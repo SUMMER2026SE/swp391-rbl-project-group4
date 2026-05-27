@@ -1,0 +1,78 @@
+.glass-purple {
+  background: rgba(255, 255, 255, 0.4);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(113, 42, 226, 0.1);
+  box-shadow: 0 8px 32px 0 rgba(113, 42, 226, 0.05);
+}
+
+.ma-whitespace {
+  padding-top: clamp(48px, 8vw, 120px);
+  padding-bottom: clamp(48px, 8vw, 120px);
+}
+
+.text-gradient-ai {
+  background: linear-gradient(135deg, #712ae2, #ae2826);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.ai-border-gradient {
+  border: 1.5px solid transparent;
+  background-image: linear-gradient(white, white), linear-gradient(to bottom, #712ae2, #ae2826);
+  background-origin: border-box;
+  background-clip: content-box, border-box;
+}
+
+@keyframes pulse-soft {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.8; transform: scale(1.02); }
+}
+
+.animate-pulse-soft {
+  animation: pulse-soft 4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+.scroll-reveal {
+  opacity: 0;
+  transform: translateY(40px);
+  transition: opacity 0.8s ease, transform 0.8s ease;
+}
+
+.scroll-reveal.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Login page */
+.glass-card {
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(229, 231, 235, 0.5);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04);
+}
+
+.japanese-bg {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background-size: cover;
+  background-position: center;
+  filter: grayscale(20%) opacity(0.3);
+}
+
+.ma-spacing { letter-spacing: 0.05em; }
+
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.6s cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+
+/* Register page */
+.ma-bg {
+  background-image: radial-gradient(circle at 2px 2px, rgba(174, 40, 38, 0.03) 1px, transparent 0);
+  background-size: 40px 40px;
+}

@@ -1,0 +1,12 @@
+<%- include('partials/head') %>
+<body class="bg-surface-stone text-on-surface font-body-md min-h-screen flex items-center justify-center">
+  <div class="text-center px-gutter">
+    <p class="text-[120px] font-bold text-tsubaki-red/10 leading-none select-none">404</p>
+    <h1 class="font-h2 text-h1 text-charcoal-text mb-base -mt-8"><%= t('not_found.title') %></h1>
+    <p class="font-body-md text-on-surface-variant mb-lg"><%= t('not_found.desc') %></p>
+    <a href="/" class="bg-tsubaki-red text-on-primary px-8 py-3 rounded-full font-label-md hover:opacity-90 transition-all">
+      <%= t('not_found.back_home') %>
+    </a>
+  </div>
+</body>
+</html>

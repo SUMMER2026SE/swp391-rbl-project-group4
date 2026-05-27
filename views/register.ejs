@@ -1,0 +1,138 @@
+<%- include('partials/head') %>
+<body class="bg-surface-stone min-h-screen flex items-center justify-center ma-bg p-margin-mobile md:p-gutter">
+
+  <!-- Background blobs -->
+  <div class="fixed inset-0 pointer-events-none overflow-hidden">
+    <div class="absolute -top-24 -right-24 w-96 h-96 bg-tsubaki-red/5 rounded-full blur-3xl"></div>
+    <div class="absolute -bottom-24 -left-24 w-80 h-80 bg-sumire-purple/5 rounded-full blur-3xl"></div>
+  </div>
+
+  <main class="relative z-10 w-full max-w-[480px]">
+    <div class="glass-card rounded-xl p-lg md:p-xl flex flex-col items-center">
+
+      <!-- Brand -->
+      <div class="mb-lg text-center">
+        <a href="/" class="font-display text-display-mobile md:text-display text-tsubaki-red tracking-tight mb-xs block">
+          Kizuna Nihongo
+        </a>
+        <p class="font-label-md text-label-md text-on-surface-variant/70 uppercase tracking-widest"><%= t('common.art_of_mastery') %></p>
+      </div>
+
+      <!-- Heading -->
+      <div class="text-center mb-lg">
+        <h2 class="font-h1 text-h1-mobile md:text-h1 text-charcoal-text mb-sm"><%= t('auth.register_heading') %></h2>
+        <p class="font-body-md text-body-md text-on-surface-variant"><%= t('auth.register_sub') %></p>
+      </div>
+
+      <!-- Error banner -->
+      <% if (error) { %>
+      <div class="w-full flex items-center gap-base px-md py-sm rounded-lg bg-error-container text-on-error-container font-caption mb-md">
+        <span class="material-symbols-outlined text-[16px]">error</span>
+        <%= error %>
+      </div>
+      <% } %>
+
+      <!-- Form -->
+      <form action="/register" method="POST" class="w-full space-y-md">
+
+        <!-- Full name -->
+        <div class="space-y-xs">
+          <label class="font-label-md text-label-md text-on-surface-variant block ml-xs" for="fullname"><%= t('auth.fullname') %></label>
+          <div class="relative group">
+            <span class="material-symbols-outlined absolute left-base top-1/2 -translate-y-1/2 text-on-surface-variant group-focus-within:text-tsubaki-red transition-colors">person</span>
+            <input id="fullname" name="fullname" type="text"
+              placeholder="<%= t('auth.fullname_placeholder') %>" required autocomplete="name"
+              class="w-full pl-lg pr-md py-base bg-surface-container-lowest border-0 border-b-2 border-outline-variant/30 focus:border-tsubaki-red focus:ring-0 rounded-lg transition-all font-body-md text-body-md text-charcoal-text outline-none">
+          </div>
+        </div>
+
+        <!-- Email -->
+        <div class="space-y-xs">
+          <label class="font-label-md text-label-md text-on-surface-variant block ml-xs" for="email"><%= t('auth.email') %></label>
+          <div class="relative group">
+            <span class="material-symbols-outlined absolute left-base top-1/2 -translate-y-1/2 text-on-surface-variant group-focus-within:text-tsubaki-red transition-colors">mail</span>
+            <input id="email" name="email" type="email"
+              placeholder="email@example.com" required autocomplete="email"
+              class="w-full pl-lg pr-md py-base bg-surface-container-lowest border-0 border-b-2 border-outline-variant/30 focus:border-tsubaki-red focus:ring-0 rounded-lg transition-all font-body-md text-body-md text-charcoal-text outline-none">
+          </div>
+        </div>
+
+        <!-- Password -->
+        <div class="space-y-xs">
+          <label class="font-label-md text-label-md text-on-surface-variant block ml-xs" for="password"><%= t('auth.password') %></label>
+          <div class="relative group">
+            <span class="material-symbols-outlined absolute left-base top-1/2 -translate-y-1/2 text-on-surface-variant group-focus-within:text-tsubaki-red transition-colors">lock</span>
+            <input id="password" name="password" type="password"
+              placeholder="••••••••" required autocomplete="new-password"
+              class="w-full pl-lg pr-lg py-base bg-surface-container-lowest border-0 border-b-2 border-outline-variant/30 focus:border-tsubaki-red focus:ring-0 rounded-lg transition-all font-body-md text-body-md text-charcoal-text outline-none">
+            <button id="toggle-password" type="button"
+              class="absolute right-base top-1/2 -translate-y-1/2 text-on-surface-variant hover:text-charcoal-text transition-colors"
+              aria-label="<%= t('auth.show_hide_password') %>">
+              <span id="toggle-password-icon" class="material-symbols-outlined">visibility</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Terms -->
+        <div class="flex items-center space-x-base pt-xs">
+          <input id="terms" name="terms" type="checkbox"
+            class="rounded border-outline-variant text-tsubaki-red focus:ring-tsubaki-red w-4 h-4">
+          <label class="font-caption text-caption text-on-surface-variant" for="terms">
+            <%= t('auth.terms_agree') %>
+            <a href="/terms" class="text-tsubaki-red hover:underline"><%= t('auth.terms_link') %></a>
+            <%= lang === 'vi' ? 'và' : 'と' %>
+            <a href="/privacy" class="text-tsubaki-red hover:underline"><%= t('auth.policy_link') %></a>
+          </label>
+        </div>
+
+        <!-- Submit -->
+        <button type="submit"
+          class="w-full bg-tsubaki-red text-on-primary py-md rounded-xl font-h2 text-h2 hover:bg-primary transition-all active:scale-[0.98] shadow-lg shadow-tsubaki-red/20 mt-base">
+          <%= t('auth.submit_register') %>
+        </button>
+      </form>
+
+      <!-- Divider -->
+      <div class="w-full flex items-center my-lg">
+        <div class="flex-grow h-px bg-outline-variant/30"></div>
+        <span class="px-md font-caption text-caption text-on-surface-variant/50"><%= t('auth.or_continue') %></span>
+        <div class="flex-grow h-px bg-outline-variant/30"></div>
+      </div>
+
+      <!-- Social -->
+      <div class="w-full grid grid-cols-2 gap-sm">
+        <button type="button"
+          class="flex items-center justify-center py-base border border-outline-variant/50 rounded-lg hover:bg-surface transition-colors font-label-md text-label-md text-charcoal-text group">
+          <img src="https://lh3.googleusercontent.com/aida-public/AB6AXuAqUt2HgYGVshV4VfTC-iFNGKdeLup7HDPtu8bVy_Ta-mZTNi8-gTdSQdTScClUXxvjDzbgdrsw7pS52YHhjSwmbWRuJY89ecwdQcXkcJTOkBDd3rsHdEna27VghvOdhzOnE6-_xJqnIUcYy2i2yETsJoviIWPW18iE-Sv_tNpam4RIRrAytRBVT96OeZysEGcvTzdVgm_SuwvQt0D5rBVdp7Edhh4RSOJU79HkdD11zk77Kf0b9jATiy7vdYxsOihZ-n8s-4n-jPVX"
+            alt="Google" class="w-5 h-5 mr-base grayscale group-hover:grayscale-0 transition-all">
+          Google
+        </button>
+        <button type="button"
+          class="flex items-center justify-center py-base border border-outline-variant/50 rounded-lg hover:bg-surface transition-colors font-label-md text-label-md text-charcoal-text group">
+          <span class="material-symbols-outlined mr-base group-hover:text-tsubaki-red transition-colors">ios</span>
+          Apple
+        </button>
+      </div>
+
+      <!-- Login link -->
+      <div class="mt-lg text-center">
+        <p class="font-body-md text-body-md text-on-surface-variant">
+          <%= t('auth.has_account') %>
+          <a href="/login" class="text-tsubaki-red font-semibold hover:underline ml-xs"><%= t('auth.login_link') %></a>
+        </p>
+      </div>
+
+    </div>
+
+    <!-- Ma quote -->
+    <div class="mt-xl text-center opacity-40">
+      <div class="inline-block p-lg rounded-full bg-surface-container-high/30 backdrop-blur-sm mb-md">
+        <span class="material-symbols-outlined text-[48px] text-tsubaki-red/60">self_improvement</span>
+      </div>
+      <p class="font-caption text-caption italic text-on-surface-variant"><%= t('auth.zen_quote') %></p>
+    </div>
+  </main>
+
+  <script src="/js/register.js"></script>
+</body>
+</html>

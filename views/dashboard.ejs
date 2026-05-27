@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="<%= lang %>">
+<head>
+  <meta charset="utf-8"/>
+  <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+  <title><%= title %></title>
+  <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Plus+Jakarta+Sans:wght@600;700;800&family=Noto+Sans+JP:wght@400;700&display=swap" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+  <script>
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          colors: {
+            "on-primary-fixed-variant": "#8f0e14",
+            "on-error-container": "#93000a",
+            "surface-bright": "#f8f9ff",
+            "on-tertiary-container": "#d5d4d3",
+            "on-tertiary-fixed-variant": "#464746",
+            "tsubaki-red": "#ae2826",
+            "on-secondary": "#ffffff",
+            "on-tertiary-fixed": "#1a1c1b",
+            "surface-container": "#e6eeff",
+            "tertiary": "#434544",
+            "on-primary-container": "#ffc8c2",
+            "surface-container-lowest": "#ffffff",
+            "surface-tint": "#b12b28",
+            "tertiary-fixed": "#e3e2e1",
+            "tertiary-container": "#5b5c5b",
+            "secondary": "#712ae2",
+            "error": "#ba1a1a",
+            "secondary-container": "#8b4bfc",
+            "surface-container-low": "#eff3ff",
+            "on-secondary-container": "#fffbff",
+            "surface-dim": "#d0daee",
+            "primary-container": "#ae2826",
+            "on-secondary-fixed": "#25005a",
+            "background": "#f8f9ff",
+            "on-error": "#ffffff",
+            "charcoal-text": "#1f2937",
+            "primary": "#8c0b12",
+            "primary-fixed-dim": "#ffb4ac",
+            "sumire-purple": "#712ae2",
+            "surface-container-high": "#dfe9fc",
+            "outline-variant": "#e1bfbb",
+            "on-secondary-fixed-variant": "#5a00c6",
+            "inverse-surface": "#273140",
+            "inverse-primary": "#ffb4ac",
+            "surface-stone": "#f7f7f5",
+            "error-container": "#ffdad6",
+            "on-primary": "#ffffff",
+            "tertiary-fixed-dim": "#c7c6c5",
+            "inverse-on-surface": "#ebf1ff",
+            "on-surface": "#121c2a",
+            "secondary-fixed": "#eaddff",
+            "on-primary-fixed": "#410003",
+            "on-background": "#121c2a",
+            "surface-variant": "#d9e3f7",
+            "on-surface-variant": "#59413e",
+            "on-tertiary": "#ffffff",
+            "primary-fixed": "#ffdad6",
+            "outline": "#8d706d",
+            "secondary-fixed-dim": "#d2bbff",
+            "surface-container-highest": "#d9e3f7",
+            "surface": "#f8f9ff"
+          },
+          borderRadius: { DEFAULT: "0.5rem", lg: "0.75rem", xl: "1rem", "2xl": "1.5rem", "3xl": "1.75rem", full: "9999px" },
+          spacing: { sm: "12px", base: "16px", md: "32px", lg: "64px", xl: "96px", gutter: "32px" }
+        }
+      }
+    }
+  </script>
+  <style>
+    .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+    .material-symbols-outlined.fill { font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+    body { font-family: 'Inter', sans-serif; background-color: #f8f9ff; color: #121c2a; }
+    h1, h2, h3, h4 { font-family: 'Plus Jakarta Sans', sans-serif; }
+    .japanese-text { font-family: 'Noto Sans JP', sans-serif; }
+    .glass-card { background: rgba(255,255,255,0.7); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.3); }
+    .zen-shadow { box-shadow: 0 4px 30px rgba(0,0,0,0.03); }
+    .ma-spacing { letter-spacing: 0.02em; }
+  </style>
+</head>
+<body class="flex min-h-screen">
+
+<!-- ── Sidebar (desktop) ──────────────────────────────────────────────────── -->
+<aside class="hidden md:flex flex-col p-md h-screen w-72 bg-surface-container-lowest border-r border-outline-variant fixed left-0 top-0 z-40">
+  <div class="mb-xl px-2">
+    <a href="/" class="text-3xl font-extrabold text-tsubaki-red tracking-tight block">Kizuna Nihongo</a>
+    <p class="text-sm font-medium text-on-surface-variant opacity-70 mt-1 uppercase tracking-widest"><%= t('dashboard.student_label') %></p>
+  </div>
+  <nav class="flex-1 flex flex-col gap-4">
+    <a href="/dashboard" class="bg-primary text-on-primary rounded-xl font-semibold p-4 flex items-center gap-4 zen-shadow transition-transform hover:scale-[1.02]">
+      <span class="material-symbols-outlined fill">dashboard</span>
+      <span class="text-md"><%= t('dashboard.nav_dashboard') %></span>
+    </a>
+    <a href="#" class="text-on-surface-variant hover:text-primary hover:bg-surface-container-low transition-all rounded-xl p-4 flex items-center gap-4 group">
+      <span class="material-symbols-outlined group-hover:scale-110 transition-transform">menu_book</span>
+      <span class="text-md font-medium"><%= t('dashboard.nav_study') %></span>
+    </a>
+    <a href="#" class="text-on-surface-variant hover:text-primary hover:bg-surface-container-low transition-all rounded-xl p-4 flex items-center gap-4 group">
+      <span class="material-symbols-outlined group-hover:scale-110 transition-transform">groups</span>
+      <span class="text-md font-medium"><%= t('dashboard.nav_class') %></span>
+    </a>
+    <a href="#" class="text-on-surface-variant hover:text-sumire-purple hover:bg-secondary-fixed transition-all rounded-xl p-4 flex items-center gap-4 group">
+      <span class="material-symbols-outlined group-hover:scale-110 transition-transform text-sumire-purple">auto_awesome</span>
+      <span class="text-md font-medium"><%= t('dashboard.nav_ai') %></span>
+    </a>
+    <a href="#" class="text-on-surface-variant hover:text-primary hover:bg-surface-container-low transition-all rounded-xl p-4 flex items-center gap-4 group">
+      <span class="material-symbols-outlined group-hover:scale-110 transition-transform">assessment</span>
+      <span class="text-md font-medium"><%= t('dashboard.nav_report') %></span>
+    </a>
+  </nav>
+  <div class="mt-auto pt-md border-t border-outline-variant/30">
+    <a href="/logout" class="w-full py-4 px-6 bg-surface-container-high text-on-surface font-bold rounded-xl hover:bg-outline-variant transition-colors flex items-center justify-center gap-2">
+      <span class="material-symbols-outlined text-xl">logout</span>
+      <%= t('nav.logout') %>
+    </a>
+  </div>
+</aside>
+
+<!-- ── Content wrapper ────────────────────────────────────────────────────── -->
+<div class="flex-1 md:ml-72 flex flex-col min-h-screen">
+
+  <!-- ── Top bar ──────────────────────────────────────────────────────────── -->
+  <header class="bg-surface/80 backdrop-blur-md border-b border-outline-variant/30 flex justify-between items-center h-20 px-md md:px-lg w-full sticky top-0 z-50">
+    <div class="flex items-center gap-4">
+      <span class="md:hidden material-symbols-outlined text-primary" id="mobile-menu-btn">menu</span>
+      <div class="hidden md:flex items-center gap-2">
+        <span class="w-2 h-2 rounded-full bg-tsubaki-red"></span>
+        <span class="text-sm font-semibold text-on-surface-variant tracking-widest uppercase opacity-60">Dashboard</span>
+      </div>
+    </div>
+    <div class="flex items-center gap-8">
+      <div class="hidden lg:flex items-center bg-surface-container-low rounded-full px-6 py-2.5 border border-outline-variant/20 focus-within:border-primary transition-colors">
+        <span class="material-symbols-outlined text-on-surface-variant text-xl">search</span>
+        <input class="bg-transparent border-none focus:ring-0 text-sm font-medium w-72 placeholder:text-on-surface-variant/50" placeholder="<%= t('dashboard.search_placeholder') %>" type="text"/>
+      </div>
+      <div class="flex items-center gap-2">
+        <button class="p-2.5 text-on-surface-variant hover:bg-surface-container-high rounded-full transition-all relative">
+          <span class="material-symbols-outlined">notifications</span>
+        </button>
+        <button class="p-2.5 text-on-surface-variant hover:bg-surface-container-high rounded-full transition-all">
+          <span class="material-symbols-outlined">settings</span>
+        </button>
+        <div class="relative ml-4" id="avatar-menu">
+          <button id="avatar-btn" class="w-11 h-11 rounded-full overflow-hidden border-2 border-tsubaki-red/20 hover:border-tsubaki-red transition-colors cursor-pointer bg-primary flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-tsubaki-red/30">
+            <% if (user.avatar_url) { %>
+              <img alt="<%= user.fullname %>" class="w-full h-full object-cover" src="<%= user.avatar_url %>"/>
+            <% } else { %>
+              <span class="text-on-primary font-bold text-lg select-none"><%= user.fullname.charAt(0).toUpperCase() %></span>
+            <% } %>
+          </button>
+          <div id="avatar-dropdown" class="hidden absolute right-0 mt-2 w-52 bg-white rounded-2xl shadow-xl border border-outline-variant/30 z-50 overflow-hidden">
+            <div class="px-4 py-3 border-b border-outline-variant/20">
+              <p class="text-sm font-bold text-on-surface truncate"><%= user.fullname %></p>
+              <p class="text-xs text-on-surface-variant truncate"><%= user.email %></p>
+            </div>
+            <a href="/profile" class="flex items-center gap-3 px-4 py-3 text-sm font-medium text-on-surface hover:bg-surface-container-low transition-colors">
+              <span class="material-symbols-outlined text-[18px]">person</span>
+              <%= t('dashboard.profile_link') %>
+            </a>
+            <a href="/dashboard" class="flex items-center gap-3 px-4 py-3 text-sm font-medium text-on-surface hover:bg-surface-container-low transition-colors">
+              <span class="material-symbols-outlined text-[18px]">dashboard</span>
+              <%= t('dashboard.nav_dashboard') %>
+            </a>
+            <div class="border-t border-outline-variant/20"></div>
+            <a href="/logout" class="flex items-center gap-3 px-4 py-3 text-sm font-medium text-error hover:bg-error-container/30 transition-colors">
+              <span class="material-symbols-outlined text-[18px]">logout</span>
+              <%= t('nav.logout') %>
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- ── Main ─────────────────────────────────────────────────────────────── -->
+  <main class="p-md md:p-lg max-w-[1400px] mx-auto w-full pb-24 md:pb-lg">
+
+    <!-- Greeting + JLPT target -->
+    <div class="mb-xl flex flex-col md:flex-row md:items-end justify-between gap-6">
+      <div>
+        <h1 class="text-4xl md:text-5xl font-extrabold text-on-surface mb-3 tracking-tight">
+          <%= greeting %>, <%= user.fullname.split(' ').pop() %>!
+        </h1>
+        <p class="text-lg font-medium text-on-surface-variant opacity-70 ma-spacing"><%= t('dashboard.journey_quote') %></p>
+      </div>
+      <div class="flex gap-4 flex-wrap">
+        <% if (profile.jlpt_target_level) { %>
+        <div class="bg-surface-container-low px-6 py-4 rounded-2xl border border-outline-variant/30 zen-shadow">
+          <p class="text-xs font-bold text-on-surface-variant opacity-50 uppercase tracking-widest mb-1"><%= t('dashboard.jlpt_goal') %></p>
+          <p class="text-2xl font-bold text-tsubaki-red">JLPT <%= profile.jlpt_target_level.trim() %></p>
+        </div>
+        <% } %>
+        <% if (profile.current_level) { %>
+        <div class="bg-surface-container-low px-6 py-4 rounded-2xl border border-outline-variant/30 zen-shadow">
+          <p class="text-xs font-bold text-on-surface-variant opacity-50 uppercase tracking-widest mb-1"><%= t('dashboard.current_level') %></p>
+          <p class="text-2xl font-bold text-on-surface">JLPT <%= profile.current_level.trim() %></p>
+        </div>
+        <% } %>
+      </div>
+    </div>
+
+    <!-- ── Bento Grid ────────────────────────────────────────────────────── -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-gutter">
+
+      <!-- Skill circles -->
+      <section class="lg:col-span-8 glass-card rounded-2xl p-md zen-shadow">
+        <div class="flex justify-between items-center mb-md">
+          <h3 class="text-2xl font-bold text-on-surface"><%= t('dashboard.skill_balance') %></h3>
+          <button class="text-sm font-bold text-sumire-purple flex items-center gap-1 hover:opacity-70">
+            <span class="material-symbols-outlined text-lg">auto_awesome</span> <%= t('dashboard.ai_analyze') %>
+          </button>
+        </div>
+        <% const skills = [
+          { key: 'listening', labelKey: 'dashboard.skill_listening', color: 'tsubaki-red',  hex: '#ae2826' },
+          { key: 'speaking',  labelKey: 'dashboard.skill_speaking',  color: 'tsubaki-red',  hex: '#ae2826' },
+          { key: 'reading',   labelKey: 'dashboard.skill_reading',   color: 'sumire-purple', hex: '#712ae2' },
+          { key: 'writing',   labelKey: 'dashboard.skill_writing',   color: 'tsubaki-red',  hex: '#ae2826' },
+        ]; %>
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-8">
+          <% skills.forEach(s => { const pct = skillScores[s.key] || 0; %>
+          <div class="flex flex-col items-center group">
+            <div class="relative w-28 h-28 mb-4 transition-transform group-hover:scale-105">
+              <svg class="w-full h-full -rotate-90" viewBox="0 0 36 36">
+                <circle class="text-surface-variant" cx="18" cy="18" fill="none" r="15.9155" stroke="currentColor" stroke-width="2.5"></circle>
+                <circle cx="18" cy="18" fill="none" r="15.9155"
+                  stroke="<%= s.hex %>"
+                  stroke-dasharray="<%= pct %>, 100"
+                  stroke-width="2.5"
+                  class="transition-all duration-1000 ease-out">
+                </circle>
+              </svg>
+              <div class="absolute inset-0 flex items-center justify-center font-bold text-xl" style="color:<%= pct >= 100 ? s.hex : '#121c2a' %>">
+                <%= pct %>%
+              </div>
+            </div>
+            <span class="font-semibold text-on-surface-variant group-hover:text-<%= s.color %> transition-colors"><%= t(s.labelKey) %></span>
+          </div>
+          <% }); %>
+        </div>
+      </section>
+
+      <!-- Stats sidebar -->
+      <aside class="lg:col-span-4 bg-surface-container-low rounded-2xl p-md border border-outline-variant/30 zen-shadow">
+        <h3 class="text-xl font-bold text-on-surface mb-6 flex items-center gap-3">
+          <span class="material-symbols-outlined text-tsubaki-red">monitoring</span>
+          <%= t('dashboard.study_overview') %>
+        </h3>
+        <div class="space-y-5">
+          <div class="flex justify-between items-center">
+            <span class="text-sm font-medium text-on-surface-variant"><%= t('dashboard.vocab_learned') %></span>
+            <span class="text-lg font-bold text-tsubaki-red"><%= dashboard.total_vocab_learned || 0 %></span>
+          </div>
+          <div class="flex justify-between items-center">
+            <span class="text-sm font-medium text-on-surface-variant"><%= t('dashboard.kanji_learned') %></span>
+            <span class="text-lg font-bold text-on-surface"><%= dashboard.total_kanji_learned || 0 %></span>
+          </div>
+          <div class="flex justify-between items-center">
+            <span class="text-sm font-medium text-on-surface-variant"><%= t('dashboard.grammar_learned') %></span>
+            <span class="text-lg font-bold text-on-surface"><%= dashboard.total_grammar_learned || 0 %></span>
+          </div>
+          <div class="flex justify-between items-center">
+            <span class="text-sm font-medium text-on-surface-variant"><%= t('dashboard.exams_taken') %></span>
+            <span class="text-lg font-bold text-on-surface"><%= dashboard.total_exams_taken || 0 %></span>
+          </div>
+          <% if (dashboard.avg_exam_score) { %>
+          <div class="flex justify-between items-center">
+            <span class="text-sm font-medium text-on-surface-variant"><%= t('dashboard.avg_score') %></span>
+            <span class="text-lg font-bold text-sumire-purple"><%= Math.round(dashboard.avg_exam_score) %>%</span>
+          </div>
+          <% } %>
+          <% if (dashboard.total_study_minutes) { %>
+          <div class="flex justify-between items-center">
+            <span class="text-sm font-medium text-on-surface-variant"><%= t('dashboard.total_hours') %></span>
+            <span class="text-lg font-bold text-on-surface"><%= Math.round(dashboard.total_study_minutes / 60) %> <%= t('common.hours') %></span>
+          </div>
+          <% } %>
+        </div>
+      </aside>
+
+      <!-- Continue learning banner -->
+      <section class="lg:col-span-12 overflow-hidden bg-primary text-on-primary rounded-3xl relative zen-shadow min-h-[380px] flex items-center">
+        <div class="grid md:grid-cols-2 w-full">
+          <div class="p-md md:p-xl z-20">
+            <div class="flex items-center gap-3 mb-6">
+              <span class="bg-white/20 backdrop-blur-md px-4 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-widest border border-white/10"><%= t('dashboard.next_lesson') %></span>
+              <% if (profile.jlpt_target_level) { %>
+              <span class="text-white/60 text-xs font-medium"><%= profile.jlpt_target_level.trim() %> • <%= t('dashboard.latest_chapter') %></span>
+              <% } %>
+            </div>
+            <h2 class="text-3xl md:text-5xl font-extrabold mb-6 leading-tight">
+              <%= t('dashboard.grammar_lesson_title') %><br/>
+              <span class="japanese-text font-bold">〜うちに</span>
+            </h2>
+            <p class="text-lg font-medium mb-10 text-white/80 max-w-md leading-relaxed">
+              <%= t('dashboard.grammar_lesson_desc') %>
+            </p>
+            <button class="px-10 py-4 bg-white text-tsubaki-red font-bold rounded-xl hover:bg-surface-bright transition-all transform hover:scale-105 active:scale-95 zen-shadow">
+              <%= t('dashboard.start_now') %>
+            </button>
+          </div>
+          <div class="absolute inset-0 md:relative md:inset-auto h-full overflow-hidden">
+            <img alt="Zen garden"
+              class="absolute inset-0 w-full h-full object-cover opacity-60 md:opacity-100"
+              src="https://images.unsplash.com/photo-1528360983277-13d401cdc186?w=800&q=80"/>
+            <div class="absolute inset-0 bg-gradient-to-r from-primary via-primary/40 to-transparent"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Vocabulary practice cards -->
+      <section class="lg:col-span-12">
+        <div class="flex justify-between items-end mb-8">
+          <div>
+            <h3 class="text-2xl font-bold text-on-surface"><%= t('dashboard.vocab_practice') %></h3>
+            <p class="text-sm font-medium text-on-surface-variant opacity-60"><%= t('dashboard.vocab_sub') %></p>
+          </div>
+          <a href="#" class="text-tsubaki-red font-bold text-sm flex items-center gap-2 hover:translate-x-1 transition-transform">
+            <%= t('dashboard.view_all') %> <span class="material-symbols-outlined text-lg">east</span>
+          </a>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-gutter">
+          <% const vocabCards = t('dashboard.vocab_cards'); %>
+          <% vocabCards.forEach(v => { %>
+          <div class="group bg-surface-container-lowest p-md rounded-2xl border border-outline-variant/30 text-center hover:border-tsubaki-red hover:-translate-y-1 transition-all cursor-pointer zen-shadow">
+            <p class="japanese-text text-5xl mb-4 text-on-surface group-hover:text-tsubaki-red transition-colors"><%= v.kanji %></p>
+            <p class="text-tsubaki-red text-xs font-bold tracking-[0.3em] mb-4 uppercase"><%= v.roma %></p>
+            <h4 class="text-lg font-bold text-on-surface mb-6"><%= v.meaning %></h4>
+            <div class="inline-block px-3 py-1 bg-surface-variant rounded text-[10px] font-bold text-on-surface-variant"><%= v.type %></div>
+          </div>
+          <% }); %>
+        </div>
+      </section>
+
+      <!-- Daily streak -->
+      <section class="lg:col-span-12 bg-white border border-outline-variant/20 rounded-3xl p-md md:p-xl flex flex-col md:flex-row items-center justify-between zen-shadow border-b-4 border-sumire-purple">
+        <div class="flex items-center gap-8 mb-8 md:mb-0">
+          <div class="relative">
+            <div class="w-20 h-20 bg-sumire-purple rounded-3xl rotate-12 flex items-center justify-center text-white zen-shadow animate-pulse">
+              <span class="material-symbols-outlined text-4xl fill -rotate-12">local_fire_department</span>
+            </div>
+          </div>
+          <div>
+            <h4 class="text-2xl md:text-3xl font-extrabold text-on-surface mb-2">
+              <% if (streak > 0) { %>
+                <%= t('dashboard.streak_active', { n: streak }) %>
+              <% } else { %>
+                <%= t('dashboard.streak_none') %>
+              <% } %>
+            </h4>
+            <p class="text-md font-medium text-on-surface-variant opacity-70">
+              <% if (streak >= 3) { %>
+                <%= t('dashboard.streak_msg_3plus') %>
+              <% } else if (streak > 0) { %>
+                <%= t('dashboard.streak_msg_active') %>
+              <% } else { %>
+                <%= t('dashboard.streak_msg_none') %>
+              <% } %>
+            </p>
+          </div>
+        </div>
+        <div class="flex flex-wrap justify-center gap-3">
+          <% weekCalendar.forEach(d => { %>
+          <div class="w-14 h-14 rounded-2xl flex flex-col items-center justify-center
+            <%= d.done ? 'bg-tsubaki-red text-white zen-shadow' + (d.today ? ' border-2 border-white' : '') : 'bg-surface-container-high text-on-surface-variant opacity-40' %>">
+            <span class="text-[10px] font-bold uppercase <%= d.done ? 'opacity-60' : '' %>"><%= d.label %></span>
+            <span class="font-bold text-lg"><%= d.num %></span>
+          </div>
+          <% }); %>
+        </div>
+      </section>
+
+    </div><!-- end grid -->
+  </main>
+</div><!-- end content wrapper -->
+
+<!-- ── Mobile bottom nav ──────────────────────────────────────────────────── -->
+<nav class="md:hidden bg-white/90 backdrop-blur-lg border-t border-outline-variant/30 fixed bottom-0 left-0 right-0 h-20 flex justify-around items-center z-50 px-4">
+  <a href="/dashboard" class="flex flex-col items-center gap-1 text-tsubaki-red">
+    <span class="material-symbols-outlined fill">dashboard</span>
+    <span class="text-[10px] font-extrabold uppercase tracking-widest">Home</span>
+  </a>
+  <a href="#" class="flex flex-col items-center gap-1 text-on-surface-variant opacity-60">
+    <span class="material-symbols-outlined">menu_book</span>
+    <span class="text-[10px] font-bold">Study</span>
+  </a>
+  <a href="#" class="flex flex-col items-center gap-1 text-on-surface-variant opacity-60">
+    <span class="material-symbols-outlined text-sumire-purple">auto_awesome</span>
+    <span class="text-[10px] font-bold">AI</span>
+  </a>
+  <a href="#" class="flex flex-col items-center gap-1 text-on-surface-variant opacity-60">
+    <span class="material-symbols-outlined">monitoring</span>
+    <span class="text-[10px] font-bold">Data</span>
+  </a>
+  <a href="/logout" class="flex flex-col items-center gap-1 text-on-surface-variant opacity-60">
+    <span class="material-symbols-outlined">logout</span>
+    <span class="text-[10px] font-bold"><%= t('nav.logout') %></span>
+  </a>
+</nav>
+
+<script>
+(function () {
+  var btn      = document.getElementById('avatar-btn');
+  var dropdown = document.getElementById('avatar-dropdown');
+  if (!btn) return;
+  btn.addEventListener('click', function (e) {
+    e.stopPropagation();
+    dropdown.classList.toggle('hidden');
+  });
+  document.addEventListener('click', function () {
+    dropdown.classList.add('hidden');
+  });
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,36 @@
+<nav class="fixed top-0 w-full z-50 bg-surface/80 backdrop-blur-md border-b border-outline-variant/30 shadow-sm">
+  <div class="max-w-max-width-desktop mx-auto flex justify-between items-center px-gutter py-base">
+    <a href="/" class="font-display text-display-mobile md:text-h2 font-bold text-tsubaki-red tracking-tight">Kizuna Nihongo</a>
+    <div class="hidden md:flex gap-lg items-center">
+      <a href="#features" class="font-label-md text-label-md text-tsubaki-red font-bold border-b-2 border-tsubaki-red pb-1 transition-all duration-200 active:scale-95"><%= t('nav.features') %></a>
+      <a href="#courses" class="font-label-md text-label-md text-on-surface-variant hover:text-tsubaki-red transition-colors duration-300 active:scale-95"><%= t('nav.courses') %></a>
+      <a href="#about" class="font-label-md text-label-md text-on-surface-variant hover:text-tsubaki-red transition-colors duration-300 active:scale-95"><%= t('nav.about') %></a>
+      <div class="flex items-center gap-md">
+        <% if (user) { %>
+          <a href="/dashboard" class="font-label-md text-label-md text-on-surface-variant hover:text-tsubaki-red transition-colors"><%= t('nav.hello') %>, <strong class="text-tsubaki-red"><%= user.fullname %></strong></a>
+          <a href="/logout" class="bg-tsubaki-red text-on-primary px-6 py-2 rounded-full font-label-md text-label-md shadow-sm hover:opacity-90 transition-all active:scale-95"><%= t('nav.logout') %></a>
+        <% } else { %>
+          <a href="/register" class="font-label-md text-label-md text-on-surface-variant hover:text-tsubaki-red transition-all duration-200 active:scale-95"><%= t('nav.register') %></a>
+          <a href="/login" class="bg-tsubaki-red text-on-primary px-6 py-2 rounded-full font-label-md text-label-md shadow-sm hover:opacity-90 transition-all active:scale-95"><%= t('nav.login') %></a>
+        <% } %>
+      </div>
+    </div>
+    <button id="mobile-menu-btn" class="md:hidden text-tsubaki-red" aria-label="Open menu">
+      <span class="material-symbols-outlined">menu</span>
+    </button>
+  </div>
+  <!-- Mobile menu -->
+  <div id="mobile-menu" class="hidden md:hidden bg-surface border-t border-outline-variant/30 px-gutter py-md flex flex-col gap-md">
+    <a href="#features" class="font-label-md text-tsubaki-red font-bold"><%= t('nav.features') %></a>
+    <a href="#courses" class="font-label-md text-on-surface-variant hover:text-tsubaki-red"><%= t('nav.courses') %></a>
+    <a href="#about" class="font-label-md text-on-surface-variant hover:text-tsubaki-red"><%= t('nav.about') %></a>
+    <hr class="border-outline-variant/30">
+    <% if (user) { %>
+      <a href="/dashboard" class="font-label-md text-on-surface-variant"><%= t('nav.hello') %>, <strong class="text-tsubaki-red"><%= user.fullname %></strong></a>
+      <a href="/logout" class="bg-tsubaki-red text-on-primary text-center py-2 rounded-full font-label-md"><%= t('nav.logout') %></a>
+    <% } else { %>
+      <a href="/register" class="font-label-md text-on-surface-variant"><%= t('nav.register') %></a>
+      <a href="/login" class="bg-tsubaki-red text-on-primary text-center py-2 rounded-full font-label-md"><%= t('nav.login') %></a>
+    <% } %>
+  </div>
+</nav>
