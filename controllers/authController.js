@@ -1,7 +1,6 @@
 'use strict';
 
 const { appName } = require('../config/site');
-const { createClient } = require('@supabase/supabase-js');
 const { supabase, supabaseAdmin } = require('../config/supabase');
 
 function loginErrorMsg(message, t) {
@@ -201,111 +200,41 @@ exports.postForgotPassword = async (req, res) => {
 };
 
 // ─── GET /reset-password ─────────────────────────────────────────────────────
-exports.getResetPassword = async (req, res) => {
-  const { code } = req.query;
-  const t = req.t;
-
-  if (!code) {
-    return res.render('reset-password', {
-      title:        `${appName} - ${t('auth.reset_heading')}`,
-      error:        null,
-      valid:        'pending',
-      supabaseUrl:  process.env.SUPABASE_URL,
-      supabaseKey:  process.env.SUPABASE_ANON_KEY,
-    });
-  }
-
-  try {
-    const tempClient = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
-    const { data, error } = await tempClient.auth.exchangeCodeForSession(code);
-
-    const vars = { supabaseUrl: process.env.SUPABASE_URL, supabaseKey: process.env.SUPABASE_ANON_KEY };
-
-    if (error || !data.session) {
-      return res.render('reset-password', {
-        title: `${appName} - ${t('auth.reset_heading')}`,
-        error: t('errors.reset_expired'),
-        valid: false, ...vars,
-      });
-    }
-
-    req.session.resetUserId = data.session.user.id;
-    req.session.save(err => { if (err) console.error('Session save error:', err); });
-
-    res.render('reset-password', {
-      title: `${appName} - ${t('auth.reset_heading')}`,
-      error: null,
-      valid: true, ...vars,
-    });
-  } catch (err) {
-    console.error('Reset password GET error:', err);
-    res.render('reset-password', {
-      title: `${appName} - ${t('auth.reset_heading')}`,
-      error: t('errors.unexpected'),
-      valid: false,
-      supabaseUrl: process.env.SUPABASE_URL,
-      supabaseKey: process.env.SUPABASE_ANON_KEY,
-    });
-  }
+exports.getResetPassword = (req, res) => {
+  res.render('reset-password', {
+    title:       `${appName} - ${req.t('auth.reset_heading')}`,
+    supabaseUrl: process.env.SUPABASE_URL,
+    supabaseKey: process.env.SUPABASE_ANON_KEY,
+  });
 };
 
-// ─── POST /reset-password ────────────────────────────────────────────────────
-exports.postResetPassword = async (req, res) => {
-  const { password, confirmPassword } = req.body;
-  const userId = req.session.resetUserId;
-  const t = req.t;
+// ─── GET /auth/callback — trang trung gian xử lý Google OAuth ────────────────
+exports.getAuthCallback = (req, res) => {
+  res.render('auth-callback', { title: `${appName} - Đang xác thực...` });
+};
 
-  if (!userId) {
-    return res.render('reset-password', {
-      title: `${appName} - ${t('auth.reset_heading')}`,
-      error: t('errors.reset_session_expired'),
-      valid: false,
-    });
-  }
-
-  if (!password || !confirmPassword) {
-    return res.render('reset-password', {
-      title: `${appName} - ${t('auth.reset_heading')}`,
-      error: t('errors.reset_missing'),
-      valid: true,
-    });
-  }
-  if (password !== confirmPassword) {
-    return res.render('reset-password', {
-      title: `${appName} - ${t('auth.reset_heading')}`,
-      error: t('errors.reset_mismatch'),
-      valid: true,
-    });
-  }
-  if (password.length < 8) {
-    return res.render('reset-password', {
-      title: `${appName} - ${t('auth.reset_heading')}`,
-      error: t('errors.reset_pass_short'),
-      valid: true,
-    });
-  }
+// ─── POST /auth/google-session — nhận access_token từ browser, set session ───
+exports.postGoogleSession = async (req, res) => {
+  const { access_token } = req.body;
+  if (!access_token) return res.status(400).json({ error: 'Thiếu token.' });
 
   try {
-    const { error } = await supabaseAdmin.auth.admin.updateUserById(userId, { password });
+    const { data: { user }, error } = await supabaseAdmin.auth.getUser(access_token);
+    if (error || !user) return res.status(401).json({ error: 'Token không hợp lệ.' });
 
-    if (error) {
-      return res.render('reset-password', {
-        title: `${appName} - ${t('auth.reset_heading')}`,
-        error: t('errors.reset_failed'),
-        valid: true,
-      });
-    }
+    req.session.user = {
+      id:       user.id,
+      email:    user.email,
+      fullname: user.user_metadata?.full_name || user.user_metadata?.name || user.email,
+      avatar_url: user.user_metadata?.avatar_url || null,
+    };
 
-    delete req.session.resetUserId;
-    req.session.save(err => { if (err) console.error('Session save error:', err); });
-
-    res.redirect(303, '/login?passwordChanged=1');
-  } catch (err) {
-    console.error('Reset password POST error:', err);
-    res.render('reset-password', {
-      title: `${appName} - ${t('auth.reset_heading')}`,
-      error: t('errors.unexpected'),
-      valid: true,
+    req.session.save(err => {
+      if (err) console.error('Session save error:', err);
+      res.json({ redirect: '/dashboard' });
     });
+  } catch (err) {
+    console.error('Google session error:', err);
+    res.status(500).json({ error: 'Đã xảy ra lỗi.' });
   }
 };

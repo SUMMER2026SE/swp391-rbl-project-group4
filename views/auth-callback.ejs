@@ -1,0 +1,71 @@
+<%- include('partials/head') %>
+<body class="font-body-md text-on-surface min-h-screen flex items-center justify-center bg-surface">
+
+  <div class="text-center space-y-4">
+    <span class="material-symbols-outlined animate-spin text-tsubaki-red text-5xl">progress_activity</span>
+    <p class="text-on-surface-variant font-medium" id="status-text">Đang xác thực tài khoản Google...</p>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+  <script>
+  (function () {
+    var SUPABASE_URL = '<%= supabaseUrl %>';
+    var SUPABASE_KEY = '<%= supabaseKey %>';
+
+    var hashParams  = new URLSearchParams(window.location.hash.substring(1));
+    var queryParams = new URLSearchParams(window.location.search);
+    var code        = queryParams.get('code');
+    var hashToken   = hashParams.get('access_token');
+    var hashError   = hashParams.get('error');
+
+    var client = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    function setStatus(msg) {
+      document.getElementById('status-text').textContent = msg;
+    }
+
+    function sendToken(access_token) {
+      fetch('/auth/google-session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ access_token }),
+      })
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (data.redirect) window.location.href = data.redirect;
+        else { setStatus('Đăng nhập thất bại. Vui lòng thử lại.'); setTimeout(() => window.location.href = '/login', 2000); }
+      })
+      .catch(function() {
+        setStatus('Đã xảy ra lỗi. Đang quay lại...');
+        setTimeout(() => window.location.href = '/login', 2000);
+      });
+    }
+
+    if (hashError) {
+      setStatus('Đăng nhập bị hủy hoặc thất bại.');
+      setTimeout(() => window.location.href = '/login', 2000);
+
+    } else if (code) {
+      // PKCE flow
+      client.auth.exchangeCodeForSession(code).then(function(result) {
+        if (result.error || !result.data.session) {
+          setStatus('Liên kết không hợp lệ. Đang quay lại...');
+          setTimeout(() => window.location.href = '/login', 2000);
+        } else {
+          sendToken(result.data.session.access_token);
+        }
+      });
+
+    } else if (hashToken) {
+      // Implicit flow
+      sendToken(hashToken);
+
+    } else {
+      setStatus('Không tìm thấy thông tin xác thực.');
+      setTimeout(() => window.location.href = '/login', 2000);
+    }
+  })();
+  </script>
+
+</body>
+</html>

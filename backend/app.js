@@ -1,0 +1,52 @@
+'use strict';
+
+const express = require('express');
+const cors    = require('cors');
+const path    = require('path');
+
+const app = express();
+
+// ── CORS ──────────────────────────────────────────────────────────────────────
+const allowedOrigins = [
+  'http://localhost:5173',
+  'http://localhost:3000',
+  process.env.FRONTEND_URL,
+].filter(Boolean);
+
+app.use(cors({
+  origin: (origin, cb) => {
+    if (!origin || allowedOrigins.includes(origin)) return cb(null, true);
+    cb(new Error('Not allowed by CORS'));
+  },
+  credentials: true,
+}));
+
+// ── Parsing ───────────────────────────────────────────────────────────────────
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: false }));
+
+// ── API Routes ────────────────────────────────────────────────────────────────
+app.use('/api/auth',       require('./routes/api/auth'));
+app.use('/api/users',      require('./routes/api/users'));
+app.use('/api/courses',    require('./routes/api/courses'));
+app.use('/api/lessons',    require('./routes/api/lessons'));
+app.use('/api/vocabulary', require('./routes/api/vocabulary'));
+app.use('/api/kanji',      require('./routes/api/kanji'));
+app.use('/api/quizzes',    require('./routes/api/quizzes'));
+app.use('/api/admin',      require('./routes/api/admin'));
+app.use('/api/teacher',    require('./routes/api/teacher'));
+app.use('/api/classes',    require('./routes/api/classes'));
+
+// ── Health check ──────────────────────────────────────────────────────────────
+app.get('/api/health', (_req, res) => res.json({ status: 'ok' }));
+
+// ── 404 ───────────────────────────────────────────────────────────────────────
+app.use((_req, res) => res.status(404).json({ error: 'Not found' }));
+
+// ── Global error handler ──────────────────────────────────────────────────────
+app.use((err, _req, res, _next) => {
+  console.error(err);
+  res.status(500).json({ error: err.message || 'Internal server error' });
+});
+
+module.exports = app;

@@ -1,0 +1,100 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    font-family: 'Inter', sans-serif;
+    background-color: #f7f7f5;
+    color: #121c2a;
+    -webkit-font-smoothing: antialiased;
+  }
+  h1, h2, h3, h4, h5 {
+    font-family: 'Plus Jakarta Sans', sans-serif;
+  }
+}
+
+@layer components {
+  .material-symbols-outlined {
+    font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+  }
+  .material-symbols-outlined.fill {
+    font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+  }
+
+  /* Từ styles.css gốc */
+  .glass-card {
+    background: rgba(255,255,255,0.7);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(229,231,235,0.5);
+    box-shadow: 0 4px 20px rgba(0,0,0,0.04);
+  }
+  .glass-purple {
+    background: rgba(255,255,255,0.4);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(113,42,226,0.1);
+    box-shadow: 0 8px 32px 0 rgba(113,42,226,0.05);
+  }
+  .ma-whitespace {
+    padding-top: clamp(48px, 8vw, 120px);
+    padding-bottom: clamp(48px, 8vw, 120px);
+  }
+  .text-gradient-ai {
+    background: linear-gradient(135deg, #712ae2, #ae2826);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .ai-border-gradient {
+    border: 1.5px solid transparent;
+    background-image: linear-gradient(white, white), linear-gradient(to bottom, #712ae2, #ae2826);
+    background-origin: border-box;
+    background-clip: content-box, border-box;
+  }
+  .scroll-reveal {
+    opacity: 0;
+    transform: translateY(40px);
+    transition: opacity 0.8s ease, transform 0.8s ease;
+  }
+  .scroll-reveal.visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  .ma-spacing { letter-spacing: 0.05em; }
+  .ma-bg {
+    background-image: radial-gradient(circle at 2px 2px, rgba(174,40,38,0.03) 1px, transparent 0);
+    background-size: 40px 40px;
+  }
+  .japanese-bg {
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    background-size: cover;
+    background-position: center;
+    filter: grayscale(20%) opacity(0.3);
+  }
+}
+
+@layer utilities {
+  .input-zen {
+    @apply w-full bg-transparent border-b border-outline-variant py-2 px-0 outline-none transition-colors duration-200;
+  }
+  .input-zen:focus {
+    @apply border-tsubaki-red;
+  }
+}
+
+@keyframes pulse-soft {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.8; transform: scale(1.02); }
+}
+.animate-pulse-soft {
+  animation: pulse-soft 4s cubic-bezier(0.4,0,0.6,1) infinite;
+}
+
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-in {
+  animation: fade-in 0.6s cubic-bezier(0.4,0,0.2,1) both;
+}

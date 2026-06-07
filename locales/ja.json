@@ -145,8 +145,10 @@
     "ai_tip_active": "良い習慣を築いています！継続して知識を定着させましょう。",
     "ai_tip_none": "毎日15分でも学習を続けて、強固な基盤を築きましょう。",
     "change_password": "パスワードの変更",
-    "change_password_desc": "{email} に確認メールを送信し、新しいパスワードを設定するためのリンクをお送りします。",
-    "send_password_email": "パスワード変更メールを送信",
+    "change_password_desc": "現在のパスワードを入力して本人確認を行います。その後 {email} にパスワード再設定リンクを送信します。",
+    "current_password": "現在のパスワード",
+    "current_password_placeholder": "現在のパスワードを入力",
+    "send_password_email": "確認して送信",
     "current_level": "現在のレベル",
     "assessed_by": "試験結果による評価"
   },
@@ -216,6 +218,8 @@
     "profile_save_failed": "変更を保存できません。再試行してください。",
     "profile_load_failed": "データを読み込めません。再試行してください。",
     "profile_fullname_required": "氏名は必須です。",
+    "profile_password_required": "現在のパスワードを入力してください。",
+    "profile_wrong_password": "現在のパスワードが正しくありません。再試行してください。",
     "link_invalid": "リンクが無効または期限切れです。"
   },
   "success": {

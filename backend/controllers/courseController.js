@@ -1,0 +1,46 @@
+'use strict';
+
+const { supabaseAdmin } = require('../config/supabase');
+
+// GET /api/courses
+exports.list = async (req, res) => {
+  const { level, search, page = 1, limit = 12 } = req.query;
+  const offset = (page - 1) * limit;
+
+  try {
+    let query = supabaseAdmin.from('courses')
+      .select('id,title,title_ja,description,level,thumbnail_url,is_published,created_at', { count: 'exact' })
+      .eq('is_published', true)
+      .order('created_at', { ascending: false })
+      .range(offset, offset + Number(limit) - 1);
+
+    if (level) query = query.eq('level', level);
+    if (search) query = query.ilike('title', `%${search}%`);
+
+    const { data, error, count } = await query;
+    if (error) throw error;
+    res.json({ data, total: count, page: Number(page), limit: Number(limit) });
+  } catch (err) {
+    console.error('List courses error:', err);
+    res.status(500).json({ error: 'Không thể tải danh sách khóa học.' });
+  }
+};
+
+// GET /api/courses/:id
+exports.getOne = async (req, res) => {
+  try {
+    const { data: course, error } = await supabaseAdmin
+      .from('courses').select('*').eq('id', req.params.id).eq('is_published', true).single();
+    if (error || !course) return res.status(404).json({ error: 'Không tìm thấy khóa học.' });
+
+    const { data: lessons } = await supabaseAdmin
+      .from('lessons').select('id,title,title_ja,order_index,is_published')
+      .eq('course_id', req.params.id).eq('is_published', true)
+      .order('order_index');
+
+    res.json({ ...course, lessons: lessons || [] });
+  } catch (err) {
+    console.error('Get course error:', err);
+    res.status(500).json({ error: 'Không thể tải khóa học.' });
+  }
+};

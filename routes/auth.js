@@ -14,7 +14,10 @@ router.get('/logout',    authController.getLogout);
 router.get('/forgot-password',  redirectIfAuth, authController.getForgotPassword);
 router.post('/forgot-password', redirectIfAuth, authController.postForgotPassword);
 
-router.get('/reset-password',   authController.getResetPassword);
-router.post('/reset-password',  authController.postResetPassword);
+router.get('/reset-password', authController.getResetPassword);
+
+// Google OAuth callback (EJS app)
+router.get('/auth/callback',        authController.getAuthCallback);
+router.post('/auth/google-session',  authController.postGoogleSession);
 
 module.exports = router;

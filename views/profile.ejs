@@ -151,6 +151,12 @@
       <span class="font-semibold"><%= error %></span>
     </div>
     <% } %>
+    <% if (locals.pwErrorMsg) { %>
+    <div class="mb-md flex items-center gap-3 px-md py-sm rounded-2xl bg-error-container text-on-error-container border border-error/20">
+      <span class="material-symbols-outlined">lock</span>
+      <span class="font-semibold"><%= locals.pwErrorMsg %></span>
+    </div>
+    <% } %>
 
     <!-- Profile hero -->
     <section class="mb-lg">
@@ -365,7 +371,17 @@
           <p class="text-sm text-on-surface-variant mb-4 leading-relaxed">
             <%= t('profile.change_password_desc', { email: user.email }) %>
           </p>
-          <form action="/profile/change-password" method="POST">
+          <form action="/profile/change-password" method="POST" class="space-y-3">
+            <div class="relative">
+              <input id="currentPassword" name="currentPassword" type="password"
+                placeholder="<%= t('profile.current_password_placeholder') %>"
+                autocomplete="current-password" required
+                class="w-full bg-surface-container-low border border-outline-variant/50 rounded-xl px-4 py-3 pr-12 text-sm font-medium focus:outline-none focus:border-tsubaki-red transition-colors placeholder:text-on-surface-variant/50">
+              <button type="button" id="toggle-cur-pw"
+                class="absolute right-3 top-1/2 -translate-y-1/2 text-on-surface-variant hover:text-tsubaki-red transition-colors focus:outline-none">
+                <span id="toggle-cur-pw-icon" class="material-symbols-outlined text-[20px]">visibility</span>
+              </button>
+            </div>
             <button type="submit"
               class="w-full flex items-center justify-center gap-2 bg-surface-container-high text-on-surface font-bold py-3 rounded-xl hover:bg-outline-variant/50 active:scale-95 transition-all border border-outline-variant/30">
               <span class="material-symbols-outlined text-[18px]">mail</span>
@@ -424,6 +440,18 @@
     });
     document.addEventListener('click', function () {
       dropdown.classList.add('hidden');
+    });
+  }
+
+  // ── Toggle current password visibility ───────────────────────────────────
+  var togglePwBtn  = document.getElementById('toggle-cur-pw');
+  var togglePwIcon = document.getElementById('toggle-cur-pw-icon');
+  var curPwInput   = document.getElementById('currentPassword');
+  if (togglePwBtn && curPwInput) {
+    togglePwBtn.addEventListener('click', function () {
+      var shown = curPwInput.type === 'text';
+      curPwInput.type = shown ? 'password' : 'text';
+      togglePwIcon.textContent = shown ? 'visibility' : 'visibility_off';
     });
   }
 

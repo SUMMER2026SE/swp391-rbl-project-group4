@@ -145,8 +145,10 @@
     "ai_tip_active": "Bạn đang xây dựng thói quen tốt! Tiếp tục duy trì để kiến thức đi sâu vào tiềm thức.",
     "ai_tip_none": "Bắt đầu học đều đặn mỗi ngày — dù chỉ 15 phút — để xây dựng nền tảng vững chắc.",
     "change_password": "Đổi mật khẩu",
-    "change_password_desc": "Chúng tôi sẽ gửi một email xác nhận đến {email} với liên kết để đặt mật khẩu mới.",
-    "send_password_email": "Gửi email đổi mật khẩu",
+    "change_password_desc": "Nhập mật khẩu hiện tại để xác minh danh tính. Sau đó chúng tôi sẽ gửi email đến {email} với liên kết đặt mật khẩu mới.",
+    "current_password": "Mật khẩu hiện tại",
+    "current_password_placeholder": "Nhập mật khẩu hiện tại",
+    "send_password_email": "Xác minh & Gửi email",
     "current_level": "Trình độ hiện tại",
     "assessed_by": "Đánh giá bởi kết quả kiểm tra"
   },
@@ -216,6 +218,8 @@
     "profile_save_failed": "Không thể lưu thay đổi. Vui lòng thử lại.",
     "profile_load_failed": "Không thể tải dữ liệu. Vui lòng thử lại.",
     "profile_fullname_required": "Họ và tên không được để trống.",
+    "profile_password_required": "Vui lòng nhập mật khẩu hiện tại.",
+    "profile_wrong_password": "Mật khẩu hiện tại không đúng. Vui lòng thử lại.",
     "link_invalid": "Liên kết không hợp lệ hoặc đã hết hạn."
   },
   "success": {

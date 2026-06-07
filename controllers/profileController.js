@@ -34,6 +34,11 @@ exports.getProfile = async (req, res) => {
   const t = req.t;
   try {
     const { userData, profileData, dashData } = await fetchProfileData(req.session.user.id);
+    const pwError = req.query.pwError;
+    let pwErrorMsg = null;
+    if (pwError === 'missing') pwErrorMsg = t('errors.profile_password_required');
+    if (pwError === 'wrong')   pwErrorMsg = t('errors.profile_wrong_password');
+
     res.render('profile', {
       title:       `${appName} - ${t('profile.nav_profile')}`,
       user:        req.session.user,
@@ -42,6 +47,7 @@ exports.getProfile = async (req, res) => {
       avatarSaved: req.query.avatarSaved === '1',
       avatarError: req.query.avatarError === '1',
       emailSent:   req.query.emailSent   === '1',
+      pwErrorMsg,
       error:       null,
     });
   } catch (err) {
@@ -147,16 +153,28 @@ exports.postAvatar = async (req, res) => {
 
 // ─── POST /profile/change-password ───────────────────────────────────────────
 exports.postChangePassword = async (req, res) => {
-  const email   = req.session.user.email;
-  const baseUrl = process.env.BASE_URL || 'http://localhost:3000';
+  const email           = req.session.user.email;
+  const currentPassword = req.body.currentPassword?.trim();
+  const t               = req.t;
+  const baseUrl         = process.env.BASE_URL || 'http://localhost:3000';
+
+  if (!currentPassword) {
+    return res.redirect(303, '/profile?pwError=missing');
+  }
 
   try {
+    const { error: signInError } = await supabase.auth.signInWithPassword({ email, password: currentPassword });
+    if (signInError) {
+      return res.redirect(303, '/profile?pwError=wrong');
+    }
+
     await supabase.auth.resetPasswordForEmail(email, {
       redirectTo: `${baseUrl}/reset-password`,
     });
-  } catch (err) {
-    console.error('Change password email error:', err);
-  }
 
-  res.redirect(303, '/profile?emailSent=1');
+    res.redirect(303, '/profile?emailSent=1');
+  } catch (err) {
+    console.error('Change password error:', err);
+    res.redirect(303, '/profile?pwError=wrong');
+  }
 };

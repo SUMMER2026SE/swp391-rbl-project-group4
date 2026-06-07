@@ -16,6 +16,9 @@ app.set('views', path.join(__dirname, 'views'));
 // ── Static assets ─────────────────────────────────────────────────────────────
 app.use(express.static(path.join(__dirname, 'public')));
 
+// Browser tự request /favicon.ico mỗi lần load trang — trả 204 thay vì 404
+app.get('/favicon.ico', (_req, res) => res.status(204).end());
+
 // ── Body parsing ──────────────────────────────────────────────────────────────
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
@@ -44,13 +47,15 @@ app.use(session({
   },
 }));
 
-// ── res.locals: user + i18n vào mọi EJS template tự động ─────────────────────
+// ── res.locals: user + i18n + Supabase public keys vào mọi EJS template ──────
 app.use((req, res, next) => {
   const lang = req.session.lang || 'vi';
   req.t = (key, vars) => t(lang, key, vars);
-  res.locals.user = req.session.user || null;
-  res.locals.lang  = lang;
-  res.locals.t     = req.t;
+  res.locals.user         = req.session.user || null;
+  res.locals.lang         = lang;
+  res.locals.t            = req.t;
+  res.locals.supabaseUrl  = process.env.SUPABASE_URL;
+  res.locals.supabaseKey  = process.env.SUPABASE_ANON_KEY;
   next();
 });
 
