@@ -23,7 +23,7 @@ export default function Modal({ open, onClose, title, children, footer }) {
         {/* Body */}
         <div className="flex-1 overflow-y-auto p-6">{children}</div>
         {/* Footer */}
-        {footer && <div className="p-6 border-t border-outline/30 flex justify-end gap-3">{footer}</div>}
+        {footer && <div className="p-6 border-t border-outline/30 flex flex-wrap justify-end gap-3">{footer}</div>}
       </div>
     </div>
   );

@@ -58,6 +58,7 @@ export default function AdminVocabulary() {
   const [aiChecking, setAiChecking]     = useState(false);
   const [aiResult, setAiResult]         = useState(null);
   const [aiSummary, setAiSummary]       = useState('');
+  const [rawInput, setRawInput]         = useState('');
 
   const fetch = async () => {
     setLoading(true);
@@ -99,13 +100,13 @@ export default function AdminVocabulary() {
   const openImport = () => {
     setImportData(null); setImportErr(''); setImportResult(null);
     setShowSample(false); setImportTab('file'); setPasteText('');
-    setAiResult(null); setAiSummary('');
+    setAiResult(null); setAiSummary(''); setRawInput('');
     setImportModal(true);
   };
 
   const switchTab = (tab) => {
     setImportTab(tab); setImportData(null); setImportErr('');
-    setAiResult(null); setAiSummary('');
+    setAiResult(null); setAiSummary(''); setRawInput('');
     if (tab === 'file' && fileRef.current) fileRef.current.value = '';
     if (tab === 'paste') setPasteText('');
   };
@@ -130,12 +131,25 @@ export default function AdminVocabulary() {
   };
 
   const parseJSON = (raw, source) => {
+    setRawInput(raw);
     try {
       const parsed = JSON.parse(raw);
       if (!Array.isArray(parsed)) throw new Error('Phải là mảng JSON (bắt đầu bằng "[").');
       if (parsed.length === 0)   throw new Error('Mảng JSON không được rỗng.');
       setImportErr(''); setImportData(parsed);
-    } catch (err) { setImportErr(`Lỗi phân tích ${source}: ${err.message}`); setImportData(null); }
+    } catch (err) { setImportErr(`Lỗi định dạng JSON: ${err.message}`); setImportData(null); }
+  };
+
+  const handleAiFixAndCheck = async () => {
+    if (!rawInput) return;
+    setAiChecking(true); setImportErr(''); setAiResult(null); setAiSummary('');
+    try {
+      const r = await api.post('/ai/check-json', { type: 'vocab', rawText: rawInput });
+      setAiResult(r.data.items);
+      setAiSummary(r.data.summary);
+    } catch (e) {
+      setImportErr('AI sửa thất bại: ' + (e.response?.data?.error || e.message));
+    } finally { setAiChecking(false); }
   };
 
   const handleFileChange = (e) => {
@@ -243,6 +257,13 @@ export default function AdminVocabulary() {
               <Button variant="secondary" onClick={handleParsePaste} disabled={!pasteText.trim()}>
                 <span className="material-symbols-outlined text-lg">data_object</span>
                 Phân tích JSON
+              </Button>
+            )}
+            {importErr && rawInput && !importData && !importResult && !aiResult && (
+              <Button variant="secondary" loading={aiChecking} onClick={handleAiFixAndCheck}
+                className="bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100">
+                <span className="material-symbols-outlined text-lg">build</span>
+                {aiChecking ? 'AI đang sửa...' : 'Sửa JSON bằng AI'}
               </Button>
             )}
             {importData && !importResult && !aiResult && (

@@ -9,6 +9,7 @@ const LINKS = [
   { to: '/teacher/kanji',   icon: 'font_download', label: 'Kanji' },
   { to: '/teacher/quizzes',  icon: 'quiz',          label: 'Bài kiểm tra' },
   { to: '/teacher/classes',  icon: 'groups',        label: 'Lớp học' },
+  { to: '/chat',             icon: 'smart_toy',     label: 'Trợ lý AI' },
 ];
 
 function Sidebar() {

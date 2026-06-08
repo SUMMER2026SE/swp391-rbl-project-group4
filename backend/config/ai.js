@@ -1,18 +1,16 @@
 'use strict';
 
-const OPENROUTER_BASE = 'https://openrouter.ai/api/v1';
+const FPT_AI_BASE = 'https://mkp-api.fptcloud.com/v1';
 
 async function chatCompletion(messages, options = {}) {
-  const res = await fetch(`${OPENROUTER_BASE}/chat/completions`, {
+  const res = await fetch(`${FPT_AI_BASE}/chat/completions`, {
     method: 'POST',
     headers: {
-      'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
+      'Authorization': `Bearer ${process.env.FPT_AI_API_KEY}`,
       'Content-Type': 'application/json',
-      'HTTP-Referer': process.env.FRONTEND_URL || 'http://localhost:5173',
-      'X-Title': 'Kizuna Nihongo',
     },
     body: JSON.stringify({
-      model: options.model || process.env.OPENROUTER_MODEL || 'nvidia/nemotron-3-ultra-550b-a55b:free',
+      model: options.model || process.env.FPT_AI_MODEL || 'gemma-4-31B-it',
       messages,
       max_tokens: options.max_tokens || 1024,
       temperature: options.temperature ?? 0.7,
@@ -21,7 +19,7 @@ async function chatCompletion(messages, options = {}) {
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: { message: res.statusText } }));
-    throw new Error(err.error?.message || `OpenRouter error ${res.status}`);
+    throw new Error(err.error?.message || `FPT AI error ${res.status}`);
   }
 
   return res.json();

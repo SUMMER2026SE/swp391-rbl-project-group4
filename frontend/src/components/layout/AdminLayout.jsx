@@ -12,6 +12,8 @@ const ADMIN_LINKS = (t) => [
   { to: '/admin/quizzes',      icon: 'quiz',          label: t('admin.quizzes') },
   { to: '/admin/submissions',  icon: 'pending_actions', label: 'Yêu cầu duyệt' },
   { to: '/admin/classes',      icon: 'groups',          label: 'Lớp học' },
+  { to: '/chat',               icon: 'smart_toy',       label: 'Trợ lý AI' },
+  { to: '/admin/system',       icon: 'monitor_heart',   label: 'Hoạt động HT' },
 ];
 
 export default function AdminLayout({ children, title }) {

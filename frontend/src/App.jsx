@@ -39,6 +39,9 @@ import AdminKanji      from './pages/admin/AdminKanji';
 import AdminQuizzes      from './pages/admin/AdminQuizzes';
 import AdminSubmissions  from './pages/admin/AdminSubmissions';
 import AdminClasses      from './pages/admin/AdminClasses';
+import AdminSystemStatus from './pages/admin/AdminSystemStatus';
+
+import ChatPage from './pages/ChatPage';
 
 // 404
 function NotFound() {
@@ -75,6 +78,7 @@ export default function App() {
             <Route path="/kanji"      element={<ProtectedRoute><Kanji /></ProtectedRoute>} />
             <Route path="/classes"    element={<ProtectedRoute><Classes /></ProtectedRoute>} />
             <Route path="/quizzes/:id" element={<ProtectedRoute><Quiz /></ProtectedRoute>} />
+            <Route path="/chat"       element={<ProtectedRoute><ChatPage /></ProtectedRoute>} />
 
             {/* Teacher (teacher + admin) */}
             <Route path="/teacher"       element={<TeacherRoute><TeacherDashboard /></TeacherRoute>} />
@@ -92,6 +96,7 @@ export default function App() {
             <Route path="/admin/quizzes"      element={<AdminRoute><AdminQuizzes /></AdminRoute>} />
             <Route path="/admin/submissions" element={<AdminRoute><AdminSubmissions /></AdminRoute>} />
             <Route path="/admin/classes"     element={<AdminRoute><AdminClasses /></AdminRoute>} />
+            <Route path="/admin/system"     element={<AdminRoute><AdminSystemStatus /></AdminRoute>} />
 
             {/* Fallback */}
             <Route path="*" element={<NotFound />} />

@@ -3,8 +3,67 @@
 const router = require('express').Router();
 const { requireAuth, requireAdmin } = require('../../middleware/auth');
 const c = require('../../controllers/adminController');
+const { supabaseAdmin } = require('../../config/supabase');
 
 router.use(requireAuth, requireAdmin);
+
+// ── System status ─────────────────────────────────────────────────────────────
+router.get('/system-status', async (_req, res) => {
+  const ping = async (fn) => {
+    const t = Date.now();
+    try { const r = await fn(); return { ok: true, latency: Date.now() - t, ...r }; }
+    catch (e) { return { ok: false, latency: Date.now() - t, error: e.message }; }
+  };
+
+  const [db, ai] = await Promise.all([
+    ping(async () => {
+      const { error } = await supabaseAdmin.from('vocabulary').select('id').limit(1);
+      if (error) throw new Error(error.message);
+      const { count: vCount } = await supabaseAdmin.from('vocabulary').select('*', { count: 'exact', head: true });
+      const { count: kCount } = await supabaseAdmin.from('kanji').select('*', { count: 'exact', head: true });
+      return { vocabCount: vCount || 0, kanjiCount: kCount || 0 };
+    }),
+    ping(async () => {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 5000);
+      try {
+        const r = await fetch('https://mkp-api.fptcloud.com/v1/models', {
+          headers: { 'Authorization': 'Bearer ' + process.env.FPT_AI_API_KEY },
+          signal: controller.signal,
+        });
+        clearTimeout(timeout);
+        return { model: process.env.FPT_AI_MODEL, httpStatus: r.status };
+      } finally { clearTimeout(timeout); }
+    }),
+  ]);
+
+  const uptimeSec = Math.floor(process.uptime());
+  const mem = process.memoryUsage();
+
+  res.json({
+    timestamp: new Date().toISOString(),
+    backend: {
+      ok: true,
+      latency: 0,
+      uptime: uptimeSec,
+      uptimeLabel: formatUptime(uptimeSec),
+      nodeVersion: process.version,
+      memoryMB: Math.round(mem.rss / 1024 / 1024),
+      heapMB: Math.round(mem.heapUsed / 1024 / 1024),
+    },
+    database: db,
+    ai: { ...ai, model: process.env.FPT_AI_MODEL },
+  });
+});
+
+function formatUptime(sec) {
+  const d = Math.floor(sec / 86400);
+  const h = Math.floor((sec % 86400) / 3600);
+  const m = Math.floor((sec % 3600) / 60);
+  if (d > 0) return d + 'n ' + h + 'g ' + m + 'p';
+  if (h > 0) return h + 'g ' + m + 'p';
+  return m + 'p ' + (sec % 60) + 'g';
+}
 
 // Stats & Activity
 router.get('/stats',    c.getStats);
