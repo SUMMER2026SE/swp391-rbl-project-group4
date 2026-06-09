@@ -380,11 +380,11 @@ exports.deleteKanji = async (req, res) => {
 
 // ── Question Bank ─────────────────────────────────────────────────────────────
 exports.listQuestionBank = async (req, res) => {
-  const { level, skill, topic, difficulty, status, question_type, search, page = 1, limit = 15 } = req.query;
+  const { level, skill, topic, difficulty, status, question_type, passage_id, search, page = 1, limit = 15 } = req.query;
   const offset = (page - 1) * limit;
   try {
     let query = supabaseAdmin.from('question_bank')
-      .select('*', { count: 'exact' })
+      .select('*, reading_passages(id, title)', { count: 'exact' })
       .order('created_at', { ascending: false })
       .range(offset, offset + Number(limit) - 1);
 
@@ -394,6 +394,7 @@ exports.listQuestionBank = async (req, res) => {
     if (difficulty)    query = query.eq('difficulty', difficulty);
     if (status)        query = query.eq('status', status);
     if (question_type) query = query.eq('question_type', question_type);
+    if (passage_id)    query = query.eq('passage_id', passage_id);
     if (search)        query = query.ilike('question_text', `%${search}%`);
 
     const { data, error, count } = await query;
@@ -421,20 +422,21 @@ exports.questionBankStats = async (req, res) => {
 };
 
 exports.createQuestionBank = async (req, res) => {
-  const { question_text, options, correct_answer, explanation, level, skill, topic, difficulty, status, is_ai_generated, question_type } = req.body;
+  const { question_text, options, correct_answer, explanation, level, skill, topic, difficulty, status, is_ai_generated, question_type, passage_id } = req.body;
   if (!question_text) return res.status(400).json({ error: 'Nội dung câu hỏi là bắt buộc.' });
   try {
     const { data, error } = await supabaseAdmin.from('question_bank')
-      .insert({ question_text, options: options ?? [], correct_answer, explanation, level, skill, topic, difficulty: difficulty || 'medium', status: status || 'pending', is_ai_generated: !!is_ai_generated, question_type: question_type || 'single_choice', created_by: req.user?.id })
-      .select().single();
+      .insert({ question_text, options: options ?? [], correct_answer, explanation, level, skill, topic, difficulty: difficulty || 'medium', status: status || 'pending', is_ai_generated: !!is_ai_generated, question_type: question_type || 'single_choice', passage_id: passage_id || null, created_by: req.user?.id })
+      .select('*, reading_passages(id, title)').single();
     if (error) throw error;
     res.status(201).json(data);
   } catch (err) { res.status(500).json({ error: 'Không thể tạo câu hỏi.' }); }
 };
 
 exports.updateQuestionBank = async (req, res) => {
-  const allowed = ['question_text','options','correct_answer','explanation','level','skill','topic','difficulty','status','is_ai_generated','question_type'];
+  const allowed = ['question_text','options','correct_answer','explanation','level','skill','topic','difficulty','status','is_ai_generated','question_type','passage_id'];
   const updates = Object.fromEntries(Object.entries(req.body).filter(([k]) => allowed.includes(k)));
+  if ('passage_id' in updates && !updates.passage_id) updates.passage_id = null;
   try {
     const { data, error } = await supabaseAdmin.from('question_bank').update(updates).eq('id', req.params.id).select().single();
     if (error) throw error;
@@ -447,6 +449,59 @@ exports.deleteQuestionBank = async (req, res) => {
     await supabaseAdmin.from('question_bank').delete().eq('id', req.params.id);
     res.json({ message: 'Đã xóa.' });
   } catch (err) { res.status(500).json({ error: 'Không thể xóa.' }); }
+};
+
+// ── Reading Passages ──────────────────────────────────────────────────────────
+exports.listPassages = async (req, res) => {
+  try {
+    const { data: passages, error } = await supabaseAdmin
+      .from('reading_passages')
+      .select('*')
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+
+    // question count per passage
+    const { data: links } = await supabaseAdmin
+      .from('question_bank')
+      .select('passage_id')
+      .not('passage_id', 'is', null);
+    const countMap = {};
+    (links || []).forEach(r => { countMap[r.passage_id] = (countMap[r.passage_id] || 0) + 1; });
+
+    res.json((passages || []).map(p => ({ ...p, question_count: countMap[p.id] || 0 })));
+  } catch (err) { res.status(500).json({ error: 'Không thể tải bài đọc.' }); }
+};
+
+exports.createPassage = async (req, res) => {
+  const { title, content, level, topic, source } = req.body;
+  if (!content?.trim()) return res.status(400).json({ error: 'Nội dung bài đọc là bắt buộc.' });
+  try {
+    const { data, error } = await supabaseAdmin.from('reading_passages')
+      .insert({ title, content, level, topic, source, created_by: req.user?.id })
+      .select().single();
+    if (error) throw error;
+    res.status(201).json({ ...data, question_count: 0 });
+  } catch (err) { res.status(500).json({ error: 'Không thể tạo bài đọc.' }); }
+};
+
+exports.updatePassage = async (req, res) => {
+  const allowed = ['title', 'content', 'level', 'topic', 'source'];
+  const updates = Object.fromEntries(Object.entries(req.body).filter(([k]) => allowed.includes(k)));
+  try {
+    const { data, error } = await supabaseAdmin.from('reading_passages')
+      .update(updates).eq('id', req.params.id).select().single();
+    if (error) throw error;
+    res.json(data);
+  } catch (err) { res.status(500).json({ error: 'Không thể cập nhật bài đọc.' }); }
+};
+
+exports.deletePassage = async (req, res) => {
+  try {
+    // unlink questions before deleting
+    await supabaseAdmin.from('question_bank').update({ passage_id: null }).eq('passage_id', req.params.id);
+    await supabaseAdmin.from('reading_passages').delete().eq('id', req.params.id);
+    res.json({ message: 'Đã xóa bài đọc.' });
+  } catch (err) { res.status(500).json({ error: 'Không thể xóa bài đọc.' }); }
 };
 
 // ── Content Submissions (teacher → system) ────────────────────────────────────

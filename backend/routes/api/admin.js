@@ -122,4 +122,10 @@ router.post('/question-bank',      c.createQuestionBank);
 router.put('/question-bank/:id',   c.updateQuestionBank);
 router.delete('/question-bank/:id', c.deleteQuestionBank);
 
+// Reading Passages
+router.get('/reading-passages',        c.listPassages);
+router.post('/reading-passages',       c.createPassage);
+router.put('/reading-passages/:id',    c.updatePassage);
+router.delete('/reading-passages/:id', c.deletePassage);
+
 module.exports = router;
