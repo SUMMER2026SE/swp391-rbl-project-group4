@@ -41,7 +41,7 @@ const EMPTY_FORM = {
   status: 'pending', is_ai_generated: false, passage_id: '',
 };
 
-const EMPTY_PASSAGE = { title: '', content: '', level: '', topic: '', source: '' };
+const EMPTY_PASSAGE = { title: '', content: '', image_url: '', level: '', topic: '', source: '' };
 
 function formFromRow(row) {
   const base = {
@@ -125,23 +125,44 @@ function TypeBadge({ type, sm }) {
 function PassageCard({ passage, compact }) {
   const [expanded, setExpanded] = useState(!compact);
   if (!passage) return null;
+  const hasText  = !!passage.content;
+  const hasImage = !!passage.image_url;
   return (
     <div className="bg-amber-50 border border-amber-200 rounded-xl overflow-hidden mb-4">
       <div className="flex items-center justify-between px-4 py-2.5 bg-amber-100/60 border-b border-amber-200">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <span className="material-symbols-outlined text-[16px] text-amber-700">menu_book</span>
           <span className="text-xs font-bold text-amber-800 uppercase tracking-wide">Bài đọc</span>
           {passage.title && <span className="text-xs font-semibold text-amber-700">— {passage.title}</span>}
+          {hasImage && !hasText && (
+            <span className="flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 bg-amber-200 rounded font-bold text-amber-800">
+              <span className="material-symbols-outlined text-[11px]">image</span>Hình ảnh
+            </span>
+          )}
+          {hasImage && hasText && (
+            <span className="flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 bg-amber-200 rounded font-bold text-amber-800">
+              <span className="material-symbols-outlined text-[11px]">image</span>Text + Hình
+            </span>
+          )}
         </div>
         {compact && (
-          <button onClick={() => setExpanded(v => !v)} className="text-amber-700 hover:text-amber-900">
+          <button onClick={() => setExpanded(v => !v)} className="text-amber-700 hover:text-amber-900 shrink-0">
             <span className="material-symbols-outlined text-[16px]">{expanded ? 'expand_less' : 'expand_more'}</span>
           </button>
         )}
       </div>
       {expanded && (
-        <div className="px-4 py-3 max-h-48 overflow-y-auto">
-          <p className="text-sm text-amber-900 leading-relaxed whitespace-pre-wrap">{passage.content}</p>
+        <div className="max-h-64 overflow-y-auto">
+          {hasImage && (
+            <div className="px-4 pt-3">
+              <img src={passage.image_url} alt="passage" className="w-full rounded-lg max-h-48 object-contain bg-white border border-amber-200" />
+            </div>
+          )}
+          {hasText && (
+            <div className="px-4 py-3">
+              <p className="text-sm text-amber-900 leading-relaxed whitespace-pre-wrap">{passage.content}</p>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -549,35 +570,56 @@ function QuestionForm({ form, setForm, passages }) {
 
 // ── Passage Tab ───────────────────────────────────────────────────────────────
 function PassagesTab({ passages, onRefresh, setAlert }) {
-  const [passageModal, setPassageModal] = useState(false);
-  const [editId, setEditId]             = useState(null);
-  const [form, setForm]                 = useState(EMPTY_PASSAGE);
-  const [saving, setSaving]             = useState(false);
-  const [viewPassage, setViewPassage]   = useState(null);
+  const [passageModal, setPassageModal]   = useState(false);
+  const [editId, setEditId]               = useState(null);
+  const [form, setForm]                   = useState(EMPTY_PASSAGE);
+  const [saving, setSaving]               = useState(false);
+  const [uploading, setUploading]         = useState(false);
+  const [viewPassage, setViewPassage]     = useState(null);
+  const fileRef                           = useRef(null);
 
   const openCreate = () => { setForm(EMPTY_PASSAGE); setEditId(null); setPassageModal(true); };
-  const openEdit   = (p) => { setForm({ title: p.title || '', content: p.content || '', level: p.level || '', topic: p.topic || '', source: p.source || '' }); setEditId(p.id); setPassageModal(true); };
+  const openEdit   = (p) => {
+    setForm({ title: p.title || '', content: p.content || '', image_url: p.image_url || '', level: p.level || '', topic: p.topic || '', source: p.source || '' });
+    setEditId(p.id); setPassageModal(true);
+  };
+
+  const handleImageSelect = async (file) => {
+    if (!file) return;
+    if (!file.type.startsWith('image/')) return setAlert({ type: 'error', msg: 'Chỉ chấp nhận file hình ảnh.' });
+    if (file.size > 5 * 1024 * 1024) return setAlert({ type: 'error', msg: 'File tối đa 5MB.' });
+    setUploading(true);
+    try {
+      const fd = new FormData(); fd.append('image', file);
+      const r = await api.post('/admin/reading-passages/upload', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+      setForm(prev => ({ ...prev, image_url: r.data.url }));
+    } catch (e) { setAlert({ type: 'error', msg: 'Không thể tải ảnh lên. Thử lại.' }); }
+    finally { setUploading(false); if (fileRef.current) fileRef.current.value = ''; }
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    const file = e.dataTransfer.files[0];
+    if (file) handleImageSelect(file);
+  };
 
   const handleSave = async () => {
-    if (!form.content.trim()) return setAlert({ type: 'error', msg: 'Nội dung bài đọc là bắt buộc.' });
+    if (!form.content.trim() && !form.image_url) return setAlert({ type: 'error', msg: 'Bài đọc cần có nội dung text hoặc hình ảnh.' });
     setSaving(true);
     try {
-      if (editId) await api.put(`/admin/reading-passages/${editId}`, form);
-      else        await api.post('/admin/reading-passages', form);
+      const payload = { title: form.title, content: form.content || null, image_url: form.image_url || null, level: form.level, topic: form.topic, source: form.source };
+      if (editId) await api.put(`/admin/reading-passages/${editId}`, payload);
+      else        await api.post('/admin/reading-passages', payload);
       setAlert({ type: 'success', msg: editId ? 'Đã cập nhật bài đọc.' : 'Đã thêm bài đọc mới.' });
-      setPassageModal(false);
-      onRefresh();
+      setPassageModal(false); onRefresh();
     } catch (e) { setAlert({ type: 'error', msg: e.message }); }
     finally { setSaving(false); }
   };
 
   const handleDelete = async (p) => {
     if (!confirm(`Xóa bài đọc "${p.title || 'này'}"? Các câu hỏi liên kết sẽ bị hủy liên kết.`)) return;
-    try {
-      await api.delete(`/admin/reading-passages/${p.id}`);
-      setAlert({ type: 'success', msg: 'Đã xóa bài đọc.' });
-      onRefresh();
-    } catch (e) { setAlert({ type: 'error', msg: e.message }); }
+    try { await api.delete(`/admin/reading-passages/${p.id}`); setAlert({ type: 'success', msg: 'Đã xóa bài đọc.' }); onRefresh(); }
+    catch (e) { setAlert({ type: 'error', msg: e.message }); }
   };
 
   return (
@@ -598,33 +640,51 @@ function PassagesTab({ passages, onRefresh, setAlert }) {
       ) : (
         <div className="grid gap-4">
           {passages.map(p => (
-            <div key={p.id} className="glass-card rounded-2xl p-5 group hover:shadow-md transition-shadow">
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1 flex-wrap">
-                    <h3 className="font-bold text-charcoal">{p.title || <span className="text-on-muted italic font-normal">Không có tiêu đề</span>}</h3>
-                    {p.level && <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${LEVEL_COLORS[p.level]}`}>{p.level}</span>}
-                    {p.topic && <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-surface-low border border-outline text-on-muted">{p.topic}</span>}
-                    <span className="flex items-center gap-1 text-xs font-semibold text-on-muted ml-auto">
-                      <span className="material-symbols-outlined text-[14px]">help</span>{p.question_count} câu hỏi
+            <div key={p.id} className="glass-card rounded-2xl overflow-hidden group hover:shadow-md transition-shadow">
+              {/* Thumbnail strip if image exists */}
+              {p.image_url && (
+                <div className="relative h-32 bg-surface-low overflow-hidden">
+                  <img src={p.image_url} alt={p.title || 'bài đọc'} className="w-full h-full object-cover" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent" />
+                  {p.content && (
+                    <span className="absolute bottom-2 left-3 flex items-center gap-1 text-[10px] px-1.5 py-0.5 bg-black/50 text-white rounded font-bold backdrop-blur-sm">
+                      <span className="material-symbols-outlined text-[11px]">subject</span>Có text
                     </span>
-                  </div>
-                  {p.source && <p className="text-xs text-on-muted mb-2">Nguồn: {p.source}</p>}
-                  <p className="text-sm text-on-muted line-clamp-2 leading-relaxed">{p.content}</p>
+                  )}
                 </div>
-                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-                  <button onClick={() => setViewPassage(p)} title="Xem nội dung"
-                    className="p-2 rounded-lg text-on-muted hover:bg-surface-low hover:text-charcoal transition-colors">
-                    <span className="material-symbols-outlined text-[18px]">visibility</span>
-                  </button>
-                  <button onClick={() => openEdit(p)} title="Sửa"
-                    className="p-2 rounded-lg text-on-muted hover:bg-surface-low hover:text-charcoal transition-colors">
-                    <span className="material-symbols-outlined text-[18px]">edit</span>
-                  </button>
-                  <button onClick={() => handleDelete(p)} title="Xóa"
-                    className="p-2 rounded-lg text-on-muted hover:bg-red-50 hover:text-tsubaki-red transition-colors">
-                    <span className="material-symbols-outlined text-[18px]">delete</span>
-                  </button>
+              )}
+              <div className="p-5">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1 flex-wrap">
+                      <h3 className="font-bold text-charcoal">{p.title || <span className="text-on-muted italic font-normal">Không có tiêu đề</span>}</h3>
+                      {p.level && <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${LEVEL_COLORS[p.level]}`}>{p.level}</span>}
+                      {p.topic && <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-surface-low border border-outline text-on-muted">{p.topic}</span>}
+                      {p.image_url && !p.content && (
+                        <span className="flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded font-bold">
+                          <span className="material-symbols-outlined text-[11px]">image</span>Hình ảnh
+                        </span>
+                      )}
+                      <span className="flex items-center gap-1 text-xs font-semibold text-on-muted ml-auto">
+                        <span className="material-symbols-outlined text-[14px]">help</span>{p.question_count} câu hỏi
+                      </span>
+                    </div>
+                    {p.source && <p className="text-xs text-on-muted mb-2">Nguồn: {p.source}</p>}
+                    {p.content
+                      ? <p className="text-sm text-on-muted line-clamp-2 leading-relaxed">{p.content}</p>
+                      : !p.image_url && <p className="text-sm text-on-muted italic">Không có nội dung</p>}
+                  </div>
+                  <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                    <button onClick={() => setViewPassage(p)} title="Xem nội dung" className="p-2 rounded-lg text-on-muted hover:bg-surface-low hover:text-charcoal transition-colors">
+                      <span className="material-symbols-outlined text-[18px]">visibility</span>
+                    </button>
+                    <button onClick={() => openEdit(p)} title="Sửa" className="p-2 rounded-lg text-on-muted hover:bg-surface-low hover:text-charcoal transition-colors">
+                      <span className="material-symbols-outlined text-[18px]">edit</span>
+                    </button>
+                    <button onClick={() => handleDelete(p)} title="Xóa" className="p-2 rounded-lg text-on-muted hover:bg-red-50 hover:text-tsubaki-red transition-colors">
+                      <span className="material-symbols-outlined text-[18px]">delete</span>
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -643,7 +703,7 @@ function PassagesTab({ passages, onRefresh, setAlert }) {
                 <span className="material-symbols-outlined text-amber-600">menu_book</span>
                 <div>
                   <h3 className="font-bold text-charcoal">{viewPassage.title || 'Bài đọc'}</h3>
-                  <div className="flex gap-2 mt-0.5">
+                  <div className="flex flex-wrap gap-2 mt-0.5">
                     {viewPassage.level && <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${LEVEL_COLORS[viewPassage.level]}`}>{viewPassage.level}</span>}
                     {viewPassage.source && <span className="text-xs text-on-muted">Nguồn: {viewPassage.source}</span>}
                     <span className="text-xs text-on-muted">{viewPassage.question_count} câu hỏi</span>
@@ -654,8 +714,17 @@ function PassagesTab({ passages, onRefresh, setAlert }) {
                 <span className="material-symbols-outlined text-lg">close</span>
               </button>
             </div>
-            <div className="p-6 overflow-y-auto">
-              <p className="text-sm text-charcoal leading-loose whitespace-pre-wrap">{viewPassage.content}</p>
+            <div className="overflow-y-auto">
+              {viewPassage.image_url && (
+                <div className="px-6 pt-6">
+                  <img src={viewPassage.image_url} alt={viewPassage.title || 'bài đọc'} className="w-full rounded-xl max-h-72 object-contain bg-surface-low border border-outline" />
+                </div>
+              )}
+              {viewPassage.content && (
+                <div className="p-6">
+                  <p className="text-sm text-charcoal leading-loose whitespace-pre-wrap">{viewPassage.content}</p>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -666,13 +735,62 @@ function PassagesTab({ passages, onRefresh, setAlert }) {
         title={editId ? 'Sửa bài đọc' : 'Thêm bài đọc mới'}
         footer={<><Button variant="secondary" onClick={() => setPassageModal(false)}>Hủy</Button><Button loading={saving} onClick={handleSave}>Lưu</Button></>}>
         <div className="space-y-4">
-          <Input label="Tiêu đề (tùy chọn)" value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} placeholder="Ví dụ: Bài đọc số 1 - Cuộc sống Nhật Bản" />
+          <Input label="Tiêu đề (tùy chọn)" value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} placeholder="Bài đọc số 1 — Cuộc sống Nhật Bản" />
+
+          {/* Image upload */}
           <div>
-            <label className="block text-sm font-medium text-on-muted mb-1">Nội dung bài đọc *</label>
-            <textarea value={form.content} onChange={e => setForm({ ...form, content: e.target.value })}
-              rows={10} placeholder="Nhập nội dung bài đọc tiếng Nhật..."
-              className="w-full px-4 py-3 bg-white border border-outline rounded-xl text-sm outline-none focus:border-tsubaki-red resize-y transition-colors font-mono leading-loose" />
+            <label className="block text-sm font-medium text-on-muted mb-2 flex items-center gap-1">
+              <span className="material-symbols-outlined text-[15px]">image</span>
+              Hình ảnh <span className="font-normal">(tùy chọn)</span>
+            </label>
+            {form.image_url ? (
+              <div className="relative rounded-xl overflow-hidden border border-outline bg-surface-low">
+                <img src={form.image_url} alt="preview" className="w-full max-h-52 object-contain" />
+                <div className="absolute top-2 right-2 flex gap-1">
+                  <button type="button" onClick={() => fileRef.current?.click()}
+                    className="px-3 py-1.5 bg-white/90 backdrop-blur-sm rounded-lg text-xs font-semibold text-charcoal hover:bg-white border border-outline/40 shadow-sm transition-colors">
+                    <span className="material-symbols-outlined text-[14px] mr-1">swap_horiz</span>Đổi ảnh
+                  </button>
+                  <button type="button" onClick={() => setForm({ ...form, image_url: '' })}
+                    className="p-1.5 bg-white/90 backdrop-blur-sm rounded-lg text-tsubaki-red hover:bg-white border border-outline/40 shadow-sm transition-colors">
+                    <span className="material-symbols-outlined text-[16px]">close</span>
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div
+                onDrop={handleDrop} onDragOver={e => e.preventDefault()}
+                onClick={() => !uploading && fileRef.current?.click()}
+                className={`border-2 border-dashed rounded-xl p-8 text-center transition-colors cursor-pointer
+                  ${uploading ? 'border-tsubaki-red/50 bg-tsubaki-red/5' : 'border-outline hover:border-tsubaki-red hover:bg-surface-low'}`}>
+                {uploading ? (
+                  <div className="flex flex-col items-center gap-2">
+                    <div className="w-8 h-8 border-2 border-tsubaki-red border-t-transparent rounded-full animate-spin" />
+                    <p className="text-sm text-tsubaki-red font-semibold">Đang tải lên...</p>
+                  </div>
+                ) : (
+                  <>
+                    <span className="material-symbols-outlined text-4xl text-on-muted/40 block mb-2">add_photo_alternate</span>
+                    <p className="text-sm font-semibold text-charcoal">Nhấn hoặc kéo thả ảnh vào đây</p>
+                    <p className="text-xs text-on-muted mt-1">JPG, PNG, WebP, GIF — tối đa 5MB</p>
+                  </>
+                )}
+              </div>
+            )}
+            <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={e => handleImageSelect(e.target.files[0])} />
           </div>
+
+          {/* Text content */}
+          <div>
+            <label className="block text-sm font-medium text-on-muted mb-1 flex items-center gap-1">
+              <span className="material-symbols-outlined text-[15px]">subject</span>
+              Nội dung text <span className="font-normal">(tùy chọn nếu đã có hình)</span>
+            </label>
+            <textarea value={form.content} onChange={e => setForm({ ...form, content: e.target.value })}
+              rows={8} placeholder="Nhập nội dung bài đọc tiếng Nhật..."
+              className="w-full px-4 py-3 bg-white border border-outline rounded-xl text-sm outline-none focus:border-tsubaki-red resize-y transition-colors leading-loose" />
+          </div>
+
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-sm font-medium text-on-muted mb-1">Cấp độ JLPT</label>
@@ -684,7 +802,7 @@ function PassagesTab({ passages, onRefresh, setAlert }) {
             </div>
             <Input label="Chủ đề" value={form.topic} onChange={e => setForm({ ...form, topic: e.target.value })} placeholder="Ẩm thực, Du lịch..." />
           </div>
-          <Input label="Nguồn (tùy chọn)" value={form.source} onChange={e => setForm({ ...form, source: e.target.value })} placeholder="JLPT N3 2023, Sách Minna no Nihongo..." />
+          <Input label="Nguồn (tùy chọn)" value={form.source} onChange={e => setForm({ ...form, source: e.target.value })} placeholder="JLPT N3 2023, Minna no Nihongo..." />
         </div>
       </Modal>
     </>

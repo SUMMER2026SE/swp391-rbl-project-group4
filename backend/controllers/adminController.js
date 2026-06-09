@@ -452,6 +452,20 @@ exports.deleteQuestionBank = async (req, res) => {
 };
 
 // ── Reading Passages ──────────────────────────────────────────────────────────
+exports.uploadPassageImage = async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'Không có file được tải lên.' });
+  const ext = (req.file.originalname.split('.').pop() || 'jpg').toLowerCase();
+  const filename = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+  try {
+    const { error } = await supabaseAdmin.storage
+      .from('passage-images')
+      .upload(filename, req.file.buffer, { contentType: req.file.mimetype, upsert: false });
+    if (error) throw error;
+    const { data: { publicUrl } } = supabaseAdmin.storage.from('passage-images').getPublicUrl(filename);
+    res.json({ url: publicUrl });
+  } catch (err) { res.status(500).json({ error: 'Không thể tải ảnh lên.' }); }
+};
+
 exports.listPassages = async (req, res) => {
   try {
     const { data: passages, error } = await supabaseAdmin
@@ -473,11 +487,11 @@ exports.listPassages = async (req, res) => {
 };
 
 exports.createPassage = async (req, res) => {
-  const { title, content, level, topic, source } = req.body;
-  if (!content?.trim()) return res.status(400).json({ error: 'Nội dung bài đọc là bắt buộc.' });
+  const { title, content, image_url, level, topic, source } = req.body;
+  if (!content?.trim() && !image_url) return res.status(400).json({ error: 'Bài đọc phải có nội dung text hoặc hình ảnh.' });
   try {
     const { data, error } = await supabaseAdmin.from('reading_passages')
-      .insert({ title, content, level, topic, source, created_by: req.user?.id })
+      .insert({ title, content: content || null, image_url: image_url || null, level, topic, source, created_by: req.user?.id })
       .select().single();
     if (error) throw error;
     res.status(201).json({ ...data, question_count: 0 });
@@ -485,8 +499,10 @@ exports.createPassage = async (req, res) => {
 };
 
 exports.updatePassage = async (req, res) => {
-  const allowed = ['title', 'content', 'level', 'topic', 'source'];
+  const allowed = ['title', 'content', 'image_url', 'level', 'topic', 'source'];
   const updates = Object.fromEntries(Object.entries(req.body).filter(([k]) => allowed.includes(k)));
+  if ('image_url' in updates && !updates.image_url) updates.image_url = null;
+  if ('content'   in updates && !updates.content)   updates.content   = null;
   try {
     const { data, error } = await supabaseAdmin.from('reading_passages')
       .update(updates).eq('id', req.params.id).select().single();
@@ -497,9 +513,14 @@ exports.updatePassage = async (req, res) => {
 
 exports.deletePassage = async (req, res) => {
   try {
-    // unlink questions before deleting
+    const { data: p } = await supabaseAdmin.from('reading_passages').select('image_url').eq('id', req.params.id).single();
     await supabaseAdmin.from('question_bank').update({ passage_id: null }).eq('passage_id', req.params.id);
     await supabaseAdmin.from('reading_passages').delete().eq('id', req.params.id);
+    // clean up storage file if present
+    if (p?.image_url) {
+      const filename = p.image_url.split('/').pop();
+      await supabaseAdmin.storage.from('passage-images').remove([filename]);
+    }
     res.json({ message: 'Đã xóa bài đọc.' });
   } catch (err) { res.status(500).json({ error: 'Không thể xóa bài đọc.' }); }
 };
