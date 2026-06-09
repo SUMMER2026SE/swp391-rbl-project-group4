@@ -8,7 +8,7 @@ import Alert from '../../components/ui/Alert';
 import { useLang } from '../../contexts/LangContext';
 import api from '../../lib/api';
 
-const EMPTY  = { character: '', reading_on: '', reading_kun: '', meaning_vi: '', stroke_count: '', level: '' };
+const EMPTY  = { character: '', reading_on: '', reading_kun: '', meaning_vi: '', stroke_count: '', level: '', han_viet: '' };
 const LEVELS = ['N5','N4','N3','N2','N1'];
 
 const SAMPLE_JSON = `[
@@ -79,7 +79,7 @@ export default function AdminKanji() {
   const openEdit   = (row) => {
     setForm({ character: row.character||'', reading_on: (row.reading_on||[]).join(', '),
       reading_kun: (row.reading_kun||[]).join(', '), meaning_vi: row.meaning_vi||'',
-      stroke_count: row.stroke_count||'', level: row.level||'' });
+      stroke_count: row.stroke_count||'', level: row.level||'', han_viet: row.han_viet||'' });
     setEditId(row.id); setModal(true);
   };
 
@@ -184,6 +184,7 @@ export default function AdminKanji() {
 
   const COLS = [
     { key: 'character',    label: 'Kanji', render: v => <span className="text-2xl font-bold text-tsubaki-red">{v}</span> },
+    { key: 'han_viet',     label: 'Hán Việt', render: v => v ? <span className="font-semibold text-amber-600">{v}</span> : '—' },
     { key: 'meaning_vi',   label: 'Nghĩa' },
     { key: 'stroke_count', label: 'Nét' },
     { key: 'level',        label: 'Level' },
@@ -231,7 +232,10 @@ export default function AdminKanji() {
           </div>
           <Input label="On-yomi (phân cách bởi dấu phẩy)" value={form.reading_on} onChange={e => setForm({...form, reading_on: e.target.value})} placeholder="カン, ハン" />
           <Input label="Kun-yomi (phân cách bởi dấu phẩy)" value={form.reading_kun} onChange={e => setForm({...form, reading_kun: e.target.value})} placeholder="おとこ" />
-          <Input label="Nghĩa (VI) *" value={form.meaning_vi} onChange={e => setForm({...form, meaning_vi: e.target.value})} />
+          <div className="grid grid-cols-2 gap-3">
+            <Input label="Nghĩa (VI) *" value={form.meaning_vi} onChange={e => setForm({...form, meaning_vi: e.target.value})} />
+            <Input label="Hán Việt" value={form.han_viet} onChange={e => setForm({...form, han_viet: e.target.value})} placeholder="vd: Sơn, Nhật..." />
+          </div>
           <div>
             <label className="block text-sm font-medium text-on-muted mb-1">Level</label>
             <select value={form.level} onChange={e => setForm({...form, level: e.target.value})} className="w-full px-4 py-3 bg-white border border-outline rounded-xl text-sm outline-none focus:border-tsubaki-red">
@@ -330,6 +334,7 @@ export default function AdminKanji() {
                     {[
                       ['character',    '✅ Có',   'Ký tự kanji (duy nhất)'],
                       ['meaning_vi',   '✅ Có',   'Nghĩa tiếng Việt'],
+                      ['han_viet',     '⬜ Không', 'Âm Hán Việt — vd: Sơn, Nhật, Học'],
                       ['reading_on',   '⬜ Không', 'Mảng hoặc chuỗi cách nhau bởi dấu phẩy — âm On'],
                       ['reading_kun',  '⬜ Không', 'Mảng hoặc chuỗi cách nhau bởi dấu phẩy — âm Kun'],
                       ['stroke_count', '⬜ Không', 'Số nguyên (số nét)'],
@@ -399,7 +404,7 @@ export default function AdminKanji() {
                   <table className="w-full text-xs">
                     <thead className="bg-surface-low sticky top-0 z-10">
                       <tr>
-                        {['#','Kanji','Nghĩa VI','On-yomi','Kun-yomi','Nét','Level'].map(h =>
+                        {['#','Kanji','Hán Việt','Nghĩa VI','On-yomi','Kun-yomi','Nét','Level'].map(h =>
                           <th key={h} className="text-left px-3 py-2 font-semibold text-on-muted border-b border-outline">{h}</th>
                         )}
                       </tr>
@@ -409,6 +414,7 @@ export default function AdminKanji() {
                         <tr key={i} className={`border-t border-outline/40 ${!row.character || !row.meaning_vi ? 'bg-red-50' : i % 2 === 1 ? 'bg-surface-low/40' : ''}`}>
                           <td className="px-3 py-1.5 text-on-muted">{i + 1}</td>
                           <td className="px-3 py-1.5 text-xl font-bold text-tsubaki-red leading-none">{row.character || <span className="text-red-500 text-xs font-bold">⚠ thiếu</span>}</td>
+                          <td className="px-3 py-1.5 font-semibold text-amber-600">{row.han_viet || '—'}</td>
                           <td className="px-3 py-1.5">{row.meaning_vi || <span className="text-red-500 font-bold">⚠ thiếu</span>}</td>
                           <td className="px-3 py-1.5 text-on-muted">{fmtArr(row.reading_on)}</td>
                           <td className="px-3 py-1.5 text-on-muted">{fmtArr(row.reading_kun)}</td>
@@ -450,7 +456,7 @@ export default function AdminKanji() {
                   <table className="w-full text-xs">
                     <thead className="bg-surface-low sticky top-0 z-10">
                       <tr>
-                        {['#','Kanji','Nghĩa VI','On-yomi','Kun-yomi','Level','Ghi chú AI'].map(h =>
+                        {['#','Kanji','Hán Việt','Nghĩa VI','On-yomi','Kun-yomi','Level','Ghi chú AI'].map(h =>
                           <th key={h} className="text-left px-3 py-2 font-semibold text-on-muted border-b border-outline">{h}</th>
                         )}
                       </tr>
@@ -460,6 +466,7 @@ export default function AdminKanji() {
                         <tr key={i} className={`border-t border-outline/40 ${row._changed ? 'bg-amber-50' : i % 2 === 1 ? 'bg-surface-low/40' : ''}`}>
                           <td className="px-3 py-1.5 text-on-muted">{i + 1}</td>
                           <td className="px-3 py-1.5 text-xl font-bold text-tsubaki-red leading-none">{row.character}</td>
+                          <td className="px-3 py-1.5 font-semibold text-amber-600">{row.han_viet || '—'}</td>
                           <td className="px-3 py-1.5">{row.meaning_vi}</td>
                           <td className="px-3 py-1.5 text-on-muted">{fmtArr(row.reading_on)}</td>
                           <td className="px-3 py-1.5 text-on-muted">{fmtArr(row.reading_kun)}</td>

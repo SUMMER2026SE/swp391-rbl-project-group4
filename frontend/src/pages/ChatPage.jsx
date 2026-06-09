@@ -3,6 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import AdminLayout from '../components/layout/AdminLayout';
 import TeacherLayout from '../components/layout/TeacherLayout';
 import StudentLayout from '../components/layout/StudentLayout';
+import FuriganaText from '../components/ui/FuriganaText';
 import api from '../lib/api';
 
 // ── constants ──────────────────────────────────────────────────────────────
@@ -49,16 +50,24 @@ function DetailOverlay({ children, onClose }) {
 }
 
 function VocabDetail({ vocab, onClose }) {
+  const [furigana, setFurigana] = useState(false);
   return (
     <DetailOverlay onClose={onClose}>
-      <div className="px-8 pt-8 pb-6 text-center">
-        <p className="text-6xl font-bold text-tsubaki-red leading-none mb-2">
-          {vocab.kanji || vocab.reading}
-        </p>
+      <div className="px-8 pt-8 pb-4 text-center">
+        <div className="flex justify-center mb-2">
+          <FuriganaText text={vocab.kanji || vocab.reading} enabled={furigana} textClassName="text-6xl font-bold text-tsubaki-red leading-none" />
+        </div>
         {vocab.kanji && <p className="text-lg text-on-muted mt-1">{vocab.reading}</p>}
-        <div className="flex flex-wrap gap-2 justify-center mt-4">
+        <div className="flex flex-wrap gap-2 justify-center mt-3">
           {vocab.level && <span className={`px-3 py-1 rounded-full text-xs font-bold ${LEVEL_COLORS[vocab.level] || 'bg-surface-low text-on-muted'}`}>{vocab.level}</span>}
           {vocab.type  && <span className={`px-3 py-1 rounded-full text-xs font-bold ${TYPE_COLORS[vocab.type]   || 'bg-surface-low text-on-muted'}`}>{vocab.type}</span>}
+          <button
+            type="button"
+            onClick={() => setFurigana(v => !v)}
+            className={`inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-lg border font-medium transition-all select-none ${furigana ? 'bg-amber-100 border-amber-300 text-amber-700' : 'bg-white border-outline/60 text-on-muted hover:border-amber-300 hover:text-amber-600 hover:bg-amber-50'}`}>
+            <span className="font-bold" style={{ fontFamily: 'serif', fontSize: '13px' }}>あ</span>
+            ふりがな
+          </button>
         </div>
       </div>
       <div className="mx-8 border-t border-outline/30" />
@@ -70,13 +79,15 @@ function VocabDetail({ vocab, onClose }) {
         {vocab.meaning_ja && (
           <div>
             <p className="text-xs font-semibold text-on-muted uppercase tracking-wide mb-1">Giải thích tiếng Nhật</p>
-            <p className="text-sm text-charcoal">{vocab.meaning_ja}</p>
+            <FuriganaText text={vocab.meaning_ja} enabled={furigana} textClassName="text-sm text-charcoal" block />
           </div>
         )}
         {vocab.example_sentence && (
           <div>
             <p className="text-xs font-semibold text-on-muted uppercase tracking-wide mb-1">Câu ví dụ</p>
-            <p className="text-sm text-charcoal italic bg-surface-low rounded-xl px-4 py-3 leading-relaxed">「{vocab.example_sentence}」</p>
+            <div className="text-sm text-charcoal italic bg-surface-low rounded-xl px-4 py-3">
+              「<FuriganaText text={vocab.example_sentence} enabled={furigana} textClassName="text-sm text-charcoal italic" />」
+            </div>
           </div>
         )}
       </div>
@@ -85,11 +96,23 @@ function VocabDetail({ vocab, onClose }) {
 }
 
 function KanjiDetail({ kanji, onClose }) {
+  const [furigana, setFurigana] = useState(false);
   return (
     <DetailOverlay onClose={onClose}>
       <div className="px-8 pt-8 pb-6 text-center">
-        <p className="text-8xl font-bold text-tsubaki-red leading-none mb-3">{kanji.character}</p>
-        {kanji.level && <span className={`px-3 py-1 rounded-full text-xs font-bold ${LEVEL_COLORS[kanji.level] || 'bg-surface-low text-on-muted'}`}>{kanji.level}</span>}
+        <div className="flex justify-center mb-3">
+          <FuriganaText text={kanji.character} enabled={furigana} textClassName="text-8xl font-bold text-tsubaki-red leading-none" />
+        </div>
+        <div className="flex flex-wrap gap-2 justify-center">
+          {kanji.level && <span className={`px-3 py-1 rounded-full text-xs font-bold ${LEVEL_COLORS[kanji.level] || 'bg-surface-low text-on-muted'}`}>{kanji.level}</span>}
+          <button
+            type="button"
+            onClick={() => setFurigana(v => !v)}
+            className={`inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-lg border font-medium transition-all select-none ${furigana ? 'bg-amber-100 border-amber-300 text-amber-700' : 'bg-white border-outline/60 text-on-muted hover:border-amber-300 hover:text-amber-600 hover:bg-amber-50'}`}>
+            <span className="font-bold" style={{ fontFamily: 'serif', fontSize: '13px' }}>あ</span>
+            ふりがな
+          </button>
+        </div>
       </div>
       <div className="mx-8 border-t border-outline/30" />
       <div className="px-8 py-6 space-y-4">

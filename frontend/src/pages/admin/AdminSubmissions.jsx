@@ -3,6 +3,7 @@ import AdminLayout from '../../components/layout/AdminLayout';
 import Modal from '../../components/ui/Modal';
 import Button from '../../components/ui/Button';
 import Alert from '../../components/ui/Alert';
+import FuriganaText from '../../components/ui/FuriganaText';
 import api from '../../lib/api';
 
 const STATUS_STYLE = {
@@ -28,6 +29,7 @@ export default function AdminSubmissions() {
   const [selected, setSelected] = useState(null);
   const [note, setNote]       = useState('');
   const [processing, setProcessing] = useState('');
+  const [furigana, setFurigana] = useState(false);
 
   const load = async (f = filter) => {
     setLoading(true);
@@ -172,10 +174,19 @@ export default function AdminSubmissions() {
         {selected && (
           <div className="space-y-4">
             <div className="p-4 bg-surface-low rounded-xl">
+              <div className="flex justify-end mb-2">
+                <button
+                  type="button"
+                  onClick={() => setFurigana(v => !v)}
+                  className={`inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-lg border font-medium transition-all select-none ${furigana ? 'bg-amber-100 border-amber-300 text-amber-700' : 'bg-white border-outline/60 text-on-muted hover:border-amber-300 hover:text-amber-600 hover:bg-amber-50'}`}>
+                  <span className="font-bold" style={{ fontFamily: 'serif', fontSize: '13px' }}>あ</span>
+                  ふりがな
+                </button>
+              </div>
               {selected._kind === 'vocab' ? (
                 <div className="space-y-2">
                   <div className="flex items-baseline gap-3">
-                    <span className="text-4xl font-bold text-tsubaki-red">{selected.kanji||selected.reading}</span>
+                    <FuriganaText text={selected.kanji||selected.reading} enabled={furigana} textClassName="text-4xl font-bold text-tsubaki-red" />
                     <span className="text-xl text-on-muted">{selected.reading}</span>
                   </div>
                   <div className="grid grid-cols-2 gap-2 text-sm mt-2">
@@ -188,7 +199,7 @@ export default function AdminSubmissions() {
                 </div>
               ) : (
                 <div className="space-y-2">
-                  <div className="text-5xl font-bold text-tsubaki-red">{selected.character}</div>
+                  <FuriganaText text={selected.character} enabled={furigana} textClassName="text-5xl font-bold text-tsubaki-red" block />
                   <div className="grid grid-cols-2 gap-2 text-sm mt-2">
                     <div><span className="text-on-muted">Nghĩa VI: </span><strong>{selected.meaning_vi}</strong></div>
                     <div><span className="text-on-muted">Level: </span>{selected.level ? <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${LEVEL_COLORS[selected.level]}`}>{selected.level}</span> : '—'}</div>

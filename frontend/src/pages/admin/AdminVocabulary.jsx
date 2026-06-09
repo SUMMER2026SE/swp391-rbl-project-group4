@@ -8,9 +8,14 @@ import Alert from '../../components/ui/Alert';
 import { useLang } from '../../contexts/LangContext';
 import api from '../../lib/api';
 
-const EMPTY  = { kanji: '', reading: '', meaning_vi: '', meaning_ja: '', level: '', type: '', example_sentence: '' };
+const EMPTY  = { kanji: '', reading: '', meaning_vi: '', meaning_ja: '', level: '', type: '', topic: '', example_sentence: '' };
 const LEVELS = ['N5','N4','N3','N2','N1'];
 const TYPES  = ['DANH TỪ','ĐỘNG TỪ','TÍNH TỪ','PHÓ TỪ','LIÊN TỪ'];
+const TOPICS = [
+  'Chào hỏi','Gia đình','Đồ ăn & thức uống','Thời gian & ngày tháng',
+  'Màu sắc','Cơ thể','Động vật','Trường học','Địa điểm',
+  'Thời tiết & thiên nhiên','Giao thông','Hành động','Tính từ mô tả',
+];
 
 const SAMPLE_JSON = `[
   {
@@ -76,7 +81,7 @@ export default function AdminVocabulary() {
   const openCreate = () => { setForm(EMPTY); setEditId(null); setModal(true); };
   const openEdit   = (row) => {
     setForm({ kanji: row.kanji||'', reading: row.reading||'', meaning_vi: row.meaning_vi||'',
-      meaning_ja: row.meaning_ja||'', level: row.level||'', type: row.type||'', example_sentence: row.example_sentence||'' });
+      meaning_ja: row.meaning_ja||'', level: row.level||'', type: row.type||'', topic: row.topic||'', example_sentence: row.example_sentence||'' });
     setEditId(row.id); setModal(true);
   };
 
@@ -182,6 +187,7 @@ export default function AdminVocabulary() {
     { key: 'meaning_vi', label: 'Nghĩa' },
     { key: 'level',      label: 'Level' },
     { key: 'type',       label: 'Loại' },
+    { key: 'topic',      label: 'Chủ đề', render: v => v ? <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">{v}</span> : '—' },
   ];
 
   return (
@@ -243,6 +249,13 @@ export default function AdminVocabulary() {
                 {TYPES.map(tp => <option key={tp} value={tp}>{tp}</option>)}
               </select>
             </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-on-muted mb-1">Chủ đề</label>
+            <select value={form.topic} onChange={e => setForm({...form, topic: e.target.value})} className="w-full px-4 py-3 bg-white border border-outline rounded-xl text-sm outline-none focus:border-tsubaki-red">
+              <option value="">-- Không có --</option>
+              {TOPICS.map(tp => <option key={tp} value={tp}>{tp}</option>)}
+            </select>
           </div>
           <Input label="Ví dụ" value={form.example_sentence} onChange={e => setForm({...form, example_sentence: e.target.value})} placeholder="Câu ví dụ..." />
         </div>
@@ -340,6 +353,7 @@ export default function AdminVocabulary() {
                       ['meaning_ja',       '⬜ Không', 'Giải thích tiếng Nhật'],
                       ['level',            '⬜ Không', 'N5 / N4 / N3 / N2 / N1'],
                       ['type',             '⬜ Không', 'DANH TỪ / ĐỘNG TỪ / TÍNH TỪ / PHÓ TỪ / LIÊN TỪ'],
+                      ['topic',            '⬜ Không', 'Chào hỏi / Gia đình / Đồ ăn & thức uống / Hành động / ...'],
                       ['example_sentence', '⬜ Không', 'Câu ví dụ tiếng Nhật'],
                       ['lesson_id',        '⬜ Không', 'UUID bài học (nếu có)'],
                     ].map(([f, req, desc]) => (

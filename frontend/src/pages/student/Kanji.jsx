@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import StudentLayout from '../../components/layout/StudentLayout';
 import Alert from '../../components/ui/Alert';
+import FuriganaText from '../../components/ui/FuriganaText';
 import api from '../../lib/api';
 
 const LEVELS = ['N5','N4','N3','N2','N1'];
@@ -35,6 +36,7 @@ export default function Kanji() {
   const [level, setLevel]       = useState('');
   const [page, setPage]         = useState(1);
   const [selected, setSelected] = useState(null);
+  const [furigana, setFurigana] = useState(false);
   const LIMIT = 30;
 
   const load = useCallback(async (p, l, s) => {
@@ -77,14 +79,24 @@ export default function Kanji() {
             <p className="text-sm text-on-muted mt-0.5">{total.toLocaleString()} kanji</p>
           )}
         </div>
-        <form onSubmit={handleSearch} className="flex gap-2">
-          <input value={search} onChange={e => setSearch(e.target.value)}
-            placeholder="Tìm kanji, reading, nghĩa..."
-            className="px-4 py-2 border border-outline rounded-xl text-sm outline-none focus:border-tsubaki-red w-52 transition-colors" />
-          <button type="submit" className="p-2 bg-tsubaki-red text-white rounded-xl hover:opacity-90 active:scale-95 transition-all">
-            <span className="material-symbols-outlined text-lg">search</span>
+        <div className="flex gap-2 items-center">
+          <button
+            type="button"
+            onClick={() => setFurigana(v => !v)}
+            title={furigana ? 'Ẩn furigana' : 'Hiển thị furigana'}
+            className={`inline-flex items-center gap-1 text-[11px] px-2.5 py-1.5 rounded-lg border font-medium transition-all select-none ${furigana ? 'bg-amber-100 border-amber-300 text-amber-700' : 'bg-white border-outline/60 text-on-muted hover:border-amber-300 hover:text-amber-600 hover:bg-amber-50'}`}>
+            <span className="font-bold" style={{ fontFamily: 'serif', fontSize: '13px' }}>あ</span>
+            ふりがな
           </button>
-        </form>
+          <form onSubmit={handleSearch} className="flex gap-2">
+            <input value={search} onChange={e => setSearch(e.target.value)}
+              placeholder="Tìm kanji, reading, nghĩa..."
+              className="px-4 py-2 border border-outline rounded-xl text-sm outline-none focus:border-tsubaki-red w-52 transition-colors" />
+            <button type="submit" className="p-2 bg-tsubaki-red text-white rounded-xl hover:opacity-90 active:scale-95 transition-all">
+              <span className="material-symbols-outlined text-lg">search</span>
+            </button>
+          </form>
+        </div>
       </div>
 
       {/* Level filter */}
@@ -126,7 +138,10 @@ export default function Kanji() {
             {items.map(k => (
               <div key={k.id} onClick={() => setSelected(k)}
                 className="glass-card rounded-2xl aspect-square cursor-pointer hover:shadow-lg hover:-translate-y-0.5 hover:border-tsubaki-red/30 border border-transparent transition-all flex flex-col justify-center items-center gap-1 select-none p-2">
-                <p className="text-4xl font-bold text-tsubaki-red leading-none">{k.character}</p>
+                <FuriganaText text={k.character} enabled={furigana} textClassName="text-4xl font-bold text-tsubaki-red leading-none" />
+                {k.han_viet && (
+                  <p className="text-[11px] font-semibold text-amber-600 leading-none">{k.han_viet}</p>
+                )}
                 <p className="text-xs text-on-muted text-center leading-tight line-clamp-1 px-1">{k.meaning_vi}</p>
                 {k.level && (
                   <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${LEVEL_COLORS[k.level]}`}>{k.level}</span>
@@ -170,7 +185,12 @@ export default function Kanji() {
 
             {/* Character display */}
             <div className="px-8 pt-8 pb-6 text-center">
-              <p className="text-8xl font-bold text-tsubaki-red leading-none mb-4">{selected.character}</p>
+              <div className="flex justify-center mb-2">
+                <FuriganaText text={selected.character} enabled={furigana} textClassName="text-8xl font-bold text-tsubaki-red leading-none" />
+              </div>
+              {selected.han_viet && (
+                <p className="text-lg font-bold text-amber-600 mb-1">{selected.han_viet}</p>
+              )}
               <p className="text-xl font-bold text-charcoal">{selected.meaning_vi}</p>
               <div className="flex flex-wrap gap-2 justify-center mt-3">
                 {selected.level && (

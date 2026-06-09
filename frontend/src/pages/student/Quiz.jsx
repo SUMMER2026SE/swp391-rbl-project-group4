@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import StudentLayout from '../../components/layout/StudentLayout';
 import Button from '../../components/ui/Button';
 import Alert from '../../components/ui/Alert';
+import FuriganaText from '../../components/ui/FuriganaText';
 import api from '../../lib/api';
 
 export default function Quiz() {
@@ -16,6 +17,7 @@ export default function Quiz() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError]       = useState('');
   const [timeLeft, setTimeLeft] = useState(null);
+  const [furigana, setFurigana] = useState(false);
 
   useEffect(() => {
     api.get(`/quizzes/${id}`)
@@ -108,7 +110,17 @@ export default function Quiz() {
         {/* Question */}
         {q && (
           <div className="glass-card rounded-2xl p-8">
-            <p className="font-display font-bold text-lg mb-6">{q.question}</p>
+            <div className="flex justify-between items-start gap-4 mb-6">
+              <FuriganaText text={q.question} enabled={furigana} textClassName="font-display font-bold text-lg" block />
+              <button
+                type="button"
+                onClick={() => setFurigana(v => !v)}
+                title={furigana ? 'Ẩn furigana' : 'Hiển thị furigana'}
+                className={`shrink-0 inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-lg border font-medium transition-all select-none ${furigana ? 'bg-amber-100 border-amber-300 text-amber-700' : 'bg-white border-outline/60 text-on-muted hover:border-amber-300 hover:text-amber-600 hover:bg-amber-50'}`}>
+                <span className="font-bold" style={{ fontFamily: 'serif', fontSize: '13px' }}>あ</span>
+                ふりがな
+              </button>
+            </div>
             <div className="space-y-3">
               {(q.options || []).map((opt, i) => (
                 <button key={i} onClick={() => setAnswers(a => ({ ...a, [q.id]: opt }))}
@@ -118,7 +130,7 @@ export default function Quiz() {
                       : 'border-outline hover:border-tsubaki-red/50 hover:bg-surface-low'
                   }`}>
                   <span className="font-bold mr-3 text-on-muted">{String.fromCharCode(65 + i)}.</span>
-                  {opt}
+                  <FuriganaText text={opt} enabled={furigana} />
                 </button>
               ))}
             </div>

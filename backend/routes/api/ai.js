@@ -145,6 +145,37 @@ Trả về ĐÚNG mảng JSON gốc với các trường đã sửa. Không thê
   }
 });
 
+// POST /api/ai/furigana  — annotate kanji in Japanese text with ruby tags
+router.post('/furigana', requireAuth, async (req, res) => {
+  const { text } = req.body;
+  if (!text || typeof text !== 'string') return res.status(400).json({ error: 'text là bắt buộc.' });
+  if (text.length > 2000) return res.status(400).json({ error: 'Text quá dài (tối đa 2000 ký tự).' });
+
+  // If no kanji present, return as-is
+  if (!/[一-鿿㐀-䶿]/.test(text)) return res.json({ html: text });
+
+  const SYSTEM = `あなたは日本語ふりがな専門家です。入力テキストの漢字にHTMLのrubyタグでふりがなを付けてください。
+ルール:
+- 形式: <ruby>漢字<rt>よみ</rt></ruby>
+- 漢字のみ対象（ひらがな・カタカナ・数字・記号・アルファベットはそのまま）
+- 単語単位で分割（例: 日本語→<ruby>日本語<rt>にほんご</rt></ruby>、学校→<ruby>学校<rt>がっこう</rt></ruby>）
+- 改行（\\n）は保持する
+- HTMLのみ返す。説明・コードブロック不要。`;
+
+  try {
+    const result = await chatCompletion(
+      [{ role: 'system', content: SYSTEM }, { role: 'user', content: text }],
+      { max_tokens: Math.max(512, text.length * 4), temperature: 0.1 }
+    );
+    let html = result.choices?.[0]?.message?.content || text;
+    // Strip any accidental markdown fences
+    html = html.replace(/```[\s\S]*?```/g, m => m.replace(/```\w*\n?/g, '').trim()).trim();
+    res.json({ html });
+  } catch (err) {
+    res.status(502).json({ error: err.message });
+  }
+});
+
 // ── Chat session management ───────────────────────────────────────────────────
 
 // GET /api/ai/sessions

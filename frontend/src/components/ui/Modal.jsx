@@ -1,6 +1,8 @@
 import { useEffect } from 'react';
 
-export default function Modal({ open, onClose, title, children, footer }) {
+const SIZE_CLASSES = { sm: 'max-w-sm', md: 'max-w-lg', lg: 'max-w-2xl', xl: 'max-w-4xl' };
+
+export default function Modal({ open, onClose, title, children, footer, size = 'md' }) {
   useEffect(() => {
     if (open) document.body.style.overflow = 'hidden';
     else document.body.style.overflow = '';
@@ -12,7 +14,7 @@ export default function Modal({ open, onClose, title, children, footer }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col">
+      <div className={`relative bg-white rounded-2xl shadow-2xl w-full ${SIZE_CLASSES[size] || SIZE_CLASSES.md} max-h-[90vh] flex flex-col`}>
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-outline/30">
           <h2 className="font-display text-lg font-bold text-charcoal">{title}</h2>

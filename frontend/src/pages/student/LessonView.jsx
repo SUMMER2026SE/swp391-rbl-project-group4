@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import StudentLayout from '../../components/layout/StudentLayout';
 import Alert from '../../components/ui/Alert';
+import FuriganaText from '../../components/ui/FuriganaText';
 import api from '../../lib/api';
 
 export default function LessonView() {
@@ -9,6 +10,7 @@ export default function LessonView() {
   const [lesson, setLesson]   = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState('');
+  const [furigana, setFurigana] = useState(false);
 
   useEffect(() => {
     api.get(`/lessons/${id}`)
@@ -39,8 +41,22 @@ export default function LessonView() {
         </Link>
 
         <div className="glass-card rounded-2xl p-8 mb-6">
-          <h1 className="font-display text-3xl font-bold mb-2">{lesson.title}</h1>
-          {lesson.title_ja && <p className="text-on-muted mb-6">{lesson.title_ja}</p>}
+          <div className="flex justify-between items-start gap-4 mb-2">
+            <h1 className="font-display text-3xl font-bold">{lesson.title}</h1>
+            <button
+              type="button"
+              onClick={() => setFurigana(v => !v)}
+              title={furigana ? 'Ẩn furigana' : 'Hiển thị furigana'}
+              className={`shrink-0 inline-flex items-center gap-1 text-[11px] px-2.5 py-1.5 rounded-lg border font-medium transition-all select-none ${furigana ? 'bg-amber-100 border-amber-300 text-amber-700' : 'bg-white border-outline/60 text-on-muted hover:border-amber-300 hover:text-amber-600 hover:bg-amber-50'}`}>
+              <span className="font-bold" style={{ fontFamily: 'serif', fontSize: '13px' }}>あ</span>
+              ふりがな
+            </button>
+          </div>
+          {lesson.title_ja && (
+            <div className="mb-6">
+              <FuriganaText text={lesson.title_ja} enabled={furigana} textClassName="text-on-muted" block />
+            </div>
+          )}
           {lesson.content ? (
             <div className="prose prose-sm max-w-none text-on-surface leading-relaxed"
               dangerouslySetInnerHTML={{ __html: lesson.content }} />
@@ -61,7 +77,9 @@ export default function LessonView() {
             <div className="divide-y divide-outline/20">
               {lesson.vocabulary.map(v => (
                 <div key={v.id} className="flex items-center gap-4 p-4">
-                  <div className="text-2xl font-bold text-tsubaki-red w-16 shrink-0 text-center">{v.kanji || v.reading}</div>
+                  <div className="text-2xl font-bold text-tsubaki-red w-16 shrink-0 text-center">
+                    <FuriganaText text={v.kanji || v.reading} enabled={furigana} textClassName="text-2xl font-bold text-tsubaki-red" />
+                  </div>
                   <div className="flex-1">
                     <p className="font-semibold text-sm">{v.reading}</p>
                     <p className="text-xs text-on-muted">{v.meaning_vi}</p>

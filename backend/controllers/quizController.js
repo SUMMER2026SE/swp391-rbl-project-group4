@@ -32,7 +32,8 @@ exports.getOne = async (req, res) => {
     if (error || !quiz) return res.status(404).json({ error: 'Không tìm thấy quiz.' });
 
     const { data: questions } = await supabaseAdmin
-      .from('quiz_questions').select('id,question,options,order_index')
+      .from('quiz_questions')
+      .select('id,question,options,correct_answer,correct_answer_data,question_type,bank_question_id,explanation,order_index')
       .eq('quiz_id', req.params.id).order('order_index');
 
     res.json({ ...quiz, questions: questions || [] });

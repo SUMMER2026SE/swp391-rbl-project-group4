@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import StudentLayout from '../../components/layout/StudentLayout';
 import Alert from '../../components/ui/Alert';
+import FuriganaText from '../../components/ui/FuriganaText';
 import { useLang } from '../../contexts/LangContext';
 import api from '../../lib/api';
 
@@ -13,6 +14,28 @@ const LEVEL_COLORS = {
 };
 
 const LEVELS = ['N5', 'N4', 'N3', 'N2', 'N1'];
+
+const TOPICS = [
+  'Chào hỏi', 'Gia đình', 'Đồ ăn & thức uống', 'Thời gian & ngày tháng',
+  'Màu sắc', 'Cơ thể', 'Động vật', 'Trường học', 'Địa điểm',
+  'Thời tiết & thiên nhiên', 'Giao thông', 'Hành động', 'Tính từ mô tả',
+];
+
+const TOPIC_ICONS = {
+  'Chào hỏi': 'waving_hand',
+  'Gia đình': 'family_restroom',
+  'Đồ ăn & thức uống': 'restaurant',
+  'Thời gian & ngày tháng': 'calendar_month',
+  'Màu sắc': 'palette',
+  'Cơ thể': 'accessibility',
+  'Động vật': 'pets',
+  'Trường học': 'school',
+  'Địa điểm': 'location_on',
+  'Thời tiết & thiên nhiên': 'partly_cloudy_day',
+  'Giao thông': 'directions_car',
+  'Hành động': 'directions_run',
+  'Tính từ mô tả': 'star',
+};
 
 const TYPE_COLORS = {
   'DANH TỪ': 'bg-blue-100 text-blue-700',
@@ -46,17 +69,20 @@ export default function Vocabulary() {
   const [error, setError]     = useState('');
   const [search, setSearch]   = useState('');
   const [level, setLevel]     = useState('');
+  const [topic, setTopic]     = useState('');
   const [page, setPage]       = useState(1);
   const [selected, setSelected] = useState(null);
+  const [furigana, setFurigana] = useState(false);
   const LIMIT = 20;
 
-  const fetchVocab = useCallback(async (p = page, l = level, s = search) => {
+  const fetchVocab = useCallback(async (p = 1, l = '', s = '', tp = '') => {
     setLoading(true);
     setSelected(null);
     try {
       const params = new URLSearchParams({ page: p, limit: LIMIT });
-      if (s) params.set('search', s);
-      if (l) params.set('level', l);
+      if (s)  params.set('search', s);
+      if (l)  params.set('level', l);
+      if (tp) params.set('topic', tp);
       const r = await api.get(`/vocabulary?${params}`);
       setItems(r.data.data || []);
       setTotal(r.data.total || 0);
@@ -67,16 +93,21 @@ export default function Vocabulary() {
     }
   }, []);
 
-  useEffect(() => { fetchVocab(page, level, search); }, [page, level]);
+  useEffect(() => { fetchVocab(page, level, search, topic); }, [page, level, topic]);
 
   const handleSearch = (e) => {
     e.preventDefault();
     setPage(1);
-    fetchVocab(1, level, search);
+    fetchVocab(1, level, search, topic);
   };
 
   const handleLevelChange = (l) => {
     setLevel(l);
+    setPage(1);
+  };
+
+  const handleTopicChange = (tp) => {
+    setTopic(tp);
     setPage(1);
   };
 
@@ -92,21 +123,31 @@ export default function Vocabulary() {
             <p className="text-sm text-on-muted mt-0.5">{total.toLocaleString()} từ vựng</p>
           )}
         </div>
-        <form onSubmit={handleSearch} className="flex gap-2">
-          <input
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            placeholder={t('vocab.search')}
-            className="px-4 py-2 border border-outline rounded-xl text-sm outline-none focus:border-tsubaki-red w-48 transition-colors"
-          />
-          <button type="submit" className="p-2 bg-tsubaki-red text-white rounded-xl hover:opacity-90 active:scale-95 transition-all">
-            <span className="material-symbols-outlined text-lg">search</span>
+        <div className="flex gap-2 items-center">
+          <button
+            type="button"
+            onClick={() => setFurigana(v => !v)}
+            title={furigana ? 'Ẩn furigana' : 'Hiển thị furigana'}
+            className={`inline-flex items-center gap-1 text-[11px] px-2.5 py-1.5 rounded-lg border font-medium transition-all select-none ${furigana ? 'bg-amber-100 border-amber-300 text-amber-700' : 'bg-white border-outline/60 text-on-muted hover:border-amber-300 hover:text-amber-600 hover:bg-amber-50'}`}>
+            <span className="font-bold" style={{ fontFamily: 'serif', fontSize: '13px' }}>あ</span>
+            ふりがな
           </button>
-        </form>
+          <form onSubmit={handleSearch} className="flex gap-2">
+            <input
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder={t('vocab.search')}
+              className="px-4 py-2 border border-outline rounded-xl text-sm outline-none focus:border-tsubaki-red w-48 transition-colors"
+            />
+            <button type="submit" className="p-2 bg-tsubaki-red text-white rounded-xl hover:opacity-90 active:scale-95 transition-all">
+              <span className="material-symbols-outlined text-lg">search</span>
+            </button>
+          </form>
+        </div>
       </div>
 
       {/* Level filter */}
-      <div className="flex flex-wrap gap-2 mb-6">
+      <div className="flex flex-wrap gap-2 mb-3">
         <button
           onClick={() => handleLevelChange('')}
           className={`px-4 py-1.5 rounded-full text-sm font-semibold transition-colors ${!level ? 'bg-tsubaki-red text-white' : 'bg-white border border-outline text-on-muted hover:border-tsubaki-red'}`}
@@ -121,6 +162,26 @@ export default function Vocabulary() {
         ))}
       </div>
 
+      {/* Topic filter */}
+      <div className="flex gap-2 mb-6 overflow-x-auto pb-1 scrollbar-thin">
+        <button
+          onClick={() => handleTopicChange('')}
+          className={`flex-shrink-0 px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${!topic ? 'bg-charcoal text-white' : 'bg-white border border-outline text-on-muted hover:border-charcoal'}`}
+        >
+          Tất cả chủ đề
+        </button>
+        {TOPICS.map(tp => (
+          <button
+            key={tp}
+            onClick={() => handleTopicChange(tp)}
+            className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${topic === tp ? 'bg-charcoal text-white' : 'bg-white border border-outline text-on-muted hover:border-charcoal'}`}
+          >
+            <span className="material-symbols-outlined text-[14px]">{TOPIC_ICONS[tp]}</span>
+            {tp}
+          </button>
+        ))}
+      </div>
+
       {/* Content */}
       {loading ? (
         <VocabSkeleton />
@@ -128,18 +189,20 @@ export default function Vocabulary() {
         <div className="flex flex-col items-center justify-center py-24 text-center">
           <span className="material-symbols-outlined text-6xl text-on-muted/20 mb-4">translate</span>
           <h3 className="font-display font-bold text-lg text-charcoal mb-1">
-            {search || level ? 'Không tìm thấy từ vựng' : 'Chưa có từ vựng nào'}
+            {search || level || topic ? 'Không tìm thấy từ vựng' : 'Chưa có từ vựng nào'}
           </h3>
           <p className="text-sm text-on-muted max-w-xs">
             {search
               ? `Không có kết quả cho "${search}". Thử từ khóa khác.`
+              : topic
+              ? `Chưa có từ vựng trong chủ đề "${topic}".`
               : level
               ? `Chưa có từ vựng cấp độ ${level}.`
               : 'Nội dung từ vựng đang được biên soạn, hãy quay lại sau.'}
           </p>
-          {(search || level) && (
+          {(search || level || topic) && (
             <button
-              onClick={() => { setSearch(''); setLevel(''); setPage(1); fetchVocab(1, '', ''); }}
+              onClick={() => { setSearch(''); setLevel(''); setTopic(''); setPage(1); fetchVocab(1, '', '', ''); }}
               className="mt-4 text-sm text-tsubaki-red font-semibold hover:underline"
             >
               Xóa bộ lọc
@@ -155,13 +218,20 @@ export default function Vocabulary() {
                 onClick={() => setSelected(v)}
                 className="glass-card rounded-2xl p-5 cursor-pointer hover:shadow-lg hover:-translate-y-0.5 hover:border-tsubaki-red/30 border border-transparent transition-all min-h-[120px] flex flex-col justify-center items-center text-center select-none"
               >
-                <p className="text-3xl font-bold text-tsubaki-red mb-1">{v.kanji || v.reading}</p>
+                <FuriganaText text={v.kanji || v.reading} enabled={furigana} textClassName="text-3xl font-bold text-tsubaki-red mb-1" />
                 {v.kanji && <p className="text-sm text-on-muted">{v.reading}</p>}
-                {v.type && (
-                  <span className={`mt-2 text-xs px-2 py-0.5 rounded-full font-bold ${TYPE_COLORS[v.type] || 'bg-surface-low text-on-muted'}`}>
-                    {v.type}
-                  </span>
-                )}
+                <div className="flex flex-wrap gap-1 justify-center mt-2">
+                  {v.type && (
+                    <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${TYPE_COLORS[v.type] || 'bg-surface-low text-on-muted'}`}>
+                      {v.type}
+                    </span>
+                  )}
+                  {v.topic && !topic && (
+                    <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-slate-100 text-slate-600">
+                      {v.topic}
+                    </span>
+                  )}
+                </div>
               </div>
             ))}
           </div>
@@ -212,9 +282,9 @@ export default function Vocabulary() {
 
             {/* Main reading / kanji */}
             <div className="px-8 pt-8 pb-6 text-center">
-              <p className="text-6xl font-bold text-tsubaki-red leading-none mb-2">
-                {selected.kanji || selected.reading}
-              </p>
+              <div className="flex justify-center mb-2">
+                <FuriganaText text={selected.kanji || selected.reading} enabled={furigana} textClassName="text-6xl font-bold text-tsubaki-red leading-none" />
+              </div>
               {selected.kanji && (
                 <p className="text-lg text-on-muted mt-1">{selected.reading}</p>
               )}
@@ -227,6 +297,12 @@ export default function Vocabulary() {
                 {selected.type && (
                   <span className={`px-3 py-1 rounded-full text-xs font-bold ${TYPE_COLORS[selected.type] || 'bg-surface-low text-on-muted'}`}>
                     {selected.type}
+                  </span>
+                )}
+                {selected.topic && (
+                  <span className="flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-600">
+                    <span className="material-symbols-outlined text-[12px]">{TOPIC_ICONS[selected.topic] || 'label'}</span>
+                    {selected.topic}
                   </span>
                 )}
               </div>
@@ -244,15 +320,15 @@ export default function Vocabulary() {
               {selected.meaning_ja && (
                 <div>
                   <p className="text-xs font-semibold text-on-muted uppercase tracking-wide mb-1">Giải thích tiếng Nhật</p>
-                  <p className="text-sm text-charcoal">{selected.meaning_ja}</p>
+                  <FuriganaText text={selected.meaning_ja} enabled={furigana} textClassName="text-sm text-charcoal" block />
                 </div>
               )}
               {selected.example_sentence && (
                 <div>
                   <p className="text-xs font-semibold text-on-muted uppercase tracking-wide mb-1">Câu ví dụ</p>
-                  <p className="text-sm text-charcoal italic bg-surface-low rounded-xl px-4 py-3 leading-relaxed">
-                    「{selected.example_sentence}」
-                  </p>
+                  <div className="text-sm text-charcoal italic bg-surface-low rounded-xl px-4 py-3">
+                    「<FuriganaText text={selected.example_sentence} enabled={furigana} textClassName="text-sm text-charcoal italic" />」
+                  </div>
                 </div>
               )}
             </div>

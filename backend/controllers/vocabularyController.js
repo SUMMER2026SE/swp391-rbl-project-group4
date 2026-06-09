@@ -4,7 +4,7 @@ const { supabaseAdmin } = require('../config/supabase');
 
 // GET /api/vocabulary
 exports.list = async (req, res) => {
-  const { level, lesson_id, search, page = 1, limit = 20 } = req.query;
+  const { level, lesson_id, search, topic, page = 1, limit = 20 } = req.query;
   const offset = (page - 1) * limit;
 
   try {
@@ -15,6 +15,7 @@ exports.list = async (req, res) => {
 
     if (level)     query = query.eq('level', level);
     if (lesson_id) query = query.eq('lesson_id', lesson_id);
+    if (topic)     query = query.eq('topic', topic);
     if (search)    query = query.or(`kanji.ilike.%${search}%,reading.ilike.%${search}%,meaning_vi.ilike.%${search}%`);
 
     const { data, error, count } = await query;

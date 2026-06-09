@@ -1,9 +1,17 @@
 'use strict';
 
-const router = require('express').Router();
+const router  = require('express').Router();
+const multer  = require('multer');
 const { requireAuth, requireAdmin } = require('../../middleware/auth');
 const c = require('../../controllers/adminController');
 const { supabaseAdmin } = require('../../config/supabase');
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) =>
+    file.mimetype.startsWith('image/') ? cb(null, true) : cb(new Error('Chỉ chấp nhận file hình ảnh.')),
+});
 
 router.use(requireAuth, requireAdmin);
 
@@ -77,16 +85,26 @@ router.put('/users/:id/password',     c.resetUserPassword);
 router.delete('/users/:id',           c.deleteUser);
 
 // Courses
-router.get('/courses',         c.listCourses);
-router.post('/courses',        c.createCourse);
-router.put('/courses/:id',     c.updateCourse);
-router.delete('/courses/:id',  c.deleteCourse);
+router.get('/courses',                    c.listCourses);
+router.post('/courses',                   c.createCourse);
+router.put('/courses/:id',                c.updateCourse);
+router.delete('/courses/:id',             c.deleteCourse);
+router.get('/courses/:courseId/builder',  c.getCourseBuilder);
+
+// Modules
+router.get('/modules',               c.listModules);
+router.post('/modules',              c.createModule);
+router.put('/modules/:id',           c.updateModule);
+router.delete('/modules/:id',        c.deleteModule);
+router.patch('/modules/reorder',     c.reorderModules);
+router.get('/modules/:moduleId/lessons', c.listModuleLessons);
 
 // Lessons
-router.get('/lessons',         c.listLessons);
-router.post('/lessons',        c.createLesson);
-router.put('/lessons/:id',     c.updateLesson);
-router.delete('/lessons/:id',  c.deleteLesson);
+router.get('/lessons',               c.listLessons);
+router.post('/lessons',              c.createLesson);
+router.put('/lessons/:id',           c.updateLesson);
+router.delete('/lessons/:id',        c.deleteLesson);
+router.patch('/lessons/reorder',     c.reorderLessons);
 
 // Vocabulary
 router.post('/vocabulary/import', c.importVocab);
@@ -110,9 +128,29 @@ router.post('/quizzes',        c.createQuiz);
 router.put('/quizzes/:id',     c.updateQuiz);
 router.delete('/quizzes/:id',  c.deleteQuiz);
 
-// Questions
-router.post('/questions',        c.createQuestion);
-router.put('/questions/:id',     c.updateQuestion);
-router.delete('/questions/:id',  c.deleteQuestion);
+// Quiz questions (admin view)
+router.get('/quizzes/:quizId/questions',              c.listQuizQuestions);
+
+// Questions (quiz-linked)
+router.post('/questions',                             c.createQuestion);
+router.put('/questions/:id',                          c.updateQuestion);
+router.delete('/questions/:id',                       c.deleteQuestion);
+router.post('/quizzes/:quizId/import-from-bank',      c.importFromBank);
+
+// Question Bank (global)
+router.get('/question-bank/stats',    c.questionBankStats);
+router.get('/question-bank',          c.listQuestionBank);
+router.post('/question-bank/bulk',    c.bulkCreateQuestionBank);
+router.post('/question-bank/ai-generate', c.aiGenerateQuestions);
+router.post('/question-bank',         c.createQuestionBank);
+router.put('/question-bank/:id',      c.updateQuestionBank);
+router.delete('/question-bank/:id',   c.deleteQuestionBank);
+
+// Reading Passages
+router.post('/reading-passages/upload', upload.single('image'), c.uploadPassageImage);
+router.get('/reading-passages',        c.listPassages);
+router.post('/reading-passages',       c.createPassage);
+router.put('/reading-passages/:id',    c.updatePassage);
+router.delete('/reading-passages/:id', c.deletePassage);
 
 module.exports = router;

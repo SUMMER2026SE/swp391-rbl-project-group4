@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import AdminLayout from '../../components/layout/AdminLayout';
 import Modal from '../../components/ui/Modal';
 import Button from '../../components/ui/Button';
@@ -25,7 +26,7 @@ const EMPTY = {
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 
-function CourseCard({ course, onEdit, onDelete }) {
+function CourseCard({ course, onEdit, onDelete, onManage }) {
   const levelStyle = LEVEL_STYLE[course.level] || 'bg-gray-100 text-gray-600';
 
   return (
@@ -82,8 +83,15 @@ function CourseCard({ course, onEdit, onDelete }) {
           </span>
           <div className="flex items-center gap-0.5">
             <button
+              onClick={() => onManage(course)}
+              title="Quản lý nội dung"
+              className="p-1.5 text-on-muted hover:text-sumire-purple hover:bg-sumire-purple/10 rounded-lg transition-colors"
+            >
+              <span className="material-symbols-outlined text-[18px]">tune</span>
+            </button>
+            <button
               onClick={() => onEdit(course)}
-              title="Chỉnh sửa"
+              title="Chỉnh sửa thông tin"
               className="p-1.5 text-on-muted hover:text-tsubaki-red hover:bg-tsubaki-red/10 rounded-lg transition-colors"
             >
               <span className="material-symbols-outlined text-[18px]">edit</span>
@@ -266,6 +274,7 @@ function DeleteModal({ course, onConfirm, onCancel, deleting }) {
 const LIMIT = 12;
 
 export default function AdminCourses() {
+  const navigate = useNavigate();
   const [data, setData]         = useState([]);
   const [total, setTotal]       = useState(0);
   const [loading, setLoading]   = useState(true);
@@ -471,6 +480,7 @@ export default function AdminCourses() {
               course={course}
               onEdit={openEdit}
               onDelete={setDeleteTarget}
+              onManage={(c) => navigate(`/admin/courses/${c.id}/edit`)}
             />
           ))}
         </div>
