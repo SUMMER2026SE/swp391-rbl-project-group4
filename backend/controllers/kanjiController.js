@@ -14,7 +14,7 @@ exports.list = async (req, res) => {
       .range(offset, offset + Number(limit) - 1);
 
     if (level)  query = query.eq('level', level);
-    if (search) query = query.or(`character.ilike.%${search}%,meaning_vi.ilike.%${search}%`);
+    if (search) query = query.or(`character.ilike.%${search}%,meaning_vi.ilike.%${search}%,han_viet.ilike.%${search}%`);
 
     const { data, error, count } = await query;
     if (error) throw error;

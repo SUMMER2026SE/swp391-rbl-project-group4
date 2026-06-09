@@ -324,6 +324,7 @@ exports.importKanji = async (req, res) => {
       meaning_vi:   row.meaning_vi,
       stroke_count: row.stroke_count ? Number(row.stroke_count) : null,
       level:        row.level || null,
+      han_viet:     row.han_viet || null,
     });
   });
 
@@ -349,11 +350,11 @@ exports.importKanji = async (req, res) => {
 
 // ── Kanji CRUD ───────────────────────────────────────────────────────────────
 exports.createKanji = async (req, res) => {
-  const { character, reading_on, reading_kun, meaning_vi, stroke_count, level } = req.body;
+  const { character, reading_on, reading_kun, meaning_vi, stroke_count, level, han_viet } = req.body;
   if (!character || !meaning_vi) return res.status(400).json({ error: 'Thiếu thông tin bắt buộc.' });
   try {
     const { data, error } = await supabaseAdmin.from('kanji')
-      .insert({ character, reading_on, reading_kun, meaning_vi, stroke_count, level })
+      .insert({ character, reading_on, reading_kun, meaning_vi, stroke_count, level, han_viet })
       .select().single();
     if (error) throw error;
     res.status(201).json(data);
@@ -361,7 +362,7 @@ exports.createKanji = async (req, res) => {
 };
 
 exports.updateKanji = async (req, res) => {
-  const allowed = ['character','reading_on','reading_kun','meaning_vi','stroke_count','level'];
+  const allowed = ['character','reading_on','reading_kun','meaning_vi','stroke_count','level','han_viet'];
   const updates = Object.fromEntries(Object.entries(req.body).filter(([k]) => allowed.includes(k)));
   try {
     const { data, error } = await supabaseAdmin.from('kanji').update(updates).eq('id', req.params.id).select().single();

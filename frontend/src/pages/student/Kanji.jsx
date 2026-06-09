@@ -127,6 +127,9 @@ export default function Kanji() {
               <div key={k.id} onClick={() => setSelected(k)}
                 className="glass-card rounded-2xl aspect-square cursor-pointer hover:shadow-lg hover:-translate-y-0.5 hover:border-tsubaki-red/30 border border-transparent transition-all flex flex-col justify-center items-center gap-1 select-none p-2">
                 <p className="text-4xl font-bold text-tsubaki-red leading-none">{k.character}</p>
+                {k.han_viet && (
+                  <p className="text-[11px] font-semibold text-amber-600 leading-none">{k.han_viet}</p>
+                )}
                 <p className="text-xs text-on-muted text-center leading-tight line-clamp-1 px-1">{k.meaning_vi}</p>
                 {k.level && (
                   <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${LEVEL_COLORS[k.level]}`}>{k.level}</span>
@@ -170,7 +173,10 @@ export default function Kanji() {
 
             {/* Character display */}
             <div className="px-8 pt-8 pb-6 text-center">
-              <p className="text-8xl font-bold text-tsubaki-red leading-none mb-4">{selected.character}</p>
+              <p className="text-8xl font-bold text-tsubaki-red leading-none mb-2">{selected.character}</p>
+              {selected.han_viet && (
+                <p className="text-lg font-bold text-amber-600 mb-1">{selected.han_viet}</p>
+              )}
               <p className="text-xl font-bold text-charcoal">{selected.meaning_vi}</p>
               <div className="flex flex-wrap gap-2 justify-center mt-3">
                 {selected.level && (
