@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import AdminLayout from '../../components/layout/AdminLayout';
 import DataTable from '../../components/ui/DataTable';
 import Modal from '../../components/ui/Modal';
@@ -13,6 +14,7 @@ const LEVELS = ['N5','N4','N3','N2','N1','Business'];
 
 export default function AdminCourses() {
   const { t } = useLang();
+  const navigate = useNavigate();
   const [data, setData]   = useState([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -70,7 +72,22 @@ export default function AdminCourses() {
         <Button onClick={openCreate}><span className="material-symbols-outlined text-lg">add</span> {t('admin.create')}</Button>
       </div>
 
-      <DataTable columns={COLS} data={data} loading={loading} onEdit={openEdit} onDelete={handleDelete} />
+      <DataTable
+        columns={COLS}
+        data={data}
+        loading={loading}
+        onEdit={openEdit}
+        onDelete={handleDelete}
+        actions={(row) => (
+          <button
+            onClick={() => navigate(`/admin/courses/${row.id}/edit`)}
+            title="Quản lý nội dung"
+            className="p-1.5 text-on-muted hover:text-sumire-purple hover:bg-sumire-purple/10 rounded-lg transition-colors"
+          >
+            <span className="material-symbols-outlined text-lg">tune</span>
+          </button>
+        )}
+      />
 
       {total > LIMIT && (
         <div className="flex justify-center gap-2 mt-4">
