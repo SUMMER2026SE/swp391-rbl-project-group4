@@ -1054,6 +1054,7 @@ function ListeningPassagesTab({ passages, onRefresh, setAlert }) {
   const [uploading, setUploading] = useState(false);
   const [viewPassage, setViewPassage] = useState(null);
   const [transcribing, setTranscribing] = useState(null); // passage id being transcribed
+  const transcribingRef = useRef(false);
   const fileRef = useRef(null);
 
   const openCreate = () => { setForm(EMPTY_LISTENING_PASSAGE); setEditId(null); setModal(true); };
@@ -1099,6 +1100,8 @@ function ListeningPassagesTab({ passages, onRefresh, setAlert }) {
   const fmtDuration = (sec) => { if (!sec) return null; const m = Math.floor(sec / 60), s = sec % 60; return `${m}:${String(s).padStart(2, '0')}`; };
 
   const handleTranscribe = async (p) => {
+    if (transcribingRef.current) return;
+    transcribingRef.current = true;
     setTranscribing(p.id);
     try {
       const r = await api.post(`/admin/listening-passages/${p.id}/transcribe`);
@@ -1108,7 +1111,7 @@ function ListeningPassagesTab({ passages, onRefresh, setAlert }) {
       }
       onRefresh();
     } catch (e) { setAlert({ type: 'error', msg: e.message }); }
-    finally { setTranscribing(null); }
+    finally { transcribingRef.current = false; setTranscribing(null); }
   };
 
   return (

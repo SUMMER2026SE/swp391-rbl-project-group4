@@ -869,7 +869,18 @@ exports.transcribeListeningPassage = async (req, res) => {
             const chunk = await extractAudioChunk(tmpFile, g.start, g.end - g.start);
             const r = await whisperTranscribe(chunk, 'chunk.mp3', 'audio/mpeg', lang);
             const text = r.text?.trim();
-            return text ? { start: g.start, end: g.end, text } : null;
+            if (!text) return null;
+
+            // Detect Whisper hallucination: repeated phrases or text too long for duration
+            const dur = g.end - g.start;
+            const isRepetitive = /(.{2,})\1{4,}/.test(text);
+            const isTooLong = text.length > dur * 18; // ~18 chars/sec max for Japanese
+            if (isRepetitive || isTooLong) {
+              console.warn('[Transcribe] hallucination detected at', g.start, '-', g.end, `(${text.length} chars / ${dur}s)`);
+              return null;
+            }
+
+            return { start: g.start, end: g.end, text };
           } catch (e) {
             console.warn('[Transcribe] chunk', g.start, '-', g.end, 'failed:', e.message);
             return null;
