@@ -1016,17 +1016,19 @@ function SyncedTranscriptPlayer({ audioUrl, segments, transcript }) {
           {effectiveSegments.map((seg, i) => {
             const isActive = i === activeIdx;
             return (
-              <span
-                key={i}
-                ref={isActive ? activeRef : null}
-                onClick={() => seekTo(seg.start)}
-                title={`${Number(seg.start).toFixed(1)}s`}
-                style={isActive
-                  ? { backgroundColor: '#fcd34d', color: '#78350f', fontWeight: '700', borderRadius: '3px', padding: '1px 3px', cursor: 'pointer', transition: 'background-color 0.15s' }
-                  : { color: '#374151', cursor: 'pointer', borderRadius: '3px', padding: '1px 3px' }
-                }
-              >
-                {seg.text}
+              <span key={i}>
+                <span
+                  ref={isActive ? activeRef : null}
+                  onClick={() => seekTo(seg.start)}
+                  title={`${Number(seg.start).toFixed(1)}s`}
+                  style={isActive
+                    ? { backgroundColor: '#fcd34d', color: '#78350f', fontWeight: '700', borderRadius: '3px', padding: '1px 3px', cursor: 'pointer', transition: 'background-color 0.15s' }
+                    : { color: '#374151', cursor: 'pointer', borderRadius: '3px', padding: '1px 3px' }
+                  }
+                >
+                  {seg.text}
+                </span>
+                {i < effectiveSegments.length - 1 && <span style={{ color: '#9ca3af' }}> </span>}
               </span>
             );
           })}

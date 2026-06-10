@@ -821,16 +821,19 @@ exports.updateListeningPassage = async (req, res) => {
 };
 
 exports.transcribeListeningPassage = async (req, res) => {
+  const fs = require('fs');
+  const path = require('path');
+  const os = require('os');
   const { whisperTranscribe } = require('../config/ai');
-  const { analyzeSilence, mapTextToSegments } = require('../config/audio');
-  const { language } = req.body; // optional: 'ja', 'en', etc.
+  const { analyzeSilence, extractAudioChunk, mergeIntoGroups } = require('../config/audio');
+  const { language } = req.body;
+
   try {
     const { data: passage, error } = await supabaseAdmin
       .from('listening_passages').select('audio_url, title').eq('id', req.params.id).single();
     if (error || !passage) return res.status(404).json({ error: 'Không tìm thấy bài nghe.' });
     if (!passage.audio_url) return res.status(400).json({ error: 'Bài nghe chưa có file âm thanh.' });
 
-    // Download audio once — reused for both Whisper and silence analysis
     const audioRes = await fetch(passage.audio_url);
     if (!audioRes.ok) throw new Error('Không thể tải file âm thanh từ storage.');
     const audioBuffer = Buffer.from(await audioRes.arrayBuffer());
@@ -838,31 +841,63 @@ exports.transcribeListeningPassage = async (req, res) => {
     const ext = (passage.audio_url.split('?')[0].split('.').pop() || 'mp3').toLowerCase();
     const mimeMap = { mp3:'audio/mpeg', mp4:'audio/mp4', wav:'audio/wav', ogg:'audio/ogg', webm:'audio/webm', m4a:'audio/x-m4a', aac:'audio/aac' };
     const mimeType = mimeMap[ext] || 'audio/mpeg';
+    const lang = language || 'ja';
 
-    // Step 1: get transcript text (Whisper)
-    const whisperResult = await whisperTranscribe(audioBuffer, `audio.${ext}`, mimeType, language || 'ja');
-    const transcript = whisperResult.text?.trim() || '';
+    // Write audio once to a temp file — shared by VAD and chunk extraction
+    const tmpFile = path.join(os.tmpdir(), `kn_${Date.now()}.${ext}`);
+    fs.writeFileSync(tmpFile, audioBuffer);
 
-    // Step 2: analyse silence in the audio to find speech boundaries (ffmpeg)
     let segments = [];
-    if (transcript) {
-      try {
-        const { speechSegments, totalDuration } = await analyzeSilence(audioBuffer, ext);
-        segments = mapTextToSegments(transcript, speechSegments, totalDuration);
-        console.log('[Audio] final segments:', segments.length);
-      } catch (audioErr) {
-        console.warn('[Audio] silence analysis failed, storing empty segments:', audioErr.message);
-        // Frontend will fall back to client-side estimation using real audio duration
+    let transcript = '';
+
+    try {
+      // Step 1: VAD / silencedetect — find speech boundaries (ignores background music)
+      const { speechSegments, totalDuration } = await analyzeSilence(tmpFile, ext);
+
+      // Step 2: merge nearby segments into utterance groups (≤0.5s gap → same group)
+      const groups = mergeIntoGroups(speechSegments, 0.5);
+      console.log('[Transcribe]', groups.length, 'utterance groups / total', totalDuration, 's');
+
+      // Step 3: transcribe each group individually — each chunk returns its own text
+      // Process in batches of 3 to avoid rate-limit issues
+      const BATCH = 3;
+      for (let i = 0; i < groups.length; i += BATCH) {
+        const batch = groups.slice(i, i + BATCH);
+        const results = await Promise.all(batch.map(async (g) => {
+          try {
+            const chunk = await extractAudioChunk(tmpFile, g.start, g.end - g.start);
+            const r = await whisperTranscribe(chunk, 'chunk.mp3', 'audio/mpeg', lang);
+            const text = r.text?.trim();
+            return text ? { start: g.start, end: g.end, text } : null;
+          } catch (e) {
+            console.warn('[Transcribe] chunk', g.start, '-', g.end, 'failed:', e.message);
+            return null;
+          }
+        }));
+        segments.push(...results.filter(Boolean));
       }
+
+      segments.sort((a, b) => a.start - b.start);
+      transcript = segments.map(s => s.text).join(' ');
+      console.log('[Transcribe] done:', segments.length, 'segments');
+
+    } catch (audioErr) {
+      console.warn('[Transcribe] segmented approach failed, falling back to single call:', audioErr.message);
+      // Fallback: one Whisper call for the whole audio (no timestamps)
+      const r = await whisperTranscribe(audioBuffer, `audio.${ext}`, mimeType, lang);
+      transcript = r.text?.trim() || '';
+      segments = [];
+    } finally {
+      try { fs.unlinkSync(tmpFile); } catch {}
     }
 
     await supabaseAdmin.from('listening_passages').update({
-      transcript_segments: segments,
+      transcript_segments: segments.length > 0 ? segments : null,
       transcript,
-      transcript_language: whisperResult.language || language || 'ja',
+      transcript_language: lang,
     }).eq('id', req.params.id);
 
-    res.json({ segments, transcript, language: whisperResult.language || language || 'ja', count: segments.length });
+    res.json({ segments, transcript, language: lang, count: segments.length });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
