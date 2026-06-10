@@ -177,57 +177,80 @@ async function analyzeSilence(audioBuffer, ext) {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// Text → timed segments (1:1 with detected speech bursts)
+// Text → timed segments
+//
+// Allocate characters proportional to each speech segment's duration,
+// not equal-size chunks.  Prevents cumulative drift: a long segment (6 s)
+// gets proportionally more text than a short one (0.5 s).
 // ══════════════════════════════════════════════════════════════════════════════
 function mapTextToSegments(transcript, speechSegments, totalDuration) {
-  const intervals = speechSegments.length > 0
-    ? speechSegments
-    : (totalDuration > 0 ? [{ start: 0, end: r2(totalDuration) }] : null);
+  const text = transcript.trim();
+  if (!text || !speechSegments.length) return [];
 
-  if (!intervals || !transcript) return [];
+  // 1. Post-process VAD output: merge very short segments and tiny gaps
+  const intervals = consolidateSegments(speechSegments);
 
-  const chunks = splitIntoNChunks(transcript.trim(), intervals.length);
+  const totalChars    = text.length;
+  const totalSpeechDur = intervals.reduce((s, iv) => s + (iv.end - iv.start), 0);
+  if (totalSpeechDur <= 0) return [];
+
+  // 2. Compute char budget for each interval (proportional to duration)
+  let remaining = totalChars;
+  const charCounts = intervals.map((iv, i) => {
+    if (i === intervals.length - 1) return Math.max(1, remaining);
+    const n = Math.max(1, Math.round((iv.end - iv.start) / totalSpeechDur * totalChars));
+    remaining = Math.max(0, remaining - n);
+    return n;
+  });
+
+  // 3. Split text by those budgets, snapping to natural boundaries
+  const chunks = splitByCharCounts(text, charCounts);
 
   return chunks
-    .map((text, i) => ({
+    .map((chunk, i) => ({
       start: intervals[i]?.start ?? intervals[intervals.length - 1].start,
       end:   intervals[i]?.end   ?? intervals[intervals.length - 1].end,
-      text,
+      text:  chunk,
     }))
     .filter(s => s.text.trim());
 }
 
-// Split text into exactly N chunks, preferring natural boundaries
+// Merge segments that are too short or too close together
+function consolidateSegments(segments, minDurS = 0.25, maxGapS = 0.12) {
+  if (!segments.length) return segments;
+  const out = [{ ...segments[0] }];
+  for (let i = 1; i < segments.length; i++) {
+    const prev = out[out.length - 1];
+    const curr = segments[i];
+    const gap  = curr.start - prev.end;
+    if (gap <= maxGapS || (curr.end - curr.start) < minDurS || (prev.end - prev.start) < minDurS) {
+      prev.end = curr.end; // merge
+    } else {
+      out.push({ ...curr });
+    }
+  }
+  return out;
+}
+
 const SPLIT_CHARS = new Set(['。', '！', '？', '、', ' ', '\n', ')', '）', '」', '』', '…']);
 
-function splitIntoNChunks(text, n) {
-  if (!text) return [];
-  if (n <= 1) return [text];
-
-  const len = text.length;
-  if (n >= len) return [...text].filter(c => c.trim());
-
-  const idealSize = len / n;
-  const chunks    = [];
+function splitByCharCounts(text, charCounts) {
+  const chunks = [];
   let pos = 0;
-
-  for (let i = 1; i < n; i++) {
-    const target = Math.round(i * idealSize);
-    if (target >= len) break;
-    const window = Math.min(8, Math.max(1, Math.round(idealSize * 0.35)));
-    let bestPos  = target;
+  for (let i = 0; i < charCounts.length - 1; i++) {
+    const target = pos + charCounts[i];
+    if (target >= text.length) { chunks.push(text.slice(pos).trim()); pos = text.length; break; }
+    const window = Math.min(10, Math.max(1, Math.round(charCounts[i] * 0.3)));
+    let bestPos = target;
     for (let d = 0; d <= window; d++) {
-      if (target + d < len && SPLIT_CHARS.has(text[target + d])) { bestPos = target + d + 1; break; }
+      if (target + d < text.length && SPLIT_CHARS.has(text[target + d])) { bestPos = target + d + 1; break; }
       if (d > 0 && target - d > pos && SPLIT_CHARS.has(text[target - d])) { bestPos = target - d + 1; break; }
     }
-    const chunk = text.slice(pos, bestPos).trim();
-    if (chunk) chunks.push(chunk);
+    chunks.push(text.slice(pos, bestPos).trim());
     pos = bestPos;
   }
-
-  const last = text.slice(pos).trim();
-  if (last) chunks.push(last);
-  return chunks;
+  if (pos < text.length) chunks.push(text.slice(pos).trim());
+  return chunks.filter(Boolean);
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
