@@ -48,22 +48,7 @@ function parseSRT(srt) {
   return segments;
 }
 
-// Estimate segment timestamps from plain text + total duration (fallback when API gives no timestamps)
-function estimateSegments(text, durationSec) {
-  if (!text || !durationSec) return [];
-  // Split on Japanese/common sentence boundaries
-  const parts = text.split(/(?<=[。！？\n])|(?<=\. )|(?<=! )|(?<=\? )/).map(s => s.trim()).filter(Boolean);
-  const totalChars = parts.reduce((s, p) => s + p.length, 0) || 1;
-  let t = 0;
-  return parts.map(part => {
-    const dur = (part.length / totalChars) * durationSec;
-    const seg = { start: Math.round(t * 100) / 100, end: Math.round((t + dur) * 100) / 100, text: part };
-    t += dur;
-    return seg;
-  });
-}
-
-async function whisperTranscribe(audioBuffer, filename, mimeType, language, durationSec) {
+async function whisperTranscribe(audioBuffer, filename, mimeType, language) {
   const formData = new FormData();
   formData.append('file', new Blob([audioBuffer], { type: mimeType }), filename);
   formData.append('model', process.env.FPT_AI_WHISPER_MODEL || 'whisper-large-v3-turbo');
@@ -87,7 +72,7 @@ async function whisperTranscribe(audioBuffer, filename, mimeType, language, dura
   // Try SRT parse
   let segments = parseSRT(raw);
 
-  // If SRT parse failed, maybe API returned JSON
+  // If SRT parse failed, API may have returned JSON
   if (segments.length === 0) {
     try {
       const json = JSON.parse(raw);
@@ -100,16 +85,10 @@ async function whisperTranscribe(audioBuffer, filename, mimeType, language, dura
           text:  String(s.text).trim(),
         })).filter(s => s.text);
       }
-      // Last resort: estimate from text + duration
-      if (segments.length === 0 && text && durationSec) {
-        segments = estimateSegments(text, durationSec);
-      }
+      // No estimation fallback — frontend estimates using real audio duration
       return { text, segments, language: json.language || language || 'ja' };
     } catch {
-      // raw is plain text, not JSON — estimate from it
-      const text = raw.trim();
-      if (durationSec) segments = estimateSegments(text, durationSec);
-      return { text, segments, language: language || 'ja' };
+      return { text: raw.trim(), segments: [], language: language || 'ja' };
     }
   }
 

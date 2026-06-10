@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import AdminLayout from '../../components/layout/AdminLayout';
 import Modal from '../../components/ui/Modal';
 import Button from '../../components/ui/Button';
@@ -931,25 +931,48 @@ function PassagesTab({ passages, onRefresh, setAlert }) {
 }
 
 // ── Synced Transcript Player ──────────────────────────────────────────────────
+function splitIntoSegments(text, durationSec) {
+  // Split on Japanese sentence-ending punctuation; keep delimiter attached
+  const parts = text.split(/(?<=[。！？\n])|(?<=[.!?] )/).map(s => s.trim()).filter(Boolean);
+  if (parts.length === 0) return [];
+  const totalChars = parts.reduce((s, p) => s + p.length, 0) || 1;
+  let t = 0;
+  return parts.map(part => {
+    const dur = (part.length / totalChars) * durationSec;
+    const seg = { start: Math.round(t * 100) / 100, end: Math.round((t + dur) * 100) / 100, text: part };
+    t += dur;
+    return seg;
+  });
+}
+
 function SyncedTranscriptPlayer({ audioUrl, segments, transcript }) {
   const audioRef     = useRef(null);
   const activeRef    = useRef(null);
   const containerRef = useRef(null);
-  const [currentTime, setCurrentTime] = useState(0);
+  const [currentTime, setCurrentTime]   = useState(0);
+  const [audioDuration, setAudioDuration] = useState(0);
 
-  const hasSegments = Array.isArray(segments) && segments.length > 0;
+  // Real segments from DB (SRT-based) take priority.
+  // When empty, estimate client-side using ACTUAL audio duration from <audio> metadata
+  // so we never depend on the manually-entered duration_sec field.
+  const effectiveSegments = useMemo(() => {
+    if (Array.isArray(segments) && segments.length > 0) return segments;
+    if (transcript && audioDuration > 0) return splitIntoSegments(transcript, audioDuration);
+    return null;
+  }, [segments, transcript, audioDuration]);
 
-  // cast to Number in case Supabase JSONB returns strings
+  const hasSegments = effectiveSegments && effectiveSegments.length > 0;
+
   const activeIdx = hasSegments
-    ? segments.reduce((best, s, i) => (currentTime >= Number(s.start) ? i : best), -1)
+    ? effectiveSegments.reduce((best, s, i) => (currentTime >= Number(s.start) ? i : best), -1)
     : -1;
 
   useEffect(() => {
     if (!activeRef.current || !containerRef.current) return;
     const el  = activeRef.current;
     const box = containerRef.current;
-    const elTop    = el.offsetTop;
-    const elHeight = el.offsetHeight;
+    const elTop     = el.offsetTop;
+    const elHeight  = el.offsetHeight;
     const boxHeight = box.clientHeight;
     const scrollTop = box.scrollTop;
     if (elTop < scrollTop || elTop + elHeight > scrollTop + boxHeight) {
@@ -970,6 +993,7 @@ function SyncedTranscriptPlayer({ audioUrl, segments, transcript }) {
         controls
         src={audioUrl}
         onTimeUpdate={e => setCurrentTime(e.target.currentTime)}
+        onLoadedMetadata={e => setAudioDuration(e.target.duration)}
         className="w-full"
       />
       {hasSegments ? (
@@ -978,7 +1002,7 @@ function SyncedTranscriptPlayer({ audioUrl, segments, transcript }) {
           className="max-h-72 overflow-y-auto rounded-xl border border-outline/30 p-4 text-sm leading-loose"
           style={{ backgroundColor: '#f8f9fa' }}
         >
-          {segments.map((seg, i) => {
+          {effectiveSegments.map((seg, i) => {
             const isActive = i === activeIdx;
             return (
               <span
@@ -997,7 +1021,10 @@ function SyncedTranscriptPlayer({ audioUrl, segments, transcript }) {
           })}
         </div>
       ) : transcript ? (
-        <div className="max-h-72 overflow-y-auto rounded-xl border border-outline/30 p-4 text-sm leading-loose whitespace-pre-wrap" style={{ backgroundColor: '#f8f9fa', color: '#374151' }}>
+        <div
+          className="max-h-72 overflow-y-auto rounded-xl border border-outline/30 p-4 text-sm leading-loose whitespace-pre-wrap"
+          style={{ backgroundColor: '#f8f9fa', color: '#374151' }}
+        >
           {transcript}
         </div>
       ) : null}

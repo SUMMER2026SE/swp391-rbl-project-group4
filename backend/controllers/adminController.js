@@ -825,7 +825,7 @@ exports.transcribeListeningPassage = async (req, res) => {
   const { language } = req.body; // optional: 'ja', 'en', etc.
   try {
     const { data: passage, error } = await supabaseAdmin
-      .from('listening_passages').select('audio_url, title, duration_sec').eq('id', req.params.id).single();
+      .from('listening_passages').select('audio_url, title').eq('id', req.params.id).single();
     if (error || !passage) return res.status(404).json({ error: 'Không tìm thấy bài nghe.' });
     if (!passage.audio_url) return res.status(400).json({ error: 'Bài nghe chưa có file âm thanh.' });
 
@@ -839,7 +839,7 @@ exports.transcribeListeningPassage = async (req, res) => {
     const mimeMap = { mp3:'audio/mpeg', mp4:'audio/mp4', wav:'audio/wav', ogg:'audio/ogg', webm:'audio/webm', m4a:'audio/x-m4a', aac:'audio/aac' };
     const mimeType = mimeMap[ext] || 'audio/mpeg';
 
-    const result = await whisperTranscribe(audioBuffer, `audio.${ext}`, mimeType, language || 'ja', passage.duration_sec);
+    const result = await whisperTranscribe(audioBuffer, `audio.${ext}`, mimeType, language || 'ja');
     console.log('[Whisper] segments count:', result.segments?.length ?? 0);
 
     const segments = (result.segments || []).filter(s => s.text);
