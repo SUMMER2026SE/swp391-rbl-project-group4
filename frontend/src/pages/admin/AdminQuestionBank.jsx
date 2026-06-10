@@ -964,7 +964,18 @@ function SyncedTranscriptPlayer({ audioUrl, segments, transcript }) {
   const hasSegments = effectiveSegments && effectiveSegments.length > 0;
 
   const activeIdx = hasSegments
-    ? effectiveSegments.reduce((best, s, i) => (currentTime >= Number(s.start) ? i : best), -1)
+    ? (() => {
+        for (let i = effectiveSegments.length - 1; i >= 0; i--) {
+          const start = Number(effectiveSegments[i].start);
+          const end   = Number(effectiveSegments[i].end);
+          if (currentTime >= start) {
+            // Past end by >0.5s = silence gap → clear highlight
+            if (currentTime > end + 0.5) return -1;
+            return i;
+          }
+        }
+        return -1;
+      })()
     : -1;
 
   useEffect(() => {
