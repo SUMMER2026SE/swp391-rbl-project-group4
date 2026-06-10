@@ -822,6 +822,7 @@ exports.updateListeningPassage = async (req, res) => {
 
 exports.transcribeListeningPassage = async (req, res) => {
   const { whisperTranscribe } = require('../config/ai');
+  const { analyzeSilence, mapTextToSegments } = require('../config/audio');
   const { language } = req.body; // optional: 'ja', 'en', etc.
   try {
     const { data: passage, error } = await supabaseAdmin
@@ -829,29 +830,39 @@ exports.transcribeListeningPassage = async (req, res) => {
     if (error || !passage) return res.status(404).json({ error: 'Không tìm thấy bài nghe.' });
     if (!passage.audio_url) return res.status(400).json({ error: 'Bài nghe chưa có file âm thanh.' });
 
-    // Download audio from storage
+    // Download audio once — reused for both Whisper and silence analysis
     const audioRes = await fetch(passage.audio_url);
     if (!audioRes.ok) throw new Error('Không thể tải file âm thanh từ storage.');
     const audioBuffer = Buffer.from(await audioRes.arrayBuffer());
 
-    // Detect mime type from URL extension
     const ext = (passage.audio_url.split('?')[0].split('.').pop() || 'mp3').toLowerCase();
     const mimeMap = { mp3:'audio/mpeg', mp4:'audio/mp4', wav:'audio/wav', ogg:'audio/ogg', webm:'audio/webm', m4a:'audio/x-m4a', aac:'audio/aac' };
     const mimeType = mimeMap[ext] || 'audio/mpeg';
 
-    const result = await whisperTranscribe(audioBuffer, `audio.${ext}`, mimeType, language || 'ja');
-    console.log('[Whisper] segments count:', result.segments?.length ?? 0);
+    // Step 1: get transcript text (Whisper)
+    const whisperResult = await whisperTranscribe(audioBuffer, `audio.${ext}`, mimeType, language || 'ja');
+    const transcript = whisperResult.text?.trim() || '';
 
-    const segments = (result.segments || []).filter(s => s.text);
-    const transcript = result.text?.trim() || segments.map(s => s.text).join(' ');
+    // Step 2: analyse silence in the audio to find speech boundaries (ffmpeg)
+    let segments = [];
+    if (transcript) {
+      try {
+        const { speechSegments, totalDuration } = await analyzeSilence(audioBuffer, ext);
+        segments = mapTextToSegments(transcript, speechSegments, totalDuration);
+        console.log('[Audio] final segments:', segments.length);
+      } catch (audioErr) {
+        console.warn('[Audio] silence analysis failed, storing empty segments:', audioErr.message);
+        // Frontend will fall back to client-side estimation using real audio duration
+      }
+    }
 
     await supabaseAdmin.from('listening_passages').update({
       transcript_segments: segments,
       transcript,
-      transcript_language: result.language || language || 'ja',
+      transcript_language: whisperResult.language || language || 'ja',
     }).eq('id', req.params.id);
 
-    res.json({ segments, transcript, language: result.language || language || 'ja', count: segments.length });
+    res.json({ segments, transcript, language: whisperResult.language || language || 'ja', count: segments.length });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
