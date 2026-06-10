@@ -1158,9 +1158,28 @@ function ListeningPassagesTab({ passages, onRefresh, setAlert }) {
                   </div>
                 </div>
               </div>
-              <button onClick={() => setViewPassage(null)} className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-surface-low text-on-muted">
-                <span className="material-symbols-outlined text-lg">close</span>
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => handleTranscribe(viewPassage)}
+                  disabled={transcribing === viewPassage.id}
+                  title="Chép lời tự động (Whisper)"
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors
+                    ${viewPassage.transcript_segments
+                      ? 'border-sky-300 bg-sky-50 text-sky-700 hover:bg-sky-100'
+                      : 'border-sky-400 bg-sky-500 text-white hover:bg-sky-600'}
+                    disabled:opacity-50`}
+                >
+                  {transcribing === viewPassage.id ? (
+                    <><span className="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin" />Đang chép lời...</>
+                  ) : (
+                    <><span className="material-symbols-outlined text-[15px]">closed_caption</span>
+                    {viewPassage.transcript_segments ? 'Chép lại' : 'Chép lời tự động'}</>
+                  )}
+                </button>
+                <button onClick={() => setViewPassage(null)} className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-surface-low text-on-muted">
+                  <span className="material-symbols-outlined text-lg">close</span>
+                </button>
+              </div>
             </div>
             <div className="overflow-y-auto p-6 space-y-4">
               {viewPassage.audio_url && (
@@ -1178,12 +1197,6 @@ function ListeningPassagesTab({ passages, onRefresh, setAlert }) {
               )}
               {viewPassage.description && (
                 <p className="text-sm text-charcoal">{viewPassage.description}</p>
-              )}
-              {!viewPassage.transcript_segments && !viewPassage.transcript && viewPassage.audio_url && (
-                <div className="flex items-center gap-2 text-xs text-on-muted bg-sky-50 border border-sky-200 rounded-xl px-4 py-3">
-                  <span className="material-symbols-outlined text-sky-500 text-[16px]">info</span>
-                  Nhấn nút <span className="material-symbols-outlined text-[14px] mx-0.5">closed_caption</span> trên thẻ bài nghe để tạo transcript tự động với Whisper.
-                </div>
               )}
             </div>
           </div>

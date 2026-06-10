@@ -28,7 +28,7 @@ async function chatCompletion(messages, options = {}) {
 async function whisperTranscribe(audioBuffer, filename, mimeType, language) {
   const formData = new FormData();
   formData.append('file', new Blob([audioBuffer], { type: mimeType }), filename);
-  formData.append('model', 'whisper-large-v3-turbo');
+  formData.append('model', process.env.FPT_AI_WHISPER_MODEL || 'whisper-large-v3-turbo');
   formData.append('response_format', 'verbose_json');
   formData.append('timestamp_granularities[]', 'segment');
   if (language) formData.append('language', language);
