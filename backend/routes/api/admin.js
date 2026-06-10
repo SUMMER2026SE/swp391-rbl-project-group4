@@ -153,10 +153,11 @@ router.put('/reading-passages/:id',    c.updatePassage);
 router.delete('/reading-passages/:id', c.deletePassage);
 
 // Listening Passages
-router.post('/listening-passages/upload', audioUpload.single('audio'), c.uploadListeningAudio);
-router.get('/listening-passages',         c.listListeningPassages);
-router.post('/listening-passages',        c.createListeningPassage);
-router.put('/listening-passages/:id',     c.updateListeningPassage);
-router.delete('/listening-passages/:id',  c.deleteListeningPassage);
+router.post('/listening-passages/upload',          audioUpload.single('audio'), c.uploadListeningAudio);
+router.get('/listening-passages',                  c.listListeningPassages);
+router.post('/listening-passages',                 c.createListeningPassage);
+router.post('/listening-passages/:id/transcribe',  c.transcribeListeningPassage);
+router.put('/listening-passages/:id',              c.updateListeningPassage);
+router.delete('/listening-passages/:id',           c.deleteListeningPassage);
 
 module.exports = router;

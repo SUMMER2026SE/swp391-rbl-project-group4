@@ -807,7 +807,7 @@ exports.createListeningPassage = async (req, res) => {
 };
 
 exports.updateListeningPassage = async (req, res) => {
-  const allowed = ['title', 'audio_url', 'transcript', 'description', 'level', 'topic', 'source', 'duration_sec'];
+  const allowed = ['title', 'audio_url', 'transcript', 'description', 'level', 'topic', 'source', 'duration_sec', 'transcript_segments'];
   const updates = Object.fromEntries(Object.entries(req.body).filter(([k]) => allowed.includes(k)));
   if ('transcript'   in updates && !updates.transcript)   updates.transcript   = null;
   if ('description'  in updates && !updates.description)  updates.description  = null;
@@ -818,6 +818,46 @@ exports.updateListeningPassage = async (req, res) => {
     if (error) throw error;
     res.json(data);
   } catch (err) { res.status(500).json({ error: 'Không thể cập nhật bài nghe.' }); }
+};
+
+exports.transcribeListeningPassage = async (req, res) => {
+  const { whisperTranscribe } = require('../config/ai');
+  const { language } = req.body; // optional: 'ja', 'en', etc.
+  try {
+    const { data: passage, error } = await supabaseAdmin
+      .from('listening_passages').select('audio_url, title').eq('id', req.params.id).single();
+    if (error || !passage) return res.status(404).json({ error: 'Không tìm thấy bài nghe.' });
+    if (!passage.audio_url) return res.status(400).json({ error: 'Bài nghe chưa có file âm thanh.' });
+
+    // Download audio from storage
+    const audioRes = await fetch(passage.audio_url);
+    if (!audioRes.ok) throw new Error('Không thể tải file âm thanh từ storage.');
+    const audioBuffer = Buffer.from(await audioRes.arrayBuffer());
+
+    // Detect mime type from URL extension
+    const ext = (passage.audio_url.split('?')[0].split('.').pop() || 'mp3').toLowerCase();
+    const mimeMap = { mp3:'audio/mpeg', mp4:'audio/mp4', wav:'audio/wav', ogg:'audio/ogg', webm:'audio/webm', m4a:'audio/x-m4a', aac:'audio/aac' };
+    const mimeType = mimeMap[ext] || 'audio/mpeg';
+
+    // Call Whisper (runs in parallel with existing Gemma model)
+    const result = await whisperTranscribe(audioBuffer, `audio.${ext}`, mimeType, language || 'ja');
+
+    const segments = (result.segments || [])
+      .map(s => ({ start: Math.round(s.start * 100) / 100, end: Math.round(s.end * 100) / 100, text: s.text.trim() }))
+      .filter(s => s.text);
+
+    const transcript = result.text?.trim() || segments.map(s => s.text).join(' ');
+
+    await supabaseAdmin.from('listening_passages').update({
+      transcript_segments: segments,
+      transcript,
+      transcript_language: result.language || language || 'ja',
+    }).eq('id', req.params.id);
+
+    res.json({ segments, transcript, language: result.language || language || 'ja', count: segments.length });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 };
 
 exports.deleteListeningPassage = async (req, res) => {

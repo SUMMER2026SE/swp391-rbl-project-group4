@@ -930,6 +930,78 @@ function PassagesTab({ passages, onRefresh, setAlert }) {
   );
 }
 
+// ── Synced Transcript Player ──────────────────────────────────────────────────
+function SyncedTranscriptPlayer({ audioUrl, segments, transcript }) {
+  const audioRef    = useRef(null);
+  const activeRef   = useRef(null);
+  const containerRef = useRef(null);
+  const [currentTime, setCurrentTime] = useState(0);
+
+  // Find last segment whose start <= currentTime
+  const activeIdx = segments
+    ? segments.reduce((best, s, i) => (currentTime >= s.start ? i : best), -1)
+    : -1;
+
+  useEffect(() => {
+    if (activeRef.current && containerRef.current) {
+      const el = activeRef.current;
+      const box = containerRef.current;
+      const elTop = el.offsetTop;
+      const elH   = el.offsetHeight;
+      const boxH  = box.clientHeight;
+      const scrollTop = box.scrollTop;
+      if (elTop < scrollTop || elTop + elH > scrollTop + boxH) {
+        box.scrollTo({ top: elTop - boxH / 2, behavior: 'smooth' });
+      }
+    }
+  }, [activeIdx]);
+
+  const seekTo = (time) => { if (audioRef.current) { audioRef.current.currentTime = time; audioRef.current.play(); } };
+
+  const hasSegments = segments && segments.length > 0;
+
+  return (
+    <div className="space-y-3">
+      <audio
+        ref={audioRef}
+        controls
+        src={audioUrl}
+        onTimeUpdate={e => setCurrentTime(e.target.currentTime)}
+        className="w-full"
+      />
+      {hasSegments ? (
+        <div
+          ref={containerRef}
+          className="max-h-72 overflow-y-auto rounded-xl bg-surface-low border border-outline/30 p-4 leading-loose text-sm"
+        >
+          {segments.map((seg, i) => {
+            const isActive = i === activeIdx;
+            return (
+              <span
+                key={i}
+                ref={isActive ? activeRef : null}
+                onClick={() => seekTo(seg.start)}
+                title={`${seg.start.toFixed(1)}s`}
+                className={`cursor-pointer rounded px-0.5 transition-colors duration-150 ${
+                  isActive
+                    ? 'bg-amber-300 text-amber-900 font-semibold'
+                    : 'hover:bg-amber-100 text-charcoal'
+                }`}
+              >
+                {seg.text}
+              </span>
+            );
+          })}
+        </div>
+      ) : transcript ? (
+        <div className="max-h-72 overflow-y-auto rounded-xl bg-surface-low border border-outline/30 p-4 text-sm text-charcoal leading-loose whitespace-pre-wrap">
+          {transcript}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 // ── Listening Passages Tab ────────────────────────────────────────────────────
 function ListeningPassagesTab({ passages, onRefresh, setAlert }) {
   const [modal, setModal]         = useState(false);
@@ -938,6 +1010,7 @@ function ListeningPassagesTab({ passages, onRefresh, setAlert }) {
   const [saving, setSaving]       = useState(false);
   const [uploading, setUploading] = useState(false);
   const [viewPassage, setViewPassage] = useState(null);
+  const [transcribing, setTranscribing] = useState(null); // passage id being transcribed
   const fileRef = useRef(null);
 
   const openCreate = () => { setForm(EMPTY_LISTENING_PASSAGE); setEditId(null); setModal(true); };
@@ -981,6 +1054,19 @@ function ListeningPassagesTab({ passages, onRefresh, setAlert }) {
   };
 
   const fmtDuration = (sec) => { if (!sec) return null; const m = Math.floor(sec / 60), s = sec % 60; return `${m}:${String(s).padStart(2, '0')}`; };
+
+  const handleTranscribe = async (p) => {
+    setTranscribing(p.id);
+    try {
+      const r = await api.post(`/admin/listening-passages/${p.id}/transcribe`);
+      setAlert({ type: 'success', msg: `Đã chép lời: ${r.data.count} đoạn.` });
+      if (viewPassage && viewPassage.id === p.id) {
+        setViewPassage(prev => ({ ...prev, transcript_segments: r.data.segments, transcript: r.data.transcript }));
+      }
+      onRefresh();
+    } catch (e) { setAlert({ type: 'error', msg: e.message }); }
+    finally { setTranscribing(null); }
+  };
 
   return (
     <>
@@ -1028,6 +1114,17 @@ function ListeningPassagesTab({ passages, onRefresh, setAlert }) {
                     <button onClick={() => setViewPassage(p)} title="Xem chi tiết" className="p-2 rounded-lg text-on-muted hover:bg-surface-low hover:text-charcoal transition-colors">
                       <span className="material-symbols-outlined text-[18px]">visibility</span>
                     </button>
+                    <button
+                      onClick={() => handleTranscribe(p)}
+                      disabled={transcribing === p.id}
+                      title="Chép lời tự động (Whisper)"
+                      className="p-2 rounded-lg text-on-muted hover:bg-sky-50 hover:text-sky-600 transition-colors disabled:opacity-50"
+                    >
+                      {transcribing === p.id
+                        ? <span className="w-[18px] h-[18px] border-2 border-sky-500 border-t-transparent rounded-full animate-spin inline-block" />
+                        : <span className="material-symbols-outlined text-[18px]">closed_caption</span>
+                      }
+                    </button>
                     <button onClick={() => openEdit(p)} title="Sửa" className="p-2 rounded-lg text-on-muted hover:bg-surface-low hover:text-charcoal transition-colors">
                       <span className="material-symbols-outlined text-[18px]">edit</span>
                     </button>
@@ -1067,15 +1164,25 @@ function ListeningPassagesTab({ passages, onRefresh, setAlert }) {
             </div>
             <div className="overflow-y-auto p-6 space-y-4">
               {viewPassage.audio_url && (
-                <audio controls src={viewPassage.audio_url} className="w-full" />
+                <SyncedTranscriptPlayer
+                  audioUrl={viewPassage.audio_url}
+                  segments={viewPassage.transcript_segments}
+                  transcript={viewPassage.transcript}
+                />
+              )}
+              {!viewPassage.audio_url && viewPassage.transcript && (
+                <div>
+                  <p className="text-xs font-bold text-on-muted uppercase tracking-wide mb-2">Transcript</p>
+                  <p className="text-sm text-charcoal leading-loose whitespace-pre-wrap bg-surface-low rounded-xl p-4">{viewPassage.transcript}</p>
+                </div>
               )}
               {viewPassage.description && (
                 <p className="text-sm text-charcoal">{viewPassage.description}</p>
               )}
-              {viewPassage.transcript && (
-                <div>
-                  <p className="text-xs font-bold text-on-muted uppercase tracking-wide mb-2">Transcript</p>
-                  <p className="text-sm text-charcoal leading-loose whitespace-pre-wrap bg-surface-low rounded-xl p-4">{viewPassage.transcript}</p>
+              {!viewPassage.transcript_segments && !viewPassage.transcript && viewPassage.audio_url && (
+                <div className="flex items-center gap-2 text-xs text-on-muted bg-sky-50 border border-sky-200 rounded-xl px-4 py-3">
+                  <span className="material-symbols-outlined text-sky-500 text-[16px]">info</span>
+                  Nhấn nút <span className="material-symbols-outlined text-[14px] mx-0.5">closed_caption</span> trên thẻ bài nghe để tạo transcript tự động với Whisper.
                 </div>
               )}
             </div>

@@ -25,4 +25,26 @@ async function chatCompletion(messages, options = {}) {
   return res.json();
 }
 
-module.exports = { chatCompletion };
+async function whisperTranscribe(audioBuffer, filename, mimeType, language) {
+  const formData = new FormData();
+  formData.append('file', new Blob([audioBuffer], { type: mimeType }), filename);
+  formData.append('model', 'whisper-large-v3-turbo');
+  formData.append('response_format', 'verbose_json');
+  formData.append('timestamp_granularities[]', 'segment');
+  if (language) formData.append('language', language);
+
+  const res = await fetch(`${FPT_AI_BASE}/audio/transcriptions`, {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${process.env.FPT_AI_API_KEY}` },
+    body: formData,
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: { message: res.statusText } }));
+    throw new Error(err.error?.message || `Whisper error ${res.status}`);
+  }
+
+  return res.json();
+}
+
+module.exports = { chatCompletion, whisperTranscribe };
