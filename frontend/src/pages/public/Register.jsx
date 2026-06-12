@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { useLang } from '../../contexts/LangContext';
@@ -6,8 +6,54 @@ import Input from '../../components/ui/Input';
 import Button from '../../components/ui/Button';
 import Alert from '../../components/ui/Alert';
 
+const OTP_LENGTH = 6;
+
+function OtpInput({ value, onChange, disabled }) {
+  const refs = useRef([]);
+
+  const handleChange = (i, ch) => {
+    const digit = ch.replace(/\D/g, '').slice(-1);
+    const next = value.split('');
+    next[i] = digit;
+    onChange(next.join('').slice(0, OTP_LENGTH));
+    if (digit && i < OTP_LENGTH - 1) refs.current[i + 1]?.focus();
+  };
+
+  const handleKeyDown = (i, e) => {
+    if (e.key === 'Backspace' && !value[i] && i > 0) refs.current[i - 1]?.focus();
+  };
+
+  const handlePaste = (e) => {
+    e.preventDefault();
+    const digits = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, OTP_LENGTH);
+    if (digits) {
+      onChange(digits);
+      refs.current[Math.min(digits.length, OTP_LENGTH - 1)]?.focus();
+    }
+  };
+
+  return (
+    <div className="flex gap-2 justify-center" onPaste={handlePaste}>
+      {Array.from({ length: OTP_LENGTH }).map((_, i) => (
+        <input
+          key={i}
+          ref={el => (refs.current[i] = el)}
+          type="text"
+          inputMode="numeric"
+          maxLength={1}
+          value={value[i] || ''}
+          onChange={e => handleChange(i, e.target.value)}
+          onKeyDown={e => handleKeyDown(i, e)}
+          disabled={disabled}
+          className="w-12 h-14 text-center text-2xl font-bold border border-outline rounded-xl bg-white focus:border-tsubaki-red focus:ring-2 focus:ring-tsubaki-red/20 outline-none transition-all disabled:opacity-50"
+        />
+      ))}
+    </div>
+  );
+}
+
 export default function Register() {
-  const { register, loginWithGoogle, user } = useAuth();
+  const { register, verifyOtp, resendOtp, loginWithGoogle, user } = useAuth();
   const { t } = useLang();
   const navigate = useNavigate();
 
@@ -17,6 +63,12 @@ export default function Register() {
   const [loading, setLoading]         = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
 
+  // OTP step
+  const [step, setStep]             = useState('form'); // 'form' | 'otp'
+  const [otp, setOtp]               = useState('');
+  const [resendIn, setResendIn]     = useState(0);
+  const [resendLoading, setResendLoading] = useState(false);
+
   useEffect(() => {
     if (!user) return;
     const role = user.user_metadata?.role;
@@ -24,6 +76,13 @@ export default function Register() {
     else if (role === 'teacher') navigate('/teacher',  { replace: true });
     else                         navigate('/dashboard', { replace: true });
   }, [user]);
+
+  // Đếm ngược thời gian được phép gửi lại OTP
+  useEffect(() => {
+    if (resendIn <= 0) return;
+    const timer = setTimeout(() => setResendIn(s => s - 1), 1000);
+    return () => clearTimeout(timer);
+  }, [resendIn]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -34,8 +93,10 @@ export default function Register() {
 
     setLoading(true);
     try {
-      const data = await register(form.fullname, form.email, form.password);
-      navigate(data.session ? '/dashboard' : '/login?registered=1', { replace: true });
+      await register(form.fullname, form.email, form.password);
+      setStep('otp');
+      setOtp('');
+      setResendIn(60);
     } catch (err) {
       if (err.code === 'EMAIL_EXISTS') {
         setEmailExists(true);
@@ -44,6 +105,40 @@ export default function Register() {
       }
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleVerifyOtp = async (e) => {
+    e?.preventDefault();
+    if (otp.length !== OTP_LENGTH) return setError('Vui lòng nhập đủ 6 chữ số.');
+    setError('');
+    setLoading(true);
+    try {
+      const data = await verifyOtp(form.email, otp);
+      navigate(data.session ? '/dashboard' : '/login?registered=1', { replace: true });
+    } catch (err) {
+      setError(err.message);
+      // Hết hạn hoặc bị khóa → quay lại form đăng ký
+      if (['OTP_EXPIRED', 'OTP_LOCKED', 'OTP_NOT_FOUND'].includes(err.code)) {
+        setStep('form');
+        setOtp('');
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResend = async () => {
+    setError('');
+    setResendLoading(true);
+    try {
+      await resendOtp(form.email);
+      setResendIn(60);
+      setOtp('');
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setResendLoading(false);
     }
   };
 
@@ -73,6 +168,47 @@ export default function Register() {
           <p className="text-sm text-on-muted">{t('common.tagline')}</p>
         </div>
 
+        {step === 'otp' ? (
+          <div className="glass-card rounded-2xl p-8 space-y-6">
+            <div className="text-center">
+              <span className="material-symbols-outlined text-tsubaki-red text-5xl mb-3 block">mark_email_read</span>
+              <h1 className="font-display text-2xl font-bold">Xác thực email</h1>
+              <p className="text-sm text-on-muted mt-2">
+                Mã xác thực 6 chữ số đã được gửi đến<br />
+                <strong className="text-charcoal">{form.email}</strong>
+              </p>
+            </div>
+
+            {error && <Alert type="error">{error}</Alert>}
+
+            <form onSubmit={handleVerifyOtp} className="space-y-5">
+              <OtpInput value={otp} onChange={setOtp} disabled={loading} />
+
+              <Button type="submit" loading={loading} className="w-full">
+                Xác nhận
+              </Button>
+            </form>
+
+            <div className="text-center space-y-2">
+              <p className="text-sm text-on-muted">
+                Không nhận được mã?{' '}
+                {resendIn > 0 ? (
+                  <span className="text-on-muted">Gửi lại sau {resendIn}s</span>
+                ) : (
+                  <button type="button" onClick={handleResend} disabled={resendLoading}
+                    className="text-tsubaki-red font-semibold hover:underline disabled:opacity-50">
+                    {resendLoading ? 'Đang gửi...' : 'Gửi lại mã'}
+                  </button>
+                )}
+              </p>
+              <button type="button"
+                onClick={() => { setStep('form'); setOtp(''); setError(''); }}
+                className="text-xs text-on-muted hover:text-charcoal underline underline-offset-2">
+                ← Quay lại chỉnh sửa thông tin
+              </button>
+            </div>
+          </div>
+        ) : (
         <div className="glass-card rounded-2xl p-8 space-y-6">
           <div className="text-center">
             <span className="material-symbols-outlined text-tsubaki-red text-5xl mb-3 block">person_add</span>
@@ -165,6 +301,7 @@ export default function Register() {
             {t('auth.zen_quote')}
           </p>
         </div>
+        )}
       </div>
     </div>
   );

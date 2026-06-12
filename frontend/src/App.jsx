@@ -22,12 +22,14 @@ import Vocabulary   from './pages/student/Vocabulary';
 import Kanji        from './pages/student/Kanji';
 import Classes      from './pages/student/Classes';
 import Quiz         from './pages/student/Quiz';
+import Dictionary   from './pages/student/Dictionary';
 
 // Teacher pages
 import TeacherDashboard  from './pages/teacher/TeacherDashboard';
 import TeacherVocabulary from './pages/teacher/TeacherVocabulary';
 import TeacherKanji      from './pages/teacher/TeacherKanji';
 import TeacherClasses    from './pages/teacher/TeacherClasses';
+import TeacherDictionary from './pages/teacher/TeacherDictionary';
 import TeacherQuestionBank from './pages/teacher/TeacherQuestionBank';
 
 // Admin pages
@@ -86,6 +88,7 @@ export default function App() {
             <Route path="/kanji"      element={<ProtectedRoute><Kanji /></ProtectedRoute>} />
             <Route path="/classes"    element={<ProtectedRoute><Classes /></ProtectedRoute>} />
             <Route path="/quizzes/:id" element={<ProtectedRoute><Quiz /></ProtectedRoute>} />
+            <Route path="/dictionary" element={<ProtectedRoute><Dictionary /></ProtectedRoute>} />
             <Route path="/chat"       element={<ProtectedRoute><ChatPage /></ProtectedRoute>} />
 
             {/* Teacher (teacher + admin) */}
@@ -93,6 +96,7 @@ export default function App() {
             <Route path="/teacher/vocab" element={<TeacherRoute><TeacherVocabulary /></TeacherRoute>} />
             <Route path="/teacher/kanji"    element={<TeacherRoute><TeacherKanji /></TeacherRoute>} />
             <Route path="/teacher/classes"  element={<TeacherRoute><TeacherClasses /></TeacherRoute>} />
+            <Route path="/teacher/dictionary" element={<TeacherRoute><TeacherDictionary /></TeacherRoute>} />
             <Route path="/teacher/question-bank" element={<TeacherRoute><TeacherQuestionBank /></TeacherRoute>} />
 
             {/* Admin (admin only) */}

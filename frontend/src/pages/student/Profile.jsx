@@ -24,7 +24,7 @@ export default function Profile() {
   const [avatarFile, setAvatarFile]   = useState(null);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [pwLoading, setPwLoading]     = useState(false);
-  const [pwForm, setPwForm]           = useState({ password: '', confirm: '' });
+  const [pwForm, setPwForm]           = useState({ current: '', password: '', confirm: '' });
 
   useEffect(() => {
     api.get('/users/profile').then(r => {
@@ -79,16 +79,20 @@ export default function Profile() {
 
   const handleChangePassword = async (e) => {
     e.preventDefault();
+    if (!pwForm.current)
+      return setAlert({ type: 'error', msg: 'Vui lòng nhập mật khẩu hiện tại.' });
     if (pwForm.password.length < 8)
       return setAlert({ type: 'error', msg: t('errors.reset_pass_short') });
     if (pwForm.password !== pwForm.confirm)
       return setAlert({ type: 'error', msg: t('errors.reset_mismatch') });
+    if (pwForm.current === pwForm.password)
+      return setAlert({ type: 'error', msg: 'Mật khẩu mới phải khác mật khẩu hiện tại.' });
     setPwLoading(true);
     setAlert({ type: '', msg: '' });
     try {
-      await api.post('/users/change-password', { password: pwForm.password });
+      await api.post('/users/change-password', { currentPassword: pwForm.current, password: pwForm.password });
       setAlert({ type: 'success', msg: 'Đổi mật khẩu thành công!' });
-      setPwForm({ password: '', confirm: '' });
+      setPwForm({ current: '', password: '', confirm: '' });
     } catch (err) {
       setAlert({ type: 'error', msg: err.message });
     } finally {
@@ -209,6 +213,9 @@ export default function Profile() {
               {t('profile.change_password')}
             </h2>
             <form onSubmit={handleChangePassword} className="space-y-4">
+              <Input label="Mật khẩu hiện tại" type="password" value={pwForm.current}
+                onChange={e => setPwForm({ ...pwForm, current: e.target.value })}
+                placeholder="Nhập mật khẩu đang dùng" required />
               <Input label="Mật khẩu mới" type="password" value={pwForm.password}
                 onChange={e => setPwForm({ ...pwForm, password: e.target.value })}
                 placeholder="Tối thiểu 8 ký tự" required />

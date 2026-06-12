@@ -32,6 +32,7 @@ app.use('/api/courses',    require('./routes/api/courses'));
 app.use('/api/lessons',    require('./routes/api/lessons'));
 app.use('/api/vocabulary', require('./routes/api/vocabulary'));
 app.use('/api/kanji',      require('./routes/api/kanji'));
+app.use('/api/dictionary', require('./routes/api/dictionary'));
 app.use('/api/quizzes',    require('./routes/api/quizzes'));
 app.use('/api/admin',      require('./routes/api/admin'));
 app.use('/api/teacher',    require('./routes/api/teacher'));

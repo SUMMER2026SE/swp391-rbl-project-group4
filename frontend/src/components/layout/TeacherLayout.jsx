@@ -7,6 +7,7 @@ const LINKS = [
   { to: '/teacher/lessons', icon: 'article',       label: 'Bài học' },
   { to: '/teacher/vocab',   icon: 'translate',     label: 'Từ vựng' },
   { to: '/teacher/kanji',   icon: 'font_download', label: 'Kanji' },
+  { to: '/teacher/dictionary', icon: 'auto_stories', label: 'Từ điển' },
   { to: '/teacher/quizzes',  icon: 'quiz',          label: 'Bài kiểm tra' },
   { to: '/teacher/question-bank', icon: 'inventory_2', label: 'Ngân hàng câu hỏi' },
   { to: '/teacher/classes',  icon: 'groups',        label: 'Lớp học' },

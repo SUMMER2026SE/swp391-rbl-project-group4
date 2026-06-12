@@ -28,6 +28,7 @@ export default function Login() {
   const success = params.get('registered') === '1' ? t('success.registered')
     : params.get('passwordChanged') === '1' ? t('success.password_changed')
     : null;
+  const sessionExpired = params.get('expired') === '1';
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -77,6 +78,7 @@ export default function Login() {
           </div>
 
           {success && <Alert type="success">{success}</Alert>}
+          {sessionExpired && !error && <Alert type="warning">Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.</Alert>}
           {error && <Alert type="error">{error}</Alert>}
 
           <form onSubmit={handleSubmit} className="space-y-4">

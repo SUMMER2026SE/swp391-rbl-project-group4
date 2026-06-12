@@ -26,6 +26,7 @@ export function AuthProvider({ children }) {
     return data;
   };
 
+  // Bước 1: gửi thông tin đăng ký — backend gửi OTP về email
   const register = async (fullname, email, password) => {
     const res = await fetch('/api/auth/register', {
       method: 'POST',
@@ -38,6 +39,22 @@ export function AuthProvider({ children }) {
       err.code = data.code;
       throw err;
     }
+    return data; // { otpRequired: true }
+  };
+
+  // Bước 2: xác thực OTP — backend tạo tài khoản và trả session
+  const verifyOtp = async (email, otp) => {
+    const res = await fetch('/api/auth/verify-otp', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, otp }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      const err = new Error(data.error || 'Xác thực thất bại.');
+      err.code = data.code;
+      throw err;
+    }
 
     // Apply the session returned by the backend so the user is logged in immediately
     if (data.session) {
@@ -46,6 +63,17 @@ export function AuthProvider({ children }) {
         refresh_token: data.session.refresh_token,
       });
     }
+    return data;
+  };
+
+  const resendOtp = async (email) => {
+    const res = await fetch('/api/auth/resend-otp', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Không thể gửi lại mã.');
     return data;
   };
 
@@ -73,7 +101,7 @@ export function AuthProvider({ children }) {
   const isTeacher = () => user?.user_metadata?.role === 'teacher';
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, loginWithGoogle, forgotPassword, logout, isAdmin, isTeacher }}>
+    <AuthContext.Provider value={{ user, loading, login, register, verifyOtp, resendOtp, loginWithGoogle, forgotPassword, logout, isAdmin, isTeacher }}>
       {children}
     </AuthContext.Provider>
   );
