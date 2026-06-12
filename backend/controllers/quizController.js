@@ -42,6 +42,31 @@ exports.getOne = async (req, res) => {
   }
 };
 
+// Chấm một câu theo question_type
+function isCorrect(q, ans) {
+  const type = q.question_type || 'single_choice';
+  if (type === 'multiple_choice') {
+    const correct = q.correct_answer_data;
+    return Array.isArray(ans) && Array.isArray(correct) &&
+      ans.length === correct.length && correct.every(c => ans.includes(c));
+  }
+  if (type === 'ordering') {
+    const correct = q.correct_answer_data;
+    return Array.isArray(ans) && Array.isArray(correct) &&
+      ans.length === correct.length && correct.every((c, i) => ans[i] === c);
+  }
+  if (type === 'matching') {
+    // options là mảng cặp {left, right} theo đúng thứ tự; answer là mảng right đã chọn
+    const pairs = q.options || [];
+    return Array.isArray(ans) && pairs.length > 0 &&
+      ans.length === pairs.length && pairs.every((p, i) => ans[i] === p.right);
+  }
+  // single_choice / fill_blank / short_answer — so sánh chuỗi
+  if (typeof ans === 'string' && typeof q.correct_answer === 'string')
+    return ans.trim() === q.correct_answer.trim();
+  return false;
+}
+
 // POST /api/quizzes/:id/attempt
 exports.submitAttempt = async (req, res) => {
   const userId    = req.user.id;
@@ -49,12 +74,14 @@ exports.submitAttempt = async (req, res) => {
 
   try {
     const { data: questions } = await supabaseAdmin
-      .from('quiz_questions').select('id,correct_answer').eq('quiz_id', req.params.id);
+      .from('quiz_questions')
+      .select('id,question_type,options,correct_answer,correct_answer_data')
+      .eq('quiz_id', req.params.id);
     if (!questions) return res.status(404).json({ error: 'Không tìm thấy quiz.' });
 
     let score = 0;
     questions.forEach(q => {
-      if (answers[q.id] === q.correct_answer) score++;
+      if (isCorrect(q, answers[q.id])) score++;
     });
 
     const { data: attempt, error } = await supabaseAdmin.from('quiz_attempts').insert({

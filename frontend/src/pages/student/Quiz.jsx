@@ -6,6 +6,15 @@ import Alert from '../../components/ui/Alert';
 import FuriganaText from '../../components/ui/FuriganaText';
 import api from '../../lib/api';
 
+function shuffle(arr) {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
 export default function Quiz() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -18,11 +27,18 @@ export default function Quiz() {
   const [error, setError]       = useState('');
   const [timeLeft, setTimeLeft] = useState(null);
   const [furigana, setFurigana] = useState(false);
+  const [shuffledRights, setShuffledRights] = useState({}); // matching: cột phải đã xáo trộn
 
   useEffect(() => {
     api.get(`/quizzes/${id}`)
       .then(r => {
         setQuiz(r.data);
+        const sr = {};
+        (r.data.questions || []).forEach(q => {
+          if (q.question_type === 'matching')
+            sr[q.id] = shuffle((q.options || []).map(p => p.right));
+        });
+        setShuffledRights(sr);
         if (r.data.time_limit) setTimeLeft(r.data.time_limit);
       })
       .catch(e => setError(e.message))
@@ -58,7 +74,18 @@ export default function Quiz() {
 
   const questions = quiz?.questions || [];
   const q         = questions[current];
-  const pct       = Math.round((Object.keys(answers).length / questions.length) * 100);
+
+  const isAnswered = (qq) => {
+    const a    = answers[qq.id];
+    const type = qq.question_type || 'single_choice';
+    if (type === 'matching') return Array.isArray(a) && a.length === (qq.options || []).length && a.every(Boolean);
+    if (type === 'ordering') return Array.isArray(a) && a.length === (qq.options || []).length;
+    if (type === 'multiple_choice') return Array.isArray(a) && a.length > 0;
+    return typeof a === 'string' && a.trim() !== '';
+  };
+  const answeredCount = questions.filter(isAnswered).length;
+  const pct           = Math.round((answeredCount / questions.length) * 100);
+  const setAnswer     = (qid, val) => setAnswers(a => ({ ...a, [qid]: val }));
 
   if (result) {
     const score = result.score;
@@ -121,31 +148,127 @@ export default function Quiz() {
                 ふりがな
               </button>
             </div>
-            <div className="space-y-3">
-              {(q.options || []).map((opt, i) => (
-                <button key={i} onClick={() => setAnswers(a => ({ ...a, [q.id]: opt }))}
-                  className={`w-full text-left px-5 py-4 rounded-xl border-2 text-sm font-medium transition-all ${
-                    answers[q.id] === opt
-                      ? 'border-tsubaki-red bg-tsubaki-red/5 text-tsubaki-red'
-                      : 'border-outline hover:border-tsubaki-red/50 hover:bg-surface-low'
-                  }`}>
-                  <span className="font-bold mr-3 text-on-muted">{String.fromCharCode(65 + i)}.</span>
-                  <FuriganaText text={opt} enabled={furigana} />
-                </button>
-              ))}
-            </div>
+            {/* ── Single choice ── */}
+            {(!q.question_type || q.question_type === 'single_choice') && (
+              <div className="space-y-3">
+                {(q.options || []).map((opt, i) => (
+                  <button key={i} onClick={() => setAnswer(q.id, opt)}
+                    className={`w-full text-left px-5 py-4 rounded-xl border-2 text-sm font-medium transition-all ${
+                      answers[q.id] === opt
+                        ? 'border-tsubaki-red bg-tsubaki-red/5 text-tsubaki-red'
+                        : 'border-outline hover:border-tsubaki-red/50 hover:bg-surface-low'
+                    }`}>
+                    <span className="font-bold mr-3 text-on-muted">{String.fromCharCode(65 + i)}.</span>
+                    <FuriganaText text={opt} enabled={furigana} />
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* ── Multiple choice ── */}
+            {q.question_type === 'multiple_choice' && (
+              <div className="space-y-3">
+                <p className="text-xs text-on-muted -mt-3 mb-1">Chọn tất cả đáp án đúng:</p>
+                {(q.options || []).map((opt, i) => {
+                  const selected = Array.isArray(answers[q.id]) && answers[q.id].includes(opt);
+                  return (
+                    <button key={i}
+                      onClick={() => {
+                        const cur = Array.isArray(answers[q.id]) ? answers[q.id] : [];
+                        setAnswer(q.id, selected ? cur.filter(o => o !== opt) : [...cur, opt]);
+                      }}
+                      className={`w-full text-left px-5 py-4 rounded-xl border-2 text-sm font-medium transition-all ${
+                        selected
+                          ? 'border-tsubaki-red bg-tsubaki-red/5 text-tsubaki-red'
+                          : 'border-outline hover:border-tsubaki-red/50 hover:bg-surface-low'
+                      }`}>
+                      <span className={`material-symbols-outlined text-lg align-middle mr-3 ${selected ? 'text-tsubaki-red' : 'text-on-muted'}`}>
+                        {selected ? 'check_box' : 'check_box_outline_blank'}
+                      </span>
+                      <FuriganaText text={opt} enabled={furigana} />
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* ── Matching ── */}
+            {q.question_type === 'matching' && (
+              <div className="space-y-3">
+                {(q.options || []).map((pair, i) => (
+                  <div key={i} className="flex items-center gap-3">
+                    <div className="flex-1 px-4 py-3 rounded-xl border-2 border-outline bg-surface-low/50 text-sm font-medium">
+                      <FuriganaText text={pair.left} enabled={furigana} />
+                    </div>
+                    <span className="material-symbols-outlined text-on-muted shrink-0">arrow_forward</span>
+                    <select
+                      value={(answers[q.id] || [])[i] || ''}
+                      onChange={e => {
+                        const next = Array.isArray(answers[q.id])
+                          ? [...answers[q.id]]
+                          : new Array((q.options || []).length).fill('');
+                        next[i] = e.target.value;
+                        setAnswer(q.id, next);
+                      }}
+                      className="flex-1 px-4 py-3 rounded-xl border-2 border-outline text-sm font-medium bg-white focus:border-tsubaki-red outline-none cursor-pointer">
+                      <option value="">— Chọn —</option>
+                      {(shuffledRights[q.id] || []).map(r => <option key={r} value={r}>{r}</option>)}
+                    </select>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* ── Ordering ── */}
+            {q.question_type === 'ordering' && (() => {
+              const chosen    = Array.isArray(answers[q.id]) ? answers[q.id] : [];
+              const remaining = (q.options || []).filter(o => !chosen.includes(o));
+              return (
+                <div>
+                  <div className="min-h-[56px] flex flex-wrap gap-2 p-3 rounded-xl border-2 border-dashed border-outline mb-4">
+                    {chosen.length === 0 && <span className="text-sm text-on-muted self-center">Bấm các từ bên dưới theo đúng thứ tự…</span>}
+                    {chosen.map((w, i) => (
+                      <button key={i} onClick={() => setAnswer(q.id, chosen.filter((_, j) => j !== i))}
+                        title="Bấm để bỏ ra"
+                        className="px-3 py-2 rounded-lg bg-tsubaki-red/10 border border-tsubaki-red/40 text-tsubaki-red text-sm font-medium">
+                        {i + 1}. {w}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {remaining.map((w, i) => (
+                      <button key={i} onClick={() => setAnswer(q.id, [...chosen, w])}
+                        className="px-3 py-2 rounded-lg border-2 border-outline text-sm font-medium hover:border-tsubaki-red/50 hover:bg-surface-low transition-all">
+                        {w}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* ── Fill blank / Short answer ── */}
+            {(q.question_type === 'fill_blank' || q.question_type === 'short_answer') && (
+              <input
+                type="text"
+                value={answers[q.id] || ''}
+                onChange={e => setAnswer(q.id, e.target.value)}
+                placeholder="Nhập câu trả lời…"
+                className="w-full px-5 py-4 rounded-xl border-2 border-outline focus:border-tsubaki-red outline-none text-sm font-medium"
+              />
+            )}
 
             <div className="flex justify-between mt-8">
               <Button variant="secondary" onClick={() => setCurrent(c => Math.max(0, c - 1))} disabled={current === 0}>
                 ← Trước
               </Button>
               {current < questions.length - 1 ? (
-                <Button onClick={() => setCurrent(c => c + 1)} disabled={!answers[q.id]}>
+                <Button onClick={() => setCurrent(c => c + 1)} disabled={!isAnswered(q)}>
                   Tiếp →
                 </Button>
               ) : (
                 <Button onClick={handleSubmit} loading={submitting}
-                  disabled={Object.keys(answers).length < questions.length}>
+                  disabled={answeredCount < questions.length}>
                   Nộp bài
                 </Button>
               )}
