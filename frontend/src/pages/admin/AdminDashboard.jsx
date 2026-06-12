@@ -3,19 +3,6 @@ import { Link } from 'react-router-dom';
 import AdminLayout from '../../components/layout/AdminLayout';
 import api from '../../lib/api';
 
-const CHART_BARS = [
-  { pct: 60, cls: 'bg-tsubaki-red' },
-  { pct: 45, cls: 'bg-tsubaki-red' },
-  { pct: 85, cls: 'bg-tsubaki-red' },
-  { pct: 70, cls: 'bg-tsubaki-red' },
-  { pct: 55, cls: 'bg-tsubaki-red' },
-  { pct: 40, cls: 'bg-sumire-purple' },
-  { pct: 90, cls: 'bg-tsubaki-red' },
-  { pct: 65, cls: 'bg-tsubaki-red' },
-  { pct: 75, cls: 'bg-tsubaki-red' },
-  { pct: 50, cls: 'bg-tsubaki-red' },
-];
-
 const QUICK_LINKS = [
   { label: 'Quản lý người dùng',  icon: 'person_add',  href: '/admin/users' },
   { label: 'Trình soạn khoá học', icon: 'edit_note',   href: '/admin/courses' },
@@ -53,6 +40,9 @@ export default function AdminDashboard() {
   const [stats, setStats]       = useState({});
   const [activity, setActivity] = useState([]);
   const [loading, setLoading]   = useState(true);
+  const [metrics, setMetrics]   = useState([]);   // bucket theo giờ: { hour, requests, avgMs, errors }
+  const [sysOk, setSysOk]       = useState(null); // null = đang kiểm tra
+  const [sysUpdatedAt, setSysUpdatedAt] = useState(null);
 
   useEffect(() => {
     Promise.allSettled([
@@ -63,6 +53,39 @@ export default function AdminDashboard() {
       if (aRes.status === 'fulfilled') setActivity(aRes.value.data || []);
     }).finally(() => setLoading(false));
   }, []);
+
+  // Metrics + trạng thái dịch vụ — refresh mỗi 60s
+  useEffect(() => {
+    let cancelled = false;
+    const load = () => {
+      Promise.allSettled([
+        api.get('/admin/metrics?hours=12'),
+        api.get('/admin/system-status'),
+      ]).then(([mRes, hRes]) => {
+        if (cancelled) return;
+        if (mRes.status === 'fulfilled') setMetrics(mRes.value.data?.buckets || []);
+        if (hRes.status === 'fulfilled') {
+          const s = hRes.value.data;
+          setSysOk(Boolean(s?.backend?.ok && s?.database?.ok && s?.ai?.ok));
+        } else {
+          setSysOk(false);
+        }
+        setSysUpdatedAt(new Date());
+      });
+    };
+    load();
+    const iv = setInterval(load, 60000);
+    return () => { cancelled = true; clearInterval(iv); };
+  }, []);
+
+  const maxRequests = Math.max(...metrics.map(b => b.requests), 1);
+  const maxAvgMs    = Math.max(...metrics.map(b => b.avgMs), 1);
+  const fmtHour     = (ts) => new Date(ts).getHours() + 'h';
+  const fmtUpdated  = () => {
+    if (!sysUpdatedAt) return 'Đang kiểm tra...';
+    const s = Math.floor((Date.now() - sysUpdatedAt.getTime()) / 1000);
+    return s < 5 ? 'Cập nhật vừa xong' : `Cập nhật ${s < 60 ? s + ' giây' : Math.floor(s / 60) + ' phút'} trước`;
+  };
 
   return (
     <AdminLayout title="Bảng điều khiển">
@@ -104,19 +127,51 @@ export default function AdminDashboard() {
             </div>
           </div>
 
-          <div className="h-48 flex items-end gap-1.5 px-2 pb-2 bg-surface-low/60 rounded-xl border border-outline/20 overflow-hidden">
-            {CHART_BARS.map((bar, i) => (
-              <div key={i} className={`flex-1 ${bar.cls} rounded-t-md opacity-80 hover:opacity-100 transition-all`}
-                style={{ height: `${bar.pct}%` }} />
-            ))}
+          <div className="h-48 bg-surface-low/60 rounded-xl border border-outline/20 overflow-hidden">
+            {metrics.length === 0 ? (
+              <div className="h-full flex items-center justify-center text-sm text-on-muted">
+                Đang tải dữ liệu hệ thống...
+              </div>
+            ) : (
+              <div className="h-full flex items-end gap-2 px-3 pt-3 pb-1">
+                {metrics.map((b) => (
+                  <div key={b.hour} className="flex-1 h-full flex flex-col justify-end items-center gap-0.5 group">
+                    <div className="w-full flex-1 flex items-end justify-center gap-0.5"
+                      title={`${fmtHour(b.hour)} — ${b.requests} requests · phản hồi TB ${b.avgMs}ms${b.errors ? ` · ${b.errors} lỗi` : ''}`}>
+                      {/* Hiệu năng: thời gian phản hồi trung bình */}
+                      <div className="w-1/2 bg-tsubaki-red rounded-t-sm opacity-80 group-hover:opacity-100 transition-all"
+                        style={{ height: `${b.avgMs > 0 ? Math.max((b.avgMs / maxAvgMs) * 100, 4) : 0}%` }} />
+                      {/* Lưu lượng: số request */}
+                      <div className="w-1/2 bg-sumire-purple rounded-t-sm opacity-80 group-hover:opacity-100 transition-all"
+                        style={{ height: `${b.requests > 0 ? Math.max((b.requests / maxRequests) * 100, 4) : 0}%` }} />
+                    </div>
+                    <span className="text-[9px] text-on-muted leading-none">{fmtHour(b.hour)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           <div className="flex items-center justify-between mt-4 pt-4 border-t border-outline/20">
             <div className="flex items-center gap-2">
-              <span className="material-symbols-outlined text-green-600 text-lg">check_circle</span>
-              <span className="text-sm">Tất cả dịch vụ hoạt động bình thường</span>
+              {sysOk === null ? (
+                <>
+                  <span className="material-symbols-outlined text-on-muted text-lg animate-spin">progress_activity</span>
+                  <span className="text-sm text-on-muted">Đang kiểm tra dịch vụ...</span>
+                </>
+              ) : sysOk ? (
+                <>
+                  <span className="material-symbols-outlined text-green-600 text-lg">check_circle</span>
+                  <span className="text-sm">Tất cả dịch vụ hoạt động bình thường</span>
+                </>
+              ) : (
+                <>
+                  <span className="material-symbols-outlined text-red-500 text-lg">error</span>
+                  <span className="text-sm text-red-600">Có dịch vụ gặp sự cố — <Link to="/admin/system" className="underline">xem chi tiết</Link></span>
+                </>
+              )}
             </div>
-            <span className="text-xs text-on-muted">Cập nhật vừa xong</span>
+            <span className="text-xs text-on-muted">{fmtUpdated()}</span>
           </div>
         </div>
 

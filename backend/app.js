@@ -25,6 +25,9 @@ app.use(cors({
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: false }));
 
+// ── Request metrics (đếm lưu lượng + đo thời gian phản hồi) ──────────────────
+app.use('/api', require('./middleware/metrics').metricsMiddleware);
+
 // ── API Routes ────────────────────────────────────────────────────────────────
 app.use('/api/auth',       require('./routes/api/auth'));
 app.use('/api/users',      require('./routes/api/users'));
