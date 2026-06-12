@@ -92,71 +92,76 @@ async function attachMeaningPreview(entries) {
 
 // GET /api/dictionary/:id
 exports.getOne = async (req, res) => {
+  const id = req.params.id;
   try {
-    const { data: entry, error: entryErr } = await dictDb
-      .from('dict_entries')
-      .select('id, kanji, kana, romaji, jlpt_level')
-      .eq('id', req.params.id)
-      .single();
+    // ── Tầng 1: entry + senses + related đều chỉ cần id → chạy song song ──
+    const [entryRes, sensesRes, relatedRowsRes] = await Promise.all([
+      dictDb.from('dict_entries')
+        .select('id, kanji, kana, romaji, jlpt_level')
+        .eq('id', id)
+        .single(),
+      dictDb.from('dict_senses')
+        .select('id, pos, meaning_vi, order_index')
+        .eq('entry_id', id)
+        .order('order_index', { ascending: true }),
+      dictDb.from('dict_related_words')
+        .select('related_id, relation_type')
+        .eq('entry_id', id),
+    ]);
+
+    const { data: entry, error: entryErr } = entryRes;
     if (entryErr || !entry) return res.status(404).json({ error: 'Không tìm thấy từ.' });
+    if (sensesRes.error) throw sensesRes.error;
+    if (relatedRowsRes.error) throw relatedRowsRes.error;
 
-    const { data: senses, error: sensesErr } = await dictDb
-      .from('dict_senses')
-      .select('id, pos, meaning_vi, order_index')
-      .eq('entry_id', entry.id)
-      .order('order_index', { ascending: true });
-    if (sensesErr) throw sensesErr;
+    const senses      = sensesRes.data || [];
+    const relatedRows = relatedRowsRes.data || [];
 
-    const senseIds = (senses || []).map(s => s.id);
-    let examplesBySense = {};
-    if (senseIds.length > 0) {
-      const { data: examples, error: examplesErr } = await dictDb
-        .from('dict_examples')
-        .select('id, sense_id, sentence_jp, sentence_vi, furigana')
-        .in('sense_id', senseIds);
-      if (examplesErr) throw examplesErr;
+    const senseIds   = senses.map(s => s.id);
+    const kanjiChars = [...new Set((entry.kanji || '').match(KANJI_GLOBAL_REGEX) || [])];
+    const relatedIds = relatedRows.map(r => r.related_id);
+    const noop       = Promise.resolve({ data: [], error: null });
 
-      examplesBySense = (examples || []).reduce((acc, ex) => {
-        (acc[ex.sense_id] = acc[ex.sense_id] || []).push(ex);
-        return acc;
-      }, {});
-    }
+    // ── Tầng 2: examples + kanji + related entries độc lập → chạy song song ──
+    const [examplesRes, kanjiRes, relatedEntriesRes] = await Promise.all([
+      senseIds.length
+        ? dictDb.from('dict_examples')
+            .select('id, sense_id, sentence_jp, sentence_vi, furigana')
+            .in('sense_id', senseIds)
+        : noop,
+      kanjiChars.length
+        ? dictDb.from('dict_kanji')
+            .select('character, sino_vi, meaning_vi, reading_on, reading_kun')
+            .in('character', kanjiChars)
+        : noop,
+      relatedIds.length
+        ? dictDb.from('dict_entries')
+            .select('id, kanji, kana, jlpt_level')
+            .in('id', relatedIds)
+        : noop,
+    ]);
 
-    const sensesWithExamples = (senses || []).map(s => ({
+    if (examplesRes.error)       throw examplesRes.error;
+    if (kanjiRes.error)          throw kanjiRes.error;
+    if (relatedEntriesRes.error) throw relatedEntriesRes.error;
+
+    // Gom ví dụ theo từng nghĩa
+    const examplesBySense = (examplesRes.data || []).reduce((acc, ex) => {
+      (acc[ex.sense_id] = acc[ex.sense_id] || []).push(ex);
+      return acc;
+    }, {});
+    const sensesWithExamples = senses.map(s => ({
       ...s,
       examples: examplesBySense[s.id] || [],
     }));
 
-    // Phân tích từng ký tự kanji trong từ -> âm Hán Việt
-    const kanjiChars = [...new Set((entry.kanji || '').match(KANJI_GLOBAL_REGEX) || [])];
-    let kanjiBreakdown = [];
-    if (kanjiChars.length > 0) {
-      const { data: kanjiData, error: kanjiErr } = await dictDb
-        .from('dict_kanji')
-        .select('character, sino_vi, meaning_vi, reading_on, reading_kun')
-        .in('character', kanjiChars);
-      if (kanjiErr) throw kanjiErr;
-      kanjiBreakdown = kanjiData || [];
-    }
+    const kanjiBreakdown = kanjiRes.data || [];
 
-    // Từ liên quan
-    const { data: relatedRows, error: relatedErr } = await dictDb
-      .from('dict_related_words')
-      .select('related_id, relation_type')
-      .eq('entry_id', entry.id);
-    if (relatedErr) throw relatedErr;
-
+    // Từ liên quan: gắn nghĩa preview + relation_type
     let related = [];
-    const relatedIds = (relatedRows || []).map(r => r.related_id);
     if (relatedIds.length > 0) {
-      const { data: relatedEntries, error: relatedEntriesErr } = await dictDb
-        .from('dict_entries')
-        .select('id, kanji, kana, jlpt_level')
-        .in('id', relatedIds);
-      if (relatedEntriesErr) throw relatedEntriesErr;
-
-      const relatedWithMeaning = await attachMeaningPreview(relatedEntries);
-      const relationByEntry = (relatedRows || []).reduce((acc, r) => {
+      const relatedWithMeaning = await attachMeaningPreview(relatedEntriesRes.data || []);
+      const relationByEntry = relatedRows.reduce((acc, r) => {
         acc[r.related_id] = r.relation_type;
         return acc;
       }, {});
