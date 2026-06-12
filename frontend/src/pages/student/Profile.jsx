@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import StudentLayout from '../../components/layout/StudentLayout';
+import TeacherLayout from '../../components/layout/TeacherLayout';
+import AdminLayout from '../../components/layout/AdminLayout';
 import Button from '../../components/ui/Button';
 import Input from '../../components/ui/Input';
 import Alert from '../../components/ui/Alert';
@@ -10,7 +12,10 @@ import api from '../../lib/api';
 const JLPT_LEVELS = ['N5', 'N4', 'N3', 'N2', 'N1'];
 
 export default function Profile() {
-  const { user } = useAuth();
+  const { user, isAdmin, isTeacher } = useAuth();
+  // Mỗi role thấy layout riêng của mình khi vào hồ sơ
+  const Layout = isAdmin() ? AdminLayout : isTeacher() ? TeacherLayout : StudentLayout;
+  const isStudent = !isAdmin() && !isTeacher();
   const { t, lang, switchLang } = useLang();
   const fileInputRef = useRef(null);
 
@@ -103,7 +108,7 @@ export default function Profile() {
   const avatarSrc = avatarPreview || userData?.avatar_url;
 
   return (
-    <StudentLayout title={t('profile.title')}>
+    <Layout title={t('profile.title')}>
       {alert.msg && <Alert type={alert.type} onClose={() => setAlert({ type: '', msg: '' })} className="mb-6">{alert.msg}</Alert>}
 
       <div className="grid md:grid-cols-3 gap-6">
@@ -134,7 +139,8 @@ export default function Profile() {
             </div>
           </div>
 
-          {/* Stats */}
+          {/* Stats — chỉ học sinh mới có dữ liệu học tập */}
+          {isStudent && (
           <div className="glass-card rounded-2xl p-5 grid grid-cols-2 gap-4">
             {[
               { label: t('profile.total_hours_label') || 'Giờ học', value: Math.floor((dashData?.total_study_minutes || 0) / 60) },
@@ -148,6 +154,7 @@ export default function Profile() {
               </div>
             ))}
           </div>
+          )}
 
           {/* Language switcher */}
           <div className="glass-card rounded-2xl p-5">
@@ -182,6 +189,7 @@ export default function Profile() {
                 </div>
                 <Input label={t('profile.phone')} value={form.phone}
                   onChange={e => setForm({ ...form, phone: e.target.value })} placeholder="+84..." />
+                {isStudent && (
                 <div>
                   <label className="block text-sm font-medium text-on-muted mb-1">{t('profile.jlpt_goal')}</label>
                   <select value={form.jlptTarget} onChange={e => setForm({ ...form, jlptTarget: e.target.value })}
@@ -190,13 +198,16 @@ export default function Profile() {
                     {JLPT_LEVELS.map(l => <option key={l} value={l}>{l}</option>)}
                   </select>
                 </div>
+                )}
               </div>
+              {isStudent && (
               <div>
                 <label className="block text-sm font-medium text-on-muted mb-1">{t('profile.bio')}</label>
                 <textarea value={form.bio} onChange={e => setForm({ ...form, bio: e.target.value })} rows={3}
                   placeholder="Chia sẻ đôi chút về hành trình học tiếng Nhật của bạn..."
                   className="w-full px-4 py-3 bg-white border border-outline rounded-xl text-sm outline-none focus:border-tsubaki-red transition-colors resize-none" />
               </div>
+              )}
               <div className="flex gap-3 pt-2">
                 <Button type="submit" loading={saving}>{t('profile.save')}</Button>
                 <Button type="button" variant="secondary" onClick={() => setForm({ fullname: userData?.full_name || '', phone: userData?.phone || '', jlptTarget: profileData?.jlpt_target_level || '', bio: profileData?.study_goal || '' })}>
@@ -230,6 +241,6 @@ export default function Profile() {
           </div>
         </div>
       </div>
-    </StudentLayout>
+    </Layout>
   );
 }

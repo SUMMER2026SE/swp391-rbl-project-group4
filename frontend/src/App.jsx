@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
 import { LangProvider } from './contexts/LangContext';
 import ProtectedRoute from './components/shared/ProtectedRoute';
+import StudentRoute from './components/shared/StudentRoute';
 import AdminRoute from './components/shared/AdminRoute';
 import TeacherRoute from './components/shared/TeacherRoute';
 
@@ -78,17 +79,19 @@ export default function App() {
             <Route path="/forgot-password" element={<ForgotPassword />} />
             <Route path="/reset-password"  element={<ResetPassword />} />
 
-            {/* Student (protected) */}
-            <Route path="/dashboard"  element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+            {/* Student only — admin/teacher bị chuyển về dashboard riêng */}
+            <Route path="/dashboard"  element={<StudentRoute><Dashboard /></StudentRoute>} />
+            <Route path="/courses"    element={<StudentRoute><Courses /></StudentRoute>} />
+            <Route path="/courses/:id" element={<StudentRoute><CourseDetail /></StudentRoute>} />
+            <Route path="/lessons/:id" element={<StudentRoute><LessonView /></StudentRoute>} />
+            <Route path="/vocabulary" element={<StudentRoute><Vocabulary /></StudentRoute>} />
+            <Route path="/kanji"      element={<StudentRoute><Kanji /></StudentRoute>} />
+            <Route path="/classes"    element={<StudentRoute><Classes /></StudentRoute>} />
+            <Route path="/quizzes/:id" element={<StudentRoute><Quiz /></StudentRoute>} />
+            <Route path="/dictionary" element={<StudentRoute><Dictionary /></StudentRoute>} />
+
+            {/* Dùng chung mọi role (layout hiển thị theo role) */}
             <Route path="/profile"    element={<ProtectedRoute><Profile /></ProtectedRoute>} />
-            <Route path="/courses"    element={<ProtectedRoute><Courses /></ProtectedRoute>} />
-            <Route path="/courses/:id" element={<ProtectedRoute><CourseDetail /></ProtectedRoute>} />
-            <Route path="/lessons/:id" element={<ProtectedRoute><LessonView /></ProtectedRoute>} />
-            <Route path="/vocabulary" element={<ProtectedRoute><Vocabulary /></ProtectedRoute>} />
-            <Route path="/kanji"      element={<ProtectedRoute><Kanji /></ProtectedRoute>} />
-            <Route path="/classes"    element={<ProtectedRoute><Classes /></ProtectedRoute>} />
-            <Route path="/quizzes/:id" element={<ProtectedRoute><Quiz /></ProtectedRoute>} />
-            <Route path="/dictionary" element={<ProtectedRoute><Dictionary /></ProtectedRoute>} />
             <Route path="/chat"       element={<ProtectedRoute><ChatPage /></ProtectedRoute>} />
 
             {/* Teacher (teacher + admin) */}
