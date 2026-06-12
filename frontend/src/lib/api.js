@@ -14,7 +14,22 @@ api.interceptors.request.use(async (config) => {
 
 api.interceptors.response.use(
   (res) => res,
-  (err) => {
+  async (err) => {
+    const status = err.response?.status;
+
+    // Token hết hạn / không hợp lệ → thử refresh 1 lần, thất bại thì đăng xuất
+    if (status === 401 && err.config && !err.config._retried) {
+      err.config._retried = true;
+      const { data, error } = await supabase.auth.refreshSession();
+      if (!error && data?.session) {
+        err.config.headers.Authorization = `Bearer ${data.session.access_token}`;
+        return api.request(err.config);
+      }
+      await supabase.auth.signOut();
+      window.location.href = '/login?expired=1';
+      return new Promise(() => {}); // trang sắp chuyển hướng — treo promise
+    }
+
     const msg = err.response?.data?.error || 'Đã xảy ra lỗi. Vui lòng thử lại.';
     return Promise.reject(new Error(msg));
   }
