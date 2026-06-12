@@ -1,5 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import AdminLayout from '../components/layout/AdminLayout';
+import TeacherLayout from '../components/layout/TeacherLayout';
 import StudentLayout from '../components/layout/StudentLayout';
 import FuriganaText from '../components/ui/FuriganaText';
 import api from '../lib/api';
@@ -367,8 +369,9 @@ function SessionSidebar({ sessions, activeId, onSelect, onDelete, onNew, loading
 
 // ── main page ──────────────────────────────────────────────────────────────
 export default function ChatPage() {
-  const { user } = useAuth();
-  const Layout = StudentLayout;
+  const { user, isAdmin, isTeacher } = useAuth();
+  // Mỗi role dùng layout riêng — admin/teacher/student đều thấy sidebar của mình
+  const Layout = isAdmin() ? AdminLayout : isTeacher() ? TeacherLayout : StudentLayout;
 
   // sessions
   const [sessions, setSessions]         = useState([]);
