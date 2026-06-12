@@ -28,7 +28,7 @@ exports.list = async (req, res) => {
 exports.getOne = async (req, res) => {
   try {
     const { data: quiz, error } = await supabaseAdmin
-      .from('quizzes').select('*').eq('id', req.params.id).eq('is_published', true).single();
+      .from('quizzes').select('*').eq('id', req.params.id).single();
     if (error || !quiz) return res.status(404).json({ error: 'Không tìm thấy quiz.' });
 
     const { data: questions } = await supabaseAdmin
