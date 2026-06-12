@@ -9,6 +9,7 @@ const STUDENT_LINKS = (t) => [
   { to: '/courses',    icon: 'menu_book',      label: t('courses.title') },
   { to: '/vocabulary', icon: 'translate',      label: t('vocab.title') },
   { to: '/kanji',      icon: 'font_download',  label: 'Kanji' },
+  { to: '/dictionary', icon: 'auto_stories',   label: t('dictionary.title') },
   { to: '/classes',    icon: 'groups',         label: 'Lớp học' },
   { to: '/chat',       icon: 'smart_toy',      label: 'Trợ lý AI' },
   { to: '/profile',    icon: 'person',         label: t('profile.title') },

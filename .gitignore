@@ -6,3 +6,4 @@ dist/
 frontend/.env
 frontend/dist/
 .claude/
+backend/scripts/dictionary-import/data/

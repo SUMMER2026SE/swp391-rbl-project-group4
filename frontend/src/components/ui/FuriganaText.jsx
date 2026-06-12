@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import api from '../../lib/api';
 
 // Allow only ruby/rt/rb/rp and text — strip everything else
@@ -20,12 +20,14 @@ const hasKanji = (t) => /[一-鿿㐀-䶿]/.test(t);
  *
  * Props:
  *  text         — plain Japanese string
+ *  html         — (optional) pre-annotated ruby HTML; when provided, render it
+ *                 directly and NEVER call the AI endpoint (offline furigana)
  *  enabled      — (optional) controlled boolean; when true, furigana is shown
  *  className    — wrapper span class
  *  textClassName — class applied to the text span/p
  *  block        — if true, uses <p> instead of <span> for text
  */
-export default function FuriganaText({ text, enabled: externalEnabled, className = '', textClassName = '', block = false }) {
+export default function FuriganaText({ text, html, enabled: externalEnabled, className = '', textClassName = '', block = false }) {
   const isControlled = externalEnabled !== undefined;
   const [active, setActive]   = useState(false);
   const [loading, setLoading] = useState(false);
@@ -37,7 +39,16 @@ export default function FuriganaText({ text, enabled: externalEnabled, className
   // Which flag drives display
   const show = isControlled ? externalEnabled : active;
 
+  // Furigana có sẵn (offline) — tính ngay khi render, không gọi AI, không cần state
+  const offlineHtml = useMemo(
+    () => (html === undefined ? undefined : (html ? sanitizeRuby(html) : text)),
+    [html, text]
+  );
+  const isOffline = html !== undefined;
+
   useEffect(() => {
+    // Chỉ gọi AI khi KHÔNG có furigana sẵn
+    if (isOffline) return;
     if (!show || htmlRef.current || loading) return;
     if (!hasKanji(text)) { htmlRef.current = text; return; }
 
@@ -46,17 +57,18 @@ export default function FuriganaText({ text, enabled: externalEnabled, className
       .then(r => { if (mountedRef.current) htmlRef.current = sanitizeRuby(r.data.html || text); })
       .catch(() => { if (mountedRef.current) htmlRef.current = text; })
       .finally(() => { if (mountedRef.current) setLoading(false); });
-  }, [show, text]);
+  }, [show, text, isOffline]);
 
   const Tag = block ? 'p' : 'span';
-  const displayed = show && htmlRef.current && !loading;
+  const annotatedHtml = isOffline ? offlineHtml : htmlRef.current;
+  const displayed = show && annotatedHtml && !loading;
 
   return (
     <span className={`inline-flex flex-col gap-1 ${className}`}>
       {displayed ? (
         <Tag
           className={`leading-[2.8] ${textClassName}`}
-          dangerouslySetInnerHTML={{ __html: htmlRef.current }}
+          dangerouslySetInnerHTML={{ __html: annotatedHtml }}
         />
       ) : (
         <Tag className={`leading-relaxed ${textClassName}`}>

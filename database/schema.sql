@@ -213,3 +213,133 @@ CREATE POLICY "attempts: insert own"      ON public.quiz_attempts  FOR INSERT TO
 --   UPDATE auth.users
 --   SET raw_user_meta_data = raw_user_meta_data || '{"role": "admin"}'::jsonb
 --   WHERE email = 'your-admin@example.com';
+
+
+-- ─── 6. DICTIONARY TABLES (schema riêng dictionary_module) ────────────────────
+-- Kho dữ liệu từ điển Nhật-Việt độc lập (không gắn lesson_id), nạp từ JMdict +
+-- KanjiDictVN/KANJIDIC + Tatoeba qua script ở backend/scripts/dictionary-import/.
+-- Các bảng nằm trong schema riêng dictionary_module; helper f_unaccent + extension
+-- giữ ở public (dùng chung). LƯU Ý: phải thêm 'dictionary_module' vào Exposed schemas
+-- (Supabase → Settings → API) để supabase-js .schema('dictionary_module') hoạt động.
+
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
+CREATE EXTENSION IF NOT EXISTS unaccent;
+
+CREATE SCHEMA IF NOT EXISTS dictionary_module;
+GRANT USAGE ON SCHEMA dictionary_module TO anon, authenticated, service_role;
+
+-- Hàm wrapper IMMUTABLE để có thể tạo index trên unaccent(meaning_vi) — giữ ở public
+CREATE OR REPLACE FUNCTION public.f_unaccent(text)
+RETURNS text AS $$
+  SELECT public.unaccent('public.unaccent', $1)
+$$ LANGUAGE sql IMMUTABLE PARALLEL SAFE STRICT;
+
+-- Bảng kanji riêng cho từ điển (đầy đủ, có âm Hán Việt) — độc lập với public.kanji
+CREATE TABLE IF NOT EXISTS dictionary_module.dict_kanji (
+  id           uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  character    text NOT NULL UNIQUE,
+  sino_vi      text,
+  meaning_vi   text,
+  reading_on   text[],
+  reading_kun  text[],
+  created_at   timestamptz DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS dictionary_module.dict_entries (
+  id          uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  kanji       text,
+  kana        text NOT NULL, -- có thể là hiragana hoặc katakana
+  romaji      text,
+  jlpt_level  text CHECK (jlpt_level IN ('N5','N4','N3','N2','N1')),
+  is_common   boolean DEFAULT false,
+  source      text,
+  source_id   text,
+  created_at  timestamptz DEFAULT now(),
+  UNIQUE (source, source_id)
+);
+
+CREATE TABLE IF NOT EXISTS dictionary_module.dict_senses (
+  id          uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  entry_id    uuid NOT NULL REFERENCES dictionary_module.dict_entries(id) ON DELETE CASCADE,
+  pos         text,
+  meaning_vi  text NOT NULL,
+  order_index integer DEFAULT 0,
+  created_at  timestamptz DEFAULT now(),
+  UNIQUE (entry_id, order_index)
+);
+
+CREATE TABLE IF NOT EXISTS dictionary_module.dict_examples (
+  id          uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  sense_id    uuid NOT NULL REFERENCES dictionary_module.dict_senses(id) ON DELETE CASCADE,
+  sentence_jp text NOT NULL,
+  sentence_vi text,
+  furigana    text,
+  created_at  timestamptz DEFAULT now(),
+  UNIQUE (sense_id, sentence_jp)
+);
+
+CREATE TABLE IF NOT EXISTS dictionary_module.dict_related_words (
+  id            uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  entry_id      uuid NOT NULL REFERENCES dictionary_module.dict_entries(id) ON DELETE CASCADE,
+  related_id    uuid NOT NULL REFERENCES dictionary_module.dict_entries(id) ON DELETE CASCADE,
+  relation_type text DEFAULT 'related' CHECK (relation_type IN ('related','synonym','antonym')),
+  created_at    timestamptz DEFAULT now(),
+  UNIQUE (entry_id, related_id, relation_type),
+  CHECK (entry_id <> related_id)
+);
+
+-- Indexes cho search theo kanji/kana/romaji/nghĩa tiếng Việt
+CREATE INDEX IF NOT EXISTS idx_dict_kanji_character  ON dictionary_module.dict_kanji (character);
+CREATE INDEX IF NOT EXISTS idx_dict_entries_kana     ON dictionary_module.dict_entries USING gin (kana gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS idx_dict_entries_kanji    ON dictionary_module.dict_entries USING gin (kanji gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS idx_dict_entries_romaji   ON dictionary_module.dict_entries USING gin (romaji gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS idx_dict_entries_jlpt     ON dictionary_module.dict_entries (jlpt_level);
+CREATE INDEX IF NOT EXISTS idx_dict_senses_entry     ON dictionary_module.dict_senses (entry_id);
+CREATE INDEX IF NOT EXISTS idx_dict_senses_meaning   ON dictionary_module.dict_senses USING gin (public.f_unaccent(meaning_vi) gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS idx_dict_examples_sense   ON dictionary_module.dict_examples (sense_id);
+CREATE INDEX IF NOT EXISTS idx_dict_related_entry    ON dictionary_module.dict_related_words (entry_id);
+
+-- RPC: tìm entry theo nghĩa tiếng Việt — khớp NGUYÊN TỪ (ranh giới từ) + ưu tiên đúng dấu + xếp hạng
+CREATE OR REPLACE FUNCTION dictionary_module.search_dict_by_meaning(p_query text, p_limit int, p_offset int)
+RETURNS TABLE(entry_id uuid) AS $$
+  WITH q AS (
+    SELECT
+      lower(btrim(p_query))                    AS qa,  -- query đúng dấu (lowercase)
+      public.f_unaccent(lower(btrim(p_query))) AS qn,  -- query bỏ dấu
+      regexp_replace(lower(btrim(p_query)), '([.^$*+?()\[\]{}|\\-])', '\\\1', 'g')                    AS qa_re,
+      regexp_replace(public.f_unaccent(lower(btrim(p_query))), '([.^$*+?()\[\]{}|\\-])', '\\\1', 'g') AS qn_re
+  )
+  -- Lọc: nghĩa (đã bỏ dấu) chứa query như một TỪ TRỌN VẸN; dùng f_unaccent(meaning_vi) để khớp index gin trgm
+  SELECT s.entry_id
+  FROM dictionary_module.dict_senses s CROSS JOIN q
+  WHERE public.f_unaccent(s.meaning_vi) ~* ('(^|[^a-z])' || q.qn_re || '([^a-z]|$)')
+  GROUP BY s.entry_id
+  -- Xếp hạng: trùng khít/mục nghĩa trọn > chứa; ĐÚNG DẤU > không dấu
+  ORDER BY MAX(GREATEST(
+    CASE WHEN lower(s.meaning_vi) = q.qa THEN 6
+         WHEN public.f_unaccent(lower(s.meaning_vi)) = q.qn THEN 5 ELSE 0 END,
+    CASE WHEN ('; ' || lower(s.meaning_vi) || ';') ~ ('[;,/] *' || q.qa_re || ' *[;,/]') THEN 4 ELSE 0 END,
+    CASE WHEN s.meaning_vi ILIKE '%' || q.qa || '%' THEN 3 ELSE 0 END,
+    CASE WHEN ('; ' || public.f_unaccent(lower(s.meaning_vi)) || ';') ~ ('[;,/] *' || q.qn_re || ' *[;,/]') THEN 2 ELSE 0 END,
+    1
+  )) DESC, s.entry_id
+  OFFSET p_offset LIMIT p_limit;
+$$ LANGUAGE sql STABLE;
+
+-- Cấp quyền cho service_role/anon/authenticated trên toàn bộ bảng + hàm trong schema mới
+GRANT ALL ON ALL TABLES    IN SCHEMA dictionary_module TO anon, authenticated, service_role;
+GRANT ALL ON ALL SEQUENCES IN SCHEMA dictionary_module TO anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION dictionary_module.search_dict_by_meaning(text, int, int) TO anon, authenticated, service_role;
+
+-- RLS: cho phép mọi user đã đăng nhập đọc dữ liệu từ điển; ghi/import qua supabaseAdmin
+ALTER TABLE dictionary_module.dict_kanji         ENABLE ROW LEVEL SECURITY;
+ALTER TABLE dictionary_module.dict_entries       ENABLE ROW LEVEL SECURITY;
+ALTER TABLE dictionary_module.dict_senses        ENABLE ROW LEVEL SECURITY;
+ALTER TABLE dictionary_module.dict_examples      ENABLE ROW LEVEL SECURITY;
+ALTER TABLE dictionary_module.dict_related_words ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "dict_kanji: read all"         ON dictionary_module.dict_kanji         FOR SELECT TO authenticated USING (true);
+CREATE POLICY "dict_entries: read all"       ON dictionary_module.dict_entries       FOR SELECT TO authenticated USING (true);
+CREATE POLICY "dict_senses: read all"        ON dictionary_module.dict_senses        FOR SELECT TO authenticated USING (true);
+CREATE POLICY "dict_examples: read all"      ON dictionary_module.dict_examples      FOR SELECT TO authenticated USING (true);
+CREATE POLICY "dict_related_words: read all" ON dictionary_module.dict_related_words FOR SELECT TO authenticated USING (true);
