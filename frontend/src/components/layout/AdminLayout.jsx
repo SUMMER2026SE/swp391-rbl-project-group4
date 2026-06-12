@@ -15,6 +15,7 @@ const ADMIN_LINKS = (t) => [
   { to: '/admin/classes',      icon: 'groups',          label: 'Lớp học' },
   { to: '/chat',               icon: 'smart_toy',       label: 'Trợ lý AI' },
   { to: '/admin/system',       icon: 'monitor_heart',   label: 'Hoạt động HT' },
+  { to: '/profile',            icon: 'person',          label: 'Hồ sơ' },
 ];
 
 export default function AdminLayout({ children, title }) {

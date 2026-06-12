@@ -86,6 +86,13 @@ function formatUptime(sec) {
 router.get('/stats',    c.getStats);
 router.get('/activity', c.getRecentActivity);
 
+// Request metrics theo giờ (lưu lượng + hiệu năng) cho chart dashboard
+router.get('/metrics', (req, res) => {
+  const { getMetrics } = require('../../middleware/metrics');
+  const hours = Math.min(Math.max(Number(req.query.hours) || 12, 1), 24);
+  res.json({ buckets: getMetrics(hours) });
+});
+
 // Users
 router.get('/users',                  c.listUsers);
 router.get('/users/:id',              c.getUser);

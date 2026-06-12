@@ -12,6 +12,7 @@ const LINKS = [
   { to: '/teacher/question-bank', icon: 'inventory_2', label: 'Ngân hàng câu hỏi' },
   { to: '/teacher/classes',  icon: 'groups',        label: 'Lớp học' },
   { to: '/chat',             icon: 'smart_toy',     label: 'Trợ lý AI' },
+  { to: '/profile',          icon: 'person',        label: 'Hồ sơ' },
 ];
 
 function Sidebar() {
