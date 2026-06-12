@@ -79,12 +79,26 @@ exports.uploadAvatar = async (req, res) => {
 
 // POST /api/users/change-password
 exports.changePassword = async (req, res) => {
-  const userId   = req.user.id;
-  const password = req.body.password?.trim();
+  const userId          = req.user.id;
+  const currentPassword = req.body.currentPassword?.trim();
+  const password        = req.body.password?.trim();
+
+  if (!currentPassword)
+    return res.status(400).json({ error: 'Vui lòng nhập mật khẩu hiện tại.' });
   if (!password || password.length < 8)
-    return res.status(400).json({ error: 'Mật khẩu phải có ít nhất 8 ký tự.' });
+    return res.status(400).json({ error: 'Mật khẩu mới phải có ít nhất 8 ký tự.' });
+  if (currentPassword === password)
+    return res.status(400).json({ error: 'Mật khẩu mới phải khác mật khẩu hiện tại.' });
 
   try {
+    // Verify current password by attempting a sign-in with it
+    const { error: verifyErr } = await supabase.auth.signInWithPassword({
+      email: req.user.email,
+      password: currentPassword,
+    });
+    if (verifyErr)
+      return res.status(400).json({ error: 'Mật khẩu hiện tại không đúng.', code: 'WRONG_PASSWORD' });
+
     // Use admin API — bypasses email confirmation entirely
     const { error } = await supabaseAdmin.auth.admin.updateUserById(userId, { password });
     if (error) throw error;
