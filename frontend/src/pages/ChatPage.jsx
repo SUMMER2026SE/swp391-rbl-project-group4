@@ -1,7 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import AdminLayout from '../components/layout/AdminLayout';
-import TeacherLayout from '../components/layout/TeacherLayout';
 import StudentLayout from '../components/layout/StudentLayout';
 import FuriganaText from '../components/ui/FuriganaText';
 import api from '../lib/api';
@@ -369,8 +367,8 @@ function SessionSidebar({ sessions, activeId, onSelect, onDelete, onNew, loading
 
 // ── main page ──────────────────────────────────────────────────────────────
 export default function ChatPage() {
-  const { user, isAdmin, isTeacher } = useAuth();
-  const Layout = isAdmin() ? AdminLayout : isTeacher() ? TeacherLayout : StudentLayout;
+  const { user } = useAuth();
+  const Layout = StudentLayout;
 
   // sessions
   const [sessions, setSessions]         = useState([]);

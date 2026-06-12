@@ -138,13 +138,18 @@ async function analyzeSilence(audioBufferOrPath, ext) {
 
 // ── Extract a time slice of audio as mp3 buffer ───────────────────────────────
 // inputPath: path to source audio file
+// voiceFilter: apply bandpass to reduce background music before Whisper
 // Returns a Buffer containing mp3 audio for [startS, startS+durationS]
-async function extractAudioChunk(inputPath, startS, durationS) {
+async function extractAudioChunk(inputPath, startS, durationS, voiceFilter = false) {
   if (!ffmpegAvailable()) throw new Error('ffmpeg not available');
+  const afArgs = voiceFilter
+    ? ['-af', 'highpass=f=100,lowpass=f=6000,afftdn=nf=-25']
+    : [];
   const { stdout } = await runFfmpeg([
-    '-ss', String(Math.max(0, startS - 0.05)),
+    '-ss', String(Math.max(0, startS - 0.15)),
     '-i', inputPath,
-    '-t', String(durationS + 0.1),
+    '-t', String(durationS + 0.3),
+    ...afArgs,
     '-f', 'mp3', '-ar', '16000', '-ac', '1', '-q:a', '5',
     'pipe:1',
   ]);
@@ -153,15 +158,17 @@ async function extractAudioChunk(inputPath, startS, durationS) {
 }
 
 // ── Merge speech segments into utterance groups ───────────────────────────────
-// Consecutive segments with gap ≤ gapS are merged into one group.
+// Merge if gap ≤ gapS AND group would not exceed maxDurS.
 // Groups shorter than minDurS are removed.
-function mergeIntoGroups(speechSegments, gapS = 0.5, minDurS = 0.5) {
+function mergeIntoGroups(speechSegments, gapS = 0.3, minDurS = 0.5, maxDurS = 6) {
   if (!speechSegments.length) return [];
   const groups = [{ start: speechSegments[0].start, end: speechSegments[0].end }];
   for (let i = 1; i < speechSegments.length; i++) {
     const prev = groups[groups.length - 1];
     const curr = speechSegments[i];
-    if (curr.start - prev.end <= gapS) prev.end = curr.end;
+    const gap = curr.start - prev.end;
+    const wouldExceed = (curr.end - prev.start) > maxDurS;
+    if (gap <= gapS && !wouldExceed) prev.end = curr.end;
     else groups.push({ start: curr.start, end: curr.end });
   }
   return groups.filter(g => r2(g.end - g.start) >= minDurS);
