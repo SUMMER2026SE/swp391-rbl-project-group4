@@ -46,7 +46,35 @@ function ClassCard({ cls, onManage, onEdit, onDelete }) {
     </div>
   );
 }
+/* ─── Delete Class Confirm Modal (UC34) ──────────────────────────────────── */
+function DeleteClassModal({ cls, open, onClose, onDeleted }) {
+  const [loading, setLoading] = useState(false);
+  const [error, setError]     = useState('');
 
+  const handleDelete = async () => {
+    setLoading(true); setError('');
+    try {
+      await api.delete(`/classes/teacher/${cls.id}`);
+      onDeleted(`Đã xóa lớp "${cls.name}".`);
+      onClose();
+    } catch (e) { setError(e.response?.data?.error || e.message); }
+    finally { setLoading(false); }
+  };
+
+  return (
+      <Modal open={open} onClose={onClose} title="Xác nhận xóa lớp"
+             footer={<><Button variant="secondary" onClick={onClose}>Huỷ</Button>
+               <Button loading={loading} onClick={handleDelete}
+                       className="bg-red-500 hover:bg-red-600 text-white">Xóa lớp</Button></>}>
+        <div className="text-center py-2 space-y-3">
+          <span className="material-symbols-outlined text-5xl text-red-400 block">delete_forever</span>
+          <p className="font-semibold">Xóa lớp <strong>"{cls?.name}"</strong>?</p>
+          <p className="text-sm text-on-muted">Toàn bộ học viên sẽ bị xóa khỏi lớp. Hành động này không thể hoàn tác.</p>
+          {error && <p className="text-sm text-red-500">{error}</p>}
+        </div>
+      </Modal>
+  );
+}
 function StudentsModal({ cls, open, onClose }) {
   const [students, setStudents] = useState([]);
   const [loading, setLoading]   = useState(false);
@@ -74,11 +102,35 @@ function StudentsModal({ cls, open, onClose }) {
     } catch(e) { setAlert({ type:'error', msg:e.message }); }
     finally { setToggling(null); }
   };
+  // UC36: Xóa học viên khỏi lớp
+  const removeStudent = async (enrollment) => {
+    setRemoving(enrollment.id);
+    try {
+      await api.delete(`/classes/teacher/enrollments/${enrollment.id}`);
+      setAlert({ type: 'success', msg: `Đã xóa ${enrollment.student?.full_name || 'học viên'} khỏi lớp.` });
+      setConfirm(null);
+      load();
+    } catch (e) { setAlert({ type: 'error', msg: e.response?.data?.error || e.message }); }
+    finally { setRemoving(null); }
+  };
 
   return (
     <Modal open={open} onClose={onClose} title={`Học viên — ${cls?.name || ''}`}
       footer={<Button variant="secondary" onClick={onClose}>Đóng</Button>}>
       {alert.msg && <Alert type={alert.type} onClose={() => setAlert({type:'',msg:''})} className="mb-3">{alert.msg}</Alert>}
+      {/* Confirm xóa học viên inline */}
+      {confirmRemove && (
+          <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-xl">
+            <p className="text-sm font-semibold text-red-700 mb-2">
+              Xóa <strong>{confirmRemove.student?.full_name || confirmRemove.student?.email}</strong> khỏi lớp?
+            </p>
+            <div className="flex gap-2">
+              <Button onClick={() => removeStudent(confirmRemove)} loading={removing === confirmRemove.id}
+                      className="bg-red-500 hover:bg-red-600 text-white text-xs px-3 py-1.5">Xóa</Button>
+              <Button variant="secondary" onClick={() => setConfirm(null)} className="text-xs px-3 py-1.5">Huỷ</Button>
+            </div>
+          </div>
+      )}
       {loading ? (
         <div className="py-8 text-center text-on-muted animate-pulse">Đang tải...</div>
       ) : students.length === 0 ? (
@@ -107,6 +159,11 @@ function StudentsModal({ cls, open, onClose }) {
                     : 'bg-surface-low text-on-muted hover:bg-emerald-100 hover:text-emerald-700'
                 }`}>
                 {e.status === 'active' ? 'Đang học' : 'Vô hiệu'}
+              </button>
+              {/* UC36 */}
+              <button onClick={() => setConfirm(e)} title="Xóa khỏi lớp"
+                      className="p-1.5 rounded-lg text-on-muted hover:text-red-500 hover:bg-red-50 transition-colors">
+                <span className="material-symbols-outlined text-base">person_remove</span>
               </button>
             </div>
           ))}
@@ -158,6 +215,10 @@ export default function TeacherClasses() {
     <TeacherLayout title="Lớp học">
       <div className="flex items-center justify-between mb-6">
         <h1 className="font-display text-2xl font-bold">Lớp học</h1>
+        {/* UC33 */}
+        <Button onClick={openCreate}>
+          <span className="material-symbols-outlined text-lg">add</span> Tạo lớp
+        </Button>
         <Button onClick={openCreate}><span className="material-symbols-outlined text-lg">add</span> Tạo lớp</Button>
       </div>
 
@@ -181,7 +242,6 @@ export default function TeacherClasses() {
           ))}
         </div>
       )}
-
       <Modal open={modal} onClose={() => setModal(false)} title={editId ? 'Sửa lớp' : 'Tạo lớp mới'}
         footer={<><Button variant="secondary" onClick={() => setModal(false)}>Huỷ</Button><Button loading={saving} onClick={handleSave}>Lưu</Button></>}>
         <div className="space-y-4">

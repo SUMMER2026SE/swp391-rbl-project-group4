@@ -40,6 +40,38 @@ function JoinModal({ open, onClose, onJoined }) {
     </Modal>
   );
 }
+/* ─── Leave Confirm Modal ─────────────────────────────────────────────────── */
+function LeaveModal({ open, onClose, cls, onLeft }) {
+  const [loading, setLoading] = useState(false);
+  const [error, setError]     = useState('');
+
+  const handleLeave = async () => {
+    setLoading(true); setError('');
+    try {
+      await api.delete(`/classes/my/${cls.class_id}`);
+      onLeft(`Đã rời khỏi lớp "${cls.class?.name}".`);
+      onClose();
+    } catch (e) { setError(e.response?.data?.error || e.message); }
+    finally { setLoading(false); }
+  };
+
+  return (
+      <Modal open={open} onClose={onClose} title="Rời khỏi lớp học"
+             footer={<><Button variant="secondary" onClick={onClose}>Huỷ</Button>
+               <Button loading={loading} onClick={handleLeave}
+                       className="bg-red-500 hover:bg-red-600 text-white">Rời lớp</Button></>}>
+        <div className="text-center py-2">
+          <span className="material-symbols-outlined text-5xl text-red-400 block mb-3">logout</span>
+          <p className="text-base font-semibold mb-1">Bạn muốn rời khỏi lớp này?</p>
+          <p className="text-sm text-on-muted">
+            Lớp: <strong>{cls?.class?.name || '—'}</strong>
+          </p>
+          <p className="text-sm text-on-muted mt-1">Bạn có thể tham gia lại bằng mã lớp.</p>
+          {error && <p className="text-sm text-red-500 mt-3">{error}</p>}
+        </div>
+      </Modal>
+  );
+}
 
 function ClassCard({ enrollment }) {
   const cls = enrollment.class || {};
