@@ -5,7 +5,8 @@ import api from '../../lib/api';
 function sanitizeRuby(html) {
   return html
     .replace(/<script[\s\S]*?<\/script>/gi, '')
-    .replace(/<(?!\/?(?:ruby|rt|rb|rp)\b)[^>]*>/gi, '');
+    .replace(/<(?!\/?(?:ruby|rt|rb|rp)\b)[^>]*>/gi, '')   // bỏ tag ngoài whitelist
+    .replace(/<(ruby|rt|rb|rp)\b[^>]*>/gi, '<$1>');        // strip mọi attribute trên tag được phép
 }
 
 // Has kanji?

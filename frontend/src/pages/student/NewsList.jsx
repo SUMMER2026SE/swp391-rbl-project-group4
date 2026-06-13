@@ -78,7 +78,7 @@ export default function NewsList() {
         <h1 className="font-display text-display-mobile font-bold text-on-surface mb-2 tracking-tight">
           Luyện đọc báo
         </h1>
-        <p className="text-on-surface-variant text-base max-w-xl leading-relaxed">
+        <p className="text-on-surface-variant text-base leading-relaxed whitespace-nowrap">
           Đọc tin tức tiếng Nhật thật, bật furigana và bản dịch tiếng Việt, hỏi đáp cùng trợ lý AI để hiểu sâu hơn.
         </p>
       </div>

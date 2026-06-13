@@ -9,21 +9,25 @@ const matDb = supabaseAdmin.schema('materials_module');
 // ── Student: danh sách bài đọc đã publish ─────────────────────────────────────
 // GET /api/news?level=&search=&page=&limit=
 exports.list = async (req, res) => {
-  const { level, search, page = 1, limit = 12 } = req.query;
-  const offset = (page - 1) * limit;
+  const { level, search } = req.query;
+  const p   = Math.max(1, Number(req.query.page) || 1);
+  const lim = Math.min(100, Math.max(1, Number(req.query.limit) || 12));
+  const offset = (p - 1) * lim;
   try {
     let query = matDb.from('news_articles')
       .select('id,title,title_vi,summary_vi,level,thumbnail_url', { count: 'exact' })
       .eq('is_published', true)
       .order('created_at', { ascending: false })
-      .range(offset, offset + Number(limit) - 1);
+      .range(offset, offset + lim - 1);
 
-    if (level)  query = query.eq('level', level);
-    if (search) query = query.or(`title.ilike.%${search}%,title_vi.ilike.%${search}%`);
+    if (level) query = query.eq('level', level);
+    // Sanitize search trước khi build filter PostgREST .or() (tránh injection cú pháp filter)
+    const safe = search ? String(search).replace(/[,()%*]/g, ' ').trim() : '';
+    if (safe) query = query.or(`title.ilike.%${safe}%,title_vi.ilike.%${safe}%`);
 
     const { data, error, count } = await query;
     if (error) throw error;
-    res.json({ data, total: count, page: Number(page), limit: Number(limit) });
+    res.json({ data, total: count, page: p, limit: lim });
   } catch (err) {
     console.error('news.list:', err);
     res.status(500).json({ error: 'Không thể tải danh sách bài đọc.' });
@@ -35,7 +39,7 @@ exports.list = async (req, res) => {
 exports.getOne = async (req, res) => {
   try {
     const { data, error } = await matDb.from('news_articles')
-      .select('id,title,title_vi,level,source,source_url,content,segments')
+      .select('id,title,title_vi,level,source,source_url,thumbnail_url,content,segments')
       .eq('id', req.params.id)
       .eq('is_published', true)
       .single();
@@ -92,20 +96,23 @@ Không giải thích, không bọc trong code block, không thêm chữ nào ngo
 // ── Admin: danh sách bài (cả nháp) ────────────────────────────────────────────
 // GET /api/admin/news?level=&search=&page=&limit=
 exports.adminList = async (req, res) => {
-  const { level, search, page = 1, limit = 20 } = req.query;
-  const offset = (page - 1) * limit;
+  const { level, search } = req.query;
+  const p   = Math.max(1, Number(req.query.page) || 1);
+  const lim = Math.min(100, Math.max(1, Number(req.query.limit) || 20));
+  const offset = (p - 1) * lim;
   try {
     let query = matDb.from('news_articles')
       .select('id,title,title_vi,level,thumbnail_url,is_published,created_at,updated_at', { count: 'exact' })
       .order('created_at', { ascending: false })
-      .range(offset, offset + Number(limit) - 1);
+      .range(offset, offset + lim - 1);
 
-    if (level)  query = query.eq('level', level);
-    if (search) query = query.or(`title.ilike.%${search}%,title_vi.ilike.%${search}%`);
+    if (level) query = query.eq('level', level);
+    const safe = search ? String(search).replace(/[,()%*]/g, ' ').trim() : '';
+    if (safe) query = query.or(`title.ilike.%${safe}%,title_vi.ilike.%${safe}%`);
 
     const { data, error, count } = await query;
     if (error) throw error;
-    res.json({ data, total: count, page: Number(page), limit: Number(limit) });
+    res.json({ data, total: count, page: p, limit: lim });
   } catch (err) {
     console.error('news.adminList:', err);
     res.status(500).json({ error: 'Không thể tải danh sách bài đọc.' });
@@ -117,7 +124,7 @@ exports.adminList = async (req, res) => {
 exports.adminGetOne = async (req, res) => {
   try {
     const { data, error } = await matDb.from('news_articles')
-      .select('*')
+      .select('id,title,title_vi,summary_vi,level,source,source_url,thumbnail_url,content,segments,is_published,created_by,created_at,updated_at')
       .eq('id', req.params.id)
       .single();
     if (error || !data) return res.status(404).json({ error: 'Không tìm thấy bài đọc.' });
@@ -146,7 +153,7 @@ exports.create = async (req, res) => {
         content:       content       || null,
         segments:      Array.isArray(segments) ? segments : [],
         is_published:  !!is_published,
-        created_by:    req.user?.id,
+        created_by:    req.user.id,
       })
       .select()
       .single();

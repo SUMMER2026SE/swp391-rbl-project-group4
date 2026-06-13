@@ -312,28 +312,13 @@ CREATE INDEX IF NOT EXISTS idx_news_articles_published
 -- Bỏ cột topic nếu DB cũ đã tạo (tính năng không dùng chủ đề nữa)
 ALTER TABLE materials_module.news_articles DROP COLUMN IF EXISTS topic;
 
--- (Phase 2) lịch sử đọc + bookmark
-CREATE TABLE IF NOT EXISTS materials_module.news_reading_history (
-  id            uuid DEFAULT gen_random_uuid() PRIMARY KEY,
-  user_id       uuid REFERENCES auth.users(id) ON DELETE CASCADE,
-  article_id    uuid REFERENCES materials_module.news_articles(id) ON DELETE CASCADE,
-  is_bookmarked boolean DEFAULT false,
-  last_read_at  timestamptz DEFAULT now(),
-  UNIQUE (user_id, article_id)
-);
+-- Grant chỉ trên bảng của tính năng này (không đụng các bảng khác trong schema)
+GRANT ALL ON materials_module.news_articles TO anon, authenticated, service_role;
 
--- Grant chỉ trên 2 bảng của tính năng này (không đụng các bảng khác trong schema)
-GRANT ALL ON materials_module.news_articles        TO anon, authenticated, service_role;
-GRANT ALL ON materials_module.news_reading_history TO anon, authenticated, service_role;
-
-ALTER TABLE materials_module.news_articles        ENABLE ROW LEVEL SECURITY;
-ALTER TABLE materials_module.news_reading_history ENABLE ROW LEVEL SECURITY;
+ALTER TABLE materials_module.news_articles ENABLE ROW LEVEL SECURITY;
 
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname='materials_module' AND tablename='news_articles' AND policyname='news_articles: read published') THEN
     CREATE POLICY "news_articles: read published" ON materials_module.news_articles FOR SELECT TO authenticated USING (is_published = true);
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname='materials_module' AND tablename='news_reading_history' AND policyname='news_reading_history: own rows') THEN
-    CREATE POLICY "news_reading_history: own rows" ON materials_module.news_reading_history FOR ALL TO authenticated USING (user_id = auth.uid()) WITH CHECK (user_id = auth.uid());
   END IF;
 END $$;

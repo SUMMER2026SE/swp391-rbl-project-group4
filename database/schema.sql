@@ -375,23 +375,10 @@ CREATE TABLE IF NOT EXISTS materials_module.news_articles (
 CREATE INDEX IF NOT EXISTS idx_news_articles_published
   ON materials_module.news_articles (is_published, level, created_at DESC);
 
--- (Phase 2) lịch sử đọc + bookmark
-CREATE TABLE IF NOT EXISTS materials_module.news_reading_history (
-  id            uuid DEFAULT gen_random_uuid() PRIMARY KEY,
-  user_id       uuid REFERENCES auth.users(id) ON DELETE CASCADE,
-  article_id    uuid REFERENCES materials_module.news_articles(id) ON DELETE CASCADE,
-  is_bookmarked boolean DEFAULT false,
-  last_read_at  timestamptz DEFAULT now(),
-  UNIQUE (user_id, article_id)
-);
+-- Grant chỉ trên bảng của tính năng này (không đụng các bảng khác trong schema)
+GRANT ALL ON materials_module.news_articles TO anon, authenticated, service_role;
 
--- Grant chỉ trên 2 bảng của tính năng này (không đụng các bảng khác trong schema)
-GRANT ALL ON materials_module.news_articles        TO anon, authenticated, service_role;
-GRANT ALL ON materials_module.news_reading_history TO anon, authenticated, service_role;
+-- RLS: student chỉ đọc bài đã publish; ghi qua supabaseAdmin
+ALTER TABLE materials_module.news_articles ENABLE ROW LEVEL SECURITY;
 
--- RLS: student chỉ đọc bài đã publish; lịch sử đọc mỗi user chỉ thấy của mình; ghi qua supabaseAdmin
-ALTER TABLE materials_module.news_articles        ENABLE ROW LEVEL SECURITY;
-ALTER TABLE materials_module.news_reading_history ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "news_articles: read published"   ON materials_module.news_articles        FOR SELECT TO authenticated USING (is_published = true);
-CREATE POLICY "news_reading_history: own rows"  ON materials_module.news_reading_history FOR ALL    TO authenticated USING (user_id = auth.uid()) WITH CHECK (user_id = auth.uid());
+CREATE POLICY "news_articles: read published" ON materials_module.news_articles FOR SELECT TO authenticated USING (is_published = true);
