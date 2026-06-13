@@ -7,6 +7,7 @@ import Button from '../../components/ui/Button';
 import Input from '../../components/ui/Input';
 import Alert from '../../components/ui/Alert';
 import QuestionTypeForm from '../../components/admin/QuestionTypeForm';
+import ProctoredAttemptsModal from '../../components/admin/ProctoredAttemptsModal';
 import { useLang } from '../../contexts/LangContext';
 import api from '../../lib/api';
 import {
@@ -14,7 +15,7 @@ import {
   QUESTION_TYPES, TYPE_MAP, LEVEL_COLORS, DIFF_COLORS,
 } from '../../utils/questionFormHelpers';
 
-const EMPTY_QUIZ = { title: '', title_ja: '', description: '', type: 'mixed', time_limit: '', is_published: false };
+const EMPTY_QUIZ = { title: '', title_ja: '', description: '', type: 'mixed', time_limit: '', is_published: false, mode: 'normal' };
 
 // ── Type badge ────────────────────────────────────────────────────────────────
 function TypeBadge({ type }) {
@@ -195,6 +196,7 @@ export default function AdminQuizzes() {
   const [quizModal, setQuizModal] = useState(false);
   const [createQModal, setCreateQModal] = useState(false);
   const [bankModal, setBankModal]       = useState(false);
+  const [attemptsModal, setAttemptsModal] = useState(false);
   const [editQuizId, setEditQuizId]     = useState(null);
   const [editQId, setEditQId]           = useState(null);
   const [form, setForm]   = useState(EMPTY_QUIZ);
@@ -237,7 +239,8 @@ export default function AdminQuizzes() {
   const openCreate = () => { setForm(EMPTY_QUIZ); setEditQuizId(null); setQuizModal(true); };
   const openEdit   = (row) => {
     setForm({ title: row.title||'', title_ja: row.title_ja||'', description: row.description||'',
-              type: row.type||'mixed', time_limit: row.time_limit||'', is_published: row.is_published||false });
+              type: row.type||'mixed', time_limit: row.time_limit||'', is_published: row.is_published||false,
+              mode: row.mode||'normal' });
     setEditQuizId(row.id); setQuizModal(true);
   };
 
@@ -324,7 +327,16 @@ export default function AdminQuizzes() {
 
   // ── Table columns ──────────────────────────────────────────────────────────
   const COLS = [
-    { key: 'title', label: 'Tiêu đề' },
+    { key: 'title', label: 'Tiêu đề', render: (v, row) => (
+      <span className="flex items-center gap-2">
+        {v}
+        {row.mode === 'proctored' && (
+          <span className="bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full text-[10px] font-bold inline-flex items-center gap-0.5">
+            <span className="material-symbols-outlined text-[11px]">verified_user</span>Giám sát
+          </span>
+        )}
+      </span>
+    )},
     { key: 'type',  label: 'Loại', render: v => <span className="text-xs text-on-muted">{v}</span> },
     { key: 'is_published', label: 'Trạng thái', render: v => (
       <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${v ? 'bg-emerald-100 text-emerald-700' : 'bg-surface-low text-on-muted'}`}>
@@ -370,9 +382,21 @@ export default function AdminQuizzes() {
               <h1 className="font-display text-2xl font-bold">
                 {selectedQuiz.title}
                 <span className="ml-2 text-on-muted text-lg font-normal">— {questions.length} câu hỏi</span>
+                {selectedQuiz.mode === 'proctored' && (
+                  <span className="ml-2 align-middle bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full text-xs font-bold inline-flex items-center gap-1">
+                    <span className="material-symbols-outlined text-[13px]">verified_user</span>Giám sát
+                  </span>
+                )}
               </h1>
             </div>
             <div className="flex gap-2 shrink-0">
+              {selectedQuiz.mode === 'proctored' && (
+                <button onClick={() => setAttemptsModal(true)}
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl border-2 border-amber-400/60 text-amber-700 text-sm font-semibold hover:bg-amber-50 transition-all">
+                  <span className="material-symbols-outlined text-lg">policy</span>
+                  Bài làm giám sát
+                </button>
+              )}
               <button onClick={() => setBankModal(true)}
                 className="flex items-center gap-2 px-4 py-2 rounded-xl border-2 border-sumire-purple text-sumire-purple text-sm font-semibold hover:bg-sumire-purple hover:text-white transition-all">
                 <span className="material-symbols-outlined text-lg">inventory_2</span>
@@ -461,6 +485,23 @@ export default function AdminQuizzes() {
             <Input label="Giới hạn thời gian (giây)" type="number" value={form.time_limit}
               onChange={e => setForm({ ...form, time_limit: e.target.value })} placeholder="VD: 600" />
           </div>
+          <div>
+            <label className="block text-sm font-medium text-on-muted mb-1.5">Chế độ thi</label>
+            <div className="grid grid-cols-2 gap-2">
+              {[
+                { val: 'normal',    icon: 'edit_note',     label: 'Thường',   desc: 'Làm bài bình thường' },
+                { val: 'proctored', icon: 'verified_user', label: 'Giám sát', desc: 'Toàn màn hình + webcam' },
+              ].map(m => (
+                <button key={m.val} type="button"
+                  onClick={() => setForm(f => ({ ...f, mode: m.val }))}
+                  className={`text-left p-3 rounded-xl border-2 transition-all ${form.mode === m.val ? 'border-tsubaki-red bg-tsubaki-red/5' : 'border-outline hover:border-tsubaki-red/40'}`}>
+                  <span className={`material-symbols-outlined text-lg ${form.mode === m.val ? 'text-tsubaki-red' : 'text-on-muted'}`}>{m.icon}</span>
+                  <p className="text-sm font-semibold mt-0.5">{m.label}</p>
+                  <p className="text-[11px] text-on-muted">{m.desc}</p>
+                </button>
+              ))}
+            </div>
+          </div>
           <label className="flex items-center gap-2 cursor-pointer">
             <input type="checkbox" checked={form.is_published} onChange={e => setForm({ ...form, is_published: e.target.checked })} className="w-4 h-4 accent-tsubaki-red" />
             <span className="text-sm font-medium">{t('admin.published')}</span>
@@ -487,6 +528,9 @@ export default function AdminQuizzes() {
         onImport={handleImport}
         saving={importing}
       />
+
+      {/* ── Proctored attempts modal ── */}
+      {selectedQuiz && <ProctoredAttemptsModal open={attemptsModal} onClose={() => setAttemptsModal(false)} quizId={selectedQuiz.id} />}
     </AdminLayout>
   );
 }
