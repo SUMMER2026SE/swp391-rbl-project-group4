@@ -12,6 +12,7 @@ const STUDENT_LINKS = (t) => [
   { to: '/dictionary', icon: 'auto_stories',   label: t('dictionary.title') },
   { to: '/news',       icon: 'newspaper',      label: 'Đọc báo' },
   { to: '/classes',    icon: 'groups',         label: 'Lớp học' },
+  { to: '/exams',      icon: 'quiz',           label: 'Đề thi' },
   { to: '/chat',       icon: 'smart_toy',      label: 'Trợ lý AI' },
   { to: '/profile',    icon: 'person',         label: t('profile.title') },
 ];

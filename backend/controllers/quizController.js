@@ -66,6 +66,7 @@ function isCorrect(q, ans) {
     return ans.trim() === q.correct_answer.trim();
   return false;
 }
+exports.isCorrect = isCorrect;
 
 // POST /api/quizzes/:id/attempt
 exports.submitAttempt = async (req, res) => {
