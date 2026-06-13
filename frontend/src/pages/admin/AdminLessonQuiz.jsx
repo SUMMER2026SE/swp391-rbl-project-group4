@@ -165,6 +165,90 @@ function BankImportModal({ open, onClose, onImport, saving }) {
   );
 }
 
+// ── Proctored Attempts Modal ──────────────────────────────────────────────────
+
+const VIOLATION_VI = {
+  fullscreen_exit: 'Thoát toàn màn hình',
+  tab_hidden:      'Rời tab/cửa sổ',
+  no_face:         'Không thấy mặt',
+  multiple_faces:  'Nhiều người',
+  camera_lost:     'Mất webcam',
+};
+
+function AttemptsModal({ open, onClose, quizId }) {
+  const [attempts, setAttempts] = useState([]);
+  const [loading, setLoading]   = useState(false);
+  const [zoomImg, setZoomImg]   = useState(null);
+
+  useEffect(() => {
+    if (!open) return;
+    setLoading(true);
+    api.get(`/admin/quizzes/${quizId}/attempts`)
+      .then(r => setAttempts(r.data || []))
+      .catch(() => setAttempts([]))
+      .finally(() => setLoading(false));
+  }, [open, quizId]);
+
+  return (
+    <Modal open={open} onClose={onClose} title="Bài làm — chế độ giám sát" size="xl"
+      footer={<Button variant="secondary" onClick={onClose}>Đóng</Button>}>
+      {loading ? (
+        <div className="flex justify-center py-10"><span className="material-symbols-outlined animate-spin text-2xl text-tsubaki-red">progress_activity</span></div>
+      ) : attempts.length === 0 ? (
+        <div className="text-center py-10 text-on-muted">
+          <span className="material-symbols-outlined text-4xl block mb-2 opacity-30">policy</span>
+          Chưa có học sinh nào làm bài thi này.
+        </div>
+      ) : (
+        <div className="space-y-4 max-h-[28rem] overflow-y-auto pr-1">
+          {attempts.map(a => (
+            <div key={a.id} className="border border-outline/30 rounded-xl p-4">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <div>
+                  <p className="font-semibold text-sm">{a.student?.full_name || a.student?.email}</p>
+                  <p className="text-xs text-on-muted">{new Date(a.completed_at).toLocaleString('vi-VN')}</p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="text-sm font-bold">{a.score}/{a.total_questions}</span>
+                  <span className={`px-2.5 py-1 rounded-full text-xs font-bold flex items-center gap-1 ${a.violation_count > 0 ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                    <span className="material-symbols-outlined text-[14px]">{a.violation_count > 0 ? 'warning' : 'check_circle'}</span>
+                    {a.violation_count > 0 ? `${a.violation_count} vi phạm` : 'Không vi phạm'}
+                  </span>
+                </div>
+              </div>
+
+              {Array.isArray(a.proctor_events) && a.proctor_events.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 mt-3">
+                  {a.proctor_events.map((ev, i) => (
+                    <span key={i} className="text-[11px] px-2 py-0.5 rounded-full bg-red-50 border border-red-200 text-red-700">
+                      {VIOLATION_VI[ev.type] || ev.type} · {new Date(ev.at).toLocaleTimeString('vi-VN')}
+                    </span>
+                  ))}
+                </div>
+              )}
+
+              {Array.isArray(a.snapshot_urls) && a.snapshot_urls.length > 0 && (
+                <div className="flex flex-wrap gap-2 mt-3">
+                  {a.snapshot_urls.map((url, i) => (
+                    <img key={i} src={url} alt="snapshot" onClick={() => setZoomImg(url)}
+                      className="w-20 h-15 rounded-lg object-cover border border-outline/30 cursor-pointer hover:ring-2 hover:ring-tsubaki-red" />
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {zoomImg && (
+        <div className="fixed inset-0 z-[70] bg-black/80 flex items-center justify-center p-6" onClick={() => setZoomImg(null)}>
+          <img src={zoomImg} alt="zoom" className="max-w-full max-h-full rounded-xl" />
+        </div>
+      )}
+    </Modal>
+  );
+}
+
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
 export default function AdminLessonQuiz() {
@@ -179,7 +263,7 @@ export default function AdminLessonQuiz() {
 
   // Quiz settings modal
   const [settingsModal, setSettingsModal]   = useState(false);
-  const [quizForm, setQuizForm]             = useState({ title: '', time_limit: '', is_published: false });
+  const [quizForm, setQuizForm]             = useState({ title: '', time_limit: '', is_published: false, mode: 'normal' });
   const [savingSettings, setSavingSettings] = useState(false);
 
   // Question modal (create / edit)
@@ -191,6 +275,9 @@ export default function AdminLessonQuiz() {
   // Bank import modal
   const [bankModal, setBankModal]   = useState(false);
   const [importSaving, setImportSaving] = useState(false);
+
+  // Proctored attempts modal
+  const [attemptsModal, setAttemptsModal] = useState(false);
 
   // ── Load ────────────────────────────────────────────────────────────────────
 
@@ -244,7 +331,7 @@ export default function AdminLessonQuiz() {
   // ── Quiz settings ───────────────────────────────────────────────────────────
 
   const openSettings = () => {
-    setQuizForm({ title: quiz.title || '', time_limit: quiz.time_limit || '', is_published: quiz.is_published || false });
+    setQuizForm({ title: quiz.title || '', time_limit: quiz.time_limit || '', is_published: quiz.is_published || false, mode: quiz.mode || 'normal' });
     setSettingsModal(true);
   };
 
@@ -255,6 +342,7 @@ export default function AdminLessonQuiz() {
         title: quizForm.title,
         time_limit: quizForm.time_limit ? Number(quizForm.time_limit) : null,
         is_published: quizForm.is_published,
+        mode: quizForm.mode,
       });
       setQuiz(r.data);
       setSettingsModal(false);
@@ -361,6 +449,11 @@ export default function AdminLessonQuiz() {
             {quiz?.is_published && (
               <span className="bg-green-100 text-green-700 px-2 py-0.5 rounded-full text-xs font-bold">Đã xuất bản</span>
             )}
+            {quiz?.mode === 'proctored' && (
+              <span className="bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full text-xs font-bold flex items-center gap-1">
+                <span className="material-symbols-outlined text-[13px]">verified_user</span>Giám sát
+              </span>
+            )}
           </div>
           <h1 className="font-display text-xl font-bold text-on-surface">
             {lesson?.title || 'Bài học quiz'}
@@ -376,6 +469,15 @@ export default function AdminLessonQuiz() {
 
         {quiz && (
           <div className="flex items-center gap-2 shrink-0">
+            {quiz.mode === 'proctored' && (
+              <button
+                onClick={() => setAttemptsModal(true)}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-amber-400/60 text-amber-700 text-sm font-medium hover:bg-amber-50 transition-all"
+              >
+                <span className="material-symbols-outlined text-base">policy</span>
+                Bài làm giám sát
+              </button>
+            )}
             <button
               onClick={() => setBankModal(true)}
               className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-sumire-purple/50 text-sumire-purple text-sm font-medium hover:bg-sumire-purple/10 transition-all"
@@ -544,6 +646,23 @@ export default function AdminLessonQuiz() {
               className="w-full px-4 py-3 border border-outline rounded-xl text-sm outline-none focus:border-tsubaki-red transition-colors"
             />
           </div>
+          <div>
+            <label className="block text-sm font-medium text-on-muted mb-1.5">Chế độ thi</label>
+            <div className="grid grid-cols-2 gap-2">
+              {[
+                { val: 'normal',    icon: 'edit_note',     label: 'Thường',   desc: 'Làm bài bình thường' },
+                { val: 'proctored', icon: 'verified_user', label: 'Giám sát', desc: 'Toàn màn hình + webcam' },
+              ].map(m => (
+                <button key={m.val} type="button"
+                  onClick={() => setQuizForm(f => ({ ...f, mode: m.val }))}
+                  className={`text-left p-3 rounded-xl border-2 transition-all ${quizForm.mode === m.val ? 'border-tsubaki-red bg-tsubaki-red/5' : 'border-outline hover:border-tsubaki-red/40'}`}>
+                  <span className={`material-symbols-outlined text-lg ${quizForm.mode === m.val ? 'text-tsubaki-red' : 'text-on-muted'}`}>{m.icon}</span>
+                  <p className="text-sm font-semibold mt-0.5">{m.label}</p>
+                  <p className="text-[11px] text-on-muted">{m.desc}</p>
+                </button>
+              ))}
+            </div>
+          </div>
           <label className="flex items-center gap-3 cursor-pointer">
             <div
               onClick={() => setQuizForm(f => ({ ...f, is_published: !f.is_published }))}
@@ -579,6 +698,9 @@ export default function AdminLessonQuiz() {
         onImport={handleImport}
         saving={importSaving}
       />
+
+      {/* Proctored Attempts Modal */}
+      {quiz && <AttemptsModal open={attemptsModal} onClose={() => setAttemptsModal(false)} quizId={quiz.id} />}
     </AdminLayout>
   );
 }

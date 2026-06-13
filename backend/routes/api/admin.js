@@ -156,6 +156,7 @@ router.post('/questions',                             c.createQuestion);
 router.put('/questions/:id',                          c.updateQuestion);
 router.delete('/questions/:id',                       c.deleteQuestion);
 router.post('/quizzes/:quizId/import-from-bank',      c.importFromBank);
+router.get('/quizzes/:quizId/attempts',               c.listQuizAttempts);
 
 // Question Bank (global)
 router.get('/question-bank/stats',    c.questionBankStats);
