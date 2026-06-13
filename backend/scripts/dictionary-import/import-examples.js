@@ -36,10 +36,61 @@ function buildPrompt(items) {
 function parseResponse(content) {
   let text = content.trim();
   text = text.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '');
-  return JSON.parse(text);
+  try {
+    return JSON.parse(text);
+  } catch {
+    // AI đôi khi trả thừa text sau mảng JSON → cắt lấy đúng mảng đầu tiên
+    return JSON.parse(extractFirstJsonArray(text));
+  }
+}
+
+// Trích mảng JSON đầu tiên (cân bằng [ ]), bỏ qua ngoặc trong chuỗi và ký tự escape
+function extractFirstJsonArray(text) {
+  const start = text.indexOf('[');
+  if (start === -1) throw new Error('Không tìm thấy mảng JSON trong phản hồi');
+  let depth = 0, inStr = false, esc = false;
+  for (let i = start; i < text.length; i++) {
+    const ch = text[i];
+    if (inStr) {
+      if (esc) esc = false;
+      else if (ch === '\\') esc = true;
+      else if (ch === '"') inStr = false;
+    } else if (ch === '"') inStr = true;
+    else if (ch === '[') depth++;
+    else if (ch === ']' && --depth === 0) return text.slice(start, i + 1);
+  }
+  throw new Error('Mảng JSON không cân bằng ngoặc');
+}
+
+// Dịch best-effort danh sách câu → map { sentence_jp: vi }. Nếu JSON cả batch hỏng
+// (vd 1 câu khiến AI sinh dấu " chưa escape) thì dịch lẻ từng câu để cô lập câu lỗi.
+async function translateSentences(items) {
+  const translations = {};
+  const toTranslate = items.filter((b) => b.sentenceEn);
+  if (toTranslate.length === 0) return translations;
+
+  try {
+    const response = await chatCompletion(buildPrompt(toTranslate), { temperature: 0.2, max_tokens: 2048 });
+    const parsed = parseResponse(response.choices?.[0]?.message?.content || '');
+    for (const item of parsed) translations[toTranslate[item.id]?.sentence_jp] = item.vi;
+    return translations;
+  } catch (err) {
+    console.warn(`  ↳ JSON batch hỏng (${err.message}) — dịch lẻ từng câu...`);
+    for (const it of toTranslate) {
+      try {
+        const r = await chatCompletion(buildPrompt([it]), { temperature: 0.2, max_tokens: 512 });
+        const p = parseResponse(r.choices?.[0]?.message?.content || '');
+        if (p[0]?.vi) translations[it.sentence_jp] = p[0].vi;
+      } catch { /* câu này bỏ trống nghĩa */ }
+      await sleep(150);
+    }
+    return translations;
+  }
 }
 
 async function main() {
+  // --retry-failed: chỉ chạy lại các batch ghi trong FAILED_FILE (không đụng checkpoint chính).
+  const retryFailed = process.argv.includes('--retry-failed');
   const limit = getLimitArg();
 
   console.log('→ Đọc entries-with-senses.json và jmdict-examples-eng.json...');
@@ -84,21 +135,29 @@ async function main() {
   console.log(`→ Tìm thấy ${pending.length} câu ví dụ cần dịch & lưu.`);
 
   const batches = chunk(pending, TRANSLATE_BATCH_SIZE);
-  let startBatch = readCheckpoint(CHECKPOINT_FILE, { lastBatch: -1 }).lastBatch + 1;
-  if (startBatch > 0) console.log(`→ Tiếp tục từ batch ${startBatch}/${batches.length} (checkpoint).`);
 
-  for (let i = startBatch; i < batches.length; i++) {
+  // Xác định danh sách index batch cần xử lý
+  let targets;
+  if (retryFailed) {
+    targets = readCheckpoint(FAILED_FILE, []).map((f) => f.batch);
+    if (targets.length === 0) { console.log('→ Không có batch lỗi nào để chạy lại.'); return; }
+    console.log(`→ Chạy lại ${targets.length} batch lỗi: ${targets.join(', ')}`);
+  } else {
+    const startBatch = readCheckpoint(CHECKPOINT_FILE, { lastBatch: -1 }).lastBatch + 1;
+    if (startBatch > 0) console.log(`→ Tiếp tục từ batch ${startBatch}/${batches.length} (checkpoint).`);
+    targets = [];
+    for (let i = startBatch; i < batches.length; i++) targets.push(i);
+  }
+
+  const stillFailed = []; // chỉ dùng ở chế độ retry
+
+  for (const i of targets) {
     const batch = batches[i];
+    if (!batch) continue;
 
     try {
-      let translations = {};
-      const toTranslate = batch.filter((b) => b.sentenceEn);
-      if (toTranslate.length > 0) {
-        const response = await chatCompletion(buildPrompt(toTranslate), { temperature: 0.2, max_tokens: 2048 });
-        const content = response.choices?.[0]?.message?.content || '';
-        const parsed = parseResponse(content);
-        for (const item of parsed) translations[toTranslate[item.id]?.sentence_jp] = item.vi;
-      }
+      // Dịch best-effort (câu nào lỗi thì để trống nghĩa) — câu ví dụ vẫn luôn được lưu
+      const translations = await translateSentences(batch);
 
       const rows = batch.map((b) => ({
         sense_id: b.sense_id,
@@ -106,21 +165,42 @@ async function main() {
         sentence_vi: translations[b.sentence_jp] || null,
       }));
 
-      const { error } = await dictDb.from('dict_examples').upsert(rows, { onConflict: 'sense_id,sentence_jp' });
+      // Khử trùng (sense_id, sentence_jp) trong cùng batch — tránh lỗi
+      // "ON CONFLICT DO UPDATE command cannot affect row a second time"
+      const seen = new Set();
+      const dedupRows = rows.filter((r) => {
+        const key = `${r.sense_id}:${r.sentence_jp}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+
+      const { error } = await dictDb.from('dict_examples').upsert(dedupRows, { onConflict: 'sense_id,sentence_jp' });
       if (error) throw error;
 
-      writeCheckpoint(CHECKPOINT_FILE, { lastBatch: i });
-      console.log(`✓ Batch ${i + 1}/${batches.length} (${rows.length} câu) đã lưu.`);
+      const missing = dedupRows.filter((r) => !r.sentence_vi).length;
+      if (!retryFailed) writeCheckpoint(CHECKPOINT_FILE, { lastBatch: i });
+      console.log(`✓ Batch ${i + 1}/${batches.length} (${dedupRows.length} câu${missing ? `, ${missing} chưa có nghĩa` : ''}) đã lưu.`);
     } catch (err) {
+      // Chỉ vào đây khi lỗi DB (upsert) — lỗi dịch đã được nuốt trong translateSentences
       console.error(`✗ Lỗi batch ${i}:`, err.message);
-      appendFailedBatch(FAILED_FILE, { batch: i, error: err.message });
-      writeCheckpoint(CHECKPOINT_FILE, { lastBatch: i });
+      if (retryFailed) {
+        stillFailed.push({ batch: i, error: err.message });
+      } else {
+        appendFailedBatch(FAILED_FILE, { batch: i, error: err.message });
+        writeCheckpoint(CHECKPOINT_FILE, { lastBatch: i });
+      }
     }
 
     await sleep(300);
   }
 
-  console.log('\nHoàn tất import-examples.');
+  if (retryFailed) {
+    writeCheckpoint(FAILED_FILE, stillFailed); // ghi đè danh sách lỗi còn lại ([] nếu xong sạch)
+    console.log(`\nHoàn tất retry. Còn ${stillFailed.length} batch lỗi.`);
+  } else {
+    console.log('\nHoàn tất import-examples.');
+  }
 }
 
 if (require.main === module) {
