@@ -184,6 +184,7 @@ export default function TeacherClasses() {
   const [editId, setEditId]   = useState(null);
   const [saving, setSaving]   = useState(false);
   const [managed, setManaged] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
 
   const load = async () => {
     setLoading(true);
@@ -207,11 +208,7 @@ export default function TeacherClasses() {
     finally { setSaving(false); }
   };
 
-  const handleDelete = async (id) => {
-    if (!confirm('Xóa lớp này? Toàn bộ học viên sẽ bị xóa khỏi lớp.')) return;
-    try { await api.delete(`/classes/teacher/${id}`); load(); }
-    catch(e) { setAlert({ type:'error', msg:e.message }); }
-  };
+  const handleDeleted = (msg) => { setAlert({ type:'success', msg }); load(); };
 
   return (
     <TeacherLayout title="Lớp học">
@@ -239,7 +236,7 @@ export default function TeacherClasses() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {classes.map(cls => (
-            <ClassCard key={cls.id} cls={cls} onManage={c => setManaged(c)} onEdit={openEdit} onDelete={handleDelete} />
+            <ClassCard key={cls.id} cls={cls} onManage={c => setManaged(c)} onEdit={openEdit} onDelete={() => setDeleteTarget(cls)} />
           ))}
         </div>
       )}
@@ -261,6 +258,7 @@ export default function TeacherClasses() {
       </Modal>
 
       <StudentsModal cls={managed} open={!!managed} onClose={() => setManaged(null)} />
+      <DeleteClassModal cls={deleteTarget} open={!!deleteTarget} onClose={() => setDeleteTarget(null)} onDeleted={handleDeleted} />
     </TeacherLayout>
   );
 }
