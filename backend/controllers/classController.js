@@ -114,6 +114,20 @@ exports.updateEnrollmentStatus = async (req, res) => {
   }
 };
 
+exports.removeEnrollment = async (req, res) => {
+  try {
+    const { data: enrollment } = await supabaseAdmin.from('class_enrollments').select('class_id').eq('id', req.params.enrollmentId).single();
+    if (!enrollment) return res.status(404).json({ error: 'Không tìm thấy.' });
+    const { data: cls } = await supabaseAdmin.from('classes').select('teacher_id').eq('id', enrollment.class_id).single();
+    if (!cls || cls.teacher_id !== req.user.id) return res.status(403).json({ error: 'Không có quyền.' });
+    const { error } = await supabaseAdmin.from('class_enrollments').delete().eq('id', req.params.enrollmentId);
+    if (error) throw error;
+    res.json({ message: 'Đã xóa học viên khỏi lớp.' });
+  } catch (err) {
+    res.status(500).json({ error: 'Không thể xóa học viên.' });
+  }
+};
+
 // ── Student: join / view classes ──────────────────────────────────────────────
 
 exports.joinClass = async (req, res) => {

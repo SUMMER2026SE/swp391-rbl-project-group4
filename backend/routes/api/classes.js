@@ -16,6 +16,7 @@ router.put('/teacher/:id',                     requireAuth, requireTeacher, c.up
 router.delete('/teacher/:id',                  requireAuth, requireTeacher, c.deleteClass);
 router.get('/teacher/:id/students',            requireAuth, requireTeacher, c.getClassStudents);
 router.put('/teacher/enrollments/:enrollmentId', requireAuth, requireTeacher, c.updateEnrollmentStatus);
+router.delete('/teacher/enrollments/:enrollmentId', requireAuth, requireTeacher, c.removeEnrollment);
 
 // Admin
 router.get('/admin',       requireAuth, requireAdmin, c.adminListClasses);

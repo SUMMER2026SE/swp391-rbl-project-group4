@@ -73,7 +73,7 @@ function LeaveModal({ open, onClose, cls, onLeft }) {
   );
 }
 
-function ClassCard({ enrollment }) {
+function ClassCard({ enrollment, onLeave }) {
   const cls = enrollment.class || {};
   return (
     <div className="glass-card rounded-2xl p-5 flex flex-col gap-3">
@@ -85,6 +85,10 @@ function ClassCard({ enrollment }) {
           <h3 className="font-bold text-base truncate">{cls.name}</h3>
           {cls.description && <p className="text-sm text-on-muted line-clamp-2 mt-0.5">{cls.description}</p>}
         </div>
+        <button onClick={() => onLeave(enrollment)} title="Rời khỏi lớp"
+          className="shrink-0 p-2 rounded-lg text-on-muted hover:text-red-500 hover:bg-red-50 transition-colors">
+          <span className="material-symbols-outlined text-lg">logout</span>
+        </button>
       </div>
       <div className="flex items-center gap-2 text-xs text-on-muted">
         <span className="material-symbols-outlined text-sm">school</span>
@@ -102,6 +106,7 @@ export default function Classes() {
   const [loading, setLoading]         = useState(true);
   const [alert, setAlert]             = useState({ type:'', msg:'' });
   const [joinModal, setJoinModal]     = useState(false);
+  const [leaveTarget, setLeaveTarget] = useState(null);
 
   const load = async () => {
     setLoading(true);
@@ -112,6 +117,7 @@ export default function Classes() {
   useEffect(() => { load(); }, []);
 
   const handleJoined = (msg) => { setAlert({ type:'success', msg }); load(); };
+  const handleLeft   = (msg) => { setAlert({ type:'success', msg }); load(); };
 
   return (
     <StudentLayout title="Lớp học">
@@ -137,11 +143,12 @@ export default function Classes() {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {enrollments.map(e => <ClassCard key={e.id} enrollment={e} />)}
+          {enrollments.map(e => <ClassCard key={e.id} enrollment={e} onLeave={setLeaveTarget} />)}
         </div>
       )}
 
       <JoinModal open={joinModal} onClose={() => setJoinModal(false)} onJoined={handleJoined} />
+      <LeaveModal open={!!leaveTarget} cls={leaveTarget} onClose={() => setLeaveTarget(null)} onLeft={handleLeft} />
     </StudentLayout>
   );
 }
