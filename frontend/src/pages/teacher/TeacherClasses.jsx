@@ -80,6 +80,8 @@ function StudentsModal({ cls, open, onClose }) {
   const [loading, setLoading]   = useState(false);
   const [alert, setAlert]       = useState({ type:'', msg:'' });
   const [toggling, setToggling] = useState(null);
+  const [confirmRemove, setConfirm] = useState(null);
+  const [removing, setRemoving]     = useState(null);
 
   const load = async () => {
     if (!cls) return;
@@ -219,7 +221,6 @@ export default function TeacherClasses() {
         <Button onClick={openCreate}>
           <span className="material-symbols-outlined text-lg">add</span> Tạo lớp
         </Button>
-        <Button onClick={openCreate}><span className="material-symbols-outlined text-lg">add</span> Tạo lớp</Button>
       </div>
 
       {alert.msg && <Alert type={alert.type} onClose={() => setAlert({type:'',msg:''})} className="mb-4">{alert.msg}</Alert>}

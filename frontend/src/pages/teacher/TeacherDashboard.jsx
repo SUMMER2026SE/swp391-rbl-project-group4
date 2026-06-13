@@ -1,16 +1,6 @@
-import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import TeacherLayout from '../../components/layout/TeacherLayout';
 import { useAuth } from '../../contexts/AuthContext';
-import api from '../../lib/api';
-
-const LEVEL_COLORS = {
-  N5: 'bg-green-100 text-green-700',
-  N4: 'bg-teal-100 text-teal-700',
-  N3: 'bg-blue-100 text-blue-700',
-  N2: 'bg-sumire-purple/10 text-sumire-purple',
-  N1: 'bg-tsubaki-red/10 text-tsubaki-red',
-};
 
 const PERF_BARS = [
   { label: 'Reading',   pct: 85 },
@@ -20,78 +10,21 @@ const PERF_BARS = [
 ];
 
 const PENDING = [
-  { icon: 'edit_note',      iconCls: 'text-tsubaki-red',   bg: 'bg-tsubaki-red/10',   title: 'Quản lý khoá học', desc: 'Xem và chỉnh sửa nội dung khoá học của bạn.' },
+  { icon: 'groups',         iconCls: 'text-tsubaki-red',   bg: 'bg-tsubaki-red/10',   title: 'Quản lý lớp học',  desc: 'Tạo lớp và quản lý học viên của bạn.' },
   { icon: 'quiz',           iconCls: 'text-sumire-purple', bg: 'bg-sumire-purple/10', title: 'Bài kiểm tra',     desc: 'Soạn bài kiểm tra mới cho học viên.' },
   { icon: 'font_download',  iconCls: 'text-on-muted',      bg: 'bg-surface-low',      title: 'Thêm Kanji',       desc: 'Bổ sung Kanji vào kho học liệu.' },
 ];
 
-function CourseCard({ course }) {
-  const pct = course.is_published ? 100 : Math.min(100, course.lesson_count * 10);
-  const levelCls = LEVEL_COLORS[course.level] || 'bg-surface-low text-on-muted';
-
-  return (
-    <div className="glass-card rounded-2xl overflow-hidden group">
-      <div className={`h-28 relative overflow-hidden flex items-center justify-center ${course.is_published ? 'bg-tsubaki-red' : 'bg-charcoal-text'}`}>
-        <div className="absolute inset-0 opacity-10 text-[90px] font-bold text-white flex items-center justify-center select-none pointer-events-none">
-          {course.title_ja || '日本語'}
-        </div>
-        <span className="relative z-10 text-white font-display font-bold text-base opacity-90 px-4 text-center">
-          {course.title}
-        </span>
-      </div>
-
-      <div className="p-5">
-        <div className="flex justify-between items-start mb-4">
-          <div>
-            <p className="text-xs text-on-muted">{course.lesson_count} bài học</p>
-          </div>
-          <div className="flex items-center gap-1.5">
-            {course.level && (
-              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-lg ${levelCls}`}>{course.level}</span>
-            )}
-            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-lg ${course.is_published ? 'bg-green-100 text-green-700' : 'bg-surface-low text-on-muted'}`}>
-              {course.is_published ? 'Đã xuất bản' : 'Nháp'}
-            </span>
-          </div>
-        </div>
-
-        <div className="space-y-1.5 mb-4">
-          <div className="flex justify-between text-xs font-semibold">
-            <span className="text-on-muted">Tiến trình</span>
-            <span className="text-on-surface">{pct}%</span>
-          </div>
-          <div className="w-full h-1.5 bg-surface-low rounded-full overflow-hidden">
-            <div className={`h-full rounded-full ${course.is_published ? 'bg-tsubaki-red' : 'bg-charcoal-text/40'}`}
-              style={{ width: `${pct}%` }} />
-          </div>
-        </div>
-
-        <Link to="/teacher/courses"
-          className="text-xs font-semibold text-tsubaki-red hover:underline flex items-center gap-0.5">
-          Quản lý <span className="material-symbols-outlined text-[14px]">chevron_right</span>
-        </Link>
-      </div>
-    </div>
-  );
-}
+// ── Thẻ điều hướng nhanh tới các khu vực thật của giáo viên ──────────────────
+const QUICK_NAV = [
+  { to: '/teacher/classes',       label: 'Lớp học',          icon: 'groups',      iconCls: 'text-tsubaki-red',   bg: 'bg-tsubaki-red/10' },
+  { to: '/teacher/question-bank', label: 'Ngân hàng câu hỏi', icon: 'inventory_2', iconCls: 'text-sumire-purple', bg: 'bg-sumire-purple/10' },
+  { to: '/teacher/vocab',         label: 'Học liệu',         icon: 'translate',   iconCls: 'text-amber-600',     bg: 'bg-amber-100' },
+];
 
 export default function TeacherDashboard() {
   const { user } = useAuth();
   const name = user?.user_metadata?.full_name || 'Giáo viên';
-
-  const [stats, setStats]     = useState({ total_courses: 0, total_lessons: 0, total_quizzes: 0 });
-  const [courses, setCourses] = useState([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    Promise.allSettled([
-      api.get('/teacher/stats'),
-      api.get('/teacher/courses'),
-    ]).then(([sRes, cRes]) => {
-      if (sRes.status === 'fulfilled') setStats(sRes.value.data || {});
-      if (cRes.status === 'fulfilled') setCourses(cRes.value.data || []);
-    }).finally(() => setLoading(false));
-  }, []);
 
   return (
     <TeacherLayout title="Dashboard">
@@ -104,80 +37,41 @@ export default function TeacherDashboard() {
               <span className="opacity-50 font-medium text-2xl">おはようございます</span>
             </h1>
             <p className="text-on-muted leading-relaxed max-w-xl">
-              Quản lý khoá học, bài học và nội dung học liệu của bạn từ đây.
+              Quản lý lớp học và nội dung học liệu của bạn từ đây.
             </p>
           </div>
           <div className="flex gap-3">
-            <Link to="/teacher/courses"
-              className="px-5 py-2.5 border border-outline/40 text-on-surface rounded-xl text-sm font-semibold hover:bg-surface-low transition-all">
-              Xem khoá học
-            </Link>
-            <Link to="/teacher/courses"
+            <Link to="/teacher/classes"
               className="px-5 py-2.5 bg-tsubaki-red text-white rounded-xl text-sm font-semibold hover:opacity-90 flex items-center gap-1.5 shadow-md shadow-tsubaki-red/20 transition-all">
-              <span className="material-symbols-outlined text-[18px]">add</span>
-              Tạo khoá học
+              <span className="material-symbols-outlined text-[18px]">groups</span>
+              Quản lý lớp học
             </Link>
           </div>
         </div>
       </section>
 
-      {/* Stats */}
+      {/* Quick nav */}
       <section className="grid sm:grid-cols-3 gap-5 mb-10">
-        {[
-          { label: 'Khoá học của tôi', value: stats.total_courses, icon: 'library_books', iconCls: 'text-tsubaki-red', bg: 'bg-tsubaki-red/10' },
-          { label: 'Bài học',          value: stats.total_lessons, icon: 'article',        iconCls: 'text-sumire-purple', bg: 'bg-sumire-purple/10' },
-          { label: 'Bài kiểm tra',     value: stats.total_quizzes, icon: 'quiz',           iconCls: 'text-amber-600',    bg: 'bg-amber-100' },
-        ].map(card => (
-          <div key={card.label} className="glass-card p-6 rounded-2xl flex flex-col justify-between h-36">
+        {QUICK_NAV.map(card => (
+          <Link key={card.to} to={card.to} className="glass-card p-6 rounded-2xl flex flex-col justify-between h-36 hover:shadow-xl transition-all group">
             <div className="flex justify-between items-start">
               <div className={`p-2 ${card.bg} rounded-lg`}>
                 <span className={`material-symbols-outlined ${card.iconCls}`}>{card.icon}</span>
               </div>
+              <span className="material-symbols-outlined text-on-muted/40 group-hover:text-tsubaki-red transition-colors">chevron_right</span>
             </div>
             <div>
-              <p className="text-[11px] font-bold text-on-muted uppercase tracking-widest mb-1">{card.label}</p>
-              <h2 className="font-display text-2xl font-bold text-on-surface">
-                {loading ? '—' : card.value}
-              </h2>
+              <p className="text-[11px] font-bold text-on-muted uppercase tracking-widest mb-1">Truy cập nhanh</p>
+              <h2 className="font-display text-xl font-bold text-on-surface">{card.label}</h2>
             </div>
-          </div>
+          </Link>
         ))}
       </section>
 
       {/* Main grid */}
       <div className="grid lg:grid-cols-3 gap-8 mb-10">
-        {/* Left: my courses + performance */}
+        {/* Left: performance */}
         <div className="lg:col-span-2 space-y-8">
-          {/* My courses */}
-          <div>
-            <div className="flex items-center justify-between mb-5">
-              <h2 className="font-display text-xl font-bold">Khoá học của tôi</h2>
-              <Link to="/teacher/courses" className="text-tsubaki-red text-sm font-semibold hover:underline flex items-center gap-0.5">
-                Xem tất cả <span className="material-symbols-outlined text-[18px]">chevron_right</span>
-              </Link>
-            </div>
-
-            {loading ? (
-              <div className="grid sm:grid-cols-2 gap-5">
-                {[0, 1].map(i => <div key={i} className="h-64 bg-surface-low rounded-2xl animate-pulse" />)}
-              </div>
-            ) : courses.length === 0 ? (
-              <div className="glass-card rounded-2xl p-12 text-center">
-                <span className="material-symbols-outlined text-5xl text-on-muted mb-3 block">library_books</span>
-                <p className="text-on-muted text-sm mb-4">Bạn chưa tạo khoá học nào.</p>
-                <Link to="/teacher/courses"
-                  className="inline-flex items-center gap-1.5 bg-tsubaki-red text-white px-5 py-2.5 rounded-xl text-sm font-semibold hover:opacity-90 transition-all">
-                  <span className="material-symbols-outlined text-[16px]">add</span>
-                  Tạo khoá học đầu tiên
-                </Link>
-              </div>
-            ) : (
-              <div className="grid sm:grid-cols-2 gap-5">
-                {courses.slice(0, 4).map(c => <CourseCard key={c.id} course={c} />)}
-              </div>
-            )}
-          </div>
-
           {/* Performance chart (decorative) */}
           <div className="glass-card p-6 rounded-2xl">
             <div className="flex items-center justify-between mb-8">
@@ -224,7 +118,7 @@ export default function TeacherDashboard() {
                 </div>
               ))}
             </div>
-            <Link to="/teacher/courses"
+            <Link to="/teacher/classes"
               className="w-full mt-6 py-2.5 border border-outline/30 rounded-xl text-xs font-bold text-on-muted hover:bg-surface-low transition-all flex items-center justify-center">
               Đến khu vực quản lý
             </Link>
