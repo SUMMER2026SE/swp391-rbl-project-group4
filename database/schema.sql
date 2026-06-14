@@ -382,3 +382,93 @@ GRANT ALL ON materials_module.news_articles TO anon, authenticated, service_role
 ALTER TABLE materials_module.news_articles ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "news_articles: read published" ON materials_module.news_articles FOR SELECT TO authenticated USING (is_published = true);
+
+-- ─── FLASHCARD MODULE: học phần / thư mục / thẻ / tiến độ (spaced repetition đơn giản) ──
+CREATE SCHEMA IF NOT EXISTS flashcard_module;
+
+-- Thư mục (chứa nhiều học phần)
+CREATE TABLE IF NOT EXISTS flashcard_module.flashcard_folders (
+  id         uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  owner_id   uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  name       text NOT NULL,
+  created_at timestamptz DEFAULT now(),
+  updated_at timestamptz DEFAULT now()
+);
+
+-- Học phần (study set)
+CREATE TABLE IF NOT EXISTS flashcard_module.flashcard_sets (
+  id          uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  owner_id    uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  title       text NOT NULL,
+  description text,
+  created_at  timestamptz DEFAULT now(),
+  updated_at  timestamptz DEFAULT now()
+);
+
+-- Nối nhiều-nhiều folder ↔ set (1 học phần có thể nằm nhiều thư mục)
+CREATE TABLE IF NOT EXISTS flashcard_module.flashcard_folder_sets (
+  folder_id uuid NOT NULL REFERENCES flashcard_module.flashcard_folders(id) ON DELETE CASCADE,
+  set_id    uuid NOT NULL REFERENCES flashcard_module.flashcard_sets(id)    ON DELETE CASCADE,
+  added_at  timestamptz DEFAULT now(),
+  PRIMARY KEY (folder_id, set_id)
+);
+
+-- Thẻ (từ vựng + định nghĩa)
+CREATE TABLE IF NOT EXISTS flashcard_module.flashcards (
+  id          uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  set_id      uuid NOT NULL REFERENCES flashcard_module.flashcard_sets(id) ON DELETE CASCADE,
+  term        text NOT NULL,                   -- từ vựng (mặt 1)
+  definition  text NOT NULL,                   -- định nghĩa (mặt 2)
+  order_index integer DEFAULT 0,
+  created_at  timestamptz DEFAULT now()
+);
+
+-- Tiến độ học per (student, card): không có row = trạng thái 'new' (chưa học)
+CREATE TABLE IF NOT EXISTS flashcard_module.flashcard_progress (
+  student_id       uuid NOT NULL REFERENCES auth.users(id)                  ON DELETE CASCADE,
+  card_id          uuid NOT NULL REFERENCES flashcard_module.flashcards(id) ON DELETE CASCADE,
+  status           text NOT NULL DEFAULT 'learning' CHECK (status IN ('learning','mastered')),
+  last_reviewed_at timestamptz DEFAULT now(),
+  PRIMARY KEY (student_id, card_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_flashcards_set            ON flashcard_module.flashcards (set_id, order_index);
+CREATE INDEX IF NOT EXISTS idx_flashcard_folder_sets_set ON flashcard_module.flashcard_folder_sets (set_id);
+CREATE INDEX IF NOT EXISTS idx_flashcard_progress_stu    ON flashcard_module.flashcard_progress (student_id);
+
+-- Cần USAGE trên schema thì các role mới truy cập được bảng bên trong (nếu thiếu -> lỗi 42501)
+GRANT USAGE ON SCHEMA flashcard_module               TO anon, authenticated, service_role;
+GRANT ALL ON flashcard_module.flashcard_folders     TO anon, authenticated, service_role;
+GRANT ALL ON flashcard_module.flashcard_sets        TO anon, authenticated, service_role;
+GRANT ALL ON flashcard_module.flashcard_folder_sets TO anon, authenticated, service_role;
+GRANT ALL ON flashcard_module.flashcards            TO anon, authenticated, service_role;
+GRANT ALL ON flashcard_module.flashcard_progress    TO anon, authenticated, service_role;
+
+-- ⚠️ Schema này phải được THÊM vào danh sách "Exposed schemas" của PostgREST thì supabase-js
+-- mới gọi được (nếu thiếu -> lỗi PGRST106 "Invalid schema"). Trên Supabase: Dashboard →
+-- Settings → API → Exposed schemas (thêm flashcard_module). Tương đương SQL:
+--   ALTER ROLE authenticator SET pgrst.db_schemas =
+--     'public, graphql_public, dictionary_module, materials_module, flashcard_module';
+--   NOTIFY pgrst, 'reload config';  NOTIFY pgrst, 'reload schema';
+
+-- RLS: mỗi student chỉ thao tác trên dữ liệu của chính mình (backend service-role bypass)
+ALTER TABLE flashcard_module.flashcard_folders     ENABLE ROW LEVEL SECURITY;
+ALTER TABLE flashcard_module.flashcard_sets        ENABLE ROW LEVEL SECURITY;
+ALTER TABLE flashcard_module.flashcard_folder_sets ENABLE ROW LEVEL SECURITY;
+ALTER TABLE flashcard_module.flashcards            ENABLE ROW LEVEL SECURITY;
+ALTER TABLE flashcard_module.flashcard_progress    ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "flashcard_folders: own" ON flashcard_module.flashcard_folders
+  FOR ALL TO authenticated USING (auth.uid() = owner_id) WITH CHECK (auth.uid() = owner_id);
+CREATE POLICY "flashcard_sets: own" ON flashcard_module.flashcard_sets
+  FOR ALL TO authenticated USING (auth.uid() = owner_id) WITH CHECK (auth.uid() = owner_id);
+CREATE POLICY "flashcard_progress: own" ON flashcard_module.flashcard_progress
+  FOR ALL TO authenticated USING (auth.uid() = student_id) WITH CHECK (auth.uid() = student_id);
+CREATE POLICY "flashcards: own via set" ON flashcard_module.flashcards
+  FOR ALL TO authenticated
+  USING     (EXISTS (SELECT 1 FROM flashcard_module.flashcard_sets s WHERE s.id = set_id AND s.owner_id = auth.uid()))
+  WITH CHECK (EXISTS (SELECT 1 FROM flashcard_module.flashcard_sets s WHERE s.id = set_id AND s.owner_id = auth.uid()));
+CREATE POLICY "flashcard_folder_sets: own via folder" ON flashcard_module.flashcard_folder_sets
+  FOR ALL TO authenticated
+  USING     (EXISTS (SELECT 1 FROM flashcard_module.flashcard_folders f WHERE f.id = folder_id AND f.owner_id = auth.uid()))
+  WITH CHECK (EXISTS (SELECT 1 FROM flashcard_module.flashcard_folders f WHERE f.id = folder_id AND f.owner_id = auth.uid()));

@@ -10,6 +10,7 @@ const STUDENT_LINKS = (t) => [
   { to: '/vocabulary', icon: 'translate',      label: t('vocab.title') },
   { to: '/kanji',      icon: 'font_download',  label: 'Kanji' },
   { to: '/dictionary', icon: 'auto_stories',   label: t('dictionary.title') },
+  { to: '/flashcards', icon: 'style',          label: 'Thẻ ghi nhớ' },
   { to: '/news',       icon: 'newspaper',      label: 'Đọc báo' },
   { to: '/classes',    icon: 'groups',         label: 'Lớp học' },
   { to: '/chat',       icon: 'smart_toy',      label: 'Trợ lý AI' },
