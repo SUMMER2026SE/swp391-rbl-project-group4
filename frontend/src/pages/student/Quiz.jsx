@@ -167,7 +167,7 @@ export default function Quiz() {
       {isProctored && examStarted && (
         <>
           <div className="fixed bottom-4 right-4 z-40 bg-charcoal/90 rounded-xl p-2 shadow-2xl w-44">
-            <video ref={proctor.videoRef} muted playsInline className="w-full rounded-lg bg-black aspect-[4/3] object-cover" />
+            <video ref={proctor.videoRef} muted playsInline style={{ transform: 'scaleX(-1)' }} className="w-full rounded-lg bg-black aspect-[4/3] object-cover" />
             <div className="flex items-center justify-between mt-1.5 px-0.5">
               <span className={`text-[10px] font-bold flex items-center gap-1 ${
                 proctor.faceStatus === 'ok' ? 'text-emerald-400'

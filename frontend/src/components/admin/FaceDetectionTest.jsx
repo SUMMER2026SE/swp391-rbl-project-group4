@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { loadFaceDetector, analyzeGaze } from '../../lib/faceDetector';
 
-const GAZE_VI = { straight: 'Nhìn thẳng', left: 'Quay trái', right: 'Quay phải', down: 'Cúi xuống' };
+const GAZE_VI = { straight: 'Nhìn thẳng', left: 'Quay trái', right: 'Quay phải', up: 'Ngẩng lên', down: 'Cúi xuống' };
 
 // Card kiểm tra AI nhận diện khuôn mặt (dùng cho thi giám sát) ngay trên trình duyệt admin.
 export default function FaceDetectionTest() {
@@ -86,6 +86,7 @@ export default function FaceDetectionTest() {
         {/* Video preview */}
         <div className="relative w-full sm:w-56 shrink-0">
           <video ref={videoRef} muted playsInline
+            style={{ transform: 'scaleX(-1)' }}
             className="w-full rounded-xl bg-charcoal/90 aspect-[4/3] object-cover" />
           {status === 'running' && (
             <span className={`absolute top-2 left-2 px-2 py-0.5 rounded-full text-[11px] font-bold bg-white/90 ${faceTone}`}>

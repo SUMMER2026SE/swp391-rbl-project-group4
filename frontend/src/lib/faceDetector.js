@@ -15,11 +15,13 @@ export async function loadFaceDetector() {
 }
 
 // Ước lượng hướng nhìn từ 6 điểm mốc của BlazeFace (2 mắt + mũi).
-// Trả về { direction: 'straight'|'left'|'right'|'down', facingForward, yaw, pitch }.
+// Trả về { direction: 'straight'|'left'|'right'|'up'|'down', facingForward, yaw, pitch }.
 // Heuristic 2D: head quay trái/phải làm mũi lệch khỏi trung điểm 2 mắt (yaw);
-// cúi xuống làm mũi tụt thấp hơn so với khoảng cách 2 mắt (pitch).
+// cúi/ngẩng làm mũi tụt thấp/cao hơn so với khoảng cách 2 mắt (pitch).
+// Hướng trái/phải theo góc nhìn của người dùng (preview đã lật như gương).
 const YAW_THRESHOLD   = 0.22; // |lệch ngang| > ngưỡng → quay đầu
-const PITCH_DOWN_MAX  = 1.15; // mũi quá thấp → cúi xuống
+const PITCH_DOWN_MAX  = 1.05; // mũi quá thấp → cúi xuống
+const PITCH_UP_MIN    = 0.35; // mũi quá cao → ngẩng lên
 export function analyzeGaze(detection) {
   const kp = detection?.keypoints;
   if (!kp || kp.length < 3) return null;
@@ -28,12 +30,13 @@ export function analyzeGaze(detection) {
   const eyeMidY = (eyeA.y + eyeB.y) / 2;
   const eyeDist = Math.hypot(eyeA.x - eyeB.x, eyeA.y - eyeB.y) || 1e-6;
   const yaw   = (nose.x - eyeMidX) / eyeDist; // ~0 khi nhìn thẳng
-  const pitch = (nose.y - eyeMidY) / eyeDist; // tăng khi cúi xuống
+  const pitch = (nose.y - eyeMidY) / eyeDist; // tăng khi cúi, giảm khi ngẩng
 
   let direction = 'straight';
-  if (yaw >  YAW_THRESHOLD) direction = 'right';
-  else if (yaw < -YAW_THRESHOLD) direction = 'left';
+  if (yaw < -YAW_THRESHOLD) direction = 'right';      // ảnh raw lệch trái = người quay phải
+  else if (yaw >  YAW_THRESHOLD) direction = 'left';
   else if (pitch > PITCH_DOWN_MAX) direction = 'down';
+  else if (pitch < PITCH_UP_MIN)  direction = 'up';
 
   return { direction, facingForward: direction === 'straight', yaw, pitch };
 }
