@@ -18,7 +18,7 @@ function SkeletonCard() {
 }
 
 // ── Menu kebab dùng chung cho card ──
-function KebabMenu({ onEdit, onDelete }) {
+function KebabMenu({ onEdit, onDelete, onAddToFolder }) {
   const [open, setOpen] = useState(false);
   return (
     <div className="relative" onClick={e => e.stopPropagation()}>
@@ -31,7 +31,15 @@ function KebabMenu({ onEdit, onDelete }) {
       {open && (
         <>
           <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 mt-1 w-36 bg-white rounded-xl shadow-xl border border-outline/30 z-20 overflow-hidden">
+          <div className="absolute right-0 mt-1 w-44 bg-white rounded-xl shadow-xl border border-outline/30 z-20 overflow-hidden">
+            {onAddToFolder && (
+              <button
+                onClick={() => { setOpen(false); onAddToFolder(); }}
+                className="w-full flex items-center gap-2 px-4 py-2.5 text-sm hover:bg-surface-low transition-colors"
+              >
+                <span className="material-symbols-outlined text-lg">create_new_folder</span> Thêm vào thư mục
+              </button>
+            )}
             <button
               onClick={() => { setOpen(false); onEdit(); }}
               className="w-full flex items-center gap-2 px-4 py-2.5 text-sm hover:bg-surface-low transition-colors"
@@ -62,6 +70,11 @@ export default function Flashcards() {
   // Modal tạo/sửa thư mục
   const [folderModal, setFolderModal] = useState(null); // null | { id?, name }
   const [savingFolder, setSavingFolder] = useState(false);
+
+  // Modal thêm học phần vào thư mục
+  const [addToFolderSet, setAddToFolderSet] = useState(null); // null | set
+  const [selectedFolders, setSelectedFolders] = useState({}); // { folderId: bool }
+  const [addingToFolder, setAddingToFolder] = useState(false);
 
   const fetchData = async () => {
     setLoading(true);
@@ -114,6 +127,28 @@ export default function Flashcards() {
       setError(e.message);
     } finally {
       setSavingFolder(false);
+    }
+  };
+
+  const openAddToFolder = (set) => {
+    setAddToFolderSet(set);
+    setSelectedFolders({});
+  };
+
+  const confirmAddToFolder = async () => {
+    const ids = Object.keys(selectedFolders).filter(k => selectedFolders[k]);
+    if (!ids.length) return;
+    setAddingToFolder(true);
+    try {
+      await Promise.all(ids.map(fid =>
+        api.post(`/flashcards/folders/${fid}/sets`, { set_id: addToFolderSet.id })
+      ));
+      setAddToFolderSet(null);
+      fetchData();
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setAddingToFolder(false);
     }
   };
 
@@ -184,6 +219,7 @@ export default function Flashcards() {
                     {s.title}
                   </h3>
                   <KebabMenu
+                    onAddToFolder={() => openAddToFolder(s)}
                     onEdit={() => navigate(`/flashcards/${s.id}/edit`)}
                     onDelete={() => handleDeleteSet(s.id)}
                   />
@@ -197,8 +233,14 @@ export default function Flashcards() {
                     {s.description}
                   </p>
                 )}
-                <div className="flex items-center justify-end mt-4 pt-3 border-t border-outline/20">
-                  <span className="text-xs font-bold text-tsubaki-red">{percent(s)}%</span>
+                <div className="mt-4 pt-3 border-t border-outline/20">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="text-xs text-on-muted">Tiến độ</span>
+                    <span className="text-xs font-bold text-tsubaki-red">{percent(s)}%</span>
+                  </div>
+                  <div className="w-full bg-surface-low rounded-full h-2">
+                    <div className="bg-tsubaki-red h-2 rounded-full transition-all" style={{ width: `${percent(s)}%` }} />
+                  </div>
                 </div>
               </div>
             ))}
@@ -260,6 +302,46 @@ export default function Flashcards() {
           placeholder="Ví dụ: Từ vựng N3 Cơ bản"
           className="w-full px-4 py-3 bg-white border border-outline rounded-xl text-sm outline-none focus:border-tsubaki-red focus:ring-2 focus:ring-tsubaki-red/10 transition-all"
         />
+      </Modal>
+
+      {/* ── Modal thêm học phần vào thư mục ──────────────────────── */}
+      <Modal
+        open={!!addToFolderSet}
+        onClose={() => setAddToFolderSet(null)}
+        title="Thêm vào thư mục"
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setAddToFolderSet(null)}>Hủy</Button>
+            <Button variant="primary" loading={addingToFolder} onClick={confirmAddToFolder}
+              disabled={!Object.values(selectedFolders).some(Boolean)}>
+              Thêm
+            </Button>
+          </>
+        }
+      >
+        {folders.length === 0 ? (
+          <p className="text-center text-sm text-on-muted py-8">Chưa có thư mục nào, hãy tạo thư mục trước.</p>
+        ) : (
+          <div className="space-y-1 max-h-80 overflow-y-auto">
+            {folders.map(f => (
+              <label key={f.id} className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-surface-low cursor-pointer transition-colors">
+                <input
+                  type="checkbox"
+                  checked={!!selectedFolders[f.id]}
+                  onChange={e => setSelectedFolders(sel => ({ ...sel, [f.id]: e.target.checked }))}
+                  className="accent-tsubaki-red w-4 h-4"
+                />
+                <div className="w-9 h-9 rounded-lg bg-tsubaki-red/10 flex items-center justify-center shrink-0">
+                  <span className="material-symbols-outlined text-tsubaki-red text-xl">folder</span>
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-on-surface truncate">{f.name}</p>
+                  <p className="text-xs text-on-muted">{f.set_count || 0} học phần</p>
+                </div>
+              </label>
+            ))}
+          </div>
+        )}
       </Modal>
     </StudentLayout>
   );

@@ -73,6 +73,7 @@ export default function FlashcardFolderDetail() {
   };
 
   const removeSet = async (setId) => {
+    if (!window.confirm('Gỡ học phần này khỏi thư mục? Học phần không bị xóa.')) return;
     try {
       await api.delete(`/flashcards/folders/${id}/sets/${setId}`);
       setSets(s => s.filter(x => x.id !== setId));
@@ -80,6 +81,9 @@ export default function FlashcardFolderDetail() {
       setError(e.message);
     }
   };
+
+  const percent = (s) =>
+    s.card_count ? Math.round((s.mastered_count || 0) / s.card_count * 100) : 0;
 
   if (loading) {
     return (
@@ -145,9 +149,18 @@ export default function FlashcardFolderDetail() {
               {s.description && (
                 <p className="text-sm text-on-surface-variant leading-relaxed line-clamp-2 flex-grow mb-4">{s.description}</p>
               )}
+              <div className="mt-auto mb-4">
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-xs text-on-muted">Tiến độ</span>
+                  <span className="text-xs font-bold text-tsubaki-red">{percent(s)}%</span>
+                </div>
+                <div className="w-full bg-surface-low rounded-full h-2">
+                  <div className="bg-tsubaki-red h-2 rounded-full transition-all" style={{ width: `${percent(s)}%` }} />
+                </div>
+              </div>
               <button
                 onClick={() => navigate(`/flashcards/${s.id}`)}
-                className="mt-auto inline-flex items-center justify-center gap-1.5 text-sm font-semibold text-tsubaki-red border border-tsubaki-red/30 rounded-xl py-2 hover:bg-tsubaki-red/5 transition-colors"
+                className="inline-flex items-center justify-center gap-1.5 text-sm font-semibold text-tsubaki-red border border-tsubaki-red/30 rounded-xl py-2 hover:bg-tsubaki-red/5 transition-colors"
               >
                 <span className="material-symbols-outlined text-lg">school</span>
                 Học ngay

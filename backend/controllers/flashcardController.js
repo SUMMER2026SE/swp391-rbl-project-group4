@@ -281,14 +281,34 @@ exports.getFolder = async (req, res) => {
       .select('id,title,description').in('id', setIds);
     if (sErr) throw sErr;
 
-    // Đếm số thẻ mỗi set
+    // Đếm số thẻ mỗi set + map card_id → set_id để quy đổi progress
     const { data: cards, error: cErr } = await fcDb.from('flashcards')
-      .select('set_id').in('set_id', setIds);
+      .select('id,set_id').in('set_id', setIds);
     if (cErr) throw cErr;
+    const cardToSet = new Map(cards.map(c => [c.id, c.set_id]));
     const cardCount = {};
     cards.forEach(c => { cardCount[c.set_id] = (cardCount[c.set_id] || 0) + 1; });
 
-    const setsOut = sets.map(s => ({ ...s, card_count: cardCount[s.id] || 0 }));
+    // Đếm số thẻ đã thuộc của user theo từng set (để vẽ thanh tiến độ)
+    const masteredCount = {};
+    if (cards.length) {
+      const { data: prog, error: pErr } = await fcDb.from('flashcard_progress')
+        .select('card_id')
+        .eq('student_id', userId)
+        .eq('status', 'mastered')
+        .in('card_id', cards.map(c => c.id));
+      if (pErr) throw pErr;
+      prog.forEach(p => {
+        const sid = cardToSet.get(p.card_id);
+        if (sid) masteredCount[sid] = (masteredCount[sid] || 0) + 1;
+      });
+    }
+
+    const setsOut = sets.map(s => ({
+      ...s,
+      card_count:     cardCount[s.id]     || 0,
+      mastered_count: masteredCount[s.id] || 0,
+    }));
     res.json({ data: { ...folder, set_count: setsOut.length, sets: setsOut } });
   } catch (err) {
     console.error('fc.getFolder:', err);

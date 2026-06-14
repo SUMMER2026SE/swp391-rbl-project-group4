@@ -37,16 +37,18 @@ export default function FlashcardStudy() {
         api.get(`/flashcards/sets/${id}`),
         api.get(`/flashcards/sets/${id}/progress`),
       ]);
+      // Lấy tiến độ trước để dựng hàng đợi loại bỏ thẻ đã thuộc (tiếp tục từ chỗ dở)
+      const prog = progRes.status === 'fulfilled'
+        ? (progRes.value.data.data || progRes.value.data || {})
+        : {};
+      setProgress(prog);
       if (setRes.status === 'fulfilled') {
         const data = setRes.value.data.data || setRes.value.data;
         const cards = data.cards || data.flashcards || [];
         setSet(data);
-        setQueue(cards);
+        setQueue(cards.filter(c => prog[c.id] !== 'mastered'));
       } else {
         setError(setRes.reason?.message || 'Không thể tải học phần.');
-      }
-      if (progRes.status === 'fulfilled') {
-        setProgress(progRes.value.data.data || progRes.value.data || {});
       }
       setLoading(false);
     })();
@@ -111,6 +113,19 @@ export default function FlashcardStudy() {
     }
   };
 
+  // ── Phím tắt: Space lật thẻ, ←/→ chuyển thẻ ──
+  useEffect(() => {
+    const onKey = (e) => {
+      const tag = e.target?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+      if (e.key === ' ' || e.code === 'Space') { e.preventDefault(); setFlipped(f => !f); }
+      else if (e.key === 'ArrowRight') { e.preventDefault(); go(1); }
+      else if (e.key === 'ArrowLeft')  { e.preventDefault(); go(-1); }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [queue.length]);
+
   if (loading) {
     return (
       <StudentLayout title="Thẻ ghi nhớ">
@@ -124,14 +139,18 @@ export default function FlashcardStudy() {
   const frontContent = (c) => (frontSide === 'term' ? c.term : c.definition);
   const backContent  = (c) => (frontSide === 'term' ? c.definition : c.term);
 
+  // Toàn bộ thẻ của set (cho danh sách phân nhóm phía dưới)
+  const allCards      = set?.cards || set?.flashcards || [];
+  const masteredCards = allCards.filter(c => progress[c.id] === 'mastered');
+  const learningCards = allCards.filter(c => progress[c.id] !== 'mastered');
+
   return (
     <StudentLayout title="Thẻ ghi nhớ">
-      {/* ── Breadcrumb ──────────────────────────────────────────── */}
-      <div className="flex items-center gap-2 text-sm text-on-muted mb-4">
-        <Link to="/flashcards" className="hover:text-tsubaki-red transition-colors">Thẻ ghi nhớ</Link>
-        <span>/</span>
-        <span className="text-on-surface font-medium truncate">{set?.title}</span>
-      </div>
+      {/* ── Quay lại ────────────────────────────────────────────── */}
+      <Link to="/flashcards" className="inline-flex items-center gap-1 text-sm text-on-muted hover:text-tsubaki-red transition-colors mb-4">
+        <span className="material-symbols-outlined text-lg">arrow_back</span>
+        Trở về
+      </Link>
 
       {/* ── Header ──────────────────────────────────────────────── */}
       <div className="flex items-center justify-between gap-4 mb-6">
@@ -243,44 +262,89 @@ export default function FlashcardStudy() {
             </span>
           </button>
 
-          {/* Điều hướng */}
+          {/* Điều hướng — khi theo dõi tiến độ: X/✓ thay cho ←/→ */}
           <div className="flex items-center justify-center gap-8 mt-6">
-            <button
-              onClick={() => go(-1)}
-              disabled={pos === 0}
-              className="w-12 h-12 flex items-center justify-center rounded-full border border-outline text-on-muted hover:border-tsubaki-red hover:text-tsubaki-red disabled:opacity-30 disabled:hover:border-outline disabled:hover:text-on-muted transition-colors"
-            >
-              <span className="material-symbols-outlined">arrow_back</span>
-            </button>
-            <span className="text-sm font-medium text-on-muted tabular-nums">{pos + 1}/{queue.length}</span>
-            <button
-              onClick={() => go(1)}
-              disabled={pos >= queue.length - 1}
-              className="w-12 h-12 flex items-center justify-center rounded-full border border-outline text-on-muted hover:border-tsubaki-red hover:text-tsubaki-red disabled:opacity-30 disabled:hover:border-outline disabled:hover:text-on-muted transition-colors"
-            >
-              <span className="material-symbols-outlined">arrow_forward</span>
-            </button>
-          </div>
-
-          {/* Nút thuộc/chưa thuộc khi theo dõi tiến độ */}
-          {trackProgress && (
-            <div className="flex items-center justify-center gap-12 mt-8">
-              <button onClick={() => mark('learning')} className="flex flex-col items-center gap-2 group">
-                <span className="w-14 h-14 flex items-center justify-center rounded-full border-2 border-error/40 text-error group-hover:bg-error group-hover:text-white transition-colors">
+            {trackProgress ? (
+              <>
+                <button
+                  onClick={() => mark('learning')}
+                  title="Chưa thuộc"
+                  className="w-14 h-14 flex items-center justify-center rounded-full border-2 border-error/40 text-error hover:bg-error hover:text-white transition-colors"
+                >
                   <span className="material-symbols-outlined text-2xl">close</span>
-                </span>
-                <span className="text-xs font-medium text-on-muted">Chưa thuộc</span>
-              </button>
-              <button onClick={() => mark('mastered')} className="flex flex-col items-center gap-2 group">
-                <span className="w-14 h-14 flex items-center justify-center rounded-full border-2 border-green-500/40 text-green-600 group-hover:bg-green-500 group-hover:text-white transition-colors">
+                </button>
+                <span className="text-sm font-medium text-on-muted tabular-nums">{pos + 1}/{queue.length}</span>
+                <button
+                  onClick={() => mark('mastered')}
+                  title="Đã thuộc"
+                  className="w-14 h-14 flex items-center justify-center rounded-full border-2 border-green-500/40 text-green-600 hover:bg-green-500 hover:text-white transition-colors"
+                >
                   <span className="material-symbols-outlined text-2xl">check</span>
-                </span>
-                <span className="text-xs font-medium text-on-muted">Đã thuộc</span>
-              </button>
-            </div>
-          )}
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  onClick={() => go(-1)}
+                  disabled={pos === 0}
+                  className="w-12 h-12 flex items-center justify-center rounded-full border border-outline text-on-muted hover:border-tsubaki-red hover:text-tsubaki-red disabled:opacity-30 disabled:hover:border-outline disabled:hover:text-on-muted transition-colors"
+                >
+                  <span className="material-symbols-outlined">arrow_back</span>
+                </button>
+                <span className="text-sm font-medium text-on-muted tabular-nums">{pos + 1}/{queue.length}</span>
+                <button
+                  onClick={() => go(1)}
+                  disabled={pos >= queue.length - 1}
+                  className="w-12 h-12 flex items-center justify-center rounded-full border border-outline text-on-muted hover:border-tsubaki-red hover:text-tsubaki-red disabled:opacity-30 disabled:hover:border-outline disabled:hover:text-on-muted transition-colors"
+                >
+                  <span className="material-symbols-outlined">arrow_forward</span>
+                </button>
+              </>
+            )}
+          </div>
         </>
       ) : null}
+
+      {/* ── Danh sách toàn bộ thẻ, phân theo trạng thái ─────────── */}
+      {allCards.length > 0 && (
+        <div className="mt-12 space-y-8">
+          <CardGroup
+            title="Đang học"
+            icon="hourglass_top"
+            color="text-amber-600"
+            cards={learningCards}
+          />
+          <CardGroup
+            title="Đã thuộc"
+            icon="check_circle"
+            color="text-green-600"
+            cards={masteredCards}
+          />
+        </div>
+      )}
     </StudentLayout>
+  );
+}
+
+// ── Nhóm thẻ (Đang học / Đã thuộc) ──
+function CardGroup({ title, icon, color, cards }) {
+  if (!cards.length) return null;
+  return (
+    <div>
+      <div className="flex items-center gap-2 mb-3">
+        <span className={`material-symbols-outlined ${color}`}>{icon}</span>
+        <h2 className="font-display text-base font-bold text-on-surface">{title}</h2>
+        <span className="text-sm text-on-muted">({cards.length})</span>
+      </div>
+      <div className="glass-card rounded-2xl divide-y divide-outline/20">
+        {cards.map(c => (
+          <div key={c.id} className="flex items-start gap-4 px-5 py-3">
+            <span className="text-sm font-semibold text-on-surface flex-1 break-words whitespace-pre-wrap">{c.term}</span>
+            <span className="w-px self-stretch bg-outline/30 shrink-0" />
+            <span className="text-sm text-on-surface-variant flex-1 break-words whitespace-pre-wrap">{c.definition}</span>
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }

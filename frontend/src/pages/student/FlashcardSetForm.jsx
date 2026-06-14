@@ -49,7 +49,16 @@ export default function FlashcardSetForm() {
   const updateCard = (i, field, value) =>
     setCards(cs => cs.map((c, idx) => (idx === i ? { ...c, [field]: value } : c)));
   const addCard    = () => setCards(cs => [...cs, emptyCard()]);
+  const insertCard = (i) => setCards(cs => [...cs.slice(0, i), emptyCard(), ...cs.slice(i)]);
   const removeCard = (i) => setCards(cs => (cs.length > 1 ? cs.filter((_, idx) => idx !== i) : cs));
+
+  // Tự giãn chiều cao textarea theo nội dung (dùng cho cả onInput lẫn ref khi tải sẵn)
+  const autoGrow = (elOrEvent) => {
+    const el = elOrEvent?.target ?? elOrEvent;
+    if (!el || !el.style) return;
+    el.style.height = 'auto';
+    el.style.height = `${el.scrollHeight}px`;
+  };
 
   // ── Parse nhập nhanh ──
   const parsedBulk = (() => {
@@ -162,37 +171,55 @@ export default function FlashcardSetForm() {
       </div>
 
       {/* ── Danh sách thẻ ───────────────────────────────────────── */}
-      <div className="space-y-4">
+      <div>
         {cards.map((card, i) => (
-          <div key={i} className="glass-card rounded-2xl p-4 flex items-start gap-4">
-            <span className="text-sm font-bold text-on-muted w-6 text-center pt-3 shrink-0">{i + 1}</span>
-            <div className="grid sm:grid-cols-2 gap-4 flex-grow">
-              <div>
-                <label className="block text-[11px] font-bold uppercase tracking-wide text-on-muted mb-1">Từ vựng</label>
-                <input
-                  value={card.term}
-                  onChange={e => updateCard(i, 'term', e.target.value)}
-                  placeholder="Nhập từ vựng..."
-                  className="w-full px-1 py-2 border-b border-outline/50 outline-none focus:border-tsubaki-red bg-transparent text-sm transition-colors"
-                />
-              </div>
-              <div>
-                <label className="block text-[11px] font-bold uppercase tracking-wide text-on-muted mb-1">Định nghĩa</label>
-                <input
-                  value={card.definition}
-                  onChange={e => updateCard(i, 'definition', e.target.value)}
-                  placeholder="Nhập định nghĩa..."
-                  className="w-full px-1 py-2 border-b border-outline/50 outline-none focus:border-tsubaki-red bg-transparent text-sm transition-colors"
-                />
-              </div>
+          <div key={i}>
+            {/* Khe chèn thẻ — hiện khi rê chuột (giống Quizlet) */}
+            <div className="relative h-3 group/ins">
+              <button
+                type="button"
+                onClick={() => insertCard(i)}
+                className="absolute left-1/2 -translate-x-1/2 top-1/2 -translate-y-1/2 opacity-0 group-hover/ins:opacity-100 transition-opacity inline-flex items-center gap-1 text-xs font-semibold text-tsubaki-red bg-white border border-tsubaki-red/30 rounded-full px-3 py-1 shadow-sm z-10"
+              >
+                <span className="material-symbols-outlined text-sm">add</span> Chèn thẻ
+              </button>
             </div>
-            <button
-              onClick={() => removeCard(i)}
-              disabled={cards.length <= 1}
-              className="w-9 h-9 flex items-center justify-center rounded-lg text-on-muted hover:text-error hover:bg-error-bg/30 disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-on-muted transition-colors shrink-0 mt-2"
-            >
-              <span className="material-symbols-outlined">delete</span>
-            </button>
+            <div className="glass-card rounded-2xl p-4 flex items-start gap-4">
+              <span className="text-sm font-bold text-on-muted w-6 text-center pt-6 shrink-0">{i + 1}</span>
+              <div className="grid sm:grid-cols-2 gap-4 flex-grow">
+                <div>
+                  <label className="block text-[11px] font-bold uppercase tracking-wide text-on-muted mb-1">Từ vựng</label>
+                  <textarea
+                    ref={autoGrow}
+                    value={card.term}
+                    rows={1}
+                    onChange={e => updateCard(i, 'term', e.target.value)}
+                    onInput={autoGrow}
+                    placeholder="Nhập từ vựng..."
+                    className="w-full px-1 py-2 border-b border-outline/50 outline-none focus:border-tsubaki-red bg-transparent text-sm transition-colors resize-none overflow-hidden"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold uppercase tracking-wide text-on-muted mb-1">Định nghĩa</label>
+                  <textarea
+                    ref={autoGrow}
+                    value={card.definition}
+                    rows={1}
+                    onChange={e => updateCard(i, 'definition', e.target.value)}
+                    onInput={autoGrow}
+                    placeholder="Nhập định nghĩa..."
+                    className="w-full px-1 py-2 border-b border-outline/50 outline-none focus:border-tsubaki-red bg-transparent text-sm transition-colors resize-none overflow-hidden"
+                  />
+                </div>
+              </div>
+              <button
+                onClick={() => removeCard(i)}
+                disabled={cards.length <= 1}
+                className="w-9 h-9 flex items-center justify-center rounded-lg text-on-muted hover:text-error hover:bg-error-bg/30 disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-on-muted transition-colors shrink-0 mt-5"
+              >
+                <span className="material-symbols-outlined">delete</span>
+              </button>
+            </div>
           </div>
         ))}
       </div>
