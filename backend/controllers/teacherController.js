@@ -2,6 +2,9 @@
 
 const { supabaseAdmin } = require('../config/supabase');
 
+// Bảng quiz đã chuyển sang schema exam_module
+const examDb = supabaseAdmin.schema('exam_module');
+
 // ── My Vocabulary ─────────────────────────────────────────────────────────────
 exports.listMyVocab = async (req, res) => {
   const { page = 1, limit = 50 } = req.query;
@@ -153,7 +156,7 @@ exports.getStats = async (req, res) => {
         ? supabaseAdmin.from('lessons').select('id', { count: 'exact', head: true }).in('course_id', courseIds)
         : Promise.resolve({ count: 0 }),
       courseIds.length > 0
-        ? supabaseAdmin.from('quizzes').select('id', { count: 'exact', head: true }).in('course_id', courseIds)
+        ? examDb.from('quizzes').select('id', { count: 'exact', head: true }).in('course_id', courseIds)
         : Promise.resolve({ count: 0 }),
     ]);
 

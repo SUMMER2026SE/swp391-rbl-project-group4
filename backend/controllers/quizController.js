@@ -2,13 +2,16 @@
 
 const { supabaseAdmin } = require('../config/supabase');
 
+// Bảng quiz đã chuyển sang schema exam_module (question_bank/users vẫn ở public)
+const examDb = supabaseAdmin.schema('exam_module');
+
 // GET /api/quizzes
 exports.list = async (req, res) => {
   const { course_id, page = 1, limit = 10 } = req.query;
   const offset = (page - 1) * limit;
 
   try {
-    let query = supabaseAdmin.from('quizzes')
+    let query = examDb.from('quizzes')
       .select('id,title,title_ja,description,type,time_limit,course_id,lesson_id,created_at', { count: 'exact' })
       .eq('is_published', true)
       .order('created_at', { ascending: false })
@@ -27,11 +30,11 @@ exports.list = async (req, res) => {
 // GET /api/quizzes/:id
 exports.getOne = async (req, res) => {
   try {
-    const { data: quiz, error } = await supabaseAdmin
+    const { data: quiz, error } = await examDb
       .from('quizzes').select('*').eq('id', req.params.id).single();
     if (error || !quiz) return res.status(404).json({ error: 'Không tìm thấy quiz.' });
 
-    const { data: questions } = await supabaseAdmin
+    const { data: questions } = await examDb
       .from('quiz_questions')
       .select('id,question,options,correct_answer,correct_answer_data,question_type,bank_question_id,explanation,order_index')
       .eq('quiz_id', req.params.id).order('order_index');
@@ -74,9 +77,9 @@ exports.submitAttempt = async (req, res) => {
   const { answers, violation_count, proctor_events, snapshots } = req.body;
 
   try {
-    const { data: quiz } = await supabaseAdmin.from('quizzes').select('mode').eq('id', req.params.id).single();
+    const { data: quiz } = await examDb.from('quizzes').select('mode').eq('id', req.params.id).single();
 
-    const { data: questions } = await supabaseAdmin
+    const { data: questions } = await examDb
       .from('quiz_questions')
       .select('id,question_type,options,correct_answer,correct_answer_data')
       .eq('quiz_id', req.params.id);
@@ -88,7 +91,7 @@ exports.submitAttempt = async (req, res) => {
     });
 
     const isProctored = quiz?.mode === 'proctored';
-    const { data: attempt, error } = await supabaseAdmin.from('quiz_attempts').insert({
+    const { data: attempt, error } = await examDb.from('quiz_attempts').insert({
       quiz_id: req.params.id,
       user_id: userId,
       score,
@@ -116,7 +119,7 @@ exports.uploadProctorSnapshot = async (req, res) => {
 
   try {
     // Chỉ nhận khi quiz đúng là chế độ giám sát
-    const { data: quiz } = await supabaseAdmin.from('quizzes').select('mode').eq('id', req.params.id).single();
+    const { data: quiz } = await examDb.from('quizzes').select('mode').eq('id', req.params.id).single();
     if (!quiz || quiz.mode !== 'proctored') return res.status(400).json({ error: 'Quiz không ở chế độ giám sát.' });
 
     const base64 = image.replace(/^data:image\/\w+;base64,/, '');
@@ -139,7 +142,7 @@ exports.uploadProctorSnapshot = async (req, res) => {
 // GET /api/quizzes/:id/results
 exports.getResults = async (req, res) => {
   try {
-    const { data, error } = await supabaseAdmin
+    const { data, error } = await examDb
       .from('quiz_attempts').select('*')
       .eq('quiz_id', req.params.id).eq('user_id', req.user.id)
       .order('completed_at', { ascending: false });

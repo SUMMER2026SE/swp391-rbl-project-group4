@@ -2,6 +2,9 @@
 
 const { supabaseAdmin } = require('../config/supabase');
 
+// Bảng quiz đã chuyển sang schema exam_module
+const examDb = supabaseAdmin.schema('exam_module');
+
 // GET /api/lessons/:id
 exports.getOne = async (req, res) => {
   try {
@@ -16,7 +19,7 @@ exports.getOne = async (req, res) => {
       supabaseAdmin.from('kanji')
         .select('id,character,reading_on,reading_kun,meaning_vi,stroke_count,level,han_viet')
         .eq('lesson_id', req.params.id).order('created_at'),
-      supabaseAdmin.from('quizzes')
+      examDb.from('quizzes')
         .select('id,title,time_limit,type')
         .eq('lesson_id', req.params.id)
         .limit(1)
