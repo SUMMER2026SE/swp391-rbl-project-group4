@@ -26,11 +26,12 @@ import Quiz         from './pages/student/Quiz';
 import Dictionary   from './pages/student/Dictionary';
 import NewsList     from './pages/student/NewsList';
 import NewsReader   from './pages/student/NewsReader';
-import Flashcards          from './pages/student/Flashcards';
-import FlashcardSetForm    from './pages/student/FlashcardSetForm';
-import FlashcardStudy       from './pages/student/FlashcardStudy';
+import Exams        from './pages/student/Exams';
+import TakeExam     from './pages/student/TakeExam';
+import Flashcards            from './pages/student/Flashcards';
+import FlashcardSetForm      from './pages/student/FlashcardSetForm';
+import FlashcardStudy        from './pages/student/FlashcardStudy';
 import FlashcardFolderDetail from './pages/student/FlashcardFolderDetail';
-
 // Teacher pages
 import TeacherDashboard  from './pages/teacher/TeacherDashboard';
 import TeacherVocabulary from './pages/teacher/TeacherVocabulary';
@@ -38,7 +39,8 @@ import TeacherKanji      from './pages/teacher/TeacherKanji';
 import TeacherClasses    from './pages/teacher/TeacherClasses';
 import TeacherDictionary from './pages/teacher/TeacherDictionary';
 import TeacherQuestionBank from './pages/teacher/TeacherQuestionBank';
-
+import TeacherExams      from './pages/teacher/TeacherExams';
+import ExamEditor        from './pages/teacher/ExamEditor';
 // Admin pages
 import AdminDashboard  from './pages/admin/AdminDashboard';
 import AdminUsers      from './pages/admin/AdminUsers';
@@ -98,12 +100,13 @@ export default function App() {
             <Route path="/dictionary" element={<StudentRoute><Dictionary /></StudentRoute>} />
             <Route path="/news"       element={<StudentRoute><NewsList /></StudentRoute>} />
             <Route path="/news/:id"   element={<StudentRoute><NewsReader /></StudentRoute>} />
+            <Route path="/exams"      element={<StudentRoute><Exams /></StudentRoute>} />
+            <Route path="/exams/:assignmentId" element={<StudentRoute><TakeExam /></StudentRoute>} />
             <Route path="/flashcards"             element={<StudentRoute><Flashcards /></StudentRoute>} />
             <Route path="/flashcards/new"         element={<StudentRoute><FlashcardSetForm /></StudentRoute>} />
             <Route path="/flashcards/folders/:id" element={<StudentRoute><FlashcardFolderDetail /></StudentRoute>} />
             <Route path="/flashcards/:id/edit"    element={<StudentRoute><FlashcardSetForm /></StudentRoute>} />
             <Route path="/flashcards/:id"         element={<StudentRoute><FlashcardStudy /></StudentRoute>} />
-
             {/* Dùng chung mọi role (layout hiển thị theo role) */}
             <Route path="/profile"    element={<ProtectedRoute><Profile /></ProtectedRoute>} />
             <Route path="/chat"       element={<ProtectedRoute><ChatPage /></ProtectedRoute>} />
@@ -115,7 +118,8 @@ export default function App() {
             <Route path="/teacher/classes"  element={<TeacherRoute><TeacherClasses /></TeacherRoute>} />
             <Route path="/teacher/dictionary" element={<TeacherRoute><TeacherDictionary /></TeacherRoute>} />
             <Route path="/teacher/question-bank" element={<TeacherRoute><TeacherQuestionBank /></TeacherRoute>} />
-
+            <Route path="/teacher/quizzes"       element={<TeacherRoute><TeacherExams /></TeacherRoute>} />
+            <Route path="/teacher/quizzes/:id"   element={<TeacherRoute><ExamEditor /></TeacherRoute>} />
             {/* Admin (admin only) */}
             <Route path="/admin"             element={<AdminRoute><AdminDashboard /></AdminRoute>} />
             <Route path="/admin/users"       element={<AdminRoute><AdminUsers /></AdminRoute>} />

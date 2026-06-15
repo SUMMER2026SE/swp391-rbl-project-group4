@@ -1,0 +1,300 @@
+import { useEffect, useState } from 'react';
+import { useParams, useNavigate, Link } from 'react-router-dom';
+import StudentLayout from '../../components/layout/StudentLayout';
+import Button from '../../components/ui/Button';
+import Alert from '../../components/ui/Alert';
+import FuriganaText from '../../components/ui/FuriganaText';
+import api from '../../lib/api';
+
+function shuffle(arr) {
+    const a = [...arr];
+    for (let i = a.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+}
+
+export default function TakeExam() {
+    const { assignmentId } = useParams();
+    const navigate = useNavigate();
+    const [exam, setExam]         = useState(null);
+    const [answers, setAnswers]   = useState({});
+    const [result, setResult]     = useState(null);
+    const [current, setCurrent]   = useState(0);
+    const [loading, setLoading]   = useState(true);
+    const [submitting, setSubmitting] = useState(false);
+    const [error, setError]       = useState('');
+    const [timeLeft, setTimeLeft] = useState(null);
+    const [furigana, setFurigana] = useState(false);
+    const [shuffledRights, setShuffledRights] = useState({});
+
+    useEffect(() => {
+        api.get(`/exams/student/${assignmentId}`)
+            .then(r => {
+                setExam(r.data);
+                const sr = {};
+                (r.data.questions || []).forEach(q => {
+                    if (q.question_type === 'matching')
+                        sr[q.id] = shuffle((q.options || []).map(p => p.right));
+                });
+                setShuffledRights(sr);
+                if (r.data.time_limit) setTimeLeft(r.data.time_limit);
+            })
+            .catch(e => setError(e.message))
+            .finally(() => setLoading(false));
+    }, [assignmentId]);
+
+    useEffect(() => {
+        if (timeLeft === null || timeLeft <= 0 || result) return;
+        const timer = setInterval(() => {
+            setTimeLeft(t => {
+                if (t <= 1) {
+                    clearInterval(timer);
+                    return 0;
+                }
+                return t - 1;
+            });
+        }, 1000);
+        return () => clearInterval(timer);
+    }, [timeLeft === null, !!result]); // eslint-disable-line
+
+// Auto-submit khi hết giờ
+    useEffect(() => {
+        if (timeLeft === 0 && !result && !submitting) {
+            handleSubmit();
+        }
+    }, [timeLeft]);
+
+    const handleSubmit = async () => {
+        if (submitting) return;
+        setSubmitting(true);
+        try {
+            const r = await api.post(`/exams/student/${assignmentId}/attempt`, { answers });
+            setResult(r.data);
+        } catch (e) {
+            setError(e.message);
+        } finally {
+            setSubmitting(false);
+        }
+    };
+
+    if (loading) return <StudentLayout title="Đề thi"><div className="flex justify-center py-16"><span className="material-symbols-outlined animate-spin text-tsubaki-red text-4xl">progress_activity</span></div></StudentLayout>;
+    if (error && !exam) return (
+        <StudentLayout title="Đề thi">
+            <Alert type="error">{error}</Alert>
+            <Link to="/exams" className="inline-flex items-center gap-1 text-sm text-tsubaki-red font-semibold hover:underline mt-4">
+                <span className="material-symbols-outlined text-base">arrow_back</span> Quay lại danh sách đề thi
+            </Link>
+        </StudentLayout>
+    );
+
+    const questions = exam?.questions || [];
+    const q         = questions[current];
+
+    const isAnswered = (qq) => {
+        const a    = answers[qq.id];
+        const type = qq.question_type || 'single_choice';
+        if (type === 'matching') return Array.isArray(a) && a.length === (qq.options || []).length && a.every(Boolean);
+        if (type === 'ordering') return Array.isArray(a) && a.length === (qq.options || []).length;
+        if (type === 'multiple_choice') return Array.isArray(a) && a.length > 0;
+        return typeof a === 'string' && a.trim() !== '';
+    };
+    const answeredCount = questions.filter(isAnswered).length;
+    const pct           = questions.length > 0 ? Math.round((answeredCount / questions.length) * 100) : 0;
+    const setAnswer     = (qid, val) => setAnswers(a => ({ ...a, [qid]: val }));
+
+    if (result) {
+        const score = result.score;
+        const total = result.total;
+        const pctScore = total > 0 ? Math.round((score / total) * 100) : 0;
+        return (
+            <StudentLayout title="Kết quả">
+                <div className="max-w-md mx-auto text-center">
+                    <div className="glass-card rounded-2xl p-10">
+            <span className={`material-symbols-outlined text-7xl mb-4 block ${pctScore >= 70 ? 'text-green-500' : 'text-tsubaki-red'}`}>
+              {pctScore >= 70 ? 'emoji_events' : 'sentiment_dissatisfied'}
+            </span>
+                        <h1 className="font-display text-3xl font-bold mb-2">Đã nộp bài</h1>
+                        <p className="text-6xl font-bold text-tsubaki-red mb-2">{score}<span className="text-2xl text-on-muted">/{total}</span></p>
+                        {result.status === 'pending_review' ? (
+                            <p className="text-on-muted mb-6">Điểm trên chỉ tính các câu chấm tự động. Đề thi có câu tự luận — giáo viên sẽ chấm và cập nhật điểm cuối cùng sau.</p>
+                        ) : (
+                            <p className="text-on-muted mb-6">{pctScore}% — {pctScore >= 80 ? 'Xuất sắc!' : pctScore >= 60 ? 'Khá tốt!' : 'Cần ôn luyện thêm.'}</p>
+                        )}
+                        <Button variant="secondary" onClick={() => navigate('/exams')}>Quay lại danh sách đề thi</Button>
+                    </div>
+                </div>
+            </StudentLayout>
+        );
+    }
+
+    return (
+        <StudentLayout title={exam?.title}>
+            <div className="max-w-2xl mx-auto">
+                {error && <Alert type="error" className="mb-4">{error}</Alert>}
+
+                {/* Progress */}
+                <div className="mb-6">
+                    <div className="flex justify-between items-center mb-2">
+                        <h1 className="font-display font-bold text-xl">{exam?.title}</h1>
+                        <div className="flex items-center gap-3">
+                            {timeLeft !== null && (
+                                <span className={`text-sm font-bold px-3 py-1 rounded-full ${timeLeft < 30 ? 'bg-error-bg text-error' : 'bg-surface-low text-on-muted'}`}>
+                  ⏱ {Math.floor(timeLeft / 60)}:{String(timeLeft % 60).padStart(2, '0')}
+                </span>
+                            )}
+                            <span className="text-sm text-on-muted">{current + 1}/{questions.length}</span>
+                        </div>
+                    </div>
+                    <div className="h-2 bg-surface-low rounded-full overflow-hidden">
+                        <div className="h-full bg-tsubaki-red rounded-full transition-all" style={{ width: `${pct}%` }} />
+                    </div>
+                </div>
+
+                {/* Question */}
+                {q && (
+                    <div className="glass-card rounded-2xl p-8">
+                        <div className="flex justify-between items-start gap-4 mb-6">
+                            <FuriganaText text={q.question} enabled={furigana} textClassName="font-display font-bold text-lg" block />
+                            <button
+                                type="button"
+                                onClick={() => setFurigana(v => !v)}
+                                title={furigana ? 'Ẩn furigana' : 'Hiển thị furigana'}
+                                className={`shrink-0 inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-lg border font-medium transition-all select-none ${furigana ? 'bg-amber-100 border-amber-300 text-amber-700' : 'bg-white border-outline/60 text-on-muted hover:border-amber-300 hover:text-amber-600 hover:bg-amber-50'}`}>
+                                <span className="font-bold" style={{ fontFamily: 'serif', fontSize: '13px' }}>あ</span>
+                                ふりがな
+                            </button>
+                        </div>
+
+                        {/* Single choice */}
+                        {(!q.question_type || q.question_type === 'single_choice') && (
+                            <div className="space-y-3">
+                                {(q.options || []).map((opt, i) => (
+                                    <button key={i} onClick={() => setAnswer(q.id, opt)}
+                                            className={`w-full text-left px-5 py-4 rounded-xl border-2 text-sm font-medium transition-all ${
+                                                answers[q.id] === opt
+                                                    ? 'border-tsubaki-red bg-tsubaki-red/5 text-tsubaki-red'
+                                                    : 'border-outline hover:border-tsubaki-red/50 hover:bg-surface-low'
+                                            }`}>
+                                        <span className="font-bold mr-3 text-on-muted">{String.fromCharCode(65 + i)}.</span>
+                                        <FuriganaText text={opt} enabled={furigana} />
+                                    </button>
+                                ))}
+                            </div>
+                        )}
+
+                        {/* Multiple choice */}
+                        {q.question_type === 'multiple_choice' && (
+                            <div className="space-y-3">
+                                <p className="text-xs text-on-muted -mt-3 mb-1">Chọn tất cả đáp án đúng:</p>
+                                {(q.options || []).map((opt, i) => {
+                                    const selected = Array.isArray(answers[q.id]) && answers[q.id].includes(opt);
+                                    return (
+                                        <button key={i}
+                                                onClick={() => {
+                                                    const cur = Array.isArray(answers[q.id]) ? answers[q.id] : [];
+                                                    setAnswer(q.id, selected ? cur.filter(o => o !== opt) : [...cur, opt]);
+                                                }}
+                                                className={`w-full text-left px-5 py-4 rounded-xl border-2 text-sm font-medium transition-all ${
+                                                    selected
+                                                        ? 'border-tsubaki-red bg-tsubaki-red/5 text-tsubaki-red'
+                                                        : 'border-outline hover:border-tsubaki-red/50 hover:bg-surface-low'
+                                                }`}>
+                      <span className={`material-symbols-outlined text-lg align-middle mr-3 ${selected ? 'text-tsubaki-red' : 'text-on-muted'}`}>
+                        {selected ? 'check_box' : 'check_box_outline_blank'}
+                      </span>
+                                            <FuriganaText text={opt} enabled={furigana} />
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        )}
+
+                        {/* Matching */}
+                        {q.question_type === 'matching' && (
+                            <div className="space-y-3">
+                                {(q.options || []).map((pair, i) => (
+                                    <div key={i} className="flex items-center gap-3">
+                                        <div className="flex-1 px-4 py-3 rounded-xl border-2 border-outline bg-surface-low/50 text-sm font-medium">
+                                            <FuriganaText text={pair.left} enabled={furigana} />
+                                        </div>
+                                        <span className="material-symbols-outlined text-on-muted shrink-0">arrow_forward</span>
+                                        <select
+                                            value={(answers[q.id] || [])[i] || ''}
+                                            onChange={e => {
+                                                const next = Array.isArray(answers[q.id])
+                                                    ? [...answers[q.id]]
+                                                    : new Array((q.options || []).length).fill('');
+                                                next[i] = e.target.value;
+                                                setAnswer(q.id, next);
+                                            }}
+                                            className="flex-1 px-4 py-3 rounded-xl border-2 border-outline text-sm font-medium bg-white focus:border-tsubaki-red outline-none cursor-pointer">
+                                            <option value="">— Chọn —</option>
+                                            {(shuffledRights[q.id] || []).map(r => <option key={r} value={r}>{r}</option>)}
+                                        </select>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+
+                        {/* Ordering */}
+                        {q.question_type === 'ordering' && (() => {
+                            const chosen    = Array.isArray(answers[q.id]) ? answers[q.id] : [];
+                            const remaining = (q.options || []).filter(o => !chosen.includes(o));
+                            return (
+                                <div>
+                                    <div className="min-h-[56px] flex flex-wrap gap-2 p-3 rounded-xl border-2 border-dashed border-outline mb-4">
+                                        {chosen.length === 0 && <span className="text-sm text-on-muted self-center">Bấm các từ bên dưới theo đúng thứ tự…</span>}
+                                        {chosen.map((w, i) => (
+                                            <button key={i} onClick={() => setAnswer(q.id, chosen.filter((_, j) => j !== i))}
+                                                    title="Bấm để bỏ ra"
+                                                    className="px-3 py-2 rounded-lg bg-tsubaki-red/10 border border-tsubaki-red/40 text-tsubaki-red text-sm font-medium">
+                                                {i + 1}. {w}
+                                            </button>
+                                        ))}
+                                    </div>
+                                    <div className="flex flex-wrap gap-2">
+                                        {remaining.map((w, i) => (
+                                            <button key={i} onClick={() => setAnswer(q.id, [...chosen, w])}
+                                                    className="px-3 py-2 rounded-lg border-2 border-outline text-sm font-medium hover:border-tsubaki-red/50 hover:bg-surface-low transition-all">
+                                                {w}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                            );
+                        })()}
+
+                        {/* Fill blank / Short answer */}
+                        {(q.question_type === 'fill_blank' || q.question_type === 'short_answer') && (
+                            <input
+                                type="text"
+                                value={answers[q.id] || ''}
+                                onChange={e => setAnswer(q.id, e.target.value)}
+                                placeholder="Nhập câu trả lời…"
+                                className="w-full px-5 py-4 rounded-xl border-2 border-outline focus:border-tsubaki-red outline-none text-sm font-medium"
+                            />
+                        )}
+
+                        <div className="flex justify-between mt-8">
+                            <Button variant="secondary" onClick={() => setCurrent(c => Math.max(0, c - 1))} disabled={current === 0}>
+                                ← Trước
+                            </Button>
+                            {current < questions.length - 1 ? (
+                                <Button onClick={() => setCurrent(c => c + 1)} disabled={!isAnswered(q)}>
+                                    Tiếp →
+                                </Button>
+                            ) : (
+                                <Button onClick={handleSubmit} loading={submitting}
+                                        disabled={answeredCount < questions.length}>
+                                    Nộp bài
+                                </Button>
+                            )}
+                        </div>
+                    </div>
+                )}
+            </div>
+        </StudentLayout>
+    );
+}

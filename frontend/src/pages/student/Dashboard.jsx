@@ -57,7 +57,8 @@ export default function Dashboard() {
   const dash    = dashData?.dashboard || {};
   const profile = dashData?.profile   || {};
   const streak  = dash.current_streak ?? 0;
-
+  const recentActivity = dashData?.recentActivity || [];
+  const myClasses      = dashData?.myClasses || [];
   return (
     <StudentLayout title={t('dashboard.title')}>
       {error && <Alert type="error" onClose={() => setError('')}>{error}</Alert>}
@@ -182,7 +183,70 @@ export default function Dashboard() {
           </div>
         )}
       </div>
+        {/* Recent activity & My classes */}
+        <div className="mt-6 grid md:grid-cols-2 gap-6">
+            {/* Recent Activity Log */}
+            {loading ? <CardSkeleton /> : (
+                <div className="glass-card rounded-2xl p-6">
+                    <div className="flex items-center gap-2 mb-4">
+                        <span className="material-symbols-outlined text-tsubaki-red text-2xl">history</span>
+                        <h2 className="font-display font-bold text-lg">{t('dashboard.recent_activity')}</h2>
+                    </div>
+                    {recentActivity.length > 0 ? (
+                        <div className="space-y-2">
+                            {recentActivity.map(a => {
+                                const pct = a.total_questions > 0 ? Math.round((a.score / a.total_questions) * 100) : 0;
+                                const color = pct >= 80 ? 'bg-emerald-100 text-emerald-700' : pct >= 60 ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-600';
+                                return (
+                                    <div key={a.id} className="flex items-center justify-between gap-3 p-3 rounded-xl bg-surface-low/40">
+                                        <div className="flex items-center gap-3 min-w-0">
+                                            <span className="material-symbols-outlined text-on-muted shrink-0">quiz</span>
+                                            <div className="min-w-0">
+                                                <p className="font-semibold text-sm truncate">{a.quiz_title}</p>
+                                                <p className="text-xs text-on-muted mt-0.5">{a.completed_at ? new Date(a.completed_at).toLocaleString('vi-VN') : '—'}</p>
+                                            </div>
+                                        </div>
+                                        <span className={`shrink-0 px-2.5 py-1 rounded-full text-xs font-bold ${color}`}>{a.score}/{a.total_questions} ({pct}%)</span>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    ) : (
+                        <p className="text-sm text-on-muted">{t('dashboard.no_activity')}</p>
+                    )}
+                </div>
+            )}
 
+            {/* My Classes */}
+            {loading ? <CardSkeleton /> : (
+                <div className="glass-card rounded-2xl p-6">
+                    <div className="flex items-center gap-2 mb-4">
+                        <span className="material-symbols-outlined text-sumire-purple text-2xl">school</span>
+                        <h2 className="font-display font-bold text-lg">{t('dashboard.my_classes')}</h2>
+                    </div>
+                    {myClasses.length > 0 ? (
+                        <div className="space-y-2">
+                            {myClasses.map(e => (
+                                <Link key={e.id} to="/classes" className="flex items-center justify-between gap-3 p-3 rounded-xl bg-surface-low/40 hover:bg-surface-low transition-colors">
+                                    <div className="min-w-0">
+                                        <p className="font-semibold text-sm truncate">{e.class?.name || '—'}</p>
+                                        {e.class?.description && <p className="text-xs text-on-muted mt-0.5 truncate">{e.class.description}</p>}
+                                    </div>
+                                    <span className="material-symbols-outlined text-on-muted shrink-0">chevron_right</span>
+                                </Link>
+                            ))}
+                        </div>
+                    ) : (
+                        <div>
+                            <p className="text-sm text-on-muted mb-3">{t('dashboard.no_classes')}</p>
+                            <Link to="/classes" className="inline-flex items-center gap-1 text-sm text-sumire-purple font-semibold hover:underline">
+                                {t('dashboard.classes')} <span className="material-symbols-outlined text-base">arrow_forward</span>
+                            </Link>
+                        </div>
+                    )}
+                </div>
+            )}
+        </div>
       {/* Quick links */}
       <div className="mt-8 grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
