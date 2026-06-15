@@ -41,6 +41,7 @@ app.use('/api/admin',      require('./routes/api/admin'));
 app.use('/api/teacher',    require('./routes/api/teacher'));
 app.use('/api/classes',    require('./routes/api/classes'));
 app.use('/api/ai',         require('./routes/api/ai'));
+app.use('/api/grammar',    require('./routes/api/grammar'));
 
 // ── Health check ──────────────────────────────────────────────────────────────
 app.get('/api/health', (_req, res) => res.json({ status: 'ok' }));

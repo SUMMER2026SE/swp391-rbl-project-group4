@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
 import { LangProvider } from './contexts/LangContext';
 import ProtectedRoute from './components/shared/ProtectedRoute';
@@ -20,6 +20,7 @@ import Courses      from './pages/student/Courses';
 import CourseDetail from './pages/student/CourseDetail';
 import LessonView   from './pages/student/LessonView';
 import Vocabulary   from './pages/student/Vocabulary';
+import Grammar      from './pages/student/Grammar';
 import Kanji        from './pages/student/Kanji';
 import Classes      from './pages/student/Classes';
 import Quiz         from './pages/student/Quiz';
@@ -47,6 +48,7 @@ import AdminSystemStatus  from './pages/admin/AdminSystemStatus';
 import AdminQuestionBank       from './pages/admin/AdminQuestionBank';
 import ManageCourseContent     from './pages/admin/ManageCourseContent';
 import AdminLessonVocabulary   from './pages/admin/AdminLessonVocabulary';
+import AdminGrammar            from './pages/admin/AdminGrammar';
 import AdminLessonGrammar      from './pages/admin/AdminLessonGrammar';
 import AdminLessonQuiz         from './pages/admin/AdminLessonQuiz';
 import AdminLessonReading      from './pages/admin/AdminLessonReading';
@@ -85,6 +87,7 @@ export default function App() {
             <Route path="/courses/:id" element={<StudentRoute><CourseDetail /></StudentRoute>} />
             <Route path="/lessons/:id" element={<StudentRoute><LessonView /></StudentRoute>} />
             <Route path="/vocabulary" element={<StudentRoute><Vocabulary /></StudentRoute>} />
+            <Route path="/grammar"    element={<StudentRoute><Grammar /></StudentRoute>} />
             <Route path="/kanji"      element={<StudentRoute><Kanji /></StudentRoute>} />
             <Route path="/classes"    element={<StudentRoute><Classes /></StudentRoute>} />
             <Route path="/quizzes/:id" element={<StudentRoute><Quiz /></StudentRoute>} />
@@ -108,6 +111,7 @@ export default function App() {
             <Route path="/admin/courses"     element={<AdminRoute><AdminCourses /></AdminRoute>} />
             <Route path="/admin/lessons"     element={<AdminRoute><AdminLessons /></AdminRoute>} />
             <Route path="/admin/vocabulary"  element={<AdminRoute><AdminVocabulary /></AdminRoute>} />
+            <Route path="/admin/grammar"    element={<AdminRoute><AdminGrammar /></AdminRoute>} />
             <Route path="/admin/kanji"       element={<AdminRoute><AdminKanji /></AdminRoute>} />
             <Route path="/admin/quizzes"      element={<AdminRoute><AdminQuizzes /></AdminRoute>} />
             <Route path="/admin/submissions" element={<AdminRoute><AdminSubmissions /></AdminRoute>} />
