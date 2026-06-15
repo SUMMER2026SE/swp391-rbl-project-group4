@@ -315,30 +315,45 @@ exports.createLesson = async (req, res) => {
   const { course_id, module_id, title, title_ja, content, order_index, lesson_type, duration_minutes, question_count, is_published } = req.body;
   if (!course_id || !title) return res.status(400).json({ error: 'Thiếu thông tin bắt buộc.' });
   try {
-    const { data, error } = await supabaseAdmin.from('lessons')
-      .insert({ course_id, module_id: module_id || null, title, title_ja, content, order_index: order_index || 0, lesson_type: lesson_type || 'reading', duration_minutes: duration_minutes || 0, question_count: question_count || 0, is_published: is_published ?? false })
+    const contentDb = supabaseAdmin.schema('content_module');
+    const { data, error } = await contentDb.from('lessons')
+      .insert({ course_id, unit_id: module_id || null, title, title_ja, content_body: content, sort_order: order_index || 0, content_type: lesson_type || 'reading', duration_minutes: duration_minutes || 0, question_count: question_count || 0, is_published: is_published ?? false })
       .select().single();
     if (error) throw error;
     res.status(201).json(data);
-  } catch (err) { res.status(500).json({ error: 'Không thể tạo bài học.' }); }
+  } catch (err) {
+    console.error('createLesson error:', err);
+    res.status(500).json({ error: 'Không thể tạo bài học.' });
+  }
 };
 
 exports.updateLesson = async (req, res) => {
+  const FIELD_MAP = { content: 'content_body', lesson_type: 'content_type', order_index: 'sort_order', module_id: 'unit_id' };
   const allowed = ['title','title_ja','content','order_index','is_published','course_id','module_id','lesson_type','duration_minutes','question_count'];
-  const updates = Object.fromEntries(Object.entries(req.body).filter(([k]) => allowed.includes(k)));
+  const raw = Object.fromEntries(Object.entries(req.body).filter(([k]) => allowed.includes(k)));
+  const updates = Object.fromEntries(Object.entries(raw).map(([k, v]) => [FIELD_MAP[k] || k, v]));
   updates.updated_at = new Date().toISOString();
   try {
-    const { data, error } = await supabaseAdmin.from('lessons').update(updates).eq('id', req.params.id).select().single();
+    const contentDb = supabaseAdmin.schema('content_module');
+    const { data, error } = await contentDb.from('lessons').update(updates).eq('id', req.params.id).select().single();
     if (error) throw error;
     res.json(data);
-  } catch (err) { res.status(500).json({ error: 'Không thể cập nhật.' }); }
+  } catch (err) {
+    console.error('updateLesson error:', err);
+    res.status(500).json({ error: 'Không thể cập nhật.' });
+  }
 };
 
 exports.deleteLesson = async (req, res) => {
   try {
-    await supabaseAdmin.from('lessons').delete().eq('id', req.params.id);
+    const contentDb = supabaseAdmin.schema('content_module');
+    const { error } = await contentDb.from('lessons').delete().eq('id', req.params.id);
+    if (error) throw error;
     res.json({ message: 'Đã xóa.' });
-  } catch (err) { res.status(500).json({ error: 'Không thể xóa.' }); }
+  } catch (err) {
+    console.error('deleteLesson error:', err);
+    res.status(500).json({ error: 'Không thể xóa.' });
+  }
 };
 
 // ── Vocabulary Import ─────────────────────────────────────────────────────────
