@@ -85,11 +85,26 @@ export function AuthProvider({ children }) {
     if (error) throw new Error(error.message);
   };
 
+  // Bước 1: gửi OTP đặt lại mật khẩu qua SMTP (giống đăng ký)
   const forgotPassword = async (email) => {
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/reset-password`,
+    const res = await fetch('/api/auth/forgot-password', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email }),
     });
-    if (error) throw new Error(error.message);
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Không thể gửi mã.');
+    return data;
+  };
+
+  // Bước 2: xác nhận OTP + đặt mật khẩu mới
+  const resetPasswordOtp = async (email, otp, password) => {
+    const res = await fetch('/api/auth/reset-password-otp', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, otp, password }),
+    });
+    const data = await res.json();
+    if (!res.ok) { const e = new Error(data.error || 'Đặt lại thất bại.'); e.code = data.code; throw e; }
+    return data;
   };
 
   const logout = async () => {
@@ -101,7 +116,7 @@ export function AuthProvider({ children }) {
   const isTeacher = () => user?.user_metadata?.role === 'teacher';
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, verifyOtp, resendOtp, loginWithGoogle, forgotPassword, logout, isAdmin, isTeacher }}>
+    <AuthContext.Provider value={{ user, loading, login, register, verifyOtp, resendOtp, loginWithGoogle, forgotPassword, resetPasswordOtp, logout, isAdmin, isTeacher }}>
       {children}
     </AuthContext.Provider>
   );
