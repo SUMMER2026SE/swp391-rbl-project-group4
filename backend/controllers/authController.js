@@ -10,12 +10,17 @@ const OTP_TTL_MS      = 10 * 60 * 1000; // 10 phút
 const OTP_MAX_ATTEMPTS = 5;
 const OTP_RESEND_COOLDOWN_MS = 60 * 1000; // 60s giữa 2 lần gửi
 const pendingRegistrations = new Map();
+// email -> { otpHash, expiresAt, attempts, lastSentAt, userId }
+const pendingResets = new Map();
 
-// Dọn các đăng ký hết hạn mỗi 5 phút
+// Dọn các yêu cầu hết hạn mỗi 5 phút
 setInterval(() => {
   const now = Date.now();
   for (const [email, p] of pendingRegistrations) {
     if (p.expiresAt < now) pendingRegistrations.delete(email);
+  }
+  for (const [email, p] of pendingResets) {
+    if (p.expiresAt < now) pendingResets.delete(email);
   }
 }, 5 * 60 * 1000).unref();
 
@@ -205,21 +210,73 @@ exports.login = async (req, res) => {
   }
 };
 
-// POST /api/auth/forgot-password
+// POST /api/auth/forgot-password — gửi OTP đặt lại mật khẩu qua SMTP (giống đăng ký)
 exports.forgotPassword = async (req, res) => {
   const { email } = req.body;
   if (!email) return res.status(400).json({ error: 'Vui lòng nhập email.' });
+  const normEmail = email.trim().toLowerCase();
 
-  const baseUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+  // Thông báo chung — không tiết lộ email có tồn tại hay không (chống dò tài khoản)
+  const genericMsg = 'Nếu email tồn tại, mã xác thực đã được gửi. Vui lòng kiểm tra hộp thư.';
   try {
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${baseUrl}/reset-password`,
-    });
-    if (error) return res.status(400).json({ error: error.message });
-    res.json({ message: 'Email khôi phục đã được gửi. Vui lòng kiểm tra hộp thư.' });
+    const { data: rows } = await supabaseAdmin.from('users').select('id, full_name').ilike('email', normEmail).limit(1);
+    const user = rows && rows[0];
+
+    // Cooldown chống spam
+    const existing = pendingResets.get(normEmail);
+    if (existing && Date.now() - existing.lastSentAt < OTP_RESEND_COOLDOWN_MS) {
+      const waitS = Math.ceil((OTP_RESEND_COOLDOWN_MS - (Date.now() - existing.lastSentAt)) / 1000);
+      return res.status(429).json({ error: `Vui lòng đợi ${waitS} giây trước khi gửi lại mã.` });
+    }
+
+    if (user) {
+      const otp = genOtp();
+      pendingResets.set(normEmail, {
+        otpHash: hashOtp(otp), expiresAt: Date.now() + OTP_TTL_MS,
+        attempts: 0, lastSentAt: Date.now(), userId: user.id,
+      });
+      await sendOtpEmail(normEmail, otp, user.full_name);
+    }
+    res.json({ otpRequired: true, message: genericMsg });
   } catch (err) {
     console.error('Forgot password error:', err);
-    res.status(500).json({ error: 'Không thể gửi email.' });
+    res.status(500).json({ error: 'Không thể gửi email. Vui lòng thử lại.' });
+  }
+};
+
+// POST /api/auth/reset-password-otp — xác nhận OTP và đặt mật khẩu mới
+exports.resetPasswordOtp = async (req, res) => {
+  const { email, otp, password } = req.body;
+  if (!email || !otp || !password) return res.status(400).json({ error: 'Thiếu thông tin.' });
+  if (password.length < 8) return res.status(400).json({ error: 'Mật khẩu mới phải có ít nhất 8 ký tự.' });
+
+  const normEmail = email.trim().toLowerCase();
+  const pending = pendingResets.get(normEmail);
+
+  if (!pending)
+    return res.status(400).json({ error: 'Không tìm thấy yêu cầu đặt lại. Vui lòng thử lại.', code: 'OTP_NOT_FOUND' });
+  if (pending.expiresAt < Date.now()) {
+    pendingResets.delete(normEmail);
+    return res.status(400).json({ error: 'Mã OTP đã hết hạn. Vui lòng thử lại.', code: 'OTP_EXPIRED' });
+  }
+  if (pending.attempts >= OTP_MAX_ATTEMPTS) {
+    pendingResets.delete(normEmail);
+    return res.status(400).json({ error: 'Bạn đã nhập sai quá nhiều lần. Vui lòng thử lại.', code: 'OTP_LOCKED' });
+  }
+  if (hashOtp(String(otp).trim()) !== pending.otpHash) {
+    pending.attempts += 1;
+    const left = OTP_MAX_ATTEMPTS - pending.attempts;
+    return res.status(400).json({ error: `Mã OTP không đúng. Còn ${left} lần thử.`, code: 'OTP_WRONG' });
+  }
+
+  try {
+    const { error } = await supabaseAdmin.auth.admin.updateUserById(pending.userId, { password });
+    if (error) throw error;
+    pendingResets.delete(normEmail);
+    res.json({ message: 'Đặt lại mật khẩu thành công. Vui lòng đăng nhập.' });
+  } catch (err) {
+    console.error('Reset password OTP error:', err);
+    res.status(500).json({ error: 'Không thể đặt lại mật khẩu. Vui lòng thử lại.' });
   }
 };
 
