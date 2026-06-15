@@ -108,6 +108,12 @@ router.put('/courses/:id',                c.updateCourse);
 router.delete('/courses/:id',             c.deleteCourse);
 router.get('/courses/:courseId/builder',  c.getCourseBuilder);
 
+// Units ("Bài học")
+router.post('/units',            c.createUnit);
+router.put('/units/:id',         c.updateUnit);
+router.delete('/units/:id',      c.deleteUnit);
+router.patch('/units/reorder',   c.reorderUnits);
+
 // Lessons
 router.get('/lessons',               c.listLessons);
 router.get('/lessons/:id',           c.getLesson);

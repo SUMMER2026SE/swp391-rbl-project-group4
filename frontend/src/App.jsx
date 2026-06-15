@@ -60,6 +60,7 @@ import AdminLessonGrammar      from './pages/admin/AdminLessonGrammar';
 import AdminLessonQuiz         from './pages/admin/AdminLessonQuiz';
 import AdminLessonReading      from './pages/admin/AdminLessonReading';
 import AdminLessonKanji        from './pages/admin/AdminLessonKanji';
+import AdminLessonVideo        from './pages/admin/AdminLessonVideo';
 
 import ChatPage from './pages/ChatPage';
 
@@ -139,6 +140,7 @@ export default function App() {
             <Route path="/admin/lessons/:lessonId/quiz"        element={<AdminRoute><AdminLessonQuiz /></AdminRoute>} />
             <Route path="/admin/lessons/:lessonId/reading"     element={<AdminRoute><AdminLessonReading /></AdminRoute>} />
             <Route path="/admin/lessons/:lessonId/kanji"       element={<AdminRoute><AdminLessonKanji /></AdminRoute>} />
+            <Route path="/admin/lessons/:lessonId/video"       element={<AdminRoute><AdminLessonVideo /></AdminRoute>} />
 
             {/* Fallback */}
             <Route path="*" element={<NotFound />} />

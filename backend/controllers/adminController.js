@@ -4,6 +4,8 @@ const { supabaseAdmin } = require('../config/supabase');
 
 // Bảng quiz đã chuyển sang schema exam_module (question_bank/users vẫn ở public)
 const examDb = supabaseAdmin.schema('exam_module');
+// Bảng "Bài học" (units) nằm trong content_module (Mục/item vẫn dùng compat view public.lessons)
+const contentDb = supabaseAdmin.schema('content_module');
 
 // ── Stats ────────────────────────────────────────────────────────────────────
 exports.getStats = async (req, res) => {
@@ -185,12 +187,65 @@ exports.getCourseBuilder = async (req, res) => {
       .from('courses').select('*').eq('id', courseId).single();
     if (cErr || !course) return res.status(404).json({ error: 'Không tìm thấy khóa học.' });
 
-    const { data: lessons, error: lErr } = await supabaseAdmin
-      .from('lessons').select('*').eq('course_id', courseId).order('order_index');
+    const [{ data: units, error: uErr }, { data: lessons, error: lErr }] = await Promise.all([
+      contentDb.from('units').select('*').eq('course_id', courseId).order('sort_order'),
+      supabaseAdmin.from('lessons')
+        .select('id,unit_id,title,title_ja,lesson_type,order_index,duration_minutes,question_count')
+        .eq('course_id', courseId).order('order_index'),
+    ]);
+    if (uErr) throw uErr;
     if (lErr) throw lErr;
 
-    res.json({ ...course, lessons: lessons || [] });
+    const items = lessons || [];
+    const unitsWithItems = (units || []).map(u => ({
+      ...u,
+      lessons: items.filter(l => l.unit_id === u.id),
+    }));
+
+    res.json({ ...course, units: unitsWithItems });
   } catch (err) { res.status(500).json({ error: 'Lỗi tải dữ liệu.' }); }
+};
+
+// ── Units CRUD ("Bài học") ─────────────────────────────────────────────────────
+exports.createUnit = async (req, res) => {
+  const { course_id, title, title_ja, sort_order } = req.body;
+  if (!course_id || !title) return res.status(400).json({ error: 'Thiếu thông tin bắt buộc.' });
+  try {
+    const { data, error } = await contentDb.from('units')
+      .insert({ course_id, title, title_ja: title_ja || null, sort_order: sort_order ?? 0 })
+      .select().single();
+    if (error) throw error;
+    res.status(201).json(data);
+  } catch (err) { res.status(500).json({ error: 'Không thể tạo bài học.' }); }
+};
+
+exports.updateUnit = async (req, res) => {
+  const allowed = ['title', 'title_ja', 'sort_order'];
+  const updates = Object.fromEntries(Object.entries(req.body).filter(([k]) => allowed.includes(k)));
+  updates.updated_at = new Date().toISOString();
+  try {
+    const { data, error } = await contentDb.from('units').update(updates).eq('id', req.params.id).select().single();
+    if (error) throw error;
+    res.json(data);
+  } catch (err) { res.status(500).json({ error: 'Không thể cập nhật.' }); }
+};
+
+exports.deleteUnit = async (req, res) => {
+  try {
+    await contentDb.from('units').delete().eq('id', req.params.id);
+    res.json({ message: 'Đã xóa bài học.' });
+  } catch (err) { res.status(500).json({ error: 'Không thể xóa.' }); }
+};
+
+exports.reorderUnits = async (req, res) => {
+  const { items } = req.body; // [{ id, sort_order }]
+  if (!Array.isArray(items)) return res.status(400).json({ error: 'items phải là mảng.' });
+  try {
+    await Promise.all(items.map(({ id, sort_order }) =>
+      contentDb.from('units').update({ sort_order, updated_at: new Date().toISOString() }).eq('id', id)
+    ));
+    res.json({ message: 'Đã cập nhật thứ tự.' });
+  } catch (err) { res.status(500).json({ error: 'Không thể cập nhật thứ tự.' }); }
 };
 
 exports.reorderLessons = async (req, res) => {
@@ -237,19 +292,19 @@ exports.listLessons = async (req, res) => {
 };
 
 exports.createLesson = async (req, res) => {
-  const { course_id, title, title_ja, content, grammar_notes, order_index, duration_minutes, question_count } = req.body;
-  if (!course_id || !title) return res.status(400).json({ error: 'Thiếu thông tin bắt buộc.' });
+  const { course_id, unit_id, title, title_ja, lesson_type, content, grammar_notes, content_url, transcript, order_index, duration_minutes, question_count } = req.body;
+  if (!course_id || !unit_id || !title) return res.status(400).json({ error: 'Thiếu thông tin bắt buộc.' });
   try {
     const { data, error } = await supabaseAdmin.from('lessons')
-      .insert({ course_id, title, title_ja, content, grammar_notes, order_index: order_index || 0, duration_minutes: duration_minutes || 0, question_count: question_count || 0 })
+      .insert({ course_id, unit_id, title, title_ja, lesson_type: lesson_type || 'reading', content, grammar_notes, content_url, transcript, order_index: order_index || 0, duration_minutes: duration_minutes || 0, question_count: question_count || 0 })
       .select().single();
     if (error) throw error;
     res.status(201).json(data);
-  } catch (err) { res.status(500).json({ error: 'Không thể tạo bài học.' }); }
+  } catch (err) { res.status(500).json({ error: 'Không thể tạo mục.' }); }
 };
 
 exports.updateLesson = async (req, res) => {
-  const allowed = ['title','title_ja','content','grammar_notes','order_index','is_published','course_id','duration_minutes','question_count'];
+  const allowed = ['title','title_ja','lesson_type','content','grammar_notes','content_url','transcript','order_index','is_published','course_id','unit_id','duration_minutes','question_count'];
   const updates = Object.fromEntries(Object.entries(req.body).filter(([k]) => allowed.includes(k)));
   updates.updated_at = new Date().toISOString();
   try {

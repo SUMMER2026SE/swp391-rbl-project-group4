@@ -8,8 +8,6 @@ import Alert from '../../components/ui/Alert';
 import { useLang } from '../../contexts/LangContext';
 import api from '../../lib/api';
 
-const EMPTY = { course_id: '', title: '', title_ja: '', order_index: 0, is_published: false };
-
 export default function AdminLessons() {
   const { t } = useLang();
   const navigate = useNavigate();
@@ -54,7 +52,6 @@ export default function AdminLessons() {
 
   // ── CRUD ────────────────────────────────────────────────────────────────────
 
-  const openCreate = () => { setForm(EMPTY); setEditId(null); setModal(true); };
   const openEdit   = (row) => {
     setForm({
       course_id:   row.course_id   || '',
@@ -71,8 +68,7 @@ export default function AdminLessons() {
     if (!form.title || !form.course_id) return setAlert({ type: 'error', msg: 'Vui lòng điền đầy đủ thông tin.' });
     setSaving(true);
     try {
-      if (editId) await api.put(`/admin/lessons/${editId}`, form);
-      else        await api.post('/admin/lessons', form);
+      await api.put(`/admin/lessons/${editId}`, form);
       setAlert({ type: 'success', msg: 'Đã lưu.' });
       setModal(false);
       fetchData();
@@ -124,9 +120,9 @@ export default function AdminLessons() {
             <option value="">Tất cả khoá học</option>
             {courses.map(c => <option key={c.id} value={c.id}>{c.title}</option>)}
           </select>
-          <Button onClick={openCreate}>
+          <Button variant="secondary" onClick={() => navigate('/admin/courses')}>
             <span className="material-symbols-outlined text-lg">add</span>
-            {t('admin.create')}
+            Tạo trong khóa học
           </Button>
         </div>
       </div>
