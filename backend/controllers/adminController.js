@@ -4,6 +4,8 @@ const { supabaseAdmin } = require('../config/supabase');
 
 // Bảng quiz đã chuyển sang schema exam_module (question_bank/users vẫn ở public)
 const examDb = supabaseAdmin.schema('exam_module');
+// Bảng "Bài học" (units) nằm trong content_module (Mục/item vẫn dùng compat view public.lessons)
+const contentDb = supabaseAdmin.schema('content_module');
 
 // ── Stats ────────────────────────────────────────────────────────────────────
 exports.getStats = async (req, res) => {
@@ -185,84 +187,65 @@ exports.getCourseBuilder = async (req, res) => {
       .from('courses').select('*').eq('id', courseId).single();
     if (cErr || !course) return res.status(404).json({ error: 'Không tìm thấy khóa học.' });
 
-    const { data: modules, error: mErr } = await supabaseAdmin
-      .from('modules').select('*').eq('course_id', courseId).order('order_index');
-    if (mErr) throw mErr;
-
-    const { data: lessons, error: lErr } = await supabaseAdmin
-      .from('lessons').select('*').eq('course_id', courseId).order('order_index');
+    const [{ data: units, error: uErr }, { data: lessons, error: lErr }] = await Promise.all([
+      contentDb.from('units').select('*').eq('course_id', courseId).order('sort_order'),
+      supabaseAdmin.from('lessons')
+        .select('id,unit_id,title,title_ja,lesson_type,order_index,duration_minutes,question_count')
+        .eq('course_id', courseId).order('order_index'),
+    ]);
+    if (uErr) throw uErr;
     if (lErr) throw lErr;
 
-    const modulesWithLessons = (modules || []).map(m => ({
-      ...m,
-      lessons: (lessons || []).filter(l => l.module_id === m.id),
+    const items = lessons || [];
+    const unitsWithItems = (units || []).map(u => ({
+      ...u,
+      lessons: items.filter(l => l.unit_id === u.id),
     }));
 
-    res.json({ ...course, modules: modulesWithLessons });
+    res.json({ ...course, units: unitsWithItems });
   } catch (err) { res.status(500).json({ error: 'Lỗi tải dữ liệu.' }); }
 };
 
-// ── Modules CRUD ──────────────────────────────────────────────────────────────
-exports.listModules = async (req, res) => {
-  const { course_id } = req.query;
-  if (!course_id) return res.status(400).json({ error: 'Thiếu course_id.' });
-  try {
-    const { data, error } = await supabaseAdmin
-      .from('modules').select('*').eq('course_id', course_id).order('order_index');
-    if (error) throw error;
-    res.json(data || []);
-  } catch (err) { res.status(500).json({ error: 'Lỗi.' }); }
-};
-
-exports.createModule = async (req, res) => {
-  const { course_id, title, order_index } = req.body;
+// ── Units CRUD ("Bài học") ─────────────────────────────────────────────────────
+exports.createUnit = async (req, res) => {
+  const { course_id, title, title_ja, sort_order } = req.body;
   if (!course_id || !title) return res.status(400).json({ error: 'Thiếu thông tin bắt buộc.' });
   try {
-    const { data, error } = await supabaseAdmin
-      .from('modules').insert({ course_id, title, order_index: order_index ?? 0 }).select().single();
+    const { data, error } = await contentDb.from('units')
+      .insert({ course_id, title, title_ja: title_ja || null, sort_order: sort_order ?? 0 })
+      .select().single();
     if (error) throw error;
     res.status(201).json(data);
-  } catch (err) { res.status(500).json({ error: 'Không thể tạo module.' }); }
+  } catch (err) { res.status(500).json({ error: 'Không thể tạo bài học.' }); }
 };
 
-exports.updateModule = async (req, res) => {
-  const { title } = req.body;
-  if (!title) return res.status(400).json({ error: 'Tiêu đề không được để trống.' });
+exports.updateUnit = async (req, res) => {
+  const allowed = ['title', 'title_ja', 'sort_order'];
+  const updates = Object.fromEntries(Object.entries(req.body).filter(([k]) => allowed.includes(k)));
+  updates.updated_at = new Date().toISOString();
   try {
-    const { data, error } = await supabaseAdmin
-      .from('modules').update({ title, updated_at: new Date().toISOString() })
-      .eq('id', req.params.id).select().single();
+    const { data, error } = await contentDb.from('units').update(updates).eq('id', req.params.id).select().single();
     if (error) throw error;
     res.json(data);
   } catch (err) { res.status(500).json({ error: 'Không thể cập nhật.' }); }
 };
 
-exports.deleteModule = async (req, res) => {
+exports.deleteUnit = async (req, res) => {
   try {
-    await supabaseAdmin.from('modules').delete().eq('id', req.params.id);
-    res.json({ message: 'Đã xóa module.' });
+    await contentDb.from('units').delete().eq('id', req.params.id);
+    res.json({ message: 'Đã xóa bài học.' });
   } catch (err) { res.status(500).json({ error: 'Không thể xóa.' }); }
 };
 
-exports.reorderModules = async (req, res) => {
-  const { items } = req.body; // [{ id, order_index }]
+exports.reorderUnits = async (req, res) => {
+  const { items } = req.body; // [{ id, sort_order }]
   if (!Array.isArray(items)) return res.status(400).json({ error: 'items phải là mảng.' });
   try {
-    await Promise.all(items.map(({ id, order_index }) =>
-      supabaseAdmin.from('modules').update({ order_index, updated_at: new Date().toISOString() }).eq('id', id)
+    await Promise.all(items.map(({ id, sort_order }) =>
+      contentDb.from('units').update({ sort_order, updated_at: new Date().toISOString() }).eq('id', id)
     ));
     res.json({ message: 'Đã cập nhật thứ tự.' });
   } catch (err) { res.status(500).json({ error: 'Không thể cập nhật thứ tự.' }); }
-};
-
-exports.listModuleLessons = async (req, res) => {
-  const { moduleId } = req.params;
-  try {
-    const { data, error } = await supabaseAdmin
-      .from('lessons').select('*').eq('module_id', moduleId).order('order_index');
-    if (error) throw error;
-    res.json(data || []);
-  } catch (err) { res.status(500).json({ error: 'Lỗi.' }); }
 };
 
 exports.reorderLessons = async (req, res) => {
@@ -289,8 +272,7 @@ exports.listLessons = async (req, res) => {
   const { course_id, lesson_type, page = 1, limit = 20 } = req.query;
   const offset = (page - 1) * limit;
   try {
-    // Sau khi DB tách module: lessons là view (không embed FK được) + bảng modules đã bỏ.
-    // → join thủ công với courses.
+    // lessons là view (không embed FK được) → join thủ công với courses.
     let q = supabaseAdmin.from('lessons').select('*', { count: 'exact' })
       .order('course_id').order('order_index')
       .range(offset, offset + Number(limit) - 1);
@@ -304,7 +286,7 @@ exports.listLessons = async (req, res) => {
       ? await supabaseAdmin.from('courses').select('id, title, level').in('id', courseIds)
       : { data: [] };
     const cMap = Object.fromEntries((courses || []).map(c => [c.id, c]));
-    const enriched = (data || []).map(l => ({ ...l, courses: cMap[l.course_id] || null, modules: null }));
+    const enriched = (data || []).map(l => ({ ...l, courses: cMap[l.course_id] || null }));
 
 
     res.json({ data: enriched, total: count, page: Number(page), limit: Number(limit) });
@@ -312,12 +294,12 @@ exports.listLessons = async (req, res) => {
 };
 
 exports.createLesson = async (req, res) => {
-  const { course_id, module_id, title, title_ja, content, order_index, lesson_type, duration_minutes, question_count, is_published } = req.body;
-  if (!course_id || !title) return res.status(400).json({ error: 'Thiếu thông tin bắt buộc.' });
+  const { course_id, unit_id, title, title_ja, lesson_type, content, grammar_notes, content_url, transcript, order_index, duration_minutes, question_count } = req.body;
+  if (!course_id || !unit_id || !title) return res.status(400).json({ error: 'Thiếu thông tin bắt buộc.' });
   try {
     const contentDb = supabaseAdmin.schema('content_module');
     const { data, error } = await contentDb.from('lessons')
-      .insert({ course_id, unit_id: module_id || null, title, title_ja, content_body: content, sort_order: order_index || 0, content_type: lesson_type || 'reading', duration_minutes: duration_minutes || 0, question_count: question_count || 0, is_published: is_published ?? false })
+      .insert({ course_id, unit_id: module_id || unit_id || null, title, title_ja, content_body: content, content_type: lesson_type || 'reading', grammar_notes, content_url, transcript, sort_order: order_index || 0, duration_minutes: duration_minutes || 0, question_count: question_count || 0, is_published: is_published ?? false })
       .select().single();
     if (error) throw error;
     res.status(201).json(data);
@@ -329,9 +311,10 @@ exports.createLesson = async (req, res) => {
 
 exports.updateLesson = async (req, res) => {
   const FIELD_MAP = { content: 'content_body', lesson_type: 'content_type', order_index: 'sort_order', module_id: 'unit_id' };
-  const allowed = ['title','title_ja','content','order_index','is_published','course_id','module_id','lesson_type','duration_minutes','question_count'];
+  const allowed = ['title','title_ja','content','order_index','is_published','course_id','module_id','unit_id','lesson_type','duration_minutes','question_count','grammar_notes','content_url','transcript'];
   const raw = Object.fromEntries(Object.entries(req.body).filter(([k]) => allowed.includes(k)));
   const updates = Object.fromEntries(Object.entries(raw).map(([k, v]) => [FIELD_MAP[k] || k, v]));
+
   updates.updated_at = new Date().toISOString();
   try {
     const contentDb = supabaseAdmin.schema('content_module');

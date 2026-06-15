@@ -8,33 +8,31 @@ import api from '../../lib/api';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
+// Loại Mục (item). Mỗi loại mở một editor riêng theo lesson_id.
 const LESSON_TYPES = [
-  { value: 'video',      label: 'Video',       icon: 'play_circle',   color: 'text-sumire-purple' },
-  { value: 'reading',    label: 'Reading',     icon: 'description',   color: 'text-primary' },
-  { value: 'quiz',       label: 'Quiz',        icon: 'quiz',          color: 'text-tsubaki-red' },
-  { value: 'vocabulary', label: 'Vocabulary',  icon: 'style',         color: 'text-green-600' },
-  { value: 'grammar',    label: 'Grammar',     icon: 'spellcheck',    color: 'text-amber-600' },
-  { value: 'kanji',      label: 'Kanji',       icon: 'translate',     color: 'text-purple-600' },
-  { value: 'practice',   label: 'Practice',    icon: 'fitness_center',color: 'text-blue-600' },
+  { value: 'video',      label: 'Video',      icon: 'play_circle',    color: 'text-sumire-purple' },
+  { value: 'reading',    label: 'Bài đọc',    icon: 'description',    color: 'text-primary' },
+  { value: 'vocabulary', label: 'Từ vựng',    icon: 'translate',      color: 'text-green-600' },
+  { value: 'kanji',      label: 'Kanji',      icon: 'draw',           color: 'text-purple-600' },
+  { value: 'grammar',    label: 'Ngữ pháp',   icon: 'spellcheck',     color: 'text-amber-600' },
+  { value: 'quiz',       label: 'Quiz',       icon: 'quiz',           color: 'text-tsubaki-red' },
 ];
 
-const getLessonTypeMeta = (type) => LESSON_TYPES.find(t => t.value === type) || LESSON_TYPES[1];
+const TYPE_ROUTE = { video: 'video', reading: 'reading', vocabulary: 'vocabulary', kanji: 'kanji', grammar: 'grammar', quiz: 'quiz' };
 
-const formatMeta = (lesson) => {
-  if (lesson.lesson_type === 'quiz' || lesson.lesson_type === 'practice') {
-    return `${lesson.lesson_type === 'quiz' ? 'Quiz' : 'Practice'} • ${lesson.question_count || 0} câu`;
-  }
-  if (lesson.duration_minutes > 0) {
-    const m = lesson.duration_minutes;
-    return `${getLessonTypeMeta(lesson.lesson_type).label} • ${m} phút`;
-  }
-  return getLessonTypeMeta(lesson.lesson_type).label;
+const getTypeMeta = (type) => LESSON_TYPES.find(t => t.value === type) || LESSON_TYPES[1];
+
+const formatMeta = (item) => {
+  const label = getTypeMeta(item.lesson_type).label;
+  if (item.lesson_type === 'quiz') return `${label} • ${item.question_count || 0} câu`;
+  if (item.duration_minutes > 0)  return `${label} • ${item.duration_minutes} phút`;
+  return label;
 };
 
-const EMPTY_MODULE = { title: '' };
-const EMPTY_LESSON = { title: '', title_ja: '', lesson_type: 'video', duration_minutes: '', question_count: '' };
+const EMPTY_UNIT = { title: '', title_ja: '' };
+const EMPTY_ITEM = { title: '', title_ja: '', lesson_type: 'reading', duration_minutes: '', question_count: '' };
 
-// ── Sub-components ────────────────────────────────────────────────────────────
+// ── Type selector ───────────────────────────────────────────────────────────────
 
 function LessonTypeSelector({ value, onChange }) {
   return (
@@ -59,13 +57,12 @@ function LessonTypeSelector({ value, onChange }) {
   );
 }
 
-const CONTENT_TYPES = new Set(['vocabulary', 'grammar', 'quiz', 'reading', 'kanji']);
+// ── Item row ──────────────────────────────────────────────────────────────────
 
-function LessonRow({ lesson, onEdit, onEditContent, onDelete, onDragStart, onDragOver, onDragEnd, isDragging }) {
+function ItemRow({ item, onEditContent, onEditInfo, onDelete, onDragStart, onDragOver, onDragEnd, isDragging }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef(null);
-  const meta = getLessonTypeMeta(lesson.lesson_type);
-  const hasContent = CONTENT_TYPES.has(lesson.lesson_type);
+  const meta = getTypeMeta(item.lesson_type);
 
   useEffect(() => {
     const handler = (e) => { if (menuRef.current && !menuRef.current.contains(e.target)) setMenuOpen(false); };
@@ -79,68 +76,47 @@ function LessonRow({ lesson, onEdit, onEditContent, onDelete, onDragStart, onDra
       onDragStart={onDragStart}
       onDragOver={onDragOver}
       onDragEnd={onDragEnd}
-      className={`flex items-center justify-between px-3 py-2.5 rounded-xl border transition-all group/lesson
+      className={`flex items-center justify-between px-3 py-2.5 rounded-xl border transition-all group/item
         ${isDragging
           ? 'opacity-40 bg-surface-container/50 border-tsubaki-red/30 scale-[0.98]'
           : 'border-outline/20 hover:border-tsubaki-red/30 hover:bg-surface-stone'}`}
     >
-      {/* Left: icon + title (clickable for content types) */}
       <div className="flex items-center gap-3 min-w-0 flex-1">
-        <span className="material-symbols-outlined text-on-muted/30 hover:text-on-muted cursor-grab text-base shrink-0 transition-colors">
-          drag_indicator
-        </span>
+        <span className="material-symbols-outlined text-on-muted/30 hover:text-on-muted cursor-grab text-base shrink-0">drag_indicator</span>
         <span className={`material-symbols-outlined text-xl shrink-0 ${meta.color}`}>{meta.icon}</span>
-
-        {hasContent ? (
-          <button
-            onClick={() => onEditContent(lesson)}
-            className="font-medium text-sm text-on-surface truncate hover:text-tsubaki-red transition-colors text-left"
-            title="Chỉnh sửa nội dung"
-          >
-            {lesson.title}
-          </button>
-        ) : (
-          <span className="font-medium text-sm text-on-surface truncate">{lesson.title}</span>
-        )}
-
-        {hasContent && (
-          <span className="material-symbols-outlined text-on-muted/40 text-sm hidden group-hover/lesson:block shrink-0">
-            open_in_new
-          </span>
-        )}
+        <button
+          onClick={() => onEditContent(item)}
+          className="font-medium text-sm text-on-surface truncate hover:text-tsubaki-red transition-colors text-left"
+          title="Soạn nội dung"
+        >
+          {item.title}
+        </button>
+        <span className="material-symbols-outlined text-on-muted/40 text-sm hidden group-hover/item:block shrink-0">open_in_new</span>
       </div>
 
-      {/* Right: meta + menu */}
       <div className="flex items-center gap-2 shrink-0">
-        <span className="text-xs text-on-muted hidden sm:block">{formatMeta(lesson)}</span>
+        <span className="text-xs text-on-muted hidden sm:block">{formatMeta(item)}</span>
         <div className="relative" ref={menuRef}>
-          <button
-            onClick={() => setMenuOpen(v => !v)}
-            className="p-1 text-on-muted hover:text-tsubaki-red rounded-lg transition-colors"
-          >
+          <button onClick={() => setMenuOpen(v => !v)} className="p-1 text-on-muted hover:text-tsubaki-red rounded-lg transition-colors">
             <span className="material-symbols-outlined text-lg">more_vert</span>
           </button>
           {menuOpen && (
-            <div className="absolute right-0 top-7 z-10 bg-white border border-outline/30 rounded-xl shadow-lg min-w-[168px] py-1 overflow-hidden">
-              {hasContent && (
-                <button
-                  onClick={() => { setMenuOpen(false); onEditContent(lesson); }}
-                  className="w-full text-left px-4 py-2 text-sm hover:bg-surface-low flex items-center gap-2 text-sumire-purple font-medium"
-                >
-                  <span className="material-symbols-outlined text-base">edit_note</span>
-                  Chỉnh sửa nội dung
-                </button>
-              )}
+            <div className="absolute right-0 top-7 z-10 bg-white border border-outline/30 rounded-xl shadow-lg min-w-[176px] py-1 overflow-hidden">
               <button
-                onClick={() => { setMenuOpen(false); onEdit(lesson); }}
+                onClick={() => { setMenuOpen(false); onEditContent(item); }}
+                className="w-full text-left px-4 py-2 text-sm hover:bg-surface-low flex items-center gap-2 text-sumire-purple font-medium"
+              >
+                <span className="material-symbols-outlined text-base">edit_note</span> Soạn nội dung
+              </button>
+              <button
+                onClick={() => { setMenuOpen(false); onEditInfo(item); }}
                 className="w-full text-left px-4 py-2 text-sm hover:bg-surface-low flex items-center gap-2 text-on-surface"
               >
-                <span className="material-symbols-outlined text-base">tune</span>
-                {hasContent ? 'Chỉnh sửa thông tin' : 'Chỉnh sửa'}
+                <span className="material-symbols-outlined text-base">tune</span> Sửa thông tin
               </button>
               <div className="h-px bg-outline/10 mx-2 my-1" />
               <button
-                onClick={() => { setMenuOpen(false); onDelete(lesson); }}
+                onClick={() => { setMenuOpen(false); onDelete(item); }}
                 className="w-full text-left px-4 py-2 text-sm hover:bg-error-container/20 flex items-center gap-2 text-error"
               >
                 <span className="material-symbols-outlined text-base">delete</span> Xóa
@@ -153,107 +129,91 @@ function LessonRow({ lesson, onEdit, onEditContent, onDelete, onDragStart, onDra
   );
 }
 
-function ModuleCard({
-  module, courseId,
-  onModuleEdit, onModuleDelete,
-  onLessonAdd, onLessonEdit, onLessonEditContent, onLessonDelete, onLessonsReorder,
-  dragProps,
-}) {
+// ── Unit card ("Bài học") ───────────────────────────────────────────────────────
+
+function UnitCard({ unit, onUnitEdit, onUnitDelete, onItemAdd, onItemEditContent, onItemEditInfo, onItemDelete, onItemsReorder, dragProps }) {
   const [collapsed, setCollapsed] = useState(false);
-  const [localLessons, setLocalLessons] = useState(module.lessons || []);
-  const dragLessonIdx = useRef(null);
-  const [draggingLessonIdx, setDraggingLessonIdx] = useState(null);
+  const [localItems, setLocalItems] = useState(unit.lessons || []);
+  const dragItemIdx = useRef(null);
+  const [draggingItemIdx, setDraggingItemIdx] = useState(null);
 
-  useEffect(() => { setLocalLessons(module.lessons || []); }, [module.lessons]);
+  useEffect(() => { setLocalItems(unit.lessons || []); }, [unit.lessons]);
 
-  const lessonCount = localLessons.length;
-  const totalMin = localLessons.reduce((s, l) => s + (l.duration_minutes || 0), 0);
-  const durationLabel = totalMin > 0 ? `${totalMin} phút` : null;
+  const totalMin = localItems.reduce((s, l) => s + (l.duration_minutes || 0), 0);
 
-  const handleLessonDragStart = (e, idx) => {
+  const handleItemDragStart = (e, idx) => {
     e.stopPropagation();
-    dragLessonIdx.current = idx;
-    setDraggingLessonIdx(idx);
+    dragItemIdx.current = idx;
+    setDraggingItemIdx(idx);
     e.dataTransfer.effectAllowed = 'move';
   };
-
-  const handleLessonDragOver = (e, idx) => {
+  const handleItemDragOver = (e, idx) => {
     e.preventDefault();
     e.stopPropagation();
-    if (dragLessonIdx.current === null || dragLessonIdx.current === idx) return;
-    const updated = [...localLessons];
-    const [moved] = updated.splice(dragLessonIdx.current, 1);
+    if (dragItemIdx.current === null || dragItemIdx.current === idx) return;
+    const updated = [...localItems];
+    const [moved] = updated.splice(dragItemIdx.current, 1);
     updated.splice(idx, 0, moved);
-    dragLessonIdx.current = idx;
-    setDraggingLessonIdx(idx);
-    setLocalLessons(updated);
+    dragItemIdx.current = idx;
+    setDraggingItemIdx(idx);
+    setLocalItems(updated);
   };
-
-  const handleLessonDragEnd = async (e) => {
+  const handleItemDragEnd = async (e) => {
     e.stopPropagation();
-    setDraggingLessonIdx(null);
-    dragLessonIdx.current = null;
-    await onLessonsReorder(localLessons.map((l, i) => ({ id: l.id, order_index: i })));
+    setDraggingItemIdx(null);
+    dragItemIdx.current = null;
+    await onItemsReorder(localItems.map((l, i) => ({ id: l.id, order_index: i })));
   };
 
   return (
-    <div
-      className="bg-white border border-outline/30 shadow-sm rounded-2xl overflow-hidden transition-all duration-200 hover:shadow-md group"
-      {...dragProps}
-    >
-      {/* Module header */}
+    <div className="bg-white border border-outline/30 shadow-sm rounded-2xl overflow-hidden transition-all duration-200 hover:shadow-md group" {...dragProps}>
+      {/* Header */}
       <div className="flex items-center justify-between px-5 py-4 border-b border-outline/10 bg-surface-container-lowest/60">
         <div className="flex items-center gap-3 min-w-0">
           <span className="material-symbols-outlined text-outline/50 cursor-grab text-xl">drag_indicator</span>
-          <button onClick={() => setCollapsed(v => !v)} className="flex items-center gap-2 min-w-0">
+          <button onClick={() => setCollapsed(v => !v)} className="flex items-center gap-2 min-w-0 text-left">
             <span className={`material-symbols-outlined text-base text-on-muted transition-transform ${collapsed ? '-rotate-90' : ''}`}>expand_more</span>
-            <div className="text-left min-w-0">
-              <h3 className="font-semibold text-on-surface text-sm truncate">{module.title}</h3>
+            <div className="min-w-0">
+              <h3 className="font-semibold text-on-surface text-sm truncate">{unit.title}</h3>
               <p className="text-xs text-on-muted">
-                {lessonCount} bài học{durationLabel ? ` • ${durationLabel}` : ''}
+                {localItems.length} mục{totalMin > 0 ? ` • ${totalMin} phút` : ''}
               </p>
             </div>
           </button>
         </div>
         <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-          <button
-            onClick={() => onModuleEdit(module)}
-            className="p-1.5 text-on-muted hover:text-tsubaki-red hover:bg-tsubaki-red/10 rounded-lg transition-colors"
-          >
+          <button onClick={() => onUnitEdit(unit)} className="p-1.5 text-on-muted hover:text-tsubaki-red hover:bg-tsubaki-red/10 rounded-lg transition-colors">
             <span className="material-symbols-outlined text-lg">edit</span>
           </button>
-          <button
-            onClick={() => onModuleDelete(module)}
-            className="p-1.5 text-on-muted hover:text-error hover:bg-error-container/20 rounded-lg transition-colors"
-          >
+          <button onClick={() => onUnitDelete(unit)} className="p-1.5 text-on-muted hover:text-error hover:bg-error-container/20 rounded-lg transition-colors">
             <span className="material-symbols-outlined text-lg">delete</span>
           </button>
         </div>
       </div>
 
-      {/* Lessons */}
+      {/* Items */}
       {!collapsed && (
         <div className="p-4 space-y-2">
-          {localLessons.map((lesson, idx) => (
-            <LessonRow
-              key={lesson.id}
-              lesson={lesson}
-              onEdit={onLessonEdit}
-              onEditContent={onLessonEditContent}
-              onDelete={onLessonDelete}
-              isDragging={draggingLessonIdx === idx}
-              onDragStart={(e) => handleLessonDragStart(e, idx)}
-              onDragOver={(e) => handleLessonDragOver(e, idx)}
-              onDragEnd={handleLessonDragEnd}
+          {localItems.map((item, idx) => (
+            <ItemRow
+              key={item.id}
+              item={item}
+              onEditContent={onItemEditContent}
+              onEditInfo={onItemEditInfo}
+              onDelete={onItemDelete}
+              isDragging={draggingItemIdx === idx}
+              onDragStart={(e) => handleItemDragStart(e, idx)}
+              onDragOver={(e) => handleItemDragOver(e, idx)}
+              onDragEnd={handleItemDragEnd}
             />
           ))}
           <button
-            onClick={() => onLessonAdd(module)}
+            onClick={() => onItemAdd(unit)}
             className="w-full py-3 border-2 border-dashed border-outline/25 rounded-xl text-on-muted text-sm font-medium
               hover:border-tsubaki-red/40 hover:text-tsubaki-red transition-all flex items-center justify-center gap-2"
           >
             <span className="material-symbols-outlined text-base">add</span>
-            Thêm bài học
+            Thêm mục
           </button>
         </div>
       )}
@@ -267,233 +227,169 @@ export default function ManageCourseContent() {
   const { courseId } = useParams();
   const navigate = useNavigate();
 
-  const [course, setCourse]   = useState(null);
-  const [modules, setModules] = useState([]);
+  const [course, setCourse] = useState(null);
+  const [units, setUnits]   = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving]   = useState(false);
   const [alert, setAlert]     = useState({ type: '', msg: '' });
 
-  // Module modal state
-  const [moduleModal, setModuleModal]   = useState(false);
-  const [moduleForm, setModuleForm]     = useState(EMPTY_MODULE);
-  const [editingModule, setEditingModule] = useState(null);
-  const [savingModule, setSavingModule] = useState(false);
+  // Unit modal
+  const [unitModal, setUnitModal]     = useState(false);
+  const [unitForm, setUnitForm]       = useState(EMPTY_UNIT);
+  const [editingUnit, setEditingUnit] = useState(null);
+  const [savingUnit, setSavingUnit]   = useState(false);
 
-  // Lesson modal state
-  const [lessonModal, setLessonModal]   = useState(false);
-  const [lessonForm, setLessonForm]     = useState(EMPTY_LESSON);
-  const [editingLesson, setEditingLesson] = useState(null);
-  const [targetModule, setTargetModule] = useState(null);
-  const [savingLesson, setSavingLesson] = useState(false);
+  // Item modal
+  const [itemModal, setItemModal]     = useState(false);
+  const [itemForm, setItemForm]       = useState(EMPTY_ITEM);
+  const [editingItem, setEditingItem] = useState(null);
+  const [targetUnit, setTargetUnit]   = useState(null);
+  const [savingItem, setSavingItem]   = useState(false);
 
-  // Drag state for modules
-  const dragModuleIdx = useRef(null);
+  const dragUnitIdx = useRef(null);
 
-  // ── Data fetching ───────────────────────────────────────────────────────────
-
+  // ── Data ───────────────────────────────────────────────────────────────────
   const loadCourse = async () => {
     setLoading(true);
     try {
       const r = await api.get(`/admin/courses/${courseId}/builder`);
       setCourse(r.data);
-      setModules(r.data.modules || []);
+      setUnits(r.data.units || []);
     } catch (e) {
       setAlert({ type: 'error', msg: e.message || 'Không thể tải khóa học.' });
     } finally {
       setLoading(false);
     }
   };
-
   useEffect(() => { loadCourse(); }, [courseId]);
 
-  // ── Publish / Unpublish ──────────────────────────────────────────────────────
-
+  // ── Publish / Preview ────────────────────────────────────────────────────────
   const handlePublishToggle = async () => {
     setSaving(true);
     try {
       const r = await api.put(`/admin/courses/${courseId}`, { is_published: !course.is_published });
       setCourse(prev => ({ ...prev, is_published: r.data.is_published }));
       setAlert({ type: 'success', msg: r.data.is_published ? 'Đã xuất bản khóa học.' : 'Đã đưa về bản nháp.' });
-    } catch (e) {
-      setAlert({ type: 'error', msg: e.message });
-    } finally {
-      setSaving(false);
-    }
+    } catch (e) { setAlert({ type: 'error', msg: e.message }); } finally { setSaving(false); }
   };
+  const handlePreview = () => window.open(`/courses/${courseId}`, '_blank');
 
-  // ── Module CRUD ──────────────────────────────────────────────────────────────
+  // ── Unit CRUD ──────────────────────────────────────────────────────────────
+  const openAddUnit = () => { setUnitForm(EMPTY_UNIT); setEditingUnit(null); setUnitModal(true); };
+  const openEditUnit = (u) => { setUnitForm({ title: u.title, title_ja: u.title_ja || '' }); setEditingUnit(u); setUnitModal(true); };
 
-  const openAddModule = () => {
-    setModuleForm(EMPTY_MODULE);
-    setEditingModule(null);
-    setModuleModal(true);
-  };
-
-  const openEditModule = (mod) => {
-    setModuleForm({ title: mod.title });
-    setEditingModule(mod);
-    setModuleModal(true);
-  };
-
-  const saveModule = async () => {
-    if (!moduleForm.title.trim()) return setAlert({ type: 'error', msg: 'Tiêu đề module không được để trống.' });
-    setSavingModule(true);
+  const saveUnit = async () => {
+    if (!unitForm.title.trim()) return setAlert({ type: 'error', msg: 'Tiêu đề bài học không được để trống.' });
+    setSavingUnit(true);
     try {
-      if (editingModule) {
-        await api.put(`/admin/modules/${editingModule.id}`, { title: moduleForm.title.trim() });
-      } else {
-        await api.post('/admin/modules', {
-          course_id: courseId,
-          title: moduleForm.title.trim(),
-          order_index: modules.length,
-        });
-      }
-      setModuleModal(false);
+      const payload = { title: unitForm.title.trim(), title_ja: unitForm.title_ja.trim() || null };
+      if (editingUnit) await api.put(`/admin/units/${editingUnit.id}`, payload);
+      else await api.post('/admin/units', { ...payload, course_id: courseId, sort_order: units.length });
+      setUnitModal(false);
       await loadCourse();
-    } catch (e) {
-      setAlert({ type: 'error', msg: e.message });
-    } finally {
-      setSavingModule(false);
-    }
+    } catch (e) { setAlert({ type: 'error', msg: e.message }); } finally { setSavingUnit(false); }
   };
 
-  const deleteModule = async (mod) => {
-    if (!confirm(`Xóa module "${mod.title}" và tất cả bài học bên trong?`)) return;
+  const deleteUnit = async (u) => {
+    if (!confirm(`Xóa bài học "${u.title}" và tất cả mục bên trong?`)) return;
     try {
-      await api.delete(`/admin/modules/${mod.id}`);
+      await api.delete(`/admin/units/${u.id}`);
       await loadCourse();
-      setAlert({ type: 'success', msg: 'Đã xóa module.' });
-    } catch (e) {
-      setAlert({ type: 'error', msg: e.message });
-    }
+      setAlert({ type: 'success', msg: 'Đã xóa bài học.' });
+    } catch (e) { setAlert({ type: 'error', msg: e.message }); }
   };
 
-  // ── Lesson CRUD ──────────────────────────────────────────────────────────────
-
-  const openLessonContent = (lesson) => {
-    const routes = {
-      vocabulary: 'vocabulary',
-      grammar:    'grammar',
-      quiz:       'quiz',
-      reading:    'reading',
-      kanji:      'kanji',
-    };
-    const seg = routes[lesson.lesson_type];
-    if (seg) navigate(`/admin/lessons/${lesson.id}/${seg}`);
+  // ── Item CRUD ──────────────────────────────────────────────────────────────
+  const openItemEditor = (item) => {
+    const seg = TYPE_ROUTE[item.lesson_type];
+    if (seg) navigate(`/admin/lessons/${item.id}/${seg}`);
   };
 
-  const openAddLesson = (mod) => {
-    setLessonForm(EMPTY_LESSON);
-    setEditingLesson(null);
-    setTargetModule(mod);
-    setLessonModal(true);
+  const openAddItem = (unit) => {
+    setItemForm(EMPTY_ITEM);
+    setEditingItem(null);
+    setTargetUnit(unit);
+    setItemModal(true);
   };
 
-  const openEditLesson = (lesson) => {
-    setLessonForm({
-      title: lesson.title || '',
-      title_ja: lesson.title_ja || '',
-      lesson_type: lesson.lesson_type || 'reading',
-      duration_minutes: lesson.duration_minutes || '',
-      question_count: lesson.question_count || '',
+  const openEditItem = (item) => {
+    setItemForm({
+      title: item.title || '',
+      title_ja: item.title_ja || '',
+      lesson_type: item.lesson_type || 'reading',
+      duration_minutes: item.duration_minutes || '',
+      question_count: item.question_count || '',
     });
-    setEditingLesson(lesson);
-    setTargetModule(null);
-    setLessonModal(true);
+    setEditingItem(item);
+    setTargetUnit(null);
+    setItemModal(true);
   };
 
-  const saveLesson = async () => {
-    if (!lessonForm.title.trim()) return setAlert({ type: 'error', msg: 'Tiêu đề bài học không được để trống.' });
-    setSavingLesson(true);
+  const saveItem = async () => {
+    if (!itemForm.title.trim()) return setAlert({ type: 'error', msg: 'Tiêu đề mục không được để trống.' });
+    setSavingItem(true);
     try {
       const payload = {
-        title: lessonForm.title.trim(),
-        title_ja: lessonForm.title_ja.trim() || null,
-        lesson_type: lessonForm.lesson_type,
-        duration_minutes: Number(lessonForm.duration_minutes) || 0,
-        question_count: Number(lessonForm.question_count) || 0,
+        title: itemForm.title.trim(),
+        title_ja: itemForm.title_ja.trim() || null,
+        lesson_type: itemForm.lesson_type,
+        duration_minutes: Number(itemForm.duration_minutes) || 0,
+        question_count: Number(itemForm.question_count) || 0,
       };
-      if (editingLesson) {
-        await api.put(`/admin/lessons/${editingLesson.id}`, payload);
-        setLessonModal(false);
+      if (editingItem) {
+        await api.put(`/admin/lessons/${editingItem.id}`, payload);
+        setItemModal(false);
         await loadCourse();
       } else {
-        const parentModule = targetModule;
-        const existingLessons = parentModule?.lessons || [];
+        const existing = targetUnit?.lessons || [];
         const res = await api.post('/admin/lessons', {
           ...payload,
           course_id: courseId,
-          module_id: parentModule?.id || null,
-          order_index: existingLessons.length,
+          unit_id: targetUnit?.id,
+          order_index: existing.length,
         });
-        setLessonModal(false);
-        const newId = res.data.id;
-        const contentRoutes = { vocabulary: 'vocabulary', grammar: 'grammar', quiz: 'quiz', reading: 'reading', kanji: 'kanji' };
-        const seg = contentRoutes[payload.lesson_type];
-        if (seg) {
-          navigate(`/admin/lessons/${newId}/${seg}`);
-        } else {
-          await loadCourse();
-        }
+        setItemModal(false);
+        const seg = TYPE_ROUTE[payload.lesson_type];
+        if (seg) navigate(`/admin/lessons/${res.data.id}/${seg}`);
+        else await loadCourse();
       }
-    } catch (e) {
-      setAlert({ type: 'error', msg: e.message });
-    } finally {
-      setSavingLesson(false);
-    }
+    } catch (e) { setAlert({ type: 'error', msg: e.message }); } finally { setSavingItem(false); }
   };
 
-  const deleteLesson = async (lesson) => {
-    if (!confirm(`Xóa bài học "${lesson.title}"?`)) return;
+  const deleteItem = async (item) => {
+    if (!confirm(`Xóa mục "${item.title}"?`)) return;
     try {
-      await api.delete(`/admin/lessons/${lesson.id}`);
+      await api.delete(`/admin/lessons/${item.id}`);
       await loadCourse();
-      setAlert({ type: 'success', msg: 'Đã xóa bài học.' });
-    } catch (e) {
-      setAlert({ type: 'error', msg: e.message });
-    }
+      setAlert({ type: 'success', msg: 'Đã xóa mục.' });
+    } catch (e) { setAlert({ type: 'error', msg: e.message }); }
   };
 
-  // ── Drag & drop for modules ──────────────────────────────────────────────────
-
-  const handleModuleDragStart = (e, idx) => {
-    dragModuleIdx.current = idx;
-    e.dataTransfer.effectAllowed = 'move';
-  };
-
-  const handleModuleDragOver = (e, idx) => {
+  // ── Reorder ──────────────────────────────────────────────────────────────────
+  const handleUnitDragStart = (e, idx) => { dragUnitIdx.current = idx; e.dataTransfer.effectAllowed = 'move'; };
+  const handleUnitDragOver = (e, idx) => {
     e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-    if (dragModuleIdx.current === null || dragModuleIdx.current === idx) return;
-    const updated = [...modules];
-    const [moved] = updated.splice(dragModuleIdx.current, 1);
+    if (dragUnitIdx.current === null || dragUnitIdx.current === idx) return;
+    const updated = [...units];
+    const [moved] = updated.splice(dragUnitIdx.current, 1);
     updated.splice(idx, 0, moved);
-    dragModuleIdx.current = idx;
-    setModules(updated);
+    dragUnitIdx.current = idx;
+    setUnits(updated);
   };
-
-  const handleModuleDragEnd = async () => {
-    dragModuleIdx.current = null;
+  const handleUnitDragEnd = async () => {
+    dragUnitIdx.current = null;
     try {
-      await api.patch('/admin/modules/reorder', {
-        items: modules.map((m, i) => ({ id: m.id, order_index: i })),
-      });
-    } catch (e) {
-      setAlert({ type: 'error', msg: 'Không thể lưu thứ tự module.' });
-    }
+      await api.patch('/admin/units/reorder', { items: units.map((u, i) => ({ id: u.id, sort_order: i })) });
+    } catch (e) { setAlert({ type: 'error', msg: 'Không thể lưu thứ tự bài học.' }); }
   };
 
-  const handleLessonsReorder = async (items) => {
-    try {
-      await api.patch('/admin/lessons/reorder', { items });
-    } catch (e) {
-      setAlert({ type: 'error', msg: 'Không thể lưu thứ tự bài học.' });
-    }
+  const handleItemsReorder = async (items) => {
+    try { await api.patch('/admin/lessons/reorder', { items }); }
+    catch (e) { setAlert({ type: 'error', msg: 'Không thể lưu thứ tự mục.' }); }
   };
 
-  // ── Render helpers ────────────────────────────────────────────────────────────
-
-  const isQuizType = ['quiz', 'practice'].includes(lessonForm.lesson_type);
+  // ── Render ─────────────────────────────────────────────────────────────────────
+  const isQuiz = itemForm.lesson_type === 'quiz';
 
   if (loading) {
     return (
@@ -504,7 +400,6 @@ export default function ManageCourseContent() {
       </AdminLayout>
     );
   }
-
   if (!course) {
     return (
       <AdminLayout title="Quản lý nội dung khóa học">
@@ -516,207 +411,158 @@ export default function ManageCourseContent() {
   return (
     <AdminLayout title="Quản lý nội dung khóa học">
       {alert.msg && (
-        <Alert type={alert.type} onClose={() => setAlert({ type: '', msg: '' })} className="mb-5">
-          {alert.msg}
-        </Alert>
+        <Alert type={alert.type} onClose={() => setAlert({ type: '', msg: '' })} className="mb-5">{alert.msg}</Alert>
       )}
 
-      {/* ── Header ─────────────────────────────────────────────────────────── */}
+      {/* Header */}
       <section className="mb-8 flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
-          <button
-            onClick={() => navigate('/admin/courses')}
-            className="flex items-center gap-1 text-sm text-on-muted hover:text-tsubaki-red transition-colors mb-3"
-          >
-            <span className="material-symbols-outlined text-base">arrow_back</span>
-            Quay lại danh sách
+          <button onClick={() => navigate('/admin/courses')} className="flex items-center gap-1 text-sm text-on-muted hover:text-tsubaki-red transition-colors mb-3">
+            <span className="material-symbols-outlined text-base">arrow_back</span> Quay lại danh sách
           </button>
-
           <div className="flex items-center gap-2 mb-2 flex-wrap">
             {course.level && (
-              <span className="bg-surface-container-highest/60 text-on-muted px-3 py-0.5 rounded-full text-xs font-semibold uppercase tracking-wider">
-                {course.level}
-              </span>
+              <span className="bg-surface-container-highest/60 text-on-muted px-3 py-0.5 rounded-full text-xs font-semibold uppercase tracking-wider">{course.level}</span>
             )}
-            <span className={`px-3 py-0.5 rounded-full text-xs font-bold ${
-              course.is_published
-                ? 'bg-green-100 text-green-700'
-                : 'bg-amber-100 text-amber-700'
-            }`}>
+            <span className={`px-3 py-0.5 rounded-full text-xs font-bold ${course.is_published ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
               {course.is_published ? 'Đã xuất bản' : 'Bản nháp'}
             </span>
           </div>
-
           <h1 className="font-display text-2xl font-bold text-on-surface">{course.title}</h1>
-          {course.description && (
-            <p className="text-on-muted text-sm mt-1 max-w-xl">{course.description}</p>
-          )}
+          {course.description && <p className="text-on-muted text-sm mt-1 max-w-xl">{course.description}</p>}
         </div>
-
         <div className="flex items-center gap-3 shrink-0">
-          <button className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-outline text-sm font-medium text-on-surface hover:bg-surface-low transition-all">
-            <span className="material-symbols-outlined text-base">visibility</span>
-            Xem trước
+          <button onClick={handlePreview} className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-outline text-sm font-medium text-on-surface hover:bg-surface-low transition-all">
+            <span className="material-symbols-outlined text-base">visibility</span> Xem trước
           </button>
           <button
             onClick={handlePublishToggle}
             disabled={saving}
             className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all
-              ${course.is_published
-                ? 'bg-surface border border-outline text-on-surface hover:bg-surface-low'
-                : 'bg-tsubaki-red text-white hover:shadow-lg active:scale-95'}`}
+              ${course.is_published ? 'bg-surface border border-outline text-on-surface hover:bg-surface-low' : 'bg-tsubaki-red text-white hover:shadow-lg active:scale-95'}`}
           >
-            <span className="material-symbols-outlined text-base">
-              {course.is_published ? 'unpublished' : 'publish'}
-            </span>
+            <span className="material-symbols-outlined text-base">{course.is_published ? 'unpublished' : 'publish'}</span>
             {saving ? 'Đang lưu...' : course.is_published ? 'Bỏ xuất bản' : 'Xuất bản'}
           </button>
         </div>
       </section>
 
-      {/* ── Course builder ──────────────────────────────────────────────────── */}
+      {/* Builder */}
       <div className="space-y-4">
-
-        {/* Module list */}
-        {modules.map((mod, idx) => (
+        {units.map((unit, idx) => (
           <div
-            key={mod.id}
+            key={unit.id}
             draggable
-            onDragStart={(e) => handleModuleDragStart(e, idx)}
-            onDragOver={(e) => handleModuleDragOver(e, idx)}
-            onDragEnd={handleModuleDragEnd}
+            onDragStart={(e) => handleUnitDragStart(e, idx)}
+            onDragOver={(e) => handleUnitDragOver(e, idx)}
+            onDragEnd={handleUnitDragEnd}
           >
-            <ModuleCard
-              module={mod}
-              courseId={courseId}
-              onModuleEdit={openEditModule}
-              onModuleDelete={deleteModule}
-              onLessonAdd={openAddLesson}
-              onLessonEdit={openEditLesson}
-              onLessonEditContent={openLessonContent}
-              onLessonDelete={deleteLesson}
-              onLessonsReorder={handleLessonsReorder}
+            <UnitCard
+              unit={unit}
+              onUnitEdit={openEditUnit}
+              onUnitDelete={deleteUnit}
+              onItemAdd={openAddItem}
+              onItemEditContent={openItemEditor}
+              onItemEditInfo={openEditItem}
+              onItemDelete={deleteItem}
+              onItemsReorder={handleItemsReorder}
             />
           </div>
         ))}
 
-        {modules.length === 0 && (
+        {units.length === 0 && (
           <div className="text-center py-10 text-on-muted text-sm">
             <span className="material-symbols-outlined text-4xl block mb-2 opacity-20">inbox</span>
-            Chưa có module nào. Hãy thêm module đầu tiên bên dưới.
+            Chưa có bài học nào. Hãy thêm bài học đầu tiên bên dưới.
           </div>
         )}
 
-        {/* AI Suggestion card */}
-        <div className="relative p-5 rounded-2xl overflow-hidden bg-white/70 backdrop-blur-md border border-outline/20 shadow-sm">
-          <div className="absolute left-0 top-0 w-1 h-full bg-gradient-to-b from-sumire-purple to-tsubaki-red rounded-l-2xl" />
-          <div className="flex items-start gap-4">
-            <span className="material-symbols-outlined text-sumire-purple bg-sumire-purple/10 p-2.5 rounded-full text-2xl">auto_awesome</span>
-            <div>
-              <h4 className="text-sm font-bold text-sumire-purple">Gợi ý từ AI</h4>
-              <p className="text-xs text-on-muted leading-relaxed mt-1">
-                Dựa trên dữ liệu học viên, người học thường gặp khó khăn nhất với phần Kính ngữ (Keigo).
-                Cân nhắc thêm một module chuyên về Ngôn ngữ trang trọng để tăng tỉ lệ hoàn thành khóa học.
-              </p>
-              <button className="mt-2 text-sumire-purple text-xs font-semibold underline underline-offset-4 hover:opacity-70 transition-opacity">
-                Thêm module được gợi ý
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Add New Module button */}
         <button
-          onClick={openAddModule}
+          onClick={openAddUnit}
           className="w-full py-10 bg-white border-2 border-dashed border-outline/25 rounded-2xl flex flex-col items-center justify-center gap-2
             hover:border-tsubaki-red/50 hover:bg-surface-container-low/30 transition-all group"
         >
           <div className="w-11 h-11 rounded-full bg-surface-container-highest/50 group-hover:bg-tsubaki-red group-hover:text-white transition-all flex items-center justify-center">
             <span className="material-symbols-outlined text-2xl">add</span>
           </div>
-          <span className="font-semibold text-on-muted group-hover:text-tsubaki-red transition-colors text-sm">Thêm module mới</span>
-          <p className="text-xs text-outline">Xác định chương học mới trong chương trình giảng dạy</p>
+          <span className="font-semibold text-on-muted group-hover:text-tsubaki-red transition-colors text-sm">Tạo bài học mới</span>
+          <p className="text-xs text-outline">Một bài học chứa nhiều mục: Video, Bài đọc, Từ vựng, Kanji, Ngữ pháp, Quiz</p>
         </button>
       </div>
 
-      {/* ── Module Modal ────────────────────────────────────────────────────── */}
+      {/* Unit modal */}
       <Modal
-        open={moduleModal}
-        onClose={() => setModuleModal(false)}
-        title={editingModule ? 'Chỉnh sửa module' : 'Thêm module mới'}
+        open={unitModal}
+        onClose={() => setUnitModal(false)}
+        title={editingUnit ? 'Chỉnh sửa bài học' : 'Thêm bài học mới'}
         size="sm"
-        footer={
-          <>
-            <Button variant="secondary" onClick={() => setModuleModal(false)}>Hủy</Button>
-            <Button loading={savingModule} onClick={saveModule}>Lưu</Button>
-          </>
-        }
-      >
-        <div>
-          <label className="block text-sm font-medium text-on-muted mb-1">Tiêu đề module *</label>
-          <input
-            type="text"
-            value={moduleForm.title}
-            onChange={e => setModuleForm({ title: e.target.value })}
-            placeholder="VD: Module 1 – Nhập môn"
-            onKeyDown={e => e.key === 'Enter' && saveModule()}
-            className="w-full px-4 py-3 border border-outline rounded-xl text-sm outline-none focus:border-tsubaki-red transition-colors"
-          />
-        </div>
-      </Modal>
-
-      {/* ── Lesson Modal ────────────────────────────────────────────────────── */}
-      <Modal
-        open={lessonModal}
-        onClose={() => setLessonModal(false)}
-        title={editingLesson ? 'Chỉnh sửa bài học' : 'Thêm bài học'}
-        size="md"
-        footer={
-          <>
-            <Button variant="secondary" onClick={() => setLessonModal(false)}>Hủy</Button>
-            <Button loading={savingLesson} onClick={saveLesson}>Lưu</Button>
-          </>
-        }
+        footer={<><Button variant="secondary" onClick={() => setUnitModal(false)}>Hủy</Button><Button loading={savingUnit} onClick={saveUnit}>Lưu</Button></>}
       >
         <div className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-on-muted mb-2">Loại bài học *</label>
-            <LessonTypeSelector
-              value={lessonForm.lesson_type}
-              onChange={v => setLessonForm(f => ({ ...f, lesson_type: v, duration_minutes: '', question_count: '' }))}
-            />
-          </div>
-
-          <div>
             <label className="block text-sm font-medium text-on-muted mb-1">Tiêu đề (Tiếng Việt) *</label>
             <input
-              type="text"
-              value={lessonForm.title}
-              onChange={e => setLessonForm(f => ({ ...f, title: e.target.value }))}
-              placeholder="Nhập tiêu đề bài học..."
+              type="text" value={unitForm.title}
+              onChange={e => setUnitForm(f => ({ ...f, title: e.target.value }))}
+              placeholder="VD: Bài 1 – Chào hỏi"
+              onKeyDown={e => e.key === 'Enter' && saveUnit()}
               className="w-full px-4 py-3 border border-outline rounded-xl text-sm outline-none focus:border-tsubaki-red transition-colors"
             />
           </div>
-
           <div>
             <label className="block text-sm font-medium text-on-muted mb-1">Tiêu đề (Tiếng Nhật)</label>
             <input
-              type="text"
-              value={lessonForm.title_ja}
-              onChange={e => setLessonForm(f => ({ ...f, title_ja: e.target.value }))}
+              type="text" value={unitForm.title_ja}
+              onChange={e => setUnitForm(f => ({ ...f, title_ja: e.target.value }))}
               placeholder="日本語のタイトル"
               className="w-full px-4 py-3 border border-outline rounded-xl text-sm outline-none focus:border-tsubaki-red transition-colors"
             />
           </div>
+        </div>
+      </Modal>
 
-          {isQuizType ? (
+      {/* Item modal */}
+      <Modal
+        open={itemModal}
+        onClose={() => setItemModal(false)}
+        title={editingItem ? 'Chỉnh sửa mục' : 'Thêm mục'}
+        size="md"
+        footer={<><Button variant="secondary" onClick={() => setItemModal(false)}>Hủy</Button><Button loading={savingItem} onClick={saveItem}>Lưu</Button></>}
+      >
+        <div className="space-y-4">
+          {!editingItem && (
+            <div>
+              <label className="block text-sm font-medium text-on-muted mb-2">Loại mục *</label>
+              <LessonTypeSelector
+                value={itemForm.lesson_type}
+                onChange={v => setItemForm(f => ({ ...f, lesson_type: v, duration_minutes: '', question_count: '' }))}
+              />
+            </div>
+          )}
+          <div>
+            <label className="block text-sm font-medium text-on-muted mb-1">Tiêu đề (Tiếng Việt) *</label>
+            <input
+              type="text" value={itemForm.title}
+              onChange={e => setItemForm(f => ({ ...f, title: e.target.value }))}
+              placeholder="Nhập tiêu đề mục..."
+              className="w-full px-4 py-3 border border-outline rounded-xl text-sm outline-none focus:border-tsubaki-red transition-colors"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-on-muted mb-1">Tiêu đề (Tiếng Nhật)</label>
+            <input
+              type="text" value={itemForm.title_ja}
+              onChange={e => setItemForm(f => ({ ...f, title_ja: e.target.value }))}
+              placeholder="日本語のタイトル"
+              className="w-full px-4 py-3 border border-outline rounded-xl text-sm outline-none focus:border-tsubaki-red transition-colors"
+            />
+          </div>
+          {isQuiz ? (
             <div>
               <label className="block text-sm font-medium text-on-muted mb-1">Số câu hỏi</label>
               <input
-                type="number"
-                min="0"
-                value={lessonForm.question_count}
-                onChange={e => setLessonForm(f => ({ ...f, question_count: e.target.value }))}
+                type="number" min="0" value={itemForm.question_count}
+                onChange={e => setItemForm(f => ({ ...f, question_count: e.target.value }))}
                 placeholder="0"
                 className="w-full px-4 py-3 border border-outline rounded-xl text-sm outline-none focus:border-tsubaki-red transition-colors"
               />
@@ -725,10 +571,8 @@ export default function ManageCourseContent() {
             <div>
               <label className="block text-sm font-medium text-on-muted mb-1">Thời lượng (phút)</label>
               <input
-                type="number"
-                min="0"
-                value={lessonForm.duration_minutes}
-                onChange={e => setLessonForm(f => ({ ...f, duration_minutes: e.target.value }))}
+                type="number" min="0" value={itemForm.duration_minutes}
+                onChange={e => setItemForm(f => ({ ...f, duration_minutes: e.target.value }))}
                 placeholder="0"
                 className="w-full px-4 py-3 border border-outline rounded-xl text-sm outline-none focus:border-tsubaki-red transition-colors"
               />

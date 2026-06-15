@@ -61,7 +61,7 @@ export default function AdminLessonGrammar() {
       try {
         const r = await api.get(`/admin/lessons/${lessonId}`);
         setLesson(r.data);
-        setContent(r.data.content || '');
+        setContent(r.data.grammar_notes || '');
       } catch (e) {
         setAlert({ type: 'error', msg: e.message });
       } finally {
@@ -76,7 +76,7 @@ export default function AdminLessonGrammar() {
   const handleSave = async () => {
     setSaving(true);
     try {
-      await api.put(`/admin/lessons/${lessonId}`, { content });
+      await api.put(`/admin/lessons/${lessonId}`, { grammar_notes: content });
       setSaved(true);
       setTimeout(() => setSaved(false), 2500);
     } catch (e) {

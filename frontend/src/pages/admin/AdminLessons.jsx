@@ -8,20 +8,6 @@ import Alert from '../../components/ui/Alert';
 import { useLang } from '../../contexts/LangContext';
 import api from '../../lib/api';
 
-const EMPTY = { course_id: '', title: '', title_ja: '', content: '', order_index: 0, is_published: false };
-
-const LESSON_TYPE_META = {
-  video:      { icon: 'play_circle',    color: 'text-sumire-purple', bg: 'bg-sumire-purple/10', label: 'Video' },
-  reading:    { icon: 'description',    color: 'text-primary',       bg: 'bg-primary/10',       label: 'Reading' },
-  quiz:       { icon: 'quiz',           color: 'text-tsubaki-red',   bg: 'bg-tsubaki-red/10',   label: 'Quiz' },
-  vocabulary: { icon: 'style',          color: 'text-green-600',     bg: 'bg-green-50',         label: 'Vocabulary' },
-  grammar:    { icon: 'spellcheck',     color: 'text-amber-600',     bg: 'bg-amber-50',         label: 'Grammar' },
-  kanji:      { icon: 'translate',      color: 'text-purple-600',    bg: 'bg-purple-50',        label: 'Kanji' },
-  practice:   { icon: 'fitness_center', color: 'text-blue-600',      bg: 'bg-blue-50',          label: 'Practice' },
-};
-
-const CONTENT_TYPES = new Set(['vocabulary', 'grammar', 'quiz', 'reading', 'kanji']);
-
 export default function AdminLessons() {
   const { t } = useLang();
   const navigate = useNavigate();
@@ -66,13 +52,11 @@ export default function AdminLessons() {
 
   // ── CRUD ────────────────────────────────────────────────────────────────────
 
-  const openCreate = () => { setForm(EMPTY); setEditId(null); setModal(true); };
   const openEdit   = (row) => {
     setForm({
       course_id:   row.course_id   || '',
       title:       row.title       || '',
       title_ja:    row.title_ja    || '',
-      content:     row.content     || '',
       order_index: row.order_index || 0,
       is_published: row.is_published || false,
     });
@@ -84,8 +68,7 @@ export default function AdminLessons() {
     if (!form.title || !form.course_id) return setAlert({ type: 'error', msg: 'Vui lòng điền đầy đủ thông tin.' });
     setSaving(true);
     try {
-      if (editId) await api.put(`/admin/lessons/${editId}`, form);
-      else        await api.post('/admin/lessons', form);
+      await api.put(`/admin/lessons/${editId}`, form);
       setAlert({ type: 'success', msg: 'Đã lưu.' });
       setModal(false);
       fetchData();
@@ -107,14 +90,9 @@ export default function AdminLessons() {
     }
   };
 
-  const handleEditContent = (row) => {
-    const routes = { vocabulary: 'vocabulary', grammar: 'grammar', quiz: 'quiz', reading: 'reading', kanji: 'kanji' };
-    const seg = routes[row.lesson_type];
-    if (seg) navigate(`/admin/lessons/${row.id}/${seg}`);
-  };
-
+  // Mở Course Builder — nơi soạn các phần (từ vựng, kanji, ngữ pháp, reading, quiz) của bài học.
   const handleGoToCourse = (row) => {
-    if (row.courses?.id) navigate(`/admin/courses/${row.courses.id}/edit`);
+    if (row.course_id) navigate(`/admin/courses/${row.course_id}/edit`);
   };
 
   // ── Render ───────────────────────────────────────────────────────────────────
@@ -142,9 +120,9 @@ export default function AdminLessons() {
             <option value="">Tất cả khoá học</option>
             {courses.map(c => <option key={c.id} value={c.id}>{c.title}</option>)}
           </select>
-          <Button onClick={openCreate}>
+          <Button variant="secondary" onClick={() => navigate('/admin/courses')}>
             <span className="material-symbols-outlined text-lg">add</span>
-            {t('admin.create')}
+            Tạo trong khóa học
           </Button>
         </div>
       </div>
@@ -152,10 +130,9 @@ export default function AdminLessons() {
       {/* Table */}
       <div className="bg-white rounded-2xl border border-outline/20 shadow-sm overflow-hidden">
         {/* Table header */}
-        <div className="grid grid-cols-[2fr_1.5fr_1.5fr_1fr_auto] gap-4 px-5 py-3 bg-surface-stone border-b border-outline/10 text-xs font-bold text-on-muted uppercase tracking-wider">
+        <div className="grid grid-cols-[2fr_1.5fr_1fr_auto] gap-4 px-5 py-3 bg-surface-stone border-b border-outline/10 text-xs font-bold text-on-muted uppercase tracking-wider">
           <span>Tiêu đề</span>
           <span>Khóa học</span>
-          <span>Module</span>
           <span>Trạng thái</span>
           <span className="text-right pr-1">Thao tác</span>
         </div>
@@ -172,35 +149,28 @@ export default function AdminLessons() {
           </div>
         ) : (
           data.map((row) => {
-            const meta = LESSON_TYPE_META[row.lesson_type] || LESSON_TYPE_META.reading;
-            const hasContent = CONTENT_TYPES.has(row.lesson_type);
             const courseTitle = row.courses?.title || '—';
             const courseLevel = row.courses?.level;
-            const moduleTitle = row.modules?.title;
 
             return (
               <div
                 key={row.id}
-                className="grid grid-cols-[2fr_1.5fr_1.5fr_1fr_auto] gap-4 px-5 py-3.5 border-b border-outline/10 last:border-0 hover:bg-surface-stone/50 transition-colors items-center group"
+                className="grid grid-cols-[2fr_1.5fr_1fr_auto] gap-4 px-5 py-3.5 border-b border-outline/10 last:border-0 hover:bg-surface-stone/50 transition-colors items-center group"
               >
-                {/* Title + type */}
+                {/* Title */}
                 <div className="flex items-center gap-3 min-w-0">
-                  <span className={`material-symbols-outlined text-xl shrink-0 ${meta.color}`}>
-                    {meta.icon}
-                  </span>
+                  <span className="material-symbols-outlined text-xl shrink-0 text-tsubaki-red">menu_book</span>
                   <div
-                    className={`min-w-0 ${hasContent ? 'cursor-pointer group/title' : ''}`}
-                    onClick={() => hasContent && handleEditContent(row)}
+                    className="min-w-0 cursor-pointer group/title"
+                    onClick={() => handleGoToCourse(row)}
+                    title="Mở Course Builder"
                   >
-                    <p className={`font-medium text-sm truncate transition-colors ${hasContent ? 'text-on-surface group-hover/title:text-tsubaki-red' : 'text-on-surface'}`}>
+                    <p className="font-medium text-sm truncate text-on-surface group-hover/title:text-tsubaki-red transition-colors">
                       {row.title}
                     </p>
                     {row.title_ja && (
                       <p className="text-xs text-on-muted truncate">{row.title_ja}</p>
                     )}
-                    <span className={`inline-flex items-center gap-0.5 mt-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-semibold ${meta.bg} ${meta.color}`}>
-                      {meta.label}
-                    </span>
                   </div>
                 </div>
 
@@ -220,22 +190,6 @@ export default function AdminLessons() {
                   )}
                 </div>
 
-                {/* Module */}
-                <div className="min-w-0">
-                  {moduleTitle ? (
-                    <span
-                      className="inline-flex items-center gap-1 text-xs text-on-muted bg-surface-container px-2.5 py-1 rounded-lg truncate max-w-full cursor-pointer hover:bg-surface-stone hover:text-on-surface transition-colors"
-                      onClick={() => handleGoToCourse(row)}
-                      title="Mở Course Builder"
-                    >
-                      <span className="material-symbols-outlined text-[12px]">folder</span>
-                      {moduleTitle}
-                    </span>
-                  ) : (
-                    <span className="text-xs text-on-muted/40 italic">Chưa gắn module</span>
-                  )}
-                </div>
-
                 {/* Status */}
                 <div>
                   <span className={`text-xs px-2.5 py-1 rounded-full font-bold ${
@@ -249,15 +203,13 @@ export default function AdminLessons() {
 
                 {/* Actions */}
                 <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  {hasContent && (
-                    <button
-                      onClick={() => handleEditContent(row)}
-                      title="Chỉnh sửa nội dung"
-                      className="p-1.5 text-on-muted hover:text-sumire-purple hover:bg-sumire-purple/10 rounded-lg transition-colors"
-                    >
-                      <span className="material-symbols-outlined text-[18px]">edit_note</span>
-                    </button>
-                  )}
+                  <button
+                    onClick={() => handleGoToCourse(row)}
+                    title="Soạn nội dung trong Course Builder"
+                    className="p-1.5 text-on-muted hover:text-sumire-purple hover:bg-sumire-purple/10 rounded-lg transition-colors"
+                  >
+                    <span className="material-symbols-outlined text-[18px]">edit_note</span>
+                  </button>
                   <button
                     onClick={() => openEdit(row)}
                     title="Chỉnh sửa thông tin"
@@ -329,16 +281,6 @@ export default function AdminLessons() {
           <Input label="Tiêu đề *" value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} />
           <Input label="Tiêu đề (JA)" value={form.title_ja} onChange={e => setForm({ ...form, title_ja: e.target.value })} />
           <Input label="Thứ tự" type="number" value={form.order_index} onChange={e => setForm({ ...form, order_index: Number(e.target.value) })} />
-          <div>
-            <label className="block text-sm font-medium text-on-muted mb-1">Nội dung</label>
-            <textarea
-              value={form.content}
-              onChange={e => setForm({ ...form, content: e.target.value })}
-              rows={4}
-              className="w-full px-4 py-3 bg-white border border-outline rounded-xl text-sm outline-none focus:border-tsubaki-red resize-none"
-              placeholder="Nội dung HTML hoặc văn bản..."
-            />
-          </div>
           <label className="flex items-center gap-2 cursor-pointer">
             <input
               type="checkbox"
@@ -348,6 +290,12 @@ export default function AdminLessons() {
             />
             <span className="text-sm font-medium">{t('admin.published')}</span>
           </label>
+          {editId && (
+            <p className="text-xs text-on-muted bg-surface-stone/60 rounded-lg p-3">
+              <span className="material-symbols-outlined text-sm align-middle mr-1">info</span>
+              Soạn từ vựng, kanji, ngữ pháp, reading và quiz của bài học trong Course Builder.
+            </p>
+          )}
         </div>
       </Modal>
     </AdminLayout>
