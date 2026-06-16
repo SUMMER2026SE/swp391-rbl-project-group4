@@ -21,6 +21,15 @@ const STATUS_LABELS = {
     pending_review:  { label: 'Chờ chấm',     cls: 'bg-amber-100 text-amber-700' },
 };
 
+const PROCTOR_VI = {
+    fullscreen_exit: 'Thoát toàn màn hình',
+    tab_hidden:      'Rời tab/cửa sổ',
+    no_face:         'Không thấy mặt',
+    multiple_faces:  'Nhiều người',
+    looking_away:    'Không nhìn màn hình',
+    camera_lost:     'Mất webcam',
+};
+
 function toLocalInput(iso) {
     if (!iso) return '';
     const d = new Date(iso);
@@ -392,6 +401,37 @@ function GradeModal({ open, onClose, attemptId, onGraded }) {
                         <p className="font-semibold">{attempt.student?.full_name || attempt.student?.email}</p>
                         <p className="text-sm text-on-muted">{attempt.exam_title} · Lần {attempt.attempt_number} · Tự chấm: {attempt.score}/{attempt.total_questions}</p>
                     </div>
+
+                    {/* Log giám sát (đề thi chế độ giám sát) */}
+                    {attempt.mode === 'proctored' && (
+                        <div className="rounded-xl border border-outline p-3">
+                            <div className="flex items-center gap-2 mb-2">
+                                <span className="material-symbols-outlined text-base text-tsubaki-red">policy</span>
+                                <p className="text-sm font-semibold">Giám sát</p>
+                                <span className={`ml-auto px-2 py-0.5 rounded-full text-xs font-bold ${attempt.violation_count > 0 ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                                    {attempt.violation_count > 0 ? `${attempt.violation_count} vi phạm` : 'Không vi phạm'}
+                                </span>
+                            </div>
+                            {Array.isArray(attempt.proctor_events) && attempt.proctor_events.length > 0 && (
+                                <div className="flex flex-wrap gap-1.5 mb-2">
+                                    {attempt.proctor_events.map((ev, i) => (
+                                        <span key={i} className="text-[11px] px-2 py-0.5 rounded-full bg-red-50 border border-red-200 text-red-700">
+                                            {PROCTOR_VI[ev.type] || ev.type} · {ev.at ? new Date(ev.at).toLocaleTimeString('vi-VN') : ''}
+                                        </span>
+                                    ))}
+                                </div>
+                            )}
+                            {Array.isArray(attempt.snapshot_urls) && attempt.snapshot_urls.length > 0 ? (
+                                <div className="flex flex-wrap gap-2">
+                                    {attempt.snapshot_urls.map((url, i) => (
+                                        <a key={i} href={url} target="_blank" rel="noreferrer">
+                                            <img src={url} alt="snapshot" className="w-20 h-16 rounded-lg object-cover border border-outline/30 hover:ring-2 hover:ring-tsubaki-red" />
+                                        </a>
+                                    ))}
+                                </div>
+                            ) : <p className="text-xs text-on-muted">Không có ảnh webcam.</p>}
+                        </div>
+                    )}
 
                     {shortAnswerQs.length > 0 && (
                         <div className="space-y-3">

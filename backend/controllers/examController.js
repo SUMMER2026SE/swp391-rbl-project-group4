@@ -368,7 +368,15 @@ exports.getAttempt = async (req, res) => {
             .eq('quiz_id', attempt.quiz_id).order('order_index');
         const { data: student } = await supabaseAdmin.from('users').select('id,full_name,email').eq('id', attempt.user_id).single();
 
-        res.json({ ...attempt, exam_title: exam.title, questions: questions || [], student: student || {} });
+        // Ảnh giám sát (bucket riêng tư) → signed URL hết hạn sau 1 giờ
+        let snapshot_urls = [];
+        if (Array.isArray(attempt.snapshots) && attempt.snapshots.length > 0) {
+            const { data: signed } = await supabaseAdmin.storage
+                .from('proctor-snapshots').createSignedUrls(attempt.snapshots, 3600);
+            snapshot_urls = (signed || []).map(s => s.signedUrl).filter(Boolean);
+        }
+
+        res.json({ ...attempt, exam_title: exam.title, questions: questions || [], student: student || {}, snapshot_urls });
     } catch (err) {
         res.status(500).json({ error: 'Không thể tải bài làm.' });
     }
