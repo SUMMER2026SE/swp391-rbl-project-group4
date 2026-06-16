@@ -52,13 +52,14 @@ exports.listMyExams = async (req, res) => {
 
 // POST /api/exams/teacher  — tạo đề thi (nền tảng cho UC42-46)
 exports.createExam = async (req, res) => {
-    const { title, title_ja, description, time_limit } = req.body;
+    const { title, title_ja, description, time_limit, mode } = req.body;
     if (!title) return res.status(400).json({ error: 'Tiêu đề đề thi là bắt buộc.' });
     try {
         const { data, error } = await examDb.from('quizzes')
             .insert({
                 title, title_ja: title_ja || null, description: description || null,
                 time_limit: time_limit || null, type: 'multiple_choice',
+                mode: mode === 'proctored' ? 'proctored' : 'normal',
                 is_exam: true, is_published: true, teacher_id: req.user.id,
             })
             .select().single();
@@ -88,7 +89,7 @@ exports.updateExam = async (req, res) => {
     try {
         const exam = await getOwnedExam(req.params.id, req.user.id);
         if (!exam) return res.status(403).json({ error: 'Không có quyền với đề thi này.' });
-        const allowed = ['title', 'title_ja', 'description', 'time_limit'];
+        const allowed = ['title', 'title_ja', 'description', 'time_limit', 'mode'];
         const updates = Object.fromEntries(Object.entries(req.body).filter(([k]) => allowed.includes(k)));
         const { data, error } = await examDb.from('quizzes').update(updates).eq('id', req.params.id).select().single();
         if (error) throw error;
@@ -322,7 +323,7 @@ exports.listAttempts = async (req, res) => {
         if (!exam) return res.status(403).json({ error: 'Không có quyền với đề thi này.' });
 
         const { data: attempts, error } = await examDb.from('quiz_attempts')
-            .select('id,user_id,assignment_id,score,total_questions,manual_score,status,attempt_number,completed_at,graded_at')
+            .select('id,user_id,assignment_id,score,total_questions,manual_score,status,attempt_number,completed_at,graded_at,violation_count')
             .eq('quiz_id', req.params.id).order('completed_at', { ascending: false });
         if (error) throw error;
         if (!attempts || attempts.length === 0) return res.json([]);
@@ -525,7 +526,7 @@ exports.getAssignedExam = async (req, res) => {
             return res.status(403).json({ error: 'Bạn đã hết số lần làm bài cho phép.' });
 
         const { data: exam } = await examDb.from('quizzes')
-            .select('id,title,title_ja,description,time_limit').eq('id', assignment.exam_id).single();
+            .select('id,title,title_ja,description,time_limit,mode').eq('id', assignment.exam_id).single();
         if (!exam) return res.status(404).json({ error: 'Không tìm thấy đề thi.' });
 
         // Không gửi đáp án đúng cho học sinh
@@ -548,7 +549,7 @@ exports.getAssignedExam = async (req, res) => {
 
 // POST /api/exams/student/:assignmentId/attempt
 exports.submitExamAttempt = async (req, res) => {
-    const { answers } = req.body;
+    const { answers, violation_count, proctor_events, snapshots } = req.body;
     try {
         const { assignment, error, code } = await getEnrolledAssignment(req.params.assignmentId, req.user.id);
         if (error) return res.status(code).json({ error });
@@ -561,6 +562,10 @@ exports.submitExamAttempt = async (req, res) => {
             .eq('assignment_id', assignment.id).eq('user_id', req.user.id);
         if ((count || 0) >= (assignment.max_attempts || 1))
             return res.status(403).json({ error: 'Bạn đã hết số lần làm bài cho phép.' });
+
+        // Đề thi ở chế độ giám sát?
+        const { data: exam } = await examDb.from('quizzes').select('mode').eq('id', assignment.exam_id).single();
+        const isProctored = exam?.mode === 'proctored';
 
         const { data: questions } = await examDb.from('quiz_questions')
             .select('id,question_type,options,correct_answer,correct_answer_data')
@@ -579,6 +584,10 @@ exports.submitExamAttempt = async (req, res) => {
             score, total_questions: questions.length, answers: answers || {},
             assignment_id: assignment.id, attempt_number: (count || 0) + 1,
             status: hasShortAnswer ? 'pending_review' : 'graded',
+            mode: exam?.mode || 'normal',
+            violation_count: isProctored ? (Number(violation_count) || 0) : 0,
+            proctor_events:  isProctored && Array.isArray(proctor_events) ? proctor_events : null,
+            snapshots:       isProctored && Array.isArray(snapshots) ? snapshots : null,
         }).select().single();
         if (insErr) throw insErr;
 

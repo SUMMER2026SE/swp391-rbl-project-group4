@@ -5,6 +5,7 @@ import Button from '../../components/ui/Button';
 import Alert from '../../components/ui/Alert';
 import FuriganaText from '../../components/ui/FuriganaText';
 import api from '../../lib/api';
+import { useProctoring } from '../../lib/useProctoring';
 
 function shuffle(arr) {
     const a = [...arr];
@@ -29,6 +30,10 @@ export default function TakeExam() {
     const [furigana, setFurigana] = useState(false);
     const [shuffledRights, setShuffledRights] = useState({});
 
+    const isProctored = exam?.mode === 'proctored';
+    const proctor     = useProctoring(exam?.id, { enabled: isProctored });
+    const examStarted = !isProctored || proctor.status === 'active';
+
     useEffect(() => {
         api.get(`/exams/student/${assignmentId}`)
             .then(r => {
@@ -46,7 +51,7 @@ export default function TakeExam() {
     }, [assignmentId]);
 
     useEffect(() => {
-        if (timeLeft === null || timeLeft <= 0 || result) return;
+        if (timeLeft === null || timeLeft <= 0 || result || !examStarted) return;
         const timer = setInterval(() => {
             setTimeLeft(t => {
                 if (t <= 1) {
@@ -57,7 +62,7 @@ export default function TakeExam() {
             });
         }, 1000);
         return () => clearInterval(timer);
-    }, [timeLeft === null, !!result]); // eslint-disable-line
+    }, [timeLeft === null, !!result, examStarted]); // eslint-disable-line
 
 // Auto-submit khi hết giờ
     useEffect(() => {
@@ -70,7 +75,10 @@ export default function TakeExam() {
         if (submitting) return;
         setSubmitting(true);
         try {
-            const r = await api.post(`/exams/student/${assignmentId}/attempt`, { answers });
+            const payload = { answers };
+            if (isProctored) Object.assign(payload, proctor.getProctorData());
+            const r = await api.post(`/exams/student/${assignmentId}/attempt`, payload);
+            if (isProctored) proctor.stop();
             setResult(r.data);
         } catch (e) {
             setError(e.message);
@@ -88,6 +96,38 @@ export default function TakeExam() {
             </Link>
         </StudentLayout>
     );
+
+    // Phòng thi giám sát: màn hình chờ cấp quyền (toàn màn hình + webcam)
+    if (isProctored && !examStarted && !result) {
+        return (
+            <StudentLayout title={exam?.title}>
+                <div className="max-w-lg mx-auto">
+                    <div className="glass-card rounded-2xl p-8">
+                        <div className="text-center mb-6">
+                            <span className="material-symbols-outlined text-5xl text-tsubaki-red block mb-2" style={{ fontVariationSettings: "'FILL' 1" }}>verified_user</span>
+                            <h1 className="font-display text-2xl font-bold">Đề thi có giám sát</h1>
+                            <p className="text-sm text-on-muted mt-1">{exam?.title}</p>
+                        </div>
+                        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-900 space-y-2 mb-6">
+                            <p className="font-semibold flex items-center gap-1.5"><span className="material-symbols-outlined text-base">info</span> Quy định phòng thi</p>
+                            <ul className="space-y-1.5 list-disc list-inside text-amber-800">
+                                <li>Bài thi sẽ chuyển sang <strong>toàn màn hình</strong>.</li>
+                                <li>Cần bật <strong>webcam</strong> trong suốt quá trình làm bài.</li>
+                                <li>Thoát toàn màn hình, chuyển tab, rời khỏi khung hình → <strong>ghi nhận vi phạm</strong> và báo giáo viên.</li>
+                                <li>Hệ thống tự chụp ảnh định kỳ để giám sát.</li>
+                            </ul>
+                        </div>
+                        {proctor.status === 'denied' && <Alert type="error" className="mb-4">{proctor.errorMsg}</Alert>}
+                        <Button onClick={proctor.start} loading={proctor.status === 'requesting'} className="w-full">
+                            <span className="material-symbols-outlined text-lg">play_circle</span>
+                            {proctor.status === 'denied' ? 'Thử lại — Vào phòng thi' : 'Tôi đã hiểu — Bắt đầu thi'}
+                        </Button>
+                        <button onClick={() => navigate('/exams')} className="w-full mt-3 text-sm text-on-muted hover:text-charcoal">Quay lại</button>
+                    </div>
+                </div>
+            </StudentLayout>
+        );
+    }
 
     const questions = exam?.questions || [];
     const q         = questions[current];
@@ -131,6 +171,38 @@ export default function TakeExam() {
 
     return (
         <StudentLayout title={exam?.title}>
+            {isProctored && examStarted && (
+                <>
+                    <div className="fixed bottom-4 right-4 z-40 bg-charcoal/90 rounded-xl p-2 shadow-2xl w-44">
+                        <video ref={proctor.videoRef} muted playsInline style={{ transform: 'scaleX(-1)' }} className="w-full rounded-lg bg-black aspect-[4/3] object-cover" />
+                        <div className="flex items-center justify-between mt-1.5 px-0.5">
+                            <span className={`text-[10px] font-bold flex items-center gap-1 ${proctor.faceStatus === 'ok' ? 'text-emerald-400' : proctor.faceStatus === 'unknown' ? 'text-white/50' : 'text-red-400'}`}>
+                                <span className="material-symbols-outlined text-[13px]">
+                                    {proctor.faceStatus === 'ok' ? 'face' : proctor.faceStatus === 'multiple' ? 'groups' : proctor.faceStatus === 'away' ? 'visibility_off' : 'no_accounts'}
+                                </span>
+                                {proctor.faceStatus === 'ok' ? 'Đang giám sát' : proctor.faceStatus === 'no_face' ? 'Không thấy mặt' : proctor.faceStatus === 'multiple' ? 'Nhiều người' : proctor.faceStatus === 'away' ? 'Nhìn ra ngoài' : 'Đang tải...'}
+                            </span>
+                            {proctor.violations > 0 && (
+                                <span className="text-[10px] font-bold text-red-400 flex items-center gap-0.5"><span className="material-symbols-outlined text-[13px]">warning</span>{proctor.violations}</span>
+                            )}
+                        </div>
+                    </div>
+                    {!proctor.isFullscreen && (
+                        <div className="fixed inset-0 z-50 bg-charcoal/95 backdrop-blur-xl flex items-center justify-center p-6">
+                            <div className="text-center max-w-sm">
+                                <span className="material-symbols-outlined text-6xl text-amber-400 block mb-4">visibility_off</span>
+                                <h2 className="font-display text-2xl font-bold text-white mb-2">Nội dung bị ẩn</h2>
+                                <p className="text-white/70 text-sm mb-2">Bạn đã thoát toàn màn hình. Vi phạm này đã được ghi nhận.</p>
+                                <p className="text-red-400 text-sm font-semibold mb-6">Số lần vi phạm: {proctor.violations}</p>
+                                <Button onClick={proctor.reenterFullscreen} className="w-full">
+                                    <span className="material-symbols-outlined text-lg">fullscreen</span> Quay lại toàn màn hình để tiếp tục
+                                </Button>
+                            </div>
+                        </div>
+                    )}
+                </>
+            )}
+
             <div className="max-w-2xl mx-auto">
                 {error && <Alert type="error" className="mb-4">{error}</Alert>}
 

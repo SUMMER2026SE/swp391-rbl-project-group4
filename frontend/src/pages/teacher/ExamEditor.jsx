@@ -472,6 +472,7 @@ function ResultsTab({ exam }) {
                             <th className="p-3 font-medium">Lần</th>
                             <th className="p-3 font-medium">Điểm</th>
                             <th className="p-3 font-medium">Trạng thái</th>
+                            <th className="p-3 font-medium">Vi phạm</th>
                             <th className="p-3 font-medium">Nộp lúc</th>
                             <th className="p-3 font-medium"></th>
                         </tr>
@@ -487,6 +488,11 @@ function ResultsTab({ exam }) {
                                     <td className="p-3 text-on-muted">{a.attempt_number}</td>
                                     <td className="p-3 font-semibold">{finalScore}/{a.total_questions}</td>
                                     <td className="p-3"><span className={`px-2 py-0.5 rounded-full text-xs font-bold ${st.cls}`}>{st.label}</span></td>
+                                    <td className="p-3">
+                                        {a.violation_count > 0
+                                            ? <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-red-100 text-red-700 inline-flex items-center gap-0.5"><span className="material-symbols-outlined text-[13px]">warning</span>{a.violation_count}</span>
+                                            : <span className="text-on-muted">—</span>}
+                                    </td>
                                     <td className="p-3 text-on-muted">{a.completed_at ? new Date(a.completed_at).toLocaleString('vi-VN') : '—'}</td>
                                     <td className="p-3">
                                         <button onClick={() => setGradingId(a.id)} className="text-tsubaki-red font-semibold hover:underline">
@@ -537,6 +543,13 @@ export default function ExamEditor() {
 
     useEffect(() => { load(); }, [id]);
 
+    const changeMode = async (mode) => {
+        if (!exam || exam.mode === mode) return;
+        setExam(e => ({ ...e, mode }));
+        try { await api.put(`/exams/teacher/${id}`, { mode }); }
+        catch { setExam(e => ({ ...e, mode: mode === 'proctored' ? 'normal' : 'proctored' })); }
+    };
+
     if (loading) return <TeacherLayout title="Đề thi"><div className="flex justify-center py-16"><span className="material-symbols-outlined animate-spin text-tsubaki-red text-4xl">progress_activity</span></div></TeacherLayout>;
     if (error || !exam) return <TeacherLayout title="Đề thi"><Alert>{error || 'Không tìm thấy đề thi.'}</Alert></TeacherLayout>;
 
@@ -546,7 +559,18 @@ export default function ExamEditor() {
                 <span className="material-symbols-outlined text-base">arrow_back</span> Quay lại danh sách đề thi
             </Link>
             <h1 className="font-display text-2xl font-bold mb-1">{exam.title}</h1>
-            {exam.description && <p className="text-sm text-on-muted mb-5">{exam.description}</p>}
+            {exam.description && <p className="text-sm text-on-muted mb-3">{exam.description}</p>}
+
+            {/* Chế độ thi: thường / giám sát */}
+            <div className="flex items-center gap-2 mb-5">
+                <span className="text-sm text-on-muted">Hình thức:</span>
+                {[['normal','Thường','edit_note'],['proctored','Giám sát','verified_user']].map(([v, l, ic]) => (
+                    <button key={v} onClick={() => changeMode(v)}
+                        className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm font-medium border-2 transition-all ${exam.mode === v ? 'border-tsubaki-red bg-tsubaki-red/5 text-tsubaki-red' : 'border-outline text-on-muted hover:bg-surface-low'}`}>
+                        <span className="material-symbols-outlined text-base">{ic}</span>{l}
+                    </button>
+                ))}
+            </div>
 
             <div className="flex gap-2 mb-5 border-b border-outline/30">
                 {TABS.map(t => (
