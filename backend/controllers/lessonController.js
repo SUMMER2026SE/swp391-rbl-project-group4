@@ -28,13 +28,25 @@ exports.getOne = async (req, res) => {
       .from('lessons').select('*').eq('id', id).single();
     if (error || !lesson) return res.status(404).json({ error: 'Không tìm thấy mục học.' });
 
+    // Từ vựng & kanji của Mục lấy qua bảng nối (nhiều–nhiều)
+    const [{ data: vocabLinks }, { data: kanjiLinks }] = await Promise.all([
+      contentDb.from('lesson_vocabulary').select('vocabulary_id').eq('lesson_id', id),
+      contentDb.from('lesson_kanji').select('kanji_id').eq('lesson_id', id),
+    ]);
+    const vocabIds = (vocabLinks || []).map(l => l.vocabulary_id);
+    const kanjiIds = (kanjiLinks || []).map(l => l.kanji_id);
+
     const [{ data: vocab }, { data: kanji }, { data: quiz }, order, { data: progress }] = await Promise.all([
-      supabaseAdmin.from('vocabulary')
-        .select('id,kanji,reading,meaning_vi,meaning_ja,type,example_sentence')
-        .eq('lesson_id', id).order('created_at'),
-      supabaseAdmin.from('kanji')
-        .select('id,character,reading_on,reading_kun,meaning_vi,stroke_count,level,han_viet')
-        .eq('lesson_id', id).order('created_at'),
+      vocabIds.length
+        ? supabaseAdmin.from('vocabulary')
+            .select('id,kanji,reading,meaning_vi,meaning_ja,type,example_sentence')
+            .in('id', vocabIds).order('created_at')
+        : Promise.resolve({ data: [] }),
+      kanjiIds.length
+        ? supabaseAdmin.from('kanji')
+            .select('id,character,reading_on,reading_kun,meaning_vi,stroke_count,level,han_viet')
+            .in('id', kanjiIds).order('created_at')
+        : Promise.resolve({ data: [] }),
       examDb.from('quizzes')
         .select('id,title,time_limit,type')
         .eq('lesson_id', id)

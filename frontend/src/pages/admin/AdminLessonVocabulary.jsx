@@ -76,8 +76,8 @@ function VocabCard({ item, onEdit, onDelete }) {
           onClick={() => onDelete(item)}
           className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl border border-outline/30 text-sm text-on-muted hover:border-error hover:text-error transition-colors"
         >
-          <span className="material-symbols-outlined text-base">delete</span>
-          Xóa
+          <span className="material-symbols-outlined text-base">link_off</span>
+          Gỡ
         </button>
       </div>
     </article>
@@ -186,6 +186,14 @@ export default function AdminLessonVocabulary() {
   const [editId, setEditId]   = useState(null);
   const [saving, setSaving]   = useState(false);
 
+  // Picker "Thêm từ thư viện"
+  const [picker, setPicker]       = useState(false);
+  const [pickerSearch, setSearch] = useState('');
+  const [pickerList, setList]     = useState([]);
+  const [pickerLoad, setPLoad]    = useState(false);
+  const [selected, setSelected]   = useState({});   // { [id]: true }
+  const [attaching, setAttaching] = useState(false);
+
   // ── Load data ───────────────────────────────────────────────────────────────
 
   const load = async () => {
@@ -253,16 +261,61 @@ export default function AdminLessonVocabulary() {
     }
   };
 
+  // Gỡ khỏi bài (không xóa từ gốc trong thư viện)
   const handleDelete = async (item) => {
-    if (!confirm(`Xóa từ "${item.kanji || item.reading}"?`)) return;
+    if (!confirm(`Gỡ từ "${item.kanji || item.reading}" khỏi bài này? (Từ vẫn còn trong thư viện)`)) return;
     try {
-      await api.delete(`/admin/vocabulary/${item.id}`);
+      await api.delete(`/admin/lessons/${lessonId}/vocabulary/${item.id}`);
       setVocab(v => v.filter(x => x.id !== item.id));
-      setAlert({ type: 'success', msg: 'Đã xóa.' });
+      setAlert({ type: 'success', msg: 'Đã gỡ khỏi bài.' });
     } catch (e) {
       setAlert({ type: 'error', msg: e.message });
     }
   };
+
+  // ── Picker: thêm từ thư viện ──────────────────────────────────────────────────
+
+  const fetchPicker = async (term) => {
+    setPLoad(true);
+    try {
+      const params = new URLSearchParams({ limit: 50 });
+      if (term?.trim()) params.set('search', term.trim());
+      const r = await api.get(`/admin/vocabulary?${params}`);
+      setList(r.data.data || []);
+    } catch (e) {
+      setAlert({ type: 'error', msg: e.message });
+    } finally {
+      setPLoad(false);
+    }
+  };
+
+  const openPicker = () => {
+    setSelected({});
+    setSearch('');
+    setPicker(true);
+    fetchPicker('');
+  };
+
+  const togglePick = (id) =>
+    setSelected(s => ({ ...s, [id]: !s[id] }));
+
+  const handleAttach = async () => {
+    const ids = Object.keys(selected).filter(id => selected[id]);
+    if (ids.length === 0) return setAlert({ type: 'error', msg: 'Chưa chọn từ nào.' });
+    setAttaching(true);
+    try {
+      await api.post(`/admin/lessons/${lessonId}/vocabulary/attach`, { ids });
+      setPicker(false);
+      await load();
+      setAlert({ type: 'success', msg: `Đã thêm ${ids.length} từ vào bài.` });
+    } catch (e) {
+      setAlert({ type: 'error', msg: e.message });
+    } finally {
+      setAttaching(false);
+    }
+  };
+
+  const inLesson = new Set(vocab.map(v => v.id));
 
   // ── Back navigation ─────────────────────────────────────────────────────────
 
@@ -315,10 +368,16 @@ export default function AdminLessonVocabulary() {
           </p>
         </div>
 
-        <Button onClick={openCreate} className="shrink-0">
-          <span className="material-symbols-outlined text-base">add</span>
-          Thêm từ vựng
-        </Button>
+        <div className="flex gap-2 shrink-0">
+          <Button variant="secondary" onClick={openPicker}>
+            <span className="material-symbols-outlined text-base">library_add</span>
+            Thêm từ thư viện
+          </Button>
+          <Button onClick={openCreate}>
+            <span className="material-symbols-outlined text-base">add</span>
+            Thêm thủ công
+          </Button>
+        </div>
       </section>
 
       {/* Progress bar */}
@@ -388,6 +447,62 @@ export default function AdminLessonVocabulary() {
         }
       >
         <VocabForm form={form} onChange={setForm} />
+      </Modal>
+
+      {/* Picker thư viện */}
+      <Modal
+        open={picker}
+        onClose={() => setPicker(false)}
+        title="Thêm từ vựng từ thư viện"
+        size="lg"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setPicker(false)}>Hủy</Button>
+            <Button loading={attaching} onClick={handleAttach}>
+              Thêm đã chọn ({Object.values(selected).filter(Boolean).length})
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <div className="relative">
+            <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-muted text-xl">search</span>
+            <input
+              value={pickerSearch}
+              onChange={e => setSearch(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && fetchPicker(pickerSearch)}
+              placeholder="Tìm theo kanji, cách đọc hoặc nghĩa... (Enter để tìm)"
+              className="w-full pl-11 pr-4 py-3 border border-outline rounded-xl text-sm outline-none focus:border-tsubaki-red transition-colors"
+            />
+          </div>
+
+          {pickerLoad ? (
+            <div className="flex justify-center py-12">
+              <span className="material-symbols-outlined animate-spin text-tsubaki-red text-4xl">progress_activity</span>
+            </div>
+          ) : (
+            <div className="max-h-[50vh] overflow-y-auto divide-y divide-outline/15 border border-outline/20 rounded-xl">
+              {pickerList.filter(it => !inLesson.has(it.id)).length === 0 ? (
+                <p className="text-sm text-on-muted text-center py-10">Không có từ phù hợp (hoặc đã có trong bài).</p>
+              ) : (
+                pickerList.filter(it => !inLesson.has(it.id)).map(it => (
+                  <label key={it.id} className="flex items-center gap-3 px-4 py-3 hover:bg-surface-stone/50 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={!!selected[it.id]}
+                      onChange={() => togglePick(it.id)}
+                      className="w-4 h-4 accent-tsubaki-red shrink-0"
+                    />
+                    <span className="text-lg font-bold text-on-surface w-28 shrink-0 truncate">{it.kanji || it.reading}</span>
+                    <span className="text-sm text-on-muted w-28 shrink-0 truncate">{it.reading}</span>
+                    <span className="text-sm flex-1 truncate">{it.meaning_vi}</span>
+                    {it.level && <span className={`text-xs px-2 py-0.5 rounded-full font-bold shrink-0 ${LEVEL_COLOR[it.level] || 'bg-gray-100 text-gray-600'}`}>{it.level}</span>}
+                  </label>
+                ))
+              )}
+            </div>
+          )}
+        </div>
       </Modal>
     </AdminLayout>
   );

@@ -46,7 +46,6 @@ import ExamEditor        from './pages/teacher/ExamEditor';
 import AdminDashboard  from './pages/admin/AdminDashboard';
 import AdminUsers      from './pages/admin/AdminUsers';
 import AdminCourses    from './pages/admin/AdminCourses';
-import AdminLessons    from './pages/admin/AdminLessons';
 import AdminVocabulary from './pages/admin/AdminVocabulary';
 import AdminKanji      from './pages/admin/AdminKanji';
 import AdminQuizzes      from './pages/admin/AdminQuizzes';
@@ -128,7 +127,6 @@ export default function App() {
             <Route path="/admin"             element={<AdminRoute><AdminDashboard /></AdminRoute>} />
             <Route path="/admin/users"       element={<AdminRoute><AdminUsers /></AdminRoute>} />
             <Route path="/admin/courses"     element={<AdminRoute><AdminCourses /></AdminRoute>} />
-            <Route path="/admin/lessons"     element={<AdminRoute><AdminLessons /></AdminRoute>} />
             <Route path="/admin/vocabulary"  element={<AdminRoute><AdminVocabulary /></AdminRoute>} />
             <Route path="/admin/grammar"    element={<AdminRoute><AdminGrammar /></AdminRoute>} />
             <Route path="/admin/kanji"       element={<AdminRoute><AdminKanji /></AdminRoute>} />
