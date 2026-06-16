@@ -294,12 +294,12 @@ exports.listLessons = async (req, res) => {
 };
 
 exports.createLesson = async (req, res) => {
-  const { course_id, unit_id, title, title_ja, lesson_type, content, grammar_notes, content_url, transcript, order_index, duration_minutes, question_count } = req.body;
+  const { course_id, unit_id, title, title_ja, lesson_type, content, grammar_notes, content_url, transcript, order_index, duration_minutes, question_count, is_published } = req.body;
   if (!course_id || !unit_id || !title) return res.status(400).json({ error: 'Thiếu thông tin bắt buộc.' });
   try {
     const contentDb = supabaseAdmin.schema('content_module');
     const { data, error } = await contentDb.from('lessons')
-      .insert({ course_id, unit_id: module_id || unit_id || null, title, title_ja, content_body: content, content_type: lesson_type || 'reading', grammar_notes, content_url, transcript, sort_order: order_index || 0, duration_minutes: duration_minutes || 0, question_count: question_count || 0, is_published: is_published ?? false })
+      .insert({ course_id, unit_id: unit_id || null, title, title_ja, content_body: content, content_type: lesson_type || 'reading', grammar_notes, content_url, transcript, sort_order: order_index || 0, duration_minutes: duration_minutes || 0, question_count: question_count || 0, is_published: is_published ?? false })
       .select().single();
     if (error) throw error;
     res.status(201).json(data);
