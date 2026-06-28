@@ -22,6 +22,7 @@ import LessonView   from './pages/student/LessonView';
 import Vocabulary   from './pages/student/Vocabulary';
 import Grammar      from './pages/student/Grammar';
 import Kanji        from './pages/student/Kanji';
+import KanjiWriting from './pages/student/KanjiWriting';
 import Classes      from './pages/student/Classes';
 import Quiz         from './pages/student/Quiz';
 import Dictionary   from './pages/student/Dictionary';
@@ -100,6 +101,7 @@ export default function App() {
             <Route path="/vocabulary" element={<StudentRoute><Vocabulary /></StudentRoute>} />
             <Route path="/grammar"    element={<StudentRoute><Grammar /></StudentRoute>} />
             <Route path="/kanji"      element={<StudentRoute><Kanji /></StudentRoute>} />
+            <Route path="/kanji/writing" element={<StudentRoute><KanjiWriting /></StudentRoute>} />
             <Route path="/classes"    element={<StudentRoute><Classes /></StudentRoute>} />
             <Route path="/quizzes/:id" element={<StudentRoute><Quiz /></StudentRoute>} />
             <Route path="/dictionary" element={<StudentRoute><Dictionary /></StudentRoute>} />
