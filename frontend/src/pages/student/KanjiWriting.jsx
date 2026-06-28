@@ -108,108 +108,95 @@ export default function KanjiWriting() {
 
   return (
     <StudentLayout title="Luyện viết Kanji">
-      <div className="flex items-center justify-between mb-4">
-        <div>
-          <h1 className="font-display text-2xl font-bold">Luyện viết Kanji</h1>
-          <p className="text-sm text-on-muted">Chọn kanji rồi <strong>vẽ trực tiếp</strong> lên khung để luyện viết tay.</p>
+      <div className="max-w-2xl mx-auto">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h1 className="font-display text-2xl font-bold">Luyện viết Kanji</h1>
+            <p className="text-sm text-on-muted">Chọn kanji rồi <strong>vẽ trực tiếp</strong> lên khung để luyện viết tay.</p>
+          </div>
+          <Link to="/kanji" className="text-sm text-on-muted hover:text-tsubaki-red inline-flex items-center gap-1 shrink-0">
+            <span className="material-symbols-outlined text-base">arrow_back</span> Kanji
+          </Link>
         </div>
-        <Link to="/kanji" className="text-sm text-on-muted hover:text-tsubaki-red inline-flex items-center gap-1">
-          <span className="material-symbols-outlined text-base">arrow_back</span> Kanji
-        </Link>
-      </div>
 
-      <div className="grid lg:grid-cols-[300px_1fr] gap-5">
-        {/* ── Cột chọn kanji ── */}
-        <div className="space-y-4">
-          <div className="glass-card rounded-2xl p-4">
-            <label className="block text-sm font-semibold mb-2">Nhập kanji</label>
-            <div className="flex gap-2">
+        {/* ── Chọn kanji ── */}
+        <div className="glass-card rounded-2xl p-4 mb-4 space-y-3">
+          <div className="flex flex-col sm:flex-row gap-3">
+            <div className="flex gap-2 flex-1">
               <input value={typed} onChange={e => setTyped(e.target.value)} onKeyDown={e => e.key === 'Enter' && addTyped()}
-                placeholder="VD: 水火木" className="flex-1 px-3 py-2 border border-outline rounded-xl text-lg outline-none focus:border-tsubaki-red" />
+                placeholder="Gõ kanji, VD: 水火木" className="flex-1 min-w-0 px-3 py-2 border border-outline rounded-xl text-lg outline-none focus:border-tsubaki-red" />
               <Button onClick={addTyped} disabled={!typed.trim()}>Thêm</Button>
             </div>
-          </div>
-          <div className="glass-card rounded-2xl p-4">
-            <label className="block text-sm font-semibold mb-2">Chọn từ thư viện</label>
             <div className="flex gap-2">
               <select value={level} onChange={e => setLevel(e.target.value)} className="px-3 py-2 border border-outline rounded-xl text-sm outline-none focus:border-tsubaki-red">
                 {LEVELS.map(l => <option key={l}>{l}</option>)}
               </select>
-              <Button variant="secondary" onClick={loadBrowse} loading={loadingBrowse}>Tải {level}</Button>
+              <Button variant="secondary" onClick={loadBrowse} loading={loadingBrowse}>Thư viện</Button>
             </div>
-            {browse.length > 0 && (
-              <div className="flex flex-wrap gap-1.5 mt-3 max-h-44 overflow-y-auto">
-                {browse.map(k => (
-                  <button key={k.id} onClick={() => addKanji({ char: k.character, reading_on: k.reading_on, reading_kun: k.reading_kun, meaning_vi: k.meaning_vi })}
-                    disabled={has(k.character)}
-                    className={`w-10 h-10 rounded-lg border text-xl flex items-center justify-center transition-colors ${has(k.character) ? 'border-emerald-300 bg-emerald-50 text-emerald-600' : 'border-outline hover:border-tsubaki-red hover:bg-tsubaki-red/5'}`}>
-                    {k.character}
-                  </button>
-                ))}
+          </div>
+          {browse.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto pt-1 border-t border-outline/40">
+              {browse.map(k => (
+                <button key={k.id} onClick={() => addKanji({ char: k.character, reading_on: k.reading_on, reading_kun: k.reading_kun, meaning_vi: k.meaning_vi })}
+                  disabled={has(k.character)}
+                  className={`w-9 h-9 rounded-lg border text-lg flex items-center justify-center transition-colors ${has(k.character) ? 'border-emerald-300 bg-emerald-50 text-emerald-600' : 'border-outline hover:border-tsubaki-red hover:bg-tsubaki-red/5'}`}>
+                  {k.character}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* ── Dải kanji đã chọn ── */}
+        {list.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 mb-4">
+            {list.map((k, i) => (
+              <div key={i} className="relative group">
+                <button onClick={() => setIdx(i)}
+                  className={`w-10 h-10 rounded-lg border text-xl flex items-center justify-center transition-all ${i === idx ? 'border-tsubaki-red bg-tsubaki-red/10 text-tsubaki-red ring-2 ring-tsubaki-red/30' : 'border-outline hover:bg-surface-low'}`}>
+                  {k.char}
+                </button>
+                <button onClick={() => removeAt(i)}
+                  className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-charcoal text-white text-[10px] opacity-0 group-hover:opacity-100 flex items-center justify-center">×</button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* ── Khu vực vẽ ── */}
+        {!current ? (
+          <div className="glass-card rounded-2xl py-16 text-center">
+            <span className="material-symbols-outlined text-6xl text-on-muted/20 block mb-3">draw</span>
+            <p className="font-bold text-lg mb-1">Chưa chọn kanji nào</p>
+            <p className="text-on-muted text-sm">Gõ kanji hoặc bấm “Thư viện” ở trên để bắt đầu vẽ.</p>
+          </div>
+        ) : (
+          <div className="glass-card rounded-2xl p-6 flex flex-col items-center">
+            <p className="text-xs text-on-muted flex flex-wrap justify-center gap-x-3 mb-3 min-h-[1rem]">
+              {current.reading_on?.length > 0 && <span>On: <b className="text-charcoal">{current.reading_on.join('、')}</b></span>}
+              {current.reading_kun?.length > 0 && <span>Kun: <b className="text-charcoal">{current.reading_kun.join('、')}</b></span>}
+              {current.meaning_vi && <span>Nghĩa: <b className="text-charcoal">{current.meaning_vi}</b></span>}
+            </p>
+
+            <KanjiCanvas char={current.char} showGuide={showGuide} brush={brush} />
+
+            <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2 mt-4">
+              <label className="flex items-center gap-2 text-sm cursor-pointer">
+                <input type="checkbox" checked={showGuide} onChange={e => setShowGuide(e.target.checked)} className="accent-tsubaki-red" /> Chữ mờ để tô
+              </label>
+              <label className="flex items-center gap-2 text-sm">Cỡ nét
+                <input type="range" min="6" max="28" value={brush} onChange={e => setBrush(Number(e.target.value))} className="accent-tsubaki-red" />
+              </label>
+            </div>
+            {list.length > 1 && (
+              <div className="flex items-center gap-4 mt-4">
+                <Button variant="secondary" onClick={() => setIdx(i => Math.max(0, i - 1))} disabled={idx === 0}>← Trước</Button>
+                <span className="text-sm text-on-muted">{idx + 1}/{list.length}</span>
+                <Button variant="secondary" onClick={() => setIdx(i => Math.min(list.length - 1, i + 1))} disabled={idx === list.length - 1}>Sau →</Button>
               </div>
             )}
           </div>
-
-          {/* danh sách đã chọn */}
-          {list.length > 0 && (
-            <div className="glass-card rounded-2xl p-4">
-              <p className="text-sm font-semibold mb-2">Đã chọn ({list.length})</p>
-              <div className="flex flex-wrap gap-1.5">
-                {list.map((k, i) => (
-                  <div key={i} className="relative group">
-                    <button onClick={() => setIdx(i)}
-                      className={`w-10 h-10 rounded-lg border text-xl flex items-center justify-center ${i === idx ? 'border-tsubaki-red bg-tsubaki-red/10 text-tsubaki-red' : 'border-outline hover:bg-surface-low'}`}>
-                      {k.char}
-                    </button>
-                    <button onClick={() => removeAt(i)}
-                      className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-charcoal text-white text-[10px] opacity-0 group-hover:opacity-100 flex items-center justify-center">×</button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* ── Khu vực vẽ ── */}
-        <div className="glass-card rounded-2xl p-6">
-          {!current ? (
-            <div className="py-20 text-center">
-              <span className="material-symbols-outlined text-6xl text-on-muted/20 block mb-3">draw</span>
-              <p className="font-bold text-lg mb-1">Chưa chọn kanji nào</p>
-              <p className="text-on-muted text-sm">Gõ kanji hoặc chọn từ thư viện bên trái để bắt đầu vẽ.</p>
-            </div>
-          ) : (
-            <div className="flex flex-col items-center">
-              {/* thông tin chữ */}
-              <div className="text-center mb-3">
-                <p className="text-xs text-on-muted flex flex-wrap justify-center gap-x-3">
-                  {current.reading_on?.length > 0 && <span>On: <b className="text-charcoal">{current.reading_on.join('、')}</b></span>}
-                  {current.reading_kun?.length > 0 && <span>Kun: <b className="text-charcoal">{current.reading_kun.join('、')}</b></span>}
-                  {current.meaning_vi && <span>Nghĩa: <b className="text-charcoal">{current.meaning_vi}</b></span>}
-                </p>
-              </div>
-
-              <KanjiCanvas char={current.char} showGuide={showGuide} brush={brush} />
-
-              {/* tùy chọn + điều hướng */}
-              <div className="flex flex-wrap items-center justify-center gap-4 mt-4">
-                <label className="flex items-center gap-2 text-sm cursor-pointer">
-                  <input type="checkbox" checked={showGuide} onChange={e => setShowGuide(e.target.checked)} className="accent-tsubaki-red" /> Chữ mờ để tô
-                </label>
-                <label className="flex items-center gap-2 text-sm">Cỡ nét
-                  <input type="range" min="6" max="28" value={brush} onChange={e => setBrush(Number(e.target.value))} className="accent-tsubaki-red" />
-                </label>
-              </div>
-              {list.length > 1 && (
-                <div className="flex items-center gap-4 mt-4">
-                  <Button variant="secondary" onClick={() => setIdx(i => Math.max(0, i - 1))} disabled={idx === 0}>← Trước</Button>
-                  <span className="text-sm text-on-muted">{idx + 1}/{list.length}</span>
-                  <Button variant="secondary" onClick={() => setIdx(i => Math.min(list.length - 1, i + 1))} disabled={idx === list.length - 1}>Sau →</Button>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
+        )}
       </div>
     </StudentLayout>
   );
