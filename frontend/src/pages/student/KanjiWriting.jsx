@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, forwardRef, useImperativeHandle } from 'react';
 import { Link } from 'react-router-dom';
 import StudentLayout from '../../components/layout/StudentLayout';
 import Button from '../../components/ui/Button';
@@ -8,13 +8,13 @@ const LEVELS = ['N5','N4','N3','N2','N1'];
 const KANJI_RE = /[一-龯㐀-䶿]/g;
 
 // ── Canvas vẽ/tô 1 chữ kanji (米字格 + chữ mờ để tô) ─────────────────────────
-function KanjiCanvas({ char, showGuide, brush }) {
+const KanjiCanvas = forwardRef(function KanjiCanvas({ char, showGuide, brush, onCount }, ref) {
   const SIZE = 320;
   const canvasRef = useRef(null);
   const strokes   = useRef([]);   // các nét đã vẽ xong
   const cur       = useRef(null); // nét đang vẽ
   const drawing   = useRef(false);
-  const [count, setCount] = useState(0); // để re-render nút undo
+  const [count, setCount] = useState(0);
 
   const styleCtx = (ctx) => { ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.strokeStyle = '#1a1a1a'; ctx.lineWidth = brush; };
   const redraw = useCallback(() => {
@@ -29,9 +29,22 @@ function KanjiCanvas({ char, showGuide, brush }) {
     }
   }, [brush]);
 
-  // đổi chữ → xóa nét cũ
   useEffect(() => { strokes.current = []; cur.current = null; setCount(0); redraw(); }, [char, redraw]);
   useEffect(() => { redraw(); }, [brush, redraw]);
+  useEffect(() => { onCount?.(count); }, [count, onCount]);
+
+  useImperativeHandle(ref, () => ({
+    isEmpty: () => strokes.current.length === 0,
+    getImage: () => {
+      if (strokes.current.length === 0) return null;
+      const tmp = document.createElement('canvas');
+      tmp.width = SIZE; tmp.height = SIZE;
+      const tctx = tmp.getContext('2d');
+      tctx.fillStyle = '#fff'; tctx.fillRect(0, 0, SIZE, SIZE);
+      tctx.drawImage(canvasRef.current, 0, 0);
+      return tmp.toDataURL('image/png');
+    },
+  }), []);
 
   const pos = (e) => {
     const r = canvasRef.current.getBoundingClientRect();
@@ -53,16 +66,13 @@ function KanjiCanvas({ char, showGuide, brush }) {
   return (
     <div className="flex flex-col items-center gap-3">
       <div className="relative rounded-2xl border-2 border-charcoal/40 bg-white" style={{ width: SIZE, height: SIZE }}>
-        {/* đường gióng 米字格 */}
         <div className="absolute left-1/2 top-0 bottom-0 border-l border-dashed border-charcoal/20" />
         <div className="absolute top-1/2 left-0 right-0 border-t border-dashed border-charcoal/20" />
         <div className="absolute inset-0" style={{ backgroundImage: 'linear-gradient(45deg, transparent 49.6%, rgba(0,0,0,0.08) 49.6%, rgba(0,0,0,0.08) 50.4%, transparent 50.4%), linear-gradient(-45deg, transparent 49.6%, rgba(0,0,0,0.08) 49.6%, rgba(0,0,0,0.08) 50.4%, transparent 50.4%)' }} />
-        {/* chữ mờ để tô */}
         {showGuide && char && (
           <span className="absolute inset-0 flex items-center justify-center leading-none select-none pointer-events-none"
             style={{ fontSize: SIZE * 0.74, color: 'rgba(0,0,0,0.14)', fontFamily: "'Noto Sans JP','Yu Mincho',serif" }}>{char}</span>
         )}
-        {/* canvas vẽ */}
         <canvas ref={canvasRef} width={SIZE} height={SIZE}
           onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerLeave={up}
           className="absolute inset-0 w-full h-full touch-none cursor-crosshair" style={{ touchAction: 'none' }} />
@@ -77,10 +87,13 @@ function KanjiCanvas({ char, showGuide, brush }) {
       </div>
     </div>
   );
-}
+});
+
+const scoreColor = (s) => s >= 80 ? 'text-emerald-600' : s >= 50 ? 'text-amber-500' : 'text-tsubaki-red';
+const scoreRing  = (s) => s >= 80 ? 'border-emerald-200 bg-emerald-50' : s >= 50 ? 'border-amber-200 bg-amber-50' : 'border-tsubaki-red/20 bg-tsubaki-red/5';
 
 export default function KanjiWriting() {
-  const [list, setList]     = useState([]); // [{char, reading_on, reading_kun, meaning_vi}]
+  const [list, setList]     = useState([]);
   const [idx, setIdx]       = useState(0);
   const [typed, setTyped]   = useState('');
   const [level, setLevel]   = useState('N5');
@@ -88,9 +101,15 @@ export default function KanjiWriting() {
   const [loadingBrowse, setLoadingBrowse] = useState(false);
   const [showGuide, setShowGuide] = useState(true);
   const [brush, setBrush]   = useState(14);
+  // chấm điểm AI
+  const canvasApi = useRef(null);
+  const [strokeCount, setStrokeCount] = useState(0);
+  const [scoring, setScoring] = useState(false);
+  const [result, setResult]   = useState(null);
+  const [scoreErr, setScoreErr] = useState('');
 
   const has = (c) => list.some(k => k.char === c);
-  const addKanji = (k) => { if (!has(k.char)) { setList(l => [...l, k]); } };
+  const addKanji = (k) => { if (!has(k.char)) setList(l => [...l, k]); };
   const addTyped = () => {
     const chars = [...new Set((typed.match(KANJI_RE) || []))].filter(c => !has(c));
     if (chars.length) setList(l => [...l, ...chars.map(c => ({ char: c, reading_on: [], reading_kun: [], meaning_vi: '' }))]);
@@ -106,13 +125,27 @@ export default function KanjiWriting() {
 
   const current = list[idx];
 
+  // nét thay đổi (vẽ/xóa/đổi chữ) → reset kết quả chấm
+  const handleCount = useCallback((c) => { setStrokeCount(c); setResult(null); setScoreErr(''); }, []);
+
+  const handleScore = async () => {
+    const img = canvasApi.current?.getImage();
+    if (!img || !current) return;
+    setScoring(true); setScoreErr(''); setResult(null);
+    try {
+      const r = await api.post('/kanji/score-writing', { image: img, character: current.char });
+      setResult(r.data);
+    } catch (e) { setScoreErr(e.response?.data?.error || 'Không chấm được, thử lại.'); }
+    finally { setScoring(false); }
+  };
+
   return (
     <StudentLayout title="Luyện viết Kanji">
       <div className="max-w-2xl mx-auto">
         <div className="flex items-center justify-between mb-4">
           <div>
             <h1 className="font-display text-2xl font-bold">Luyện viết Kanji</h1>
-            <p className="text-sm text-on-muted">Chọn kanji rồi <strong>vẽ trực tiếp</strong> lên khung để luyện viết tay.</p>
+            <p className="text-sm text-on-muted">Chọn kanji, <strong>vẽ trực tiếp</strong> rồi để AI chấm độ giống.</p>
           </div>
           <Link to="/kanji" className="text-sm text-on-muted hover:text-tsubaki-red inline-flex items-center gap-1 shrink-0">
             <span className="material-symbols-outlined text-base">arrow_back</span> Kanji
@@ -178,7 +211,7 @@ export default function KanjiWriting() {
               {current.meaning_vi && <span>Nghĩa: <b className="text-charcoal">{current.meaning_vi}</b></span>}
             </p>
 
-            <KanjiCanvas char={current.char} showGuide={showGuide} brush={brush} />
+            <KanjiCanvas ref={canvasApi} char={current.char} showGuide={showGuide} brush={brush} onCount={handleCount} />
 
             <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2 mt-4">
               <label className="flex items-center gap-2 text-sm cursor-pointer">
@@ -188,8 +221,46 @@ export default function KanjiWriting() {
                 <input type="range" min="6" max="28" value={brush} onChange={e => setBrush(Number(e.target.value))} className="accent-tsubaki-red" />
               </label>
             </div>
+
+            {/* Chấm điểm AI */}
+            <Button onClick={handleScore} loading={scoring} disabled={strokeCount === 0} className="mt-4">
+              <span className="material-symbols-outlined text-lg">auto_awesome</span> Chấm điểm AI
+            </Button>
+            {strokeCount === 0 && !result && <p className="text-xs text-on-muted mt-2">Vẽ chữ trước rồi bấm chấm điểm.</p>}
+            {scoreErr && <p className="text-sm text-tsubaki-red mt-3">{scoreErr}</p>}
+
+            {result && (
+              <div className={`w-full max-w-sm mt-4 rounded-2xl border p-4 ${result.similarity != null ? scoreRing(result.similarity) : 'border-outline bg-surface-low'}`}>
+                {result.similarity != null && (
+                  <div className="flex items-center justify-center gap-2 mb-2">
+                    <span className="text-sm text-on-muted">Độ giống</span>
+                    <span className={`text-4xl font-display font-bold ${scoreColor(result.similarity)}`}>{result.similarity}%</span>
+                  </div>
+                )}
+                {result.comment && <p className="text-sm text-center text-charcoal mb-2">{result.comment}</p>}
+                {result.errors?.length > 0 && (
+                  <div>
+                    <p className="text-xs font-semibold text-on-muted mb-1">Lỗi cần sửa:</p>
+                    <ul className="space-y-1">
+                      {result.errors.map((e, i) => (
+                        <li key={i} className="text-sm text-charcoal flex gap-1.5">
+                          <span className="material-symbols-outlined text-base text-tsubaki-red shrink-0">close</span>
+                          <span>{e}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {result.similarity != null && result.errors?.length === 0 && (
+                  <p className="text-sm text-center text-emerald-600 flex items-center justify-center gap-1">
+                    <span className="material-symbols-outlined text-lg">check_circle</span> Viết tốt, không có lỗi!
+                  </p>
+                )}
+              </div>
+            )}
+
             {list.length > 1 && (
-              <div className="flex items-center gap-4 mt-4">
+              <div className="flex items-center gap-4 mt-5">
                 <Button variant="secondary" onClick={() => setIdx(i => Math.max(0, i - 1))} disabled={idx === 0}>← Trước</Button>
                 <span className="text-sm text-on-muted">{idx + 1}/{list.length}</span>
                 <Button variant="secondary" onClick={() => setIdx(i => Math.min(list.length - 1, i + 1))} disabled={idx === list.length - 1}>Sau →</Button>
