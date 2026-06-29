@@ -136,6 +136,12 @@ router.post('/kanji',        c.createKanji);
 router.put('/kanji/:id',     c.updateKanji);
 router.delete('/kanji/:id',  c.deleteKanji);
 
+// Gắn/gỡ từ vựng & kanji có sẵn vào Mục (bảng nối nhiều–nhiều)
+router.post('/lessons/:lessonId/vocabulary/attach',     c.attachVocab);
+router.delete('/lessons/:lessonId/vocabulary/:vocabId', c.detachVocab);
+router.post('/lessons/:lessonId/kanji/attach',          c.attachKanji);
+router.delete('/lessons/:lessonId/kanji/:kanjiId',      c.detachKanji);
+
 // Content submissions
 router.get('/submissions',                    c.listSubmissions);
 router.post('/submissions/vocab/:id/review',  c.reviewVocab);

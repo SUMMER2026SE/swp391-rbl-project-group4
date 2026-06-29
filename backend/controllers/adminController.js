@@ -384,13 +384,25 @@ exports.importVocab = async (req, res) => {
 
 // ── Vocabulary CRUD ──────────────────────────────────────────────────────────
 exports.listVocab = async (req, res) => {
-  const { lesson_id, page = 1, limit = 100 } = req.query;
+  const { lesson_id, search, page = 1, limit = 100 } = req.query;
   const offset = (Number(page) - 1) * Number(limit);
   try {
+    // Từ vựng trong một Mục được lấy qua bảng nối lesson_vocabulary (nhiều–nhiều).
+    if (lesson_id) {
+      const { data: links } = await contentDb.from('lesson_vocabulary')
+        .select('vocabulary_id').eq('lesson_id', lesson_id);
+      const ids = (links || []).map(l => l.vocabulary_id);
+      if (ids.length === 0) return res.json({ data: [], total: 0 });
+      const { data, error } = await supabaseAdmin.from('vocabulary')
+        .select('*').in('id', ids).order('created_at', { ascending: true });
+      if (error) throw error;
+      return res.json({ data: data || [], total: data?.length || 0 });
+    }
+
     let q = supabaseAdmin.from('vocabulary').select('*', { count: 'exact' })
       .order('created_at', { ascending: true })
       .range(offset, offset + Number(limit) - 1);
-    if (lesson_id) q = q.eq('lesson_id', lesson_id);
+    if (search) q = q.or(`kanji.ilike.%${search}%,reading.ilike.%${search}%,meaning_vi.ilike.%${search}%`);
     const { data, error, count } = await q;
     if (error) throw error;
     res.json({ data: data || [], total: count || 0 });
@@ -405,8 +417,38 @@ exports.createVocab = async (req, res) => {
       .insert({ kanji, reading, meaning_vi, meaning_ja, level, lesson_id, type, topic, example_sentence })
       .select().single();
     if (error) throw error;
+    // Gắn từ mới vào Mục qua bảng nối để hiển thị trong bài.
+    if (lesson_id) {
+      await contentDb.from('lesson_vocabulary')
+        .upsert({ lesson_id, vocabulary_id: data.id }, { onConflict: 'lesson_id,vocabulary_id' });
+    }
     res.status(201).json(data);
   } catch (err) { res.status(500).json({ error: 'Không thể tạo.' }); }
+};
+
+// Gắn nhiều từ vựng có sẵn vào một Mục (chọn từ list tổng).
+exports.attachVocab = async (req, res) => {
+  const { lessonId } = req.params;
+  const ids = Array.isArray(req.body?.ids) ? req.body.ids : [];
+  if (ids.length === 0) return res.status(400).json({ error: 'Chưa chọn từ vựng nào.' });
+  try {
+    const rows = ids.map(vocabulary_id => ({ lesson_id: lessonId, vocabulary_id }));
+    const { error } = await contentDb.from('lesson_vocabulary')
+      .upsert(rows, { onConflict: 'lesson_id,vocabulary_id' });
+    if (error) throw error;
+    res.json({ message: `Đã thêm ${ids.length} từ vựng vào bài.` });
+  } catch (err) { res.status(500).json({ error: 'Không thể thêm từ vựng.' }); }
+};
+
+// Gỡ một từ vựng khỏi Mục (không xóa từ gốc).
+exports.detachVocab = async (req, res) => {
+  const { lessonId, vocabId } = req.params;
+  try {
+    const { error } = await contentDb.from('lesson_vocabulary')
+      .delete().eq('lesson_id', lessonId).eq('vocabulary_id', vocabId);
+    if (error) throw error;
+    res.json({ message: 'Đã gỡ khỏi bài.' });
+  } catch (err) { res.status(500).json({ error: 'Không thể gỡ từ vựng.' }); }
 };
 
 exports.updateVocab = async (req, res) => {
@@ -488,10 +530,21 @@ exports.listKanji = async (req, res) => {
   const { lesson_id, level, search, page = 1, limit = 50 } = req.query;
   const offset = (Number(page) - 1) * Number(limit);
   try {
+    // Kanji trong một Mục được lấy qua bảng nối lesson_kanji (nhiều–nhiều).
+    if (lesson_id) {
+      const { data: links } = await contentDb.from('lesson_kanji')
+        .select('kanji_id').eq('lesson_id', lesson_id);
+      const ids = (links || []).map(l => l.kanji_id);
+      if (ids.length === 0) return res.json({ data: [], total: 0 });
+      const { data, error } = await supabaseAdmin.from('kanji')
+        .select('*').in('id', ids).order('created_at', { ascending: true });
+      if (error) throw error;
+      return res.json({ data: data || [], total: data?.length || 0 });
+    }
+
     let q = supabaseAdmin.from('kanji').select('*', { count: 'exact' })
       .order('created_at', { ascending: true })
       .range(offset, offset + Number(limit) - 1);
-    if (lesson_id) q = q.eq('lesson_id', lesson_id);
     if (level)     q = q.eq('level', level);
     if (search)    q = q.or(`character.ilike.%${search}%,meaning_vi.ilike.%${search}%,han_viet.ilike.%${search}%`);
     const { data, error, count } = await q;
@@ -508,8 +561,38 @@ exports.createKanji = async (req, res) => {
       .insert({ character, reading_on, reading_kun, meaning_vi, stroke_count, level, han_viet, lesson_id: lesson_id || null })
       .select().single();
     if (error) throw error;
+    // Gắn kanji mới vào Mục qua bảng nối để hiển thị trong bài.
+    if (lesson_id) {
+      await contentDb.from('lesson_kanji')
+        .upsert({ lesson_id, kanji_id: data.id }, { onConflict: 'lesson_id,kanji_id' });
+    }
     res.status(201).json(data);
   } catch (err) { res.status(500).json({ error: err.message || 'Không thể tạo.' }); }
+};
+
+// Gắn nhiều kanji có sẵn vào một Mục (chọn từ list tổng).
+exports.attachKanji = async (req, res) => {
+  const { lessonId } = req.params;
+  const ids = Array.isArray(req.body?.ids) ? req.body.ids : [];
+  if (ids.length === 0) return res.status(400).json({ error: 'Chưa chọn kanji nào.' });
+  try {
+    const rows = ids.map(kanji_id => ({ lesson_id: lessonId, kanji_id }));
+    const { error } = await contentDb.from('lesson_kanji')
+      .upsert(rows, { onConflict: 'lesson_id,kanji_id' });
+    if (error) throw error;
+    res.json({ message: `Đã thêm ${ids.length} kanji vào bài.` });
+  } catch (err) { res.status(500).json({ error: 'Không thể thêm kanji.' }); }
+};
+
+// Gỡ một kanji khỏi Mục (không xóa kanji gốc).
+exports.detachKanji = async (req, res) => {
+  const { lessonId, kanjiId } = req.params;
+  try {
+    const { error } = await contentDb.from('lesson_kanji')
+      .delete().eq('lesson_id', lessonId).eq('kanji_id', kanjiId);
+    if (error) throw error;
+    res.json({ message: 'Đã gỡ khỏi bài.' });
+  } catch (err) { res.status(500).json({ error: 'Không thể gỡ kanji.' }); }
 };
 
 exports.updateKanji = async (req, res) => {
