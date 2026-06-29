@@ -4,6 +4,47 @@ import StudentLayout from '../../components/layout/StudentLayout';
 import Button from '../../components/ui/Button';
 import api from '../../lib/api';
 
+async function downloadWorksheetPDF(elementId, filename = 'kanji-luyen-viet.pdf') {
+  const { default: html2canvas } = await import('html2canvas');
+  const { jsPDF } = await import('jspdf');
+
+  const el = document.getElementById(elementId);
+  if (!el) return;
+
+  const canvas = await html2canvas(el, {
+    scale: 2,           // độ phân giải cao
+    useCORS: true,
+    backgroundColor: '#ffffff',
+    logging: false,
+  });
+
+  const A4_W = 210, A4_H = 297; // mm
+  const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
+  const margin = 10;
+  const imgW = A4_W - margin * 2;
+  const imgH = (canvas.height / canvas.width) * imgW;
+  const pageH = A4_H - margin * 2;
+
+  let y = 0;
+  while (y < imgH) {
+    if (y > 0) pdf.addPage();
+    const srcY  = (y / imgH) * canvas.height;
+    const srcH  = Math.min((pageH / imgH) * canvas.height, canvas.height - srcY);
+    const sliceH = (srcH / canvas.height) * imgH;
+
+    // cắt từng trang từ canvas
+    const pageCanvas = document.createElement('canvas');
+    pageCanvas.width  = canvas.width;
+    pageCanvas.height = srcH;
+    pageCanvas.getContext('2d').drawImage(canvas, 0, srcY, canvas.width, srcH, 0, 0, canvas.width, srcH);
+
+    pdf.addImage(pageCanvas.toDataURL('image/jpeg', 0.95), 'JPEG', margin, margin, imgW, sliceH);
+    y += pageH;
+  }
+
+  pdf.save(filename);
+}
+
 const LEVELS = ['N5','N4','N3','N2','N1'];
 const KANJI_RE = /[一-龯㐀-䶿]/g;
 const SERIF = "'Noto Sans JP','Yu Mincho','Hiragino Mincho Pro',serif";
@@ -158,8 +199,9 @@ export default function KanjiWriting() {
   const [result, setResult]     = useState(null);
   const [scoreErr, setScoreErr] = useState('');
   // sheet options
-  const [boxSize, setBoxSize]     = useState(68);
+  const [boxSize, setBoxSize]       = useState(68);
   const [guideCount, setGuideCount] = useState(3);
+  const [downloading, setDownloading] = useState(false);
 
   const has = (c) => list.some(k => k.char === c);
   const addKanji = (k) => { if (!has(k.char)) setList(l => [...l, k]); };
@@ -335,8 +377,15 @@ export default function KanjiWriting() {
                 </select>
               </label>
               <div className="ml-auto">
-                <Button onClick={()=>window.print()} disabled={list.length===0}>
-                  <span className="material-symbols-outlined text-lg">download</span> Tải PDF / In
+                <Button
+                  loading={downloading}
+                  disabled={list.length === 0}
+                  onClick={async () => {
+                    setDownloading(true);
+                    try { await downloadWorksheetPDF('ws-print', `luyen-viet-kanji-${list.map(k=>k.char).join('')}.pdf`); }
+                    finally { setDownloading(false); }
+                  }}>
+                  <span className="material-symbols-outlined text-lg">download</span> Tải PDF
                 </Button>
               </div>
             </div>
@@ -360,14 +409,6 @@ export default function KanjiWriting() {
         )}
       </div>
 
-      <style>{`
-        @media print {
-          @page { size: A4 portrait; margin: 14mm; }
-          body > * { visibility: hidden; }
-          #ws-print, #ws-print * { visibility: visible; }
-          #ws-print { position: fixed; inset: 0; padding: 0; margin: 0; box-shadow: none; border-radius: 0; overflow: visible; }
-        }
-      `}</style>
     </StudentLayout>
   );
 }
