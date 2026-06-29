@@ -34,16 +34,21 @@ exports.scoreWriting = async (req, res) => {
   if (typeof image !== 'string' || !image.startsWith('data:image/'))
     return res.status(400).json({ error: 'Ảnh không hợp lệ.' });
 
+  // Rubric cố định → model chấm nhất quán hơn; temperature=0 → deterministic
   const prompt =
-`Bạn là giáo viên tiếng Nhật chấm bài luyện viết kanji.
-Ảnh đính kèm là chữ kanji học viên VIẾT TAY (nét đen trên nền trắng).
-Chữ mẫu đúng cần viết là: 「${character}」.
-So sánh nét viết của học viên với chữ mẫu và đánh giá:
-- similarity: độ giống tổng thể, số nguyên 0-100 (%). Nếu trong ảnh không có nét nào hoặc nguệch ngoạc vô nghĩa thì cho điểm rất thấp.
-- errors: liệt kê các lỗi sai cụ thể (nét thiếu, nét thừa, sai thứ tự/hướng nét, sai tỉ lệ, lệch vị trí, viết sai chữ...). Nếu viết đúng và đẹp thì để mảng rỗng.
-- comment: một câu nhận xét ngắn gọn bằng tiếng Việt.
-CHỈ trả về JSON thuần, không kèm giải thích:
-{"similarity": <int 0-100>, "errors": ["<lỗi>", ...], "comment": "<nhận xét>"}`;
+`Bạn là giáo viên tiếng Nhật chấm bài viết kanji. Nhiệm vụ: so sánh ảnh chữ viết tay với chữ mẫu 「${character}」.
+
+BƯỚC 1 — Quan sát ảnh: đếm số nét, hình dáng tổng thể, vị trí từng nét.
+BƯỚC 2 — Chấm điểm theo 4 tiêu chí (mỗi tiêu chí 0-25 điểm):
+  A. Đủ số nét và đúng chữ (không thiếu/thừa nét, không nhầm chữ khác): 0/10/20/25
+  B. Hướng và hình dáng nét (nét thẳng/cong/chéo đúng hướng): 0/10/20/25
+  C. Tỉ lệ và cân đối (các phần của chữ cân đối với nhau): 0/10/20/25
+  D. Vị trí và bố cục trong ô (không lệch hẳn sang một phía): 0/10/20/25
+BƯỚC 3 — similarity = tổng điểm A+B+C+D (0-100).
+BƯỚC 4 — Liệt kê LỖI CỤ THỂ quan sát được (chỉ lỗi rõ ràng, không đoán mò). Không có lỗi → mảng rỗng [].
+
+Trả về JSON THUẦN (không markdown, không giải thích thêm):
+{"similarity":<int>,"errors":["<lỗi cụ thể>",...],"comment":"<1 câu tiếng Việt>"}`;
 
   try {
     const r = await chatCompletion(
@@ -51,7 +56,7 @@ CHỈ trả về JSON thuần, không kèm giải thích:
         { type: 'text', text: prompt },
         { type: 'image_url', image_url: { url: image } },
       ] }],
-      { model: 'Qwen2.5-VL-7B-Instruct', temperature: 0.2, max_tokens: 500 }
+      { model: 'Qwen2.5-VL-7B-Instruct', temperature: 0, max_tokens: 400 }
     );
     const txt = r.choices?.[0]?.message?.content || '';
     const m = txt.match(/\{[\s\S]*\}/);
