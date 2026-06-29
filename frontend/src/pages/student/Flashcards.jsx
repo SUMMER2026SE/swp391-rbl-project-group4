@@ -4,6 +4,7 @@ import StudentLayout from '../../components/layout/StudentLayout';
 import Alert from '../../components/ui/Alert';
 import Button from '../../components/ui/Button';
 import Modal from '../../components/ui/Modal';
+import ConfirmDialog from '../../components/ui/ConfirmDialog';
 import api from '../../lib/api';
 import { listDrafts, removeDraft } from '../../lib/flashcardDrafts';
 
@@ -78,6 +79,24 @@ export default function Flashcards() {
   const [selectedFolders, setSelectedFolders] = useState({}); // { folderId: bool }
   const [addingToFolder, setAddingToFolder] = useState(false);
 
+  // Popup xác nhận xóa dùng chung
+  const [confirm, setConfirm] = useState(null); // null | { title, message, confirmLabel?, onConfirm }
+  const [confirming, setConfirming] = useState(false);
+
+  const runConfirm = async () => {
+    if (!confirm) return;
+    setConfirming(true);
+    try {
+      await confirm.onConfirm();
+      setConfirm(null);
+    } catch (e) {
+      setError(e.message);
+      setConfirm(null);
+    } finally {
+      setConfirming(false);
+    }
+  };
+
   const fetchData = async () => {
     setLoading(true);
     try {
@@ -97,30 +116,38 @@ export default function Flashcards() {
 
   useEffect(() => { fetchData(); }, []);
 
-  const handleDeleteSet = async (id) => {
-    if (!window.confirm('Xóa học phần này? Hành động không thể hoàn tác.')) return;
-    try {
+  const handleDeleteSet = (id) => setConfirm({
+    title: 'Xóa học phần',
+    message: 'Bạn có chắc muốn xóa học phần này? Hành động không thể hoàn tác.',
+    confirmLabel: 'Xóa',
+    onConfirm: async () => {
       await api.delete(`/flashcards/sets/${id}`);
       setSets(s => s.filter(x => x.id !== id));
-    } catch (e) { setError(e.message); }
-  };
+    },
+  });
 
-  const handleDeleteDraft = (id) => {
-    if (!window.confirm('Xóa bản nháp này?')) return;
-    removeDraft(id);
-    setDrafts(listDrafts());
-  };
+  const handleDeleteDraft = (id) => setConfirm({
+    title: 'Xóa bản nháp',
+    message: 'Bạn có chắc muốn xóa bản nháp này?',
+    confirmLabel: 'Xóa',
+    onConfirm: async () => {
+      removeDraft(id);
+      setDrafts(listDrafts());
+    },
+  });
 
   const draftCardCount = (d) =>
     (d.cards || []).filter(c => c.term?.trim() && c.definition?.trim()).length;
 
-  const handleDeleteFolder = async (id) => {
-    if (!window.confirm('Xóa thư mục này? Các học phần bên trong không bị xóa.')) return;
-    try {
+  const handleDeleteFolder = (id) => setConfirm({
+    title: 'Xóa thư mục',
+    message: 'Xóa thư mục này? Các học phần bên trong không bị xóa.',
+    confirmLabel: 'Xóa',
+    onConfirm: async () => {
       await api.delete(`/flashcards/folders/${id}`);
       setFolders(f => f.filter(x => x.id !== id));
-    } catch (e) { setError(e.message); }
-  };
+    },
+  });
 
   const saveFolder = async () => {
     const name = folderModal.name.trim();
@@ -289,6 +316,13 @@ export default function Flashcards() {
                     <div className="bg-tsubaki-red h-2 rounded-full transition-all" style={{ width: `${percent(s)}%` }} />
                   </div>
                 </div>
+                <button
+                  onClick={(e) => { e.stopPropagation(); navigate(`/flashcards/${s.id}`); }}
+                  className="mt-4 inline-flex items-center justify-center gap-1.5 text-sm font-semibold text-tsubaki-red border border-tsubaki-red/30 rounded-xl py-2 hover:bg-tsubaki-red/5 transition-colors"
+                >
+                  <span className="material-symbols-outlined text-lg">school</span>
+                  Học ngay
+                </button>
               </div>
             ))}
           </div>
@@ -390,6 +424,17 @@ export default function Flashcards() {
           </div>
         )}
       </Modal>
+
+      {/* ── Popup xác nhận xóa ──────────────────────────────────── */}
+      <ConfirmDialog
+        open={!!confirm}
+        title={confirm?.title}
+        message={confirm?.message}
+        confirmLabel={confirm?.confirmLabel || 'Xác nhận'}
+        loading={confirming}
+        onConfirm={runConfirm}
+        onCancel={() => setConfirm(null)}
+      />
     </StudentLayout>
   );
 }
