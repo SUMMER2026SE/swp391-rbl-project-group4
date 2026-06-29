@@ -5,6 +5,7 @@ import Alert from '../../components/ui/Alert';
 import Button from '../../components/ui/Button';
 import Modal from '../../components/ui/Modal';
 import api from '../../lib/api';
+import { listDrafts, removeDraft } from '../../lib/flashcardDrafts';
 
 function SkeletonCard() {
   return (
@@ -64,6 +65,7 @@ export default function Flashcards() {
   const [tab, setTab]         = useState('sets'); // 'sets' | 'folders'
   const [sets, setSets]       = useState([]);
   const [folders, setFolders] = useState([]);
+  const [drafts, setDrafts]   = useState(() => listDrafts()); // nháp lưu localStorage
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState('');
 
@@ -102,6 +104,15 @@ export default function Flashcards() {
       setSets(s => s.filter(x => x.id !== id));
     } catch (e) { setError(e.message); }
   };
+
+  const handleDeleteDraft = (id) => {
+    if (!window.confirm('Xóa bản nháp này?')) return;
+    removeDraft(id);
+    setDrafts(listDrafts());
+  };
+
+  const draftCardCount = (d) =>
+    (d.cards || []).filter(c => c.term?.trim() && c.definition?.trim()).length;
 
   const handleDeleteFolder = async (id) => {
     if (!window.confirm('Xóa thư mục này? Các học phần bên trong không bị xóa.')) return;
@@ -201,13 +212,49 @@ export default function Flashcards() {
           {Array.from({ length: 6 }).map((_, i) => <SkeletonCard key={i} />)}
         </div>
       ) : tab === 'sets' ? (
-        sets.length === 0 ? (
+        sets.length === 0 && drafts.length === 0 ? (
           <EmptyState icon="style" title="Chưa có học phần nào"
             hint="Tạo học phần đầu tiên để bắt đầu ôn tập"
             action={<Button variant="primary" onClick={() => navigate('/flashcards/new')}>Tạo học phần</Button>}
           />
         ) : (
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            {/* ── Bản nháp (lưu localStorage, chưa lưu DB) ── */}
+            {drafts.map(d => (
+              <div
+                key={d.id}
+                onClick={() => navigate(`/flashcards/new?draft=${d.id}`)}
+                className="text-left glass-card rounded-2xl p-5 cursor-pointer border-2 border-dashed border-outline/60 hover:border-tsubaki-red hover:-translate-y-1 transition-all duration-300 flex flex-col group"
+              >
+                <div className="flex items-start justify-between gap-2 mb-2">
+                  <h3 className="font-display text-base font-bold text-on-surface group-hover:text-tsubaki-red transition-colors line-clamp-2 leading-snug">
+                    {d.title?.trim() || 'Chưa có tiêu đề'}
+                  </h3>
+                  <button
+                    onClick={e => { e.stopPropagation(); handleDeleteDraft(d.id); }}
+                    title="Xóa bản nháp"
+                    className="text-on-muted hover:text-error w-8 h-8 flex items-center justify-center rounded-lg hover:bg-error-bg/30 transition-colors shrink-0"
+                  >
+                    <span className="material-symbols-outlined text-xl">delete</span>
+                  </button>
+                </div>
+                <div className="flex items-center gap-2 mb-3">
+                  <span className="inline-flex items-center gap-1 text-xs font-bold text-amber-700 bg-amber-100 px-2.5 py-1 rounded-lg">
+                    <span className="material-symbols-outlined text-sm">edit_note</span>
+                    Bản nháp
+                  </span>
+                  <span className="inline-flex items-center gap-1 text-xs font-semibold text-on-muted bg-surface-low px-2.5 py-1 rounded-lg">
+                    <span className="material-symbols-outlined text-sm">layers</span>
+                    {draftCardCount(d)} thẻ
+                  </span>
+                </div>
+                {d.description?.trim() && (
+                  <p className="text-sm text-on-surface-variant leading-relaxed line-clamp-2 flex-grow">
+                    {d.description}
+                  </p>
+                )}
+              </div>
+            ))}
             {sets.map(s => (
               <div
                 key={s.id}

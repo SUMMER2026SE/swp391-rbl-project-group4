@@ -215,6 +215,23 @@ exports.upsertProgress = async (req, res) => {
   }
 };
 
+// DELETE /api/flashcards/sets/:id/progress/:cardId  → xóa tiến độ 1 thẻ (dùng cho Hoàn tác)
+exports.deleteCardProgress = async (req, res) => {
+  const userId = req.user.id;
+  try {
+    const set = await ownSet(req.params.id, userId);
+    if (!set) return res.status(404).json({ error: 'Không tìm thấy học phần.' });
+
+    const { error } = await fcDb.from('flashcard_progress')
+      .delete().eq('student_id', userId).eq('card_id', req.params.cardId);
+    if (error) throw error;
+    res.json({ data: { ok: true } });
+  } catch (err) {
+    console.error('fc.deleteCardProgress:', err);
+    res.status(500).json({ error: 'Không thể xóa tiến độ thẻ.' });
+  }
+};
+
 // DELETE /api/flashcards/sets/:id/progress  → khởi động lại (xóa tiến độ của user cho set)
 exports.resetProgress = async (req, res) => {
   const userId = req.user.id;

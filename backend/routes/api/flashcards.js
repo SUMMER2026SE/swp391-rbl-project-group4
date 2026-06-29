@@ -15,6 +15,7 @@ router.delete('/sets/:id',          requireAuth, c.deleteSet);
 router.get('/sets/:id/progress',    requireAuth, c.getProgress);
 router.put('/sets/:id/progress',    requireAuth, c.upsertProgress);
 router.delete('/sets/:id/progress', requireAuth, c.resetProgress);
+router.delete('/sets/:id/progress/:cardId', requireAuth, c.deleteCardProgress);
 
 // Thư mục (folders)
 router.get('/folders',                    requireAuth, c.listFolders);
