@@ -4,6 +4,7 @@ import StudentLayout from '../../components/layout/StudentLayout';
 import Alert from '../../components/ui/Alert';
 import Button from '../../components/ui/Button';
 import Modal from '../../components/ui/Modal';
+import ConfirmDialog from '../../components/ui/ConfirmDialog';
 import api from '../../lib/api';
 
 export default function FlashcardFolderDetail() {
@@ -21,6 +22,10 @@ export default function FlashcardFolderDetail() {
   const [selected, setSelected]     = useState({});
   const [loadingAll, setLoadingAll] = useState(false);
   const [adding, setAdding]         = useState(false);
+
+  // Popup xác nhận gỡ học phần khỏi thư mục
+  const [confirmSet, setConfirmSet] = useState(null); // null | set
+  const [removing, setRemoving]     = useState(false);
 
   const fetchFolder = async () => {
     setLoading(true);
@@ -72,13 +77,18 @@ export default function FlashcardFolderDetail() {
     }
   };
 
-  const removeSet = async (setId) => {
-    if (!window.confirm('Gỡ học phần này khỏi thư mục? Học phần không bị xóa.')) return;
+  const confirmRemoveSet = async () => {
+    if (!confirmSet) return;
+    setRemoving(true);
     try {
-      await api.delete(`/flashcards/folders/${id}/sets/${setId}`);
-      setSets(s => s.filter(x => x.id !== setId));
+      await api.delete(`/flashcards/folders/${id}/sets/${confirmSet.id}`);
+      setSets(s => s.filter(x => x.id !== confirmSet.id));
+      setConfirmSet(null);
     } catch (e) {
       setError(e.message);
+      setConfirmSet(null);
+    } finally {
+      setRemoving(false);
     }
   };
 
@@ -135,7 +145,7 @@ export default function FlashcardFolderDetail() {
               <div className="flex items-start justify-between gap-2 mb-2">
                 <h3 className="font-display text-base font-bold text-on-surface line-clamp-2 leading-snug">{s.title}</h3>
                 <button
-                  onClick={() => removeSet(s.id)}
+                  onClick={() => setConfirmSet(s)}
                   title="Gỡ khỏi thư mục"
                   className="w-8 h-8 flex items-center justify-center rounded-lg text-on-muted hover:text-error hover:bg-error-bg/30 transition-colors shrink-0"
                 >
@@ -210,6 +220,18 @@ export default function FlashcardFolderDetail() {
           </div>
         )}
       </Modal>
+
+      {/* ── Popup xác nhận gỡ học phần ──────────────────────────── */}
+      <ConfirmDialog
+        open={!!confirmSet}
+        title="Gỡ khỏi thư mục"
+        message="Gỡ học phần này khỏi thư mục? Học phần không bị xóa."
+        icon="bookmark_remove"
+        confirmLabel="Gỡ"
+        loading={removing}
+        onConfirm={confirmRemoveSet}
+        onCancel={() => setConfirmSet(null)}
+      />
     </StudentLayout>
   );
 }
