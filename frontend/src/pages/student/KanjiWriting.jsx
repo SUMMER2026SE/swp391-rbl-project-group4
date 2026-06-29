@@ -11,11 +11,15 @@ async function downloadWorksheetPDF(elementId, filename = 'kanji-luyen-viet.pdf'
   const el = document.getElementById(elementId);
   if (!el) return;
 
+  // đợi font CJK load xong trước khi chụp
+  await document.fonts.ready;
+
   const canvas = await html2canvas(el, {
-    scale: 2,           // độ phân giải cao
+    scale: 2,
     useCORS: true,
     backgroundColor: '#ffffff',
     logging: false,
+    allowTaint: true,
   });
 
   const A4_W = 210, A4_H = 297; // mm
@@ -59,13 +63,16 @@ function PracticeBox({ char, opacity = 0, size = 68 }) {
       <div style={{ position:'absolute', top:'50%', left:0, right:0, height:1,
         background:'repeating-linear-gradient(to right,#d0d0d0 0,#d0d0d0 3px,transparent 3px,transparent 7px)' }} />
       {/* đường chéo mờ */}
-      <div style={{ position:'absolute', inset:0, backgroundImage:
+      <div style={{ position:'absolute', top:0, left:0, right:0, bottom:0, backgroundImage:
         'linear-gradient(45deg,transparent 49.2%,#e8e8e8 49.2%,#e8e8e8 50.8%,transparent 50.8%),' +
         'linear-gradient(-45deg,transparent 49.2%,#e8e8e8 49.2%,#e8e8e8 50.8%,transparent 50.8%)' }} />
       {char && opacity > 0 && (
-        <span style={{ position:'absolute', inset:0, display:'flex', alignItems:'center', justifyContent:'center',
-          fontSize:size*0.74, fontFamily:SERIF, color:`rgba(0,0,0,${opacity})`,
-          userSelect:'none', pointerEvents:'none', lineHeight:1 }}>{char}</span>
+        <span style={{
+          position:'absolute', top:'50%', left:'50%',
+          transform:'translate(-50%, -50%)',
+          fontSize:size*0.72, fontFamily:SERIF, color:`rgba(0,0,0,${opacity})`,
+          userSelect:'none', pointerEvents:'none', lineHeight:1, display:'block',
+        }}>{char}</span>
       )}
     </div>
   );
@@ -85,11 +92,14 @@ function WorksheetEntry({ k, boxSize, guideCount }) {
           borderRight:'1px solid #e0e0e0', background:'#fafafa' }}>
           <div style={{ position:'absolute', left:'50%', top:0, bottom:0, width:1, background:'#ddd' }} />
           <div style={{ position:'absolute', top:'50%', left:0, right:0, height:1, background:'#ddd' }} />
-          <div style={{ position:'absolute', inset:0, backgroundImage:
+          <div style={{ position:'absolute', top:0, left:0, right:0, bottom:0, backgroundImage:
             'linear-gradient(45deg,transparent 49.2%,#ececec 49.2%,#ececec 50.8%,transparent 50.8%),' +
             'linear-gradient(-45deg,transparent 49.2%,#ececec 49.2%,#ececec 50.8%,transparent 50.8%)' }} />
-          <span style={{ position:'absolute', inset:0, display:'flex', alignItems:'center', justifyContent:'center',
-            fontSize:REF*0.72, fontFamily:SERIF, lineHeight:1, userSelect:'none' }}>{k.char}</span>
+          <span style={{
+            position:'absolute', top:'50%', left:'50%',
+            transform:'translate(-50%, -50%)',
+            fontSize:REF*0.72, fontFamily:SERIF, lineHeight:1, userSelect:'none', display:'block',
+          }}>{k.char}</span>
         </div>
         {/* thông tin */}
         <div style={{ padding:'10px 14px', fontSize:13, lineHeight:1.9, color:'#333' }}>
