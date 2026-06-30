@@ -1,10 +1,10 @@
 'use strict';
 
 const router = require('express').Router();
-const auth   = require('../../middleware/auth');
-const c      = require('../../controllers/listeningController');
+const { requireAuth } = require('../../middleware/auth');
+const c               = require('../../controllers/listeningController');
 
-router.use(auth);
+router.use(requireAuth);
 
 router.get('/',                     c.list);
 router.post('/score-pronunciation', c.scorePronunciation);
