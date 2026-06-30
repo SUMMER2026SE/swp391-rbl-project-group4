@@ -46,6 +46,7 @@ app.use('/api/flashcards', require('./routes/api/flashcards'));
 app.use('/api/ai',         require('./routes/api/ai'));
 app.use('/api/grammar',    require('./routes/api/grammar'));
 app.use('/api/writing',    require('./routes/api/writing'));
+app.use('/api/listening',  require('./routes/api/listening'));
 
 // ── Health check ──────────────────────────────────────────────────────────────
 app.get('/api/health', (_req, res) => res.json({ status: 'ok' }));
