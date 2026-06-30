@@ -4,6 +4,7 @@ const router = require('express').Router();
 const multer  = require('multer');
 const { requireAuth, requireTeacher } = require('../../middleware/auth');
 const c = require('../../controllers/teacherController');
+const ac = require('../../controllers/adminController'); // tái dùng cho thao tác trên kho chung (vocab/kanji)
 const qb = require('../../controllers/teacherQuestionBankController');
 
 const upload = multer({
@@ -20,6 +21,32 @@ router.get('/courses',          c.listCourses);
 router.post('/courses',         c.createCourse);
 router.put('/courses/:id',      c.updateCourse);
 router.delete('/courses/:id',   c.deleteCourse);
+router.post('/courses/upload-cover', upload.single('image'), ac.uploadCourseCover);
+
+// Course content (Bài học/units + Mục/lessons) — chỉ trên khóa do chính mình tạo
+router.get('/courses/:courseId/builder', c.getCourseBuilder);
+router.post('/units',          c.createUnit);
+router.put('/units/:id',       c.updateUnit);
+router.delete('/units/:id',    c.deleteUnit);
+router.get('/lessons/:id',     c.getLesson);
+router.post('/lessons',        c.createLesson);
+router.patch('/lessons/reorder', c.reorderLessons);
+router.put('/lessons/:id',     c.updateLesson);
+router.delete('/lessons/:id',  c.deleteLesson);
+
+// Trình soạn Từ vựng / Kanji của Mục — list/create/update dùng kho chung (admin handler),
+// attach/detach kiểm tra sở hữu khóa (teacher handler).
+router.get('/vocabulary',                              ac.listVocab);
+router.post('/vocabulary',                             ac.createVocab);
+router.put('/vocabulary/:id',                          ac.updateVocab);
+router.post('/lessons/:lessonId/vocabulary/attach',    c.attachVocab);
+router.delete('/lessons/:lessonId/vocabulary/:vocabId', c.detachVocab);
+
+router.get('/kanji',                                   ac.listKanji);
+router.post('/kanji',                                  ac.createKanji);
+router.put('/kanji/:id',                               ac.updateKanji);
+router.post('/lessons/:lessonId/kanji/attach',         c.attachKanji);
+router.delete('/lessons/:lessonId/kanji/:kanjiId',     c.detachKanji);
 
 // My vocabulary
 router.get('/my-vocab',                c.listMyVocab);

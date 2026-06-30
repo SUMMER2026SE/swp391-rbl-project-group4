@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import AdminLayout from '../../components/layout/AdminLayout';
+import { useEditorArea } from '../../lib/useEditorArea';
 import Modal from '../../components/ui/Modal';
 import Button from '../../components/ui/Button';
 import Alert from '../../components/ui/Alert';
@@ -175,6 +175,7 @@ function VocabForm({ form, onChange }) {
 export default function AdminLessonVocabulary() {
   const { lessonId } = useParams();
   const navigate = useNavigate();
+  const { apiBase, Layout } = useEditorArea();
 
   const [lesson, setLesson]   = useState(null);
   const [vocab, setVocab]     = useState([]);
@@ -200,8 +201,8 @@ export default function AdminLessonVocabulary() {
     setLoading(true);
     try {
       const [lessonRes, vocabRes] = await Promise.all([
-        api.get(`/admin/lessons/${lessonId}`),
-        api.get(`/admin/vocabulary?lesson_id=${lessonId}`),
+        api.get(`${apiBase}/lessons/${lessonId}`),
+        api.get(`${apiBase}/vocabulary?lesson_id=${lessonId}`),
       ]);
       setLesson(lessonRes.data);
       setVocab(vocabRes.data.data || []);
@@ -247,9 +248,9 @@ export default function AdminLessonVocabulary() {
         lesson_id: lessonId,
       };
       if (editId) {
-        await api.put(`/admin/vocabulary/${editId}`, payload);
+        await api.put(`${apiBase}/vocabulary/${editId}`, payload);
       } else {
-        await api.post('/admin/vocabulary', payload);
+        await api.post(`${apiBase}/vocabulary`, payload);
       }
       setModal(false);
       await load();
@@ -265,7 +266,7 @@ export default function AdminLessonVocabulary() {
   const handleDelete = async (item) => {
     if (!confirm(`Gỡ từ "${item.kanji || item.reading}" khỏi bài này? (Từ vẫn còn trong thư viện)`)) return;
     try {
-      await api.delete(`/admin/lessons/${lessonId}/vocabulary/${item.id}`);
+      await api.delete(`${apiBase}/lessons/${lessonId}/vocabulary/${item.id}`);
       setVocab(v => v.filter(x => x.id !== item.id));
       setAlert({ type: 'success', msg: 'Đã gỡ khỏi bài.' });
     } catch (e) {
@@ -280,7 +281,7 @@ export default function AdminLessonVocabulary() {
     try {
       const params = new URLSearchParams({ limit: 50 });
       if (term?.trim()) params.set('search', term.trim());
-      const r = await api.get(`/admin/vocabulary?${params}`);
+      const r = await api.get(`${apiBase}/vocabulary?${params}`);
       setList(r.data.data || []);
     } catch (e) {
       setAlert({ type: 'error', msg: e.message });
@@ -304,7 +305,7 @@ export default function AdminLessonVocabulary() {
     if (ids.length === 0) return setAlert({ type: 'error', msg: 'Chưa chọn từ nào.' });
     setAttaching(true);
     try {
-      await api.post(`/admin/lessons/${lessonId}/vocabulary/attach`, { ids });
+      await api.post(`${apiBase}/lessons/${lessonId}/vocabulary/attach`, { ids });
       setPicker(false);
       await load();
       setAlert({ type: 'success', msg: `Đã thêm ${ids.length} từ vào bài.` });
@@ -320,14 +321,14 @@ export default function AdminLessonVocabulary() {
   // ── Back navigation ─────────────────────────────────────────────────────────
 
   const goBack = () => {
-    if (lesson?.course_id) navigate(`/admin/courses/${lesson.course_id}/edit`);
-    else navigate('/admin/courses');
+    if (lesson?.course_id) navigate(`${apiBase}/courses/${lesson.course_id}/edit`);
+    else navigate(`${apiBase}/courses`);
   };
 
   // ── Render ───────────────────────────────────────────────────────────────────
 
   return (
-    <AdminLayout title="Từ vựng bài học">
+    <Layout title="Từ vựng bài học">
       {alert.msg && (
         <Alert type={alert.type} onClose={() => setAlert({ type: '', msg: '' })} className="mb-5">
           {alert.msg}
@@ -504,6 +505,6 @@ export default function AdminLessonVocabulary() {
           )}
         </div>
       </Modal>
-    </AdminLayout>
+    </Layout>
   );
 }
