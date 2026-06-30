@@ -3,12 +3,15 @@
 const { supabaseAdmin } = require('../config/supabase');
 const { whisperTranscribe } = require('../config/ai');
 
-const db = () => supabaseAdmin.schema('listening_module');
+// Tables are in public schema with listening_ prefix (schema exposure workaround)
+const dlg   = () => supabaseAdmin.from('listening_dialogues');
+const lines = () => supabaseAdmin.from('listening_dialogue_lines');
+const uadb  = () => supabaseAdmin.from('listening_user_audios');
 
 // ── Public: Dialogue list / detail ────────────────────────────────────────────
 
 exports.list = async (req, res) => {
-  let q = db().from('dialogues').select('id, title, title_vi, level, topic, thumbnail_icon').order('level').order('created_at');
+  let q = dlg().select('id, title, title_vi, level, topic, thumbnail_icon').order('level').order('created_at');
   if (req.query.level) q = q.eq('level', req.query.level);
   const { data, error } = await q;
   if (error) return res.status(500).json({ error: 'Không tải được danh sách.' });
@@ -16,14 +19,14 @@ exports.list = async (req, res) => {
 };
 
 exports.getOne = async (req, res) => {
-  const [{ data: dlg, error: e1 }, { data: lines, error: e2 }] = await Promise.all([
-    db().from('dialogues').select('*').eq('id', req.params.id).single(),
-    db().from('dialogue_lines').select('id, line_order, speaker, text_jp, text_plain, text_vi')
+  const [{ data: dialogue, error: e1 }, { data: dlgLines, error: e2 }] = await Promise.all([
+    dlg().select('*').eq('id', req.params.id).single(),
+    lines().select('id, line_order, speaker, text_jp, text_plain, text_vi')
       .eq('dialogue_id', req.params.id).order('line_order'),
   ]);
-  if (e1 || !dlg) return res.status(404).json({ error: 'Không tìm thấy hội thoại.' });
+  if (e1 || !dialogue) return res.status(404).json({ error: 'Không tìm thấy hội thoại.' });
   if (e2) return res.status(500).json({ error: 'Không tải được nội dung.' });
-  res.json({ ...dlg, lines });
+  res.json({ ...dialogue, lines: dlgLines });
 };
 
 // ── Public: Pronunciation scoring ─────────────────────────────────────────────
@@ -68,7 +71,7 @@ function pronunciationScore(a, b) {
 // ── User: Personal audio upload ───────────────────────────────────────────────
 
 exports.listUserAudio = async (req, res) => {
-  const { data, error } = await db().from('user_audios')
+  const { data, error } = await uadb()
     .select('id, title, level, audio_url, transcript, segments, created_at')
     .eq('student_id', req.user.id).order('created_at', { ascending: false });
   if (error) return res.status(500).json({ error: 'Không tải được.' });
@@ -99,7 +102,7 @@ exports.uploadAudio = async (req, res) => {
     console.error('Whisper transcribe error:', e.message);
   }
 
-  const { data, error: dbErr } = await db().from('user_audios').insert({
+  const { data, error: dbErr } = await uadb().insert({
     student_id:   req.user.id,
     title,
     level,
@@ -118,53 +121,53 @@ exports.uploadAudio = async (req, res) => {
 };
 
 exports.deleteUserAudio = async (req, res) => {
-  const { data, error } = await db().from('user_audios')
+  const { data, error } = await uadb()
     .select('storage_path').eq('id', req.params.id).eq('student_id', req.user.id).single();
   if (error || !data) return res.status(404).json({ error: 'Không tìm thấy.' });
   if (data.storage_path) {
     await supabaseAdmin.storage.from('listening-passages-audio').remove([data.storage_path]);
   }
-  await db().from('user_audios').delete().eq('id', req.params.id);
+  await uadb().delete().eq('id', req.params.id);
   res.json({ ok: true });
 };
 
 // ── Admin: Dialogue CRUD ──────────────────────────────────────────────────────
 
 exports.adminListDialogues = async (req, res) => {
-  const [{ data: dlgs, error: e1 }, { data: lines, error: e2 }] = await Promise.all([
-    db().from('dialogues').select('*').order('level').order('created_at'),
-    db().from('dialogue_lines').select('id, dialogue_id, line_order, speaker, text_jp, text_plain, text_vi').order('line_order'),
+  const [{ data: dlgs, error: e1 }, { data: dlgLines, error: e2 }] = await Promise.all([
+    dlg().select('*').order('level').order('created_at'),
+    lines().select('id, dialogue_id, line_order, speaker, text_jp, text_plain, text_vi').order('line_order'),
   ]);
   if (e1) return res.status(500).json({ error: e1.message || 'Không tải được.' });
   if (e2) return res.status(500).json({ error: e2.message || 'Không tải được lines.' });
   const map = {};
   (dlgs || []).forEach(d => { map[d.id] = { ...d, dialogue_lines: [] }; });
-  (lines || []).forEach(l => { if (map[l.dialogue_id]) map[l.dialogue_id].dialogue_lines.push(l); });
+  (dlgLines || []).forEach(l => { if (map[l.dialogue_id]) map[l.dialogue_id].dialogue_lines.push(l); });
   res.json(Object.values(map));
 };
 
 exports.adminCreateDialogue = async (req, res) => {
   const { title, title_vi, level, topic, thumbnail_icon } = req.body;
   if (!title || !level) return res.status(400).json({ error: 'Cần tiêu đề và cấp độ.' });
-  const { data, error } = await db().from('dialogues')
+  const { data, error } = await dlg()
     .insert({ title, title_vi, level, topic, thumbnail_icon: thumbnail_icon || 'headphones' })
     .select().single();
-  if (error) return res.status(500).json({ error: 'Không thể tạo hội thoại.' });
+  if (error) return res.status(500).json({ error: error.message || 'Không thể tạo hội thoại.' });
   res.json({ ...data, dialogue_lines: [] });
 };
 
 exports.adminUpdateDialogue = async (req, res) => {
   const { title, title_vi, level, topic, thumbnail_icon } = req.body;
-  const { data, error } = await db().from('dialogues')
+  const { data, error } = await dlg()
     .update({ title, title_vi, level, topic, thumbnail_icon })
     .eq('id', req.params.id).select().single();
-  if (error) return res.status(500).json({ error: 'Không thể cập nhật.' });
+  if (error) return res.status(500).json({ error: error.message || 'Không thể cập nhật.' });
   res.json(data);
 };
 
 exports.adminDeleteDialogue = async (req, res) => {
-  const { error } = await db().from('dialogues').delete().eq('id', req.params.id);
-  if (error) return res.status(500).json({ error: 'Không thể xóa.' });
+  const { error } = await dlg().delete().eq('id', req.params.id);
+  if (error) return res.status(500).json({ error: error.message || 'Không thể xóa.' });
   res.json({ ok: true });
 };
 
@@ -173,14 +176,14 @@ exports.adminDeleteDialogue = async (req, res) => {
 exports.adminAddLine = async (req, res) => {
   const { speaker, text_jp, text_plain, text_vi } = req.body;
   if (!text_jp || !text_plain) return res.status(400).json({ error: 'Cần nội dung câu.' });
-  const { data: existing } = await db().from('dialogue_lines')
+  const { data: existing } = await lines()
     .select('line_order').eq('dialogue_id', req.params.id)
     .order('line_order', { ascending: false }).limit(1);
   const order = (existing?.[0]?.line_order || 0) + 1;
-  const { data, error } = await db().from('dialogue_lines')
+  const { data, error } = await lines()
     .insert({ dialogue_id: req.params.id, speaker: speaker || 'A', text_jp, text_plain, text_vi, line_order: order })
     .select().single();
-  if (error) return res.status(500).json({ error: 'Không thể thêm câu.' });
+  if (error) return res.status(500).json({ error: error.message || 'Không thể thêm câu.' });
   res.json(data);
 };
 
@@ -192,14 +195,14 @@ exports.adminUpdateLine = async (req, res) => {
   if (text_plain !== undefined) updates.text_plain = text_plain;
   if (text_vi    !== undefined) updates.text_vi    = text_vi;
   if (line_order !== undefined) updates.line_order = line_order;
-  const { data, error } = await db().from('dialogue_lines')
+  const { data, error } = await lines()
     .update(updates).eq('id', req.params.lineId).select().single();
-  if (error) return res.status(500).json({ error: 'Không thể cập nhật câu.' });
+  if (error) return res.status(500).json({ error: error.message || 'Không thể cập nhật câu.' });
   res.json(data);
 };
 
 exports.adminDeleteLine = async (req, res) => {
-  const { error } = await db().from('dialogue_lines').delete().eq('id', req.params.lineId);
-  if (error) return res.status(500).json({ error: 'Không thể xóa câu.' });
+  const { error } = await lines().delete().eq('id', req.params.lineId);
+  if (error) return res.status(500).json({ error: error.message || 'Không thể xóa câu.' });
   res.json({ ok: true });
 };
