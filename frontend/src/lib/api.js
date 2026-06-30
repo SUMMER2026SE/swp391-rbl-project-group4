@@ -35,4 +35,16 @@ api.interceptors.response.use(
   }
 );
 
+// ── Course enrollment ─────────────────────────────────────────────────────────
+export const enrollCourse        = (courseId) => api.post(`/courses/${courseId}/enroll`).then(r => r.data);
+export const getEnrollmentStatus = (courseId) => api.get(`/courses/${courseId}/enrollment-status`).then(r => r.data);
+export const unenrollCourse      = (courseId) => api.delete(`/courses/${courseId}/unenroll`).then(r => r.data);
+
+// ── Course reviews ────────────────────────────────────────────────────────────
+export const getCourseReviews = (courseId, page = 1, limit = 10) =>
+  api.get(`/courses/${courseId}/reviews?page=${page}&limit=${limit}`).then(r => r.data);
+export const createReview = (courseId, data)           => api.post(`/courses/${courseId}/reviews`, data).then(r => r.data);
+export const updateReview = (courseId, reviewId, data) => api.put(`/courses/${courseId}/reviews/${reviewId}`, data).then(r => r.data);
+export const deleteReview = (courseId, reviewId)       => api.delete(`/courses/${courseId}/reviews/${reviewId}`).then(r => r.data);
+
 export default api;

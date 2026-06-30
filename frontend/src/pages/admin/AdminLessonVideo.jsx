@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import AdminLayout from '../../components/layout/AdminLayout';
+import { useEditorArea } from '../../lib/useEditorArea';
 import Alert from '../../components/ui/Alert';
 import api from '../../lib/api';
 
@@ -15,6 +15,7 @@ function toEmbed(url) {
 export default function AdminLessonVideo() {
   const { lessonId } = useParams();
   const navigate = useNavigate();
+  const { apiBase, Layout } = useEditorArea();
 
   const [lesson, setLesson]       = useState(null);
   const [contentUrl, setContentUrl] = useState('');
@@ -27,7 +28,7 @@ export default function AdminLessonVideo() {
   useEffect(() => {
     const load = async () => {
       try {
-        const r = await api.get(`/admin/lessons/${lessonId}`);
+        const r = await api.get(`${apiBase}/lessons/${lessonId}`);
         setLesson(r.data);
         setContentUrl(r.data.content_url || '');
         setTranscript(r.data.transcript || '');
@@ -43,7 +44,7 @@ export default function AdminLessonVideo() {
   const handleSave = async () => {
     setSaving(true);
     try {
-      await api.put(`/admin/lessons/${lessonId}`, { content_url: contentUrl.trim() || null, transcript: transcript.trim() || null });
+      await api.put(`${apiBase}/lessons/${lessonId}`, { content_url: contentUrl.trim() || null, transcript: transcript.trim() || null });
       setSaved(true);
       setTimeout(() => setSaved(false), 2500);
     } catch (e) {
@@ -54,14 +55,14 @@ export default function AdminLessonVideo() {
   };
 
   const goBack = () => {
-    if (lesson?.course_id) navigate(`/admin/courses/${lesson.course_id}/edit`);
-    else navigate('/admin/courses');
+    if (lesson?.course_id) navigate(`${apiBase}/courses/${lesson.course_id}/edit`);
+    else navigate(`${apiBase}/courses`);
   };
 
   const embed = toEmbed(contentUrl);
 
   return (
-    <AdminLayout title="Soạn video">
+    <Layout title="Soạn video">
       {alert.msg && (
         <Alert type={alert.type} onClose={() => setAlert({ type: '', msg: '' })} className="mb-5">{alert.msg}</Alert>
       )}
@@ -130,6 +131,6 @@ export default function AdminLessonVideo() {
           />
         </div>
       </div>
-    </AdminLayout>
+    </Layout>
   );
 }

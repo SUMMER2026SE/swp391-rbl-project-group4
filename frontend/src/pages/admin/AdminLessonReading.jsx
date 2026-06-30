@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import AdminLayout from '../../components/layout/AdminLayout';
+import { useEditorArea } from '../../lib/useEditorArea';
 import Button from '../../components/ui/Button';
 import Alert from '../../components/ui/Alert';
 import api from '../../lib/api';
@@ -25,6 +25,7 @@ function renderPreview(text) {
 export default function AdminLessonReading() {
   const { lessonId } = useParams();
   const navigate     = useNavigate();
+  const { apiBase, Layout } = useEditorArea();
 
   const [lesson, setLesson]   = useState(null);
   const [content, setContent] = useState('');
@@ -43,7 +44,7 @@ export default function AdminLessonReading() {
   useEffect(() => {
     const load = async () => {
       try {
-        const r = await api.get(`/admin/lessons/${lessonId}`);
+        const r = await api.get(`${apiBase}/lessons/${lessonId}`);
         setLesson(r.data);
         // content field stores: JSON { text, imageUrl } OR plain string (legacy)
         const raw = r.data.content || '';
@@ -70,7 +71,7 @@ export default function AdminLessonReading() {
     setSaving(true);
     try {
       const payload = JSON.stringify({ text: content, imageUrl: imageUrl.trim() || null });
-      await api.put(`/admin/lessons/${lessonId}`, { content: payload });
+      await api.put(`${apiBase}/lessons/${lessonId}`, { content: payload });
       setSaved(true);
       setTimeout(() => setSaved(false), 2500);
     } catch (e) {
@@ -124,8 +125,8 @@ export default function AdminLessonReading() {
   ];
 
   const goBack = () => {
-    if (lesson?.course_id) navigate(`/admin/courses/${lesson.course_id}/edit`);
-    else navigate('/admin/courses');
+    if (lesson?.course_id) navigate(`${apiBase}/courses/${lesson.course_id}/edit`);
+    else navigate(`${apiBase}/courses`);
   };
 
   // ── Render preview ──────────────────────────────────────────────────────────
@@ -175,16 +176,16 @@ export default function AdminLessonReading() {
 
   if (loading) {
     return (
-      <AdminLayout title="Soạn thảo bài đọc">
+      <Layout title="Soạn thảo bài đọc">
         <div className="flex items-center justify-center py-24">
           <span className="material-symbols-outlined animate-spin text-tsubaki-red text-5xl">progress_activity</span>
         </div>
-      </AdminLayout>
+      </Layout>
     );
   }
 
   return (
-    <AdminLayout title="Soạn thảo bài đọc">
+    <Layout title="Soạn thảo bài đọc">
       {alert.msg && (
         <Alert type={alert.type} onClose={() => setAlert({ type: '', msg: '' })} className="mb-5">
           {alert.msg}
@@ -389,6 +390,6 @@ export default function AdminLessonReading() {
           </div>
         </div>
       )}
-    </AdminLayout>
+    </Layout>
   );
 }

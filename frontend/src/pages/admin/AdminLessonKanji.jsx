@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import AdminLayout from '../../components/layout/AdminLayout';
+import { useEditorArea } from '../../lib/useEditorArea';
 import Modal from '../../components/ui/Modal';
 import Button from '../../components/ui/Button';
 import Alert from '../../components/ui/Alert';
@@ -211,6 +211,7 @@ function KanjiForm({ form, onChange }) {
 export default function AdminLessonKanji() {
   const { lessonId } = useParams();
   const navigate     = useNavigate();
+  const { apiBase, Layout } = useEditorArea();
 
   const [lesson, setLesson]   = useState(null);
   const [kanji, setKanji]     = useState([]);
@@ -247,8 +248,8 @@ export default function AdminLessonKanji() {
     setLoading(true);
     try {
       const [lessonRes, kanjiRes] = await Promise.all([
-        api.get(`/admin/lessons/${lessonId}`),
-        api.get(`/admin/kanji?lesson_id=${lessonId}&limit=100`),
+        api.get(`${apiBase}/lessons/${lessonId}`),
+        api.get(`${apiBase}/kanji?lesson_id=${lessonId}&limit=100`),
       ]);
       setLesson(lessonRes.data);
       setKanji(kanjiRes.data.data || []);
@@ -294,9 +295,9 @@ export default function AdminLessonKanji() {
         lesson_id:   lessonId,
       };
       if (editId) {
-        await api.put(`/admin/kanji/${editId}`, payload);
+        await api.put(`${apiBase}/kanji/${editId}`, payload);
       } else {
-        await api.post('/admin/kanji', payload);
+        await api.post(`${apiBase}/kanji`, payload);
       }
       setModal(false);
       await load();
@@ -312,7 +313,7 @@ export default function AdminLessonKanji() {
   const handleDelete = async (item) => {
     if (!confirm(`Gỡ kanji "${item.character}" khỏi bài này? (Kanji vẫn còn trong thư viện)`)) return;
     try {
-      await api.delete(`/admin/lessons/${lessonId}/kanji/${item.id}`);
+      await api.delete(`${apiBase}/lessons/${lessonId}/kanji/${item.id}`);
       setKanji(k => k.filter(x => x.id !== item.id));
       setAlert({ type: 'success', msg: 'Đã gỡ khỏi bài.' });
     } catch (e) {
@@ -327,7 +328,7 @@ export default function AdminLessonKanji() {
     try {
       const params = new URLSearchParams({ limit: 50 });
       if (term?.trim()) params.set('search', term.trim());
-      const r = await api.get(`/admin/kanji?${params}`);
+      const r = await api.get(`${apiBase}/kanji?${params}`);
       setList(r.data.data || []);
     } catch (e) {
       setAlert({ type: 'error', msg: e.message });
@@ -351,7 +352,7 @@ export default function AdminLessonKanji() {
     if (ids.length === 0) return setAlert({ type: 'error', msg: 'Chưa chọn kanji nào.' });
     setAttaching(true);
     try {
-      await api.post(`/admin/lessons/${lessonId}/kanji/attach`, { ids });
+      await api.post(`${apiBase}/lessons/${lessonId}/kanji/attach`, { ids });
       setPicker(false);
       await load();
       setAlert({ type: 'success', msg: `Đã thêm ${ids.length} kanji vào bài.` });
@@ -367,24 +368,24 @@ export default function AdminLessonKanji() {
   // ── Back navigation ─────────────────────────────────────────────────────────
 
   const goBack = () => {
-    if (lesson?.course_id) navigate(`/admin/courses/${lesson.course_id}/edit`);
-    else navigate('/admin/courses');
+    if (lesson?.course_id) navigate(`${apiBase}/courses/${lesson.course_id}/edit`);
+    else navigate(`${apiBase}/courses`);
   };
 
   // ── Render ───────────────────────────────────────────────────────────────────
 
   if (loading) {
     return (
-      <AdminLayout title="Kanji bài học">
+      <Layout title="Kanji bài học">
         <div className="flex items-center justify-center py-24">
           <span className="material-symbols-outlined animate-spin text-tsubaki-red text-5xl">progress_activity</span>
         </div>
-      </AdminLayout>
+      </Layout>
     );
   }
 
   return (
-    <AdminLayout title="Kanji bài học">
+    <Layout title="Kanji bài học">
       {alert.msg && (
         <Alert type={alert.type} onClose={() => setAlert({ type: '', msg: '' })} className="mb-5">
           {alert.msg}
@@ -559,6 +560,6 @@ export default function AdminLessonKanji() {
           )}
         </div>
       </Modal>
-    </AdminLayout>
+    </Layout>
   );
 }

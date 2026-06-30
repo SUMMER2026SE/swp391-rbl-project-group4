@@ -31,3 +31,16 @@ exports.requireTeacher = (req, res, next) => {
   if (role !== 'teacher' && role !== 'admin') return res.status(403).json({ error: 'Forbidden: teacher access required' });
   next();
 };
+
+// Like requireAuth but never blocks: attach req.user only if a valid token is present.
+// Lets guests hit public endpoints while still personalizing the response when logged in.
+exports.optionalAuth = async (req, res, next) => {
+  const header = req.headers.authorization;
+  if (!header || !header.startsWith('Bearer ')) return next();
+  const token = header.slice(7);
+  try {
+    const { data: { user }, error } = await supabaseAdmin.auth.getUser(token);
+    if (!error && user) req.user = user;
+  } catch { /* ignore — treat as guest */ }
+  next();
+};

@@ -102,6 +102,7 @@ router.put('/users/:id/password',     c.resetUserPassword);
 router.delete('/users/:id',           c.deleteUser);
 
 // Courses
+router.post('/courses/upload-cover',      upload.single('image'), c.uploadCourseCover);
 router.get('/courses',                    c.listCourses);
 router.post('/courses',                   c.createCourse);
 router.put('/courses/:id',                c.updateCourse);

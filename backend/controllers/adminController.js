@@ -137,38 +137,122 @@ exports.getRecentActivity = async (req, res) => {
 
 // ── Courses CRUD ─────────────────────────────────────────────────────────────
 exports.listCourses = async (req, res) => {
-  const { page = 1, limit = 20, search } = req.query;
+  const { page = 1, limit = 12, search, status, level, sort = 'newest' } = req.query;
   const offset = (page - 1) * limit;
-  try {
-    let q = supabaseAdmin.from('courses').select('*', { count: 'exact' })
-      .order('created_at', { ascending: false }).range(offset, offset + Number(limit) - 1);
+  // Áp filter search/level dùng chung cho cả query trang lẫn đếm tab.
+  const applyBase = (q) => {
     if (search) q = q.ilike('title', `%${search}%`);
-    const { data, error, count } = await q;
-    if (error) throw error;
-    res.json({ data, total: count, page: Number(page), limit: Number(limit) });
+    if (level)  q = q.eq('level', level);
+    return q;
+  };
+  try {
+    let q = applyBase(supabaseAdmin.from('courses').select('*', { count: 'exact' }));
+    if (status === 'published') q = q.eq('is_published', true);
+    if (status === 'draft')     q = q.eq('is_published', false);
+    if (sort === 'oldest')      q = q.order('created_at', { ascending: true });
+    else if (sort === 'title')  q = q.order('title', { ascending: true });
+    else                        q = q.order('created_at', { ascending: false });
+    q = q.range(offset, offset + Number(limit) - 1);
+
+    const [pageRes, allRes, pubRes] = await Promise.all([
+      q,
+      applyBase(supabaseAdmin.from('courses').select('*', { count: 'exact', head: true })),
+      applyBase(supabaseAdmin.from('courses').select('*', { count: 'exact', head: true })).eq('is_published', true),
+    ]);
+    if (pageRes.error) throw pageRes.error;
+    const rows = pageRes.data || [];
+    const all = allRes.count || 0;
+    const published = pubRes.count || 0;
+
+    // Bổ sung số học viên (cột cache ở content_module) + số mục cho từng khóa của trang.
+    const ids = rows.map(c => c.id);
+    let enrollMap = {}, lessonMap = {};
+    if (ids.length) {
+      const [{ data: cm }, { data: ls }] = await Promise.all([
+        contentDb.from('courses').select('id,enrollment_count').in('id', ids),
+        supabaseAdmin.from('lessons').select('course_id').in('course_id', ids),
+      ]);
+      enrollMap = Object.fromEntries((cm || []).map(c => [c.id, c.enrollment_count]));
+      (ls || []).forEach(l => { lessonMap[l.course_id] = (lessonMap[l.course_id] || 0) + 1; });
+    }
+    const data = rows.map(c => ({ ...c, enrollment_count: enrollMap[c.id] || 0, lesson_count: lessonMap[c.id] || 0 }));
+
+    res.json({
+      data, total: pageRes.count, page: Number(page), limit: Number(limit),
+      counts: { all, published, draft: all - published },
+    });
   } catch (err) { res.status(500).json({ error: 'Lỗi.' }); }
 };
 
+// POST /api/admin/courses/upload-cover (dùng chung cho teacher) — trả về URL ảnh bìa.
+exports.uploadCourseCover = async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'Không có file được tải lên.' });
+  const ext = (req.file.originalname.split('.').pop() || 'jpg').toLowerCase();
+  const filename = `course-${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+  try {
+    const { error } = await supabaseAdmin.storage
+      .from('passage-images')
+      .upload(filename, req.file.buffer, { contentType: req.file.mimetype, upsert: false });
+    if (error) throw error;
+    const { data: { publicUrl } } = supabaseAdmin.storage.from('passage-images').getPublicUrl(filename);
+    res.json({ url: publicUrl });
+  } catch (err) { res.status(500).json({ error: 'Không thể tải ảnh lên.' }); }
+};
+
 exports.createCourse = async (req, res) => {
-  const { title, title_ja, description, description_ja, level, thumbnail_url, is_published = false } = req.body;
+  const { title, title_ja, description, description_ja, level, thumbnail_url, is_published = false,
+          price, reference_curriculum, difficulty_level } = req.body;
   if (!title) return res.status(400).json({ error: 'Tiêu đề không được để trống.' });
   try {
+    // Cột cơ bản đi qua view compat (map level → jlpt_level_id).
     const { data, error } = await supabaseAdmin.from('courses')
       .insert({ title, title_ja, description, description_ja, level, thumbnail_url, is_published, created_by: req.user.id })
       .select().single();
     if (error) throw error;
-    res.status(201).json(data);
+
+    // Khóa do admin tạo: miễn phí, creator_type='admin'. Cột mới ghi thẳng vào bảng gốc.
+    const { data: extra } = await contentDb.from('courses')
+      .update({
+        creator_type: 'admin',
+        is_free: true,
+        price: price ?? 0,
+        reference_curriculum: reference_curriculum ?? null,
+        difficulty_level: difficulty_level ?? null,
+      })
+      .eq('id', data.id)
+      .select('is_free,price,creator_type,reference_curriculum,difficulty_level').single();
+
+    res.status(201).json({ ...data, ...(extra || {}) });
   } catch (err) { res.status(500).json({ error: 'Không thể tạo khóa học.' }); }
 };
 
 exports.updateCourse = async (req, res) => {
-  const allowed = ['title','title_ja','description','description_ja','level','thumbnail_url','is_published'];
-  const updates = Object.fromEntries(Object.entries(req.body).filter(([k]) => allowed.includes(k)));
-  updates.updated_at = new Date().toISOString();
+  // Cột cơ bản qua view compat; cột giá/phân loại ghi thẳng vào bảng gốc content_module.
+  const viewAllowed = ['title','title_ja','description','description_ja','level','thumbnail_url','is_published'];
+  const newAllowed  = ['is_free','price','reference_curriculum','difficulty_level'];
+  const viewUpdates = Object.fromEntries(Object.entries(req.body).filter(([k]) => viewAllowed.includes(k)));
+  const newUpdates  = Object.fromEntries(Object.entries(req.body).filter(([k]) => newAllowed.includes(k)));
   try {
-    const { data, error } = await supabaseAdmin.from('courses').update(updates).eq('id', req.params.id).select().single();
-    if (error) throw error;
-    res.json(data);
+    let data = null;
+    if (Object.keys(viewUpdates).length) {
+      viewUpdates.updated_at = new Date().toISOString();
+      const r = await supabaseAdmin.from('courses').update(viewUpdates).eq('id', req.params.id).select().single();
+      if (r.error) throw r.error;
+      data = r.data;
+    }
+    let extra = null;
+    if (Object.keys(newUpdates).length) {
+      const r = await contentDb.from('courses').update(newUpdates).eq('id', req.params.id)
+        .select('is_free,price,creator_type,reference_curriculum,difficulty_level').single();
+      if (r.error) throw r.error;
+      extra = r.data;
+    }
+    // Nếu chỉ sửa cột mới, vẫn trả về bản ghi đầy đủ từ view.
+    if (!data) {
+      const r = await supabaseAdmin.from('courses').select('*').eq('id', req.params.id).single();
+      data = r.data;
+    }
+    res.json({ ...data, ...(extra || {}) });
   } catch (err) { res.status(500).json({ error: 'Không thể cập nhật.' }); }
 };
 

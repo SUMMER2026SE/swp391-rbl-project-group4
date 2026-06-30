@@ -3,6 +3,7 @@ import { useAuth } from '../../contexts/AuthContext';
 
 const TEACHER_LINKS = [
   { to: '/teacher',               icon: 'dashboard',     label: 'Dashboard' },
+  { to: '/teacher/courses',       icon: 'menu_book',     label: 'Khóa học' },
   { to: '/teacher/vocab',         icon: 'translate',     label: 'Từ vựng' },
   { to: '/teacher/kanji',         icon: 'font_download', label: 'Kanji' },
   { to: '/teacher/dictionary',    icon: 'auto_stories',  label: 'Từ điển' },
