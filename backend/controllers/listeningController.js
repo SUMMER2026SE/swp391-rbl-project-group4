@@ -131,12 +131,16 @@ exports.deleteUserAudio = async (req, res) => {
 // ── Admin: Dialogue CRUD ──────────────────────────────────────────────────────
 
 exports.adminListDialogues = async (req, res) => {
-  const { data, error } = await db().from('dialogues')
-    .select('*, dialogue_lines(id, line_order, speaker, text_jp, text_plain, text_vi)')
-    .order('level').order('created_at');
-  if (error) return res.status(500).json({ error: 'Không tải được.' });
-  (data || []).forEach(d => d.dialogue_lines?.sort((a, b) => a.line_order - b.line_order));
-  res.json(data || []);
+  const [{ data: dlgs, error: e1 }, { data: lines, error: e2 }] = await Promise.all([
+    db().from('dialogues').select('*').order('level').order('created_at'),
+    db().from('dialogue_lines').select('id, dialogue_id, line_order, speaker, text_jp, text_plain, text_vi').order('line_order'),
+  ]);
+  if (e1) return res.status(500).json({ error: e1.message || 'Không tải được.' });
+  if (e2) return res.status(500).json({ error: e2.message || 'Không tải được lines.' });
+  const map = {};
+  (dlgs || []).forEach(d => { map[d.id] = { ...d, dialogue_lines: [] }; });
+  (lines || []).forEach(l => { if (map[l.dialogue_id]) map[l.dialogue_id].dialogue_lines.push(l); });
+  res.json(Object.values(map));
 };
 
 exports.adminCreateDialogue = async (req, res) => {
