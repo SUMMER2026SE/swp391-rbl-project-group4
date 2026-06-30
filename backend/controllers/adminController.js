@@ -292,11 +292,11 @@ exports.getCourseBuilder = async (req, res) => {
 
 // ── Units CRUD ("Bài học") ─────────────────────────────────────────────────────
 exports.createUnit = async (req, res) => {
-  const { course_id, title, title_ja, sort_order } = req.body;
+  const { course_id, title, title_ja, sort_order, description, level } = req.body;
   if (!course_id || !title) return res.status(400).json({ error: 'Thiếu thông tin bắt buộc.' });
   try {
     const { data, error } = await contentDb.from('units')
-      .insert({ course_id, title, title_ja: title_ja || null, sort_order: sort_order ?? 0 })
+      .insert({ course_id, title, title_ja: title_ja || null, sort_order: sort_order ?? 0, description: description || null, level: level || null })
       .select().single();
     if (error) throw error;
     res.status(201).json(data);
@@ -304,7 +304,7 @@ exports.createUnit = async (req, res) => {
 };
 
 exports.updateUnit = async (req, res) => {
-  const allowed = ['title', 'title_ja', 'sort_order'];
+  const allowed = ['title', 'title_ja', 'sort_order', 'description', 'level'];
   const updates = Object.fromEntries(Object.entries(req.body).filter(([k]) => allowed.includes(k)));
   updates.updated_at = new Date().toISOString();
   try {

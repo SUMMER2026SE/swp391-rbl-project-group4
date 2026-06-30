@@ -26,28 +26,51 @@ const LEVEL_GRADIENT = {
   mixed: 'from-purple-500/10 to-violet-400/10',
 };
 const TYPE_META = {
-  video:      { icon: 'play_circle', color: 'text-sumire-purple' },
-  reading:    { icon: 'article',     color: 'text-primary' },
-  vocabulary: { icon: 'translate',   color: 'text-green-600' },
-  kanji:      { icon: 'draw',        color: 'text-purple-600' },
-  grammar:    { icon: 'spellcheck',  color: 'text-amber-600' },
-  quiz:       { icon: 'quiz',        color: 'text-tsubaki-red' },
+  video:      { label: 'Video',    icon: 'play_circle', badge: 'bg-purple-100 text-purple-700' },
+  reading:    { label: 'Bài đọc',  icon: 'article',     badge: 'bg-orange-100 text-orange-700' },
+  vocabulary: { label: 'Từ vựng',  icon: 'translate',   badge: 'bg-green-100 text-green-700' },
+  kanji:      { label: 'Kanji',    icon: 'draw',        badge: 'bg-violet-100 text-violet-700' },
+  grammar:    { label: 'Ngữ pháp', icon: 'spellcheck',  badge: 'bg-amber-100 text-amber-700' },
+  quiz:       { label: 'Quiz',     icon: 'quiz',        badge: 'bg-slate-100 text-slate-600' },
+};
+
+// Trạng thái Bài học (unit) suy từ tiến độ các mục bên trong + mục đang học hiện tại.
+const unitStatus = (lessons, resumeId) => {
+  const total = lessons.length;
+  const done = lessons.filter(l => l.completed).length;
+  if (total > 0 && done === total) return 'completed';
+  if (resumeId && lessons.some(l => l.id === resumeId)) return 'active';
+  if (done > 0) return 'active';
+  return 'locked';
 };
 
 const REVIEW_PAGE_SIZE = 5;
 
-function ItemRow({ item }) {
+function ItemRow({ item, isCurrent }) {
   const meta = TYPE_META[item.lesson_type] || TYPE_META.reading;
   return (
-    <Link to={`/lessons/${item.id}`} className="flex items-center gap-3 py-3 pl-10 pr-5 hover:bg-surface-container-low transition-colors group">
-      <span className={`material-symbols-outlined text-xl shrink-0 ${item.completed ? 'text-green-600' : meta.color}`}>
-        {item.completed ? 'check_circle' : meta.icon}
-      </span>
+    <Link
+      to={`/lessons/${item.id}`}
+      className={`flex items-center gap-3 px-5 py-3 transition-colors group ${isCurrent ? 'bg-sumire-purple/5' : 'hover:bg-surface-container-low'}`}
+    >
+      {item.completed ? (
+        <span className="material-symbols-outlined text-green-500 fill text-[26px] shrink-0">check_circle</span>
+      ) : (
+        <span className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${meta.badge}`}>
+          <span className="material-symbols-outlined text-lg">{meta.icon}</span>
+        </span>
+      )}
       <div className="flex-1 min-w-0">
-        <p className="font-medium text-sm text-on-surface group-hover:text-tsubaki-red transition-colors line-clamp-1">{item.title}</p>
-        {item.title_ja && <p className="text-xs text-on-muted mt-0.5">{item.title_ja}</p>}
+        <div className="flex items-center gap-2">
+          <p className={`font-medium text-sm line-clamp-1 transition-colors ${isCurrent ? 'text-sumire-purple' : 'text-on-surface group-hover:text-sumire-purple'}`}>{item.title}</p>
+          {isCurrent && !item.completed && (
+            <span className="shrink-0 text-[10px] font-bold px-1.5 py-0.5 rounded bg-sumire-purple text-white tracking-wide">ĐANG HỌC</span>
+          )}
+        </div>
+        {item.title_ja && <p className="text-xs text-on-muted mt-0.5 truncate">{item.title_ja}</p>}
       </div>
-      <span className="material-symbols-outlined text-lg text-on-muted/40 group-hover:text-tsubaki-red group-hover:translate-x-1 transition-all shrink-0">chevron_right</span>
+      <span className={`shrink-0 text-xs font-semibold px-2.5 py-1 rounded-full ${meta.badge}`}>{meta.label}</span>
+      <span className="material-symbols-outlined text-lg text-on-muted/40 group-hover:text-sumire-purple group-hover:translate-x-0.5 transition-all shrink-0">chevron_right</span>
     </Link>
   );
 }
@@ -219,11 +242,11 @@ export default function CourseDetail() {
             <div className="flex flex-wrap items-center gap-2">
               {lvl && (
                 <span className={`px-3 py-1 rounded-full text-xs font-bold border ${LEVEL_BADGE[lvl] || 'bg-surface-container text-on-muted border-outline-variant'}`}>
-                  {lvl === 'mixed' ? 'Tổng hợp' : `JLPT ${lvl}`}
+                  {lvl === 'mixed' ? 'Tổng hợp' : `JLPT${lvl}`}
                 </span>
               )}
               {totalItems > 0 && (
-                <span className="px-3 py-1 rounded-full text-xs font-semibold bg-surface-container text-on-muted border border-outline-variant">
+                <span className="text-xs font-semibold text-on-muted">
                   {units.length} bài học • {totalItems} mục
                 </span>
               )}
@@ -233,24 +256,35 @@ export default function CourseDetail() {
                 </span>
               )}
             </div>
-            <h1 className="font-display text-display-mobile font-bold text-on-surface leading-tight">{course.title}</h1>
-            {course.title_ja && <p className="text-lg text-on-muted">{course.title_ja}</p>}
+            <h1 className="font-display text-display-mobile font-bold text-on-surface leading-tight">
+              {course.title}
+              {course.title_ja && <span className="text-on-muted font-normal text-2xl ml-3">{course.title_ja}</span>}
+            </h1>
             <p className="text-base text-on-surface-variant leading-relaxed whitespace-pre-line">
               {course.description || 'Khám phá nội dung và bắt đầu hành trình học tiếng Nhật của bạn.'}
             </p>
-
-            {enrolled && totalItems > 0 && (
-              <div className="space-y-1.5 pt-1">
-                <div className="flex justify-between text-xs text-on-muted">
-                  <span>Tiến độ</span>
-                  <span>{completedCount}/{totalItems} mục • {progressPct}%</span>
-                </div>
-                <div className="h-2 rounded-full bg-surface-container overflow-hidden">
-                  <div className="h-full bg-tsubaki-red rounded-full transition-all" style={{ width: `${progressPct}%` }} />
-                </div>
-              </div>
-            )}
           </div>
+
+          {/* Tiến độ học tập (card nổi bật) */}
+          {enrolled && totalItems > 0 && (
+            <div className="bg-white rounded-2xl border border-outline-variant/60 shadow-sm p-5">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-3">
+                  <span className="w-11 h-11 rounded-xl bg-sumire-purple/10 text-sumire-purple flex items-center justify-center shrink-0">
+                    <span className="material-symbols-outlined fill">task_alt</span>
+                  </span>
+                  <div>
+                    <p className="font-semibold text-on-surface">Tiến độ học tập</p>
+                    <p className="text-xs text-on-muted">Đã hoàn thành {completedCount}/{totalItems} mục</p>
+                  </div>
+                </div>
+                <span className="text-3xl font-display font-bold text-sumire-purple leading-none">{progressPct}%</span>
+              </div>
+              <div className="h-2.5 rounded-full bg-surface-container overflow-hidden">
+                <div className="h-full bg-sumire-purple rounded-full transition-all" style={{ width: `${progressPct}%` }} />
+              </div>
+            </div>
+          )}
 
           {/* Nội dung khóa học */}
           <div>
@@ -269,13 +303,22 @@ export default function CourseDetail() {
                 {units.map((unit, uIdx) => {
                   const open = expanded.has(unit.id);
                   const lessons = unit.lessons || [];
+                  const status = unitStatus(lessons, resumeItem?.id);
+                  const circle =
+                    status === 'completed' ? 'bg-green-100 text-green-600'
+                    : status === 'active' ? 'bg-sumire-purple/10 text-sumire-purple'
+                    : 'bg-surface-container text-on-muted';
                   return (
-                    <div key={unit.id} className="glass-card rounded-2xl overflow-hidden border border-outline-variant/60">
+                    <div key={unit.id} className="bg-white rounded-2xl overflow-hidden border border-outline-variant/60 shadow-sm">
                       <button
                         onClick={() => toggleUnit(unit.id)}
-                        className="w-full flex items-center gap-3 px-5 py-3.5 bg-surface-container-low border-b border-outline-variant/30 text-left hover:bg-surface-container transition-colors"
+                        className="w-full flex items-center gap-3 px-5 py-4 text-left hover:bg-surface-container-low/50 transition-colors"
                       >
-                        <span className="w-7 h-7 rounded-full bg-tsubaki-red/10 text-tsubaki-red text-xs font-bold flex items-center justify-center shrink-0">{uIdx + 1}</span>
+                        <span className={`w-9 h-9 rounded-full text-sm font-bold flex items-center justify-center shrink-0 ${circle}`}>
+                          {status === 'completed'
+                            ? <span className="material-symbols-outlined text-xl fill">check</span>
+                            : uIdx + 1}
+                        </span>
                         <div className="min-w-0 flex-1">
                           <p className="font-semibold text-sm text-on-surface truncate">{unit.title}</p>
                           {unit.title_ja && <p className="text-xs text-on-muted truncate">{unit.title_ja}</p>}
@@ -284,8 +327,8 @@ export default function CourseDetail() {
                         <span className={`material-symbols-outlined text-on-muted shrink-0 transition-transform ${open ? 'rotate-180' : ''}`}>expand_more</span>
                       </button>
                       {open && (
-                        <div className="divide-y divide-outline-variant/20">
-                          {lessons.map(item => <ItemRow key={item.id} item={item} />)}
+                        <div className="border-t border-outline-variant/30 divide-y divide-outline-variant/15">
+                          {lessons.map(item => <ItemRow key={item.id} item={item} isCurrent={resumeItem && item.id === resumeItem.id} />)}
                           {lessons.length === 0 && <p className="px-5 py-4 text-sm text-on-muted italic">Chưa có mục nào.</p>}
                         </div>
                       )}
@@ -389,34 +432,52 @@ export default function CourseDetail() {
         {/* ── RIGHT: sidebar (xuống dưới trên mobile) ────────────────── */}
         <aside className="lg:col-span-1">
           <div className="lg:sticky lg:top-20 space-y-4">
-            {/* Thumbnail */}
+            {/* Video giới thiệu / thumbnail */}
             <div className="aspect-[4/3] rounded-2xl overflow-hidden border border-outline-variant/60 shadow-lg relative">
               {course.thumbnail_url ? (
                 <img src={course.thumbnail_url} alt={course.title} className="w-full h-full object-cover" />
               ) : (
-                <div className={`w-full h-full bg-gradient-to-br ${LEVEL_GRADIENT[lvl] || 'from-tsubaki-red/10 to-sumire-purple/10'} flex items-center justify-center`}>
-                  <span className="material-symbols-outlined text-7xl text-tsubaki-red/15">menu_book</span>
+                <div className={`w-full h-full bg-gradient-to-br ${LEVEL_GRADIENT[lvl] || 'from-tsubaki-red/10 to-sumire-purple/10'} flex items-center justify-center relative`}>
+                  <span className="absolute -right-2 bottom-0 font-display font-bold text-tsubaki-red/10 leading-none select-none pointer-events-none" style={{ fontSize: '11rem' }}>絆</span>
+                  <span className="absolute top-3 left-3 flex items-center gap-1.5 bg-charcoal/70 text-white text-xs font-medium px-2.5 py-1 rounded-lg">
+                    <span className="material-symbols-outlined text-sm">videocam</span> Video giới thiệu
+                  </span>
+                  <div className="w-16 h-16 rounded-full bg-white/90 shadow-lg flex items-center justify-center relative z-10">
+                    <span className="material-symbols-outlined text-tsubaki-red text-3xl fill">play_arrow</span>
+                  </div>
                 </div>
               )}
             </div>
 
-            <div className="glass-card rounded-2xl border border-outline-variant/60 p-5 space-y-4">
-              {/* Giá */}
-              <div>
-                {course.is_free ? (
-                  <p className="text-2xl font-display font-bold text-green-600">Miễn phí</p>
-                ) : (
-                  <p className="text-2xl font-display font-bold text-on-surface">{formatVnd(course.price)}</p>
-                )}
-              </div>
+            {/* Tiến độ + CTA */}
+            <div className="bg-white rounded-2xl border border-outline-variant/60 shadow-sm p-5 space-y-4">
+              {enrolled && totalItems > 0 ? (
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-medium text-on-surface">Tiến độ của bạn</span>
+                    <span className="text-sm font-bold text-sumire-purple">{progressPct}%</span>
+                  </div>
+                  <div className="h-2 rounded-full bg-surface-container overflow-hidden">
+                    <div className="h-full bg-sumire-purple rounded-full transition-all" style={{ width: `${progressPct}%` }} />
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  {course.is_free ? (
+                    <p className="text-2xl font-display font-bold text-green-600">Miễn phí</p>
+                  ) : (
+                    <p className="text-2xl font-display font-bold text-on-surface">{formatVnd(course.price)}</p>
+                  )}
+                </div>
+              )}
 
               {/* CTA */}
               {enrolled ? (
                 resumeItem ? (
                   <Link to={`/lessons/${resumeItem.id}`} className="w-full">
                     <Button className="w-full">
+                      <span className="material-symbols-outlined text-lg fill">play_arrow</span>
                       {completedCount > 0 ? 'Tiếp tục học' : 'Vào học'}
-                      <span className="material-symbols-outlined text-lg">arrow_forward</span>
                     </Button>
                   </Link>
                 ) : (
@@ -431,21 +492,29 @@ export default function CourseDetail() {
 
               {/* Lượt đăng ký */}
               <div className="flex items-center gap-2 text-sm text-on-muted">
-                <span className="material-symbols-outlined text-base">group</span>
-                {formatCount(course.enrollment_count)} học viên đã đăng ký
+                <span className="material-symbols-outlined text-base">groups</span>
+                <span><strong className="text-on-surface">{formatCount(course.enrollment_count)}</strong> học viên đã đăng ký</span>
               </div>
 
               {/* Giáo viên */}
-              <div className="flex items-center gap-2 text-sm text-on-surface pt-3 border-t border-outline-variant/40">
-                <span className={`material-symbols-outlined text-lg ${isAdmin ? 'text-tsubaki-red fill' : 'text-on-muted'}`}>{isAdmin ? 'verified' : 'person'}</span>
-                <span className="font-medium">{author}</span>
+              <div className="flex items-center gap-3 pt-3 border-t border-outline-variant/40">
+                <div className="w-10 h-10 rounded-full bg-sumire-purple/15 text-sumire-purple flex items-center justify-center font-bold shrink-0">
+                  {(author || 'G').charAt(0).toUpperCase()}
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs text-on-muted">Giáo viên</p>
+                  <p className="font-semibold text-sm text-on-surface truncate flex items-center gap-1">
+                    {author}
+                    {isAdmin && <span className="material-symbols-outlined text-tsubaki-red text-base fill">verified</span>}
+                  </p>
+                </div>
               </div>
             </div>
 
             {/* Rating summary */}
-            <div className="glass-card rounded-2xl border border-outline-variant/60 p-5">
-              <div className="flex items-center gap-4 mb-3">
-                <div className="text-center">
+            <div className="bg-white rounded-2xl border border-outline-variant/60 shadow-sm p-5">
+              <div className="flex items-center gap-4">
+                <div className="text-center shrink-0">
                   <p className="text-4xl font-display font-bold text-on-surface leading-none">{avgRating.toFixed(1)}</p>
                   <Stars value={Math.round(avgRating)} size="text-base" className="mt-1" />
                   <p className="text-xs text-on-muted mt-1">{reviewTotal} đánh giá</p>

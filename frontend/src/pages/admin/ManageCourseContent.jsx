@@ -10,24 +10,17 @@ import api from '../../lib/api';
 
 // Loại Mục (item). Mỗi loại mở một editor riêng theo lesson_id.
 const LESSON_TYPES = [
-  { value: 'video',      label: 'Video',      icon: 'play_circle',    color: 'text-sumire-purple' },
-  { value: 'reading',    label: 'Bài đọc',    icon: 'description',    color: 'text-primary' },
-  { value: 'vocabulary', label: 'Từ vựng',    icon: 'translate',      color: 'text-green-600' },
-  { value: 'kanji',      label: 'Kanji',      icon: 'draw',           color: 'text-purple-600' },
-  { value: 'grammar',    label: 'Ngữ pháp',   icon: 'spellcheck',     color: 'text-amber-600' },
-  { value: 'quiz',       label: 'Quiz',       icon: 'quiz',           color: 'text-tsubaki-red' },
+  { value: 'video',      label: 'Video',      icon: 'play_circle',    color: 'text-purple-500', badge: 'bg-purple-100 text-purple-700' },
+  { value: 'reading',    label: 'Bài đọc',    icon: 'description',    color: 'text-orange-500', badge: 'bg-orange-100 text-orange-700' },
+  { value: 'vocabulary', label: 'Từ vựng',    icon: 'translate',      color: 'text-green-600',  badge: 'bg-green-100 text-green-700' },
+  { value: 'kanji',      label: 'Kanji',      icon: 'draw',           color: 'text-violet-600', badge: 'bg-violet-100 text-violet-700' },
+  { value: 'grammar',    label: 'Ngữ pháp',   icon: 'spellcheck',     color: 'text-amber-600',  badge: 'bg-amber-100 text-amber-700' },
+  { value: 'quiz',       label: 'Quiz',       icon: 'quiz',           color: 'text-slate-500',  badge: 'bg-slate-100 text-slate-600' },
 ];
 
 const TYPE_ROUTE = { video: 'video', reading: 'reading', vocabulary: 'vocabulary', kanji: 'kanji', grammar: 'grammar', quiz: 'quiz' };
 
 const getTypeMeta = (type) => LESSON_TYPES.find(t => t.value === type) || LESSON_TYPES[1];
-
-const formatMeta = (item) => {
-  const label = getTypeMeta(item.lesson_type).label;
-  if (item.lesson_type === 'quiz') return `${label} • ${item.question_count || 0} câu`;
-  if (item.duration_minutes > 0)  return `${label} • ${item.duration_minutes} phút`;
-  return label;
-};
 
 const EMPTY_UNIT = { title: '', title_ja: '' };
 const EMPTY_ITEM = { title: '', title_ja: '', lesson_type: 'reading', duration_minutes: '', question_count: '' };
@@ -44,10 +37,10 @@ function LessonTypeSelector({ value, onChange }) {
           onClick={() => onChange(t.value)}
           className={`flex flex-col items-center gap-1 p-3 rounded-xl border-2 transition-all text-sm font-medium
             ${value === t.value
-              ? 'border-tsubaki-red bg-tsubaki-red/5 text-tsubaki-red'
-              : 'border-outline/30 hover:border-tsubaki-red/40 text-on-muted hover:text-on-surface'}`}
+              ? 'border-sumire-purple bg-sumire-purple/5 text-sumire-purple'
+              : 'border-outline/30 hover:border-sumire-purple/40 text-on-muted hover:text-on-surface'}`}
         >
-          <span className={`material-symbols-outlined text-2xl ${value === t.value ? 'text-tsubaki-red' : t.color}`}>
+          <span className={`material-symbols-outlined text-2xl ${value === t.value ? 'text-sumire-purple' : t.color}`}>
             {t.icon}
           </span>
           {t.label}
@@ -76,28 +69,35 @@ function ItemRow({ item, onEditContent, onEditInfo, onDelete, onDragStart, onDra
       onDragStart={onDragStart}
       onDragOver={onDragOver}
       onDragEnd={onDragEnd}
-      className={`flex items-center justify-between px-3 py-2.5 rounded-xl border transition-all group/item
+      className={`flex items-center gap-3 px-3 py-2.5 rounded-xl border transition-all group/item
         ${isDragging
-          ? 'opacity-40 bg-surface-container/50 border-tsubaki-red/30 scale-[0.98]'
-          : 'border-outline/20 hover:border-tsubaki-red/30 hover:bg-surface-stone'}`}
+          ? 'opacity-40 bg-surface-container/50 border-sumire-purple/30 scale-[0.98]'
+          : 'border-outline/20 hover:border-sumire-purple/30 hover:bg-surface-stone'}`}
     >
-      <div className="flex items-center gap-3 min-w-0 flex-1">
-        <span className="material-symbols-outlined text-on-muted/30 hover:text-on-muted cursor-grab text-base shrink-0">drag_indicator</span>
-        <span className={`material-symbols-outlined text-xl shrink-0 ${meta.color}`}>{meta.icon}</span>
-        <button
-          onClick={() => onEditContent(item)}
-          className="font-medium text-sm text-on-surface truncate hover:text-tsubaki-red transition-colors text-left"
-          title="Soạn nội dung"
-        >
-          {item.title}
-        </button>
-        <span className="material-symbols-outlined text-on-muted/40 text-sm hidden group-hover/item:block shrink-0">open_in_new</span>
-      </div>
+      <span className="material-symbols-outlined text-on-muted/30 hover:text-on-muted cursor-grab text-base shrink-0">drag_indicator</span>
+      <button
+        onClick={() => onEditContent(item)}
+        className="flex items-center gap-3 min-w-0 flex-1 text-left"
+        title="Soạn nội dung"
+      >
+        <span className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${meta.badge}`}>
+          <span className="material-symbols-outlined text-lg">{meta.icon}</span>
+        </span>
+        <div className="min-w-0">
+          <p className="font-medium text-sm text-on-surface truncate group-hover/item:text-sumire-purple transition-colors">{item.title}</p>
+          {item.title_ja && <p className="text-xs text-on-muted truncate">{item.title_ja}</p>}
+        </div>
+      </button>
+
+      <span className={`shrink-0 text-xs font-semibold px-2.5 py-1 rounded-full ${meta.badge}`}>
+        {item.lesson_type === 'quiz' && item.question_count ? `${meta.label} • ${item.question_count} câu`
+          : item.duration_minutes > 0 ? `${meta.label} • ${item.duration_minutes}′`
+          : meta.label}
+      </span>
 
       <div className="flex items-center gap-2 shrink-0">
-        <span className="text-xs text-on-muted hidden sm:block">{formatMeta(item)}</span>
         <div className="relative" ref={menuRef}>
-          <button onClick={() => setMenuOpen(v => !v)} className="p-1 text-on-muted hover:text-tsubaki-red rounded-lg transition-colors">
+          <button onClick={() => setMenuOpen(v => !v)} className="p-1 text-on-muted hover:text-sumire-purple rounded-lg transition-colors">
             <span className="material-symbols-outlined text-lg">more_vert</span>
           </button>
           {menuOpen && (
@@ -131,7 +131,7 @@ function ItemRow({ item, onEditContent, onEditInfo, onDelete, onDragStart, onDra
 
 // ── Unit card ("Bài học") ───────────────────────────────────────────────────────
 
-function UnitCard({ unit, onUnitEdit, onUnitDelete, onItemAdd, onItemEditContent, onItemEditInfo, onItemDelete, onItemsReorder, dragProps }) {
+function UnitCard({ unit, index, onUnitEdit, onUnitDelete, onItemAdd, onItemEditContent, onItemEditInfo, onItemDelete, onItemsReorder, dragProps }) {
   const [collapsed, setCollapsed] = useState(false);
   const [localItems, setLocalItems] = useState(unit.lessons || []);
   const dragItemIdx = useRef(null);
@@ -168,21 +168,22 @@ function UnitCard({ unit, onUnitEdit, onUnitDelete, onItemAdd, onItemEditContent
   return (
     <div className="bg-white border border-outline/30 shadow-sm rounded-2xl overflow-hidden transition-all duration-200 hover:shadow-md group" {...dragProps}>
       {/* Header */}
-      <div className="flex items-center justify-between px-5 py-4 border-b border-outline/10 bg-surface-container-lowest/60">
-        <div className="flex items-center gap-3 min-w-0">
-          <span className="material-symbols-outlined text-outline/50 cursor-grab text-xl">drag_indicator</span>
-          <button onClick={() => setCollapsed(v => !v)} className="flex items-center gap-2 min-w-0 text-left">
-            <span className={`material-symbols-outlined text-base text-on-muted transition-transform ${collapsed ? '-rotate-90' : ''}`}>expand_more</span>
-            <div className="min-w-0">
-              <h3 className="font-semibold text-on-surface text-sm truncate">{unit.title}</h3>
-              <p className="text-xs text-on-muted">
-                {localItems.length} mục{totalMin > 0 ? ` • ${totalMin} phút` : ''}
-              </p>
-            </div>
+      <div className="flex items-center justify-between px-5 py-4 border-b border-outline/10 bg-surface-container-lowest/40">
+        <div className="flex items-center gap-3 min-w-0 flex-1">
+          <span className="material-symbols-outlined text-outline/50 cursor-grab text-xl shrink-0">drag_indicator</span>
+          <button onClick={() => setCollapsed(v => !v)} className="p-1 text-on-muted hover:text-on-surface transition-colors shrink-0">
+            <span className={`material-symbols-outlined text-base transition-transform ${collapsed ? '-rotate-90' : ''}`}>expand_more</span>
+          </button>
+          <span className="w-8 h-8 rounded-full bg-sumire-purple/10 text-sumire-purple text-sm font-bold flex items-center justify-center shrink-0">{(index ?? 0) + 1}</span>
+          <button onClick={() => onUnitEdit(unit)} className="flex-1 min-w-0 text-left group/unitname">
+            <h3 className="font-semibold text-on-surface text-sm truncate group-hover/unitname:text-sumire-purple transition-colors">{unit.title}</h3>
+            <p className="text-xs text-on-muted truncate">
+              {unit.title_ja ? `${unit.title_ja} • ` : ''}{localItems.length} mục{totalMin > 0 ? ` • ${totalMin} phút` : ''}
+            </p>
           </button>
         </div>
         <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-          <button onClick={() => onUnitEdit(unit)} className="p-1.5 text-on-muted hover:text-tsubaki-red hover:bg-tsubaki-red/10 rounded-lg transition-colors">
+          <button onClick={() => onUnitEdit(unit)} className="p-1.5 text-on-muted hover:text-sumire-purple hover:bg-sumire-purple/10 rounded-lg transition-colors" title="Chỉnh sửa bài học">
             <span className="material-symbols-outlined text-lg">edit</span>
           </button>
           <button onClick={() => onUnitDelete(unit)} className="p-1.5 text-on-muted hover:text-error hover:bg-error-container/20 rounded-lg transition-colors">
@@ -209,8 +210,8 @@ function UnitCard({ unit, onUnitEdit, onUnitDelete, onItemAdd, onItemEditContent
           ))}
           <button
             onClick={() => onItemAdd(unit)}
-            className="w-full py-3 border-2 border-dashed border-outline/25 rounded-xl text-on-muted text-sm font-medium
-              hover:border-tsubaki-red/40 hover:text-tsubaki-red transition-all flex items-center justify-center gap-2"
+            className="w-full py-3 border-2 border-dashed border-outline/25 rounded-xl text-sumire-purple text-sm font-medium
+              hover:border-sumire-purple/50 hover:bg-sumire-purple/5 transition-all flex items-center justify-center gap-2"
           >
             <span className="material-symbols-outlined text-base">add</span>
             Thêm mục
@@ -276,7 +277,7 @@ export default function ManageCourseContent() {
 
   // ── Unit CRUD ──────────────────────────────────────────────────────────────
   const openAddUnit = () => { setUnitForm(EMPTY_UNIT); setEditingUnit(null); setUnitModal(true); };
-  const openEditUnit = (u) => { setUnitForm({ title: u.title, title_ja: u.title_ja || '' }); setEditingUnit(u); setUnitModal(true); };
+  const openEditUnit = (u) => navigate(`/admin/courses/${courseId}/units/${u.id}/edit`);
 
   const saveUnit = async () => {
     if (!unitForm.title.trim()) return setAlert({ type: 'error', msg: 'Tiêu đề bài học không được để trống.' });
@@ -459,6 +460,7 @@ export default function ManageCourseContent() {
           >
             <UnitCard
               unit={unit}
+              index={idx}
               onUnitEdit={openEditUnit}
               onUnitDelete={deleteUnit}
               onItemAdd={openAddItem}
@@ -480,12 +482,12 @@ export default function ManageCourseContent() {
         <button
           onClick={openAddUnit}
           className="w-full py-10 bg-white border-2 border-dashed border-outline/25 rounded-2xl flex flex-col items-center justify-center gap-2
-            hover:border-tsubaki-red/50 hover:bg-surface-container-low/30 transition-all group"
+            hover:border-sumire-purple/50 hover:bg-sumire-purple/5 transition-all group"
         >
-          <div className="w-11 h-11 rounded-full bg-surface-container-highest/50 group-hover:bg-tsubaki-red group-hover:text-white transition-all flex items-center justify-center">
+          <div className="w-11 h-11 rounded-full bg-surface-container-highest/50 group-hover:bg-sumire-purple group-hover:text-white transition-all flex items-center justify-center">
             <span className="material-symbols-outlined text-2xl">add</span>
           </div>
-          <span className="font-semibold text-on-muted group-hover:text-tsubaki-red transition-colors text-sm">Tạo bài học mới</span>
+          <span className="font-semibold text-on-muted group-hover:text-sumire-purple transition-colors text-sm">Tạo bài học mới</span>
           <p className="text-xs text-outline">Một bài học chứa nhiều mục: Video, Bài đọc, Từ vựng, Kanji, Ngữ pháp, Quiz</p>
         </button>
       </div>

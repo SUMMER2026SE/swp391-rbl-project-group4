@@ -321,12 +321,12 @@ exports.getCourseBuilder = async (req, res) => {
 
 // ── Units ──────────────────────────────────────────────────────────────────────
 exports.createUnit = async (req, res) => {
-  const { course_id, title, title_ja, sort_order } = req.body;
+  const { course_id, title, title_ja, sort_order, description, level } = req.body;
   if (!course_id || !title) return res.status(400).json({ error: 'Thiếu thông tin bắt buộc.' });
   if (!(await ownsCourse(course_id, req.user.id))) return res.status(403).json({ error: 'Không có quyền.' });
   try {
     const { data, error } = await contentDb.from('units')
-      .insert({ course_id, title, title_ja: title_ja || null, sort_order: sort_order ?? 0 })
+      .insert({ course_id, title, title_ja: title_ja || null, sort_order: sort_order ?? 0, description: description || null, level: level || null })
       .select().single();
     if (error) throw error;
     res.status(201).json(data);
@@ -337,13 +337,24 @@ exports.updateUnit = async (req, res) => {
   try {
     const { data: unit } = await contentDb.from('units').select('course_id').eq('id', req.params.id).single();
     if (!unit || !(await ownsCourse(unit.course_id, req.user.id))) return res.status(403).json({ error: 'Không có quyền.' });
-    const allowed = ['title', 'title_ja', 'sort_order'];
+    const allowed = ['title', 'title_ja', 'sort_order', 'description', 'level'];
     const updates = Object.fromEntries(Object.entries(req.body).filter(([k]) => allowed.includes(k)));
     updates.updated_at = new Date().toISOString();
     const { data, error } = await contentDb.from('units').update(updates).eq('id', req.params.id).select().single();
     if (error) throw error;
     res.json(data);
   } catch (err) { res.status(500).json({ error: 'Không thể cập nhật.' }); }
+};
+
+exports.reorderLessons = async (req, res) => {
+  const { items } = req.body; // [{ id, order_index }]
+  if (!Array.isArray(items)) return res.status(400).json({ error: 'items phải là mảng.' });
+  try {
+    await Promise.all(items.map(({ id, order_index }) =>
+      supabaseAdmin.from('lessons').update({ order_index, updated_at: new Date().toISOString() }).eq('id', id)
+    ));
+    res.json({ message: 'Đã cập nhật thứ tự.' });
+  } catch (err) { res.status(500).json({ error: 'Không thể cập nhật thứ tự.' }); }
 };
 
 exports.deleteUnit = async (req, res) => {

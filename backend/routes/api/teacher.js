@@ -30,6 +30,7 @@ router.put('/units/:id',       c.updateUnit);
 router.delete('/units/:id',    c.deleteUnit);
 router.get('/lessons/:id',     c.getLesson);
 router.post('/lessons',        c.createLesson);
+router.patch('/lessons/reorder', c.reorderLessons);
 router.put('/lessons/:id',     c.updateLesson);
 router.delete('/lessons/:id',  c.deleteLesson);
 

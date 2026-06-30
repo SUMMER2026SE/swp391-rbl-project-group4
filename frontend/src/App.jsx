@@ -38,6 +38,7 @@ import FlashcardFolderDetail from './pages/student/FlashcardFolderDetail';
 import TeacherDashboard  from './pages/teacher/TeacherDashboard';
 import TeacherCourses    from './pages/teacher/TeacherCourses';
 import TeacherCourseContent from './pages/teacher/TeacherCourseContent';
+import UnitEditPage      from './pages/shared/UnitEditPage';
 import TeacherVocabulary from './pages/teacher/TeacherVocabulary';
 import TeacherKanji      from './pages/teacher/TeacherKanji';
 import TeacherClasses    from './pages/teacher/TeacherClasses';
@@ -124,6 +125,7 @@ export default function App() {
             <Route path="/teacher"       element={<TeacherRoute><TeacherDashboard /></TeacherRoute>} />
             <Route path="/teacher/courses" element={<TeacherRoute><TeacherCourses /></TeacherRoute>} />
             <Route path="/teacher/courses/:courseId/edit" element={<TeacherRoute><TeacherCourseContent /></TeacherRoute>} />
+            <Route path="/teacher/courses/:courseId/units/:unitId/edit" element={<TeacherRoute><UnitEditPage /></TeacherRoute>} />
             {/* Trình soạn chuyên sâu cho giáo viên — dùng chung component với admin (role-aware) */}
             <Route path="/teacher/lessons/:lessonId/video"      element={<TeacherRoute><AdminLessonVideo /></TeacherRoute>} />
             <Route path="/teacher/lessons/:lessonId/reading"    element={<TeacherRoute><AdminLessonReading /></TeacherRoute>} />
@@ -151,6 +153,7 @@ export default function App() {
             <Route path="/admin/questions"  element={<AdminRoute><AdminQuestionBank /></AdminRoute>} />
             <Route path="/admin/news"       element={<AdminRoute><AdminNews /></AdminRoute>} />
             <Route path="/admin/courses/:courseId/edit"         element={<AdminRoute><ManageCourseContent /></AdminRoute>} />
+            <Route path="/admin/courses/:courseId/units/:unitId/edit" element={<AdminRoute><UnitEditPage /></AdminRoute>} />
             <Route path="/admin/lessons/:lessonId/vocabulary"  element={<AdminRoute><AdminLessonVocabulary /></AdminRoute>} />
             <Route path="/admin/lessons/:lessonId/grammar"     element={<AdminRoute><AdminLessonGrammar /></AdminRoute>} />
             <Route path="/admin/lessons/:lessonId/quiz"        element={<AdminRoute><AdminLessonQuiz /></AdminRoute>} />
