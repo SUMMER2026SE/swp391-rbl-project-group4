@@ -60,6 +60,7 @@ import AdminClasses      from './pages/admin/AdminClasses';
 import AdminSystemStatus  from './pages/admin/AdminSystemStatus';
 import AdminQuestionBank       from './pages/admin/AdminQuestionBank';
 import AdminNews               from './pages/admin/AdminNews';
+import AdminListening          from './pages/admin/AdminListening';
 import ManageCourseContent     from './pages/admin/ManageCourseContent';
 import AdminLessonVocabulary   from './pages/admin/AdminLessonVocabulary';
 import AdminGrammar            from './pages/admin/AdminGrammar';
@@ -156,6 +157,7 @@ export default function App() {
             <Route path="/admin/system"     element={<AdminRoute><AdminSystemStatus /></AdminRoute>} />
             <Route path="/admin/questions"  element={<AdminRoute><AdminQuestionBank /></AdminRoute>} />
             <Route path="/admin/news"       element={<AdminRoute><AdminNews /></AdminRoute>} />
+            <Route path="/admin/listening"  element={<AdminRoute><AdminListening /></AdminRoute>} />
             <Route path="/admin/courses/:courseId/edit"         element={<AdminRoute><ManageCourseContent /></AdminRoute>} />
             <Route path="/admin/courses/:courseId/units/:unitId/edit" element={<AdminRoute><UnitEditPage /></AdminRoute>} />
             <Route path="/admin/lessons/:lessonId/vocabulary"  element={<AdminRoute><AdminLessonVocabulary /></AdminRoute>} />
