@@ -102,21 +102,23 @@ export default function Writing() {
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult]   = useState(null);
   const [submitErr, setSubmitErr] = useState('');
+  const [customMode, setCustomMode]   = useState(false);
+  const [customInput, setCustomInput] = useState('');
   // history
   const [history, setHistory]   = useState([]);
   const [loadingHist, setLoadingHist] = useState(false);
   const [histLoaded, setHistLoaded]   = useState(false);
   const [detail, setDetail] = useState(null);
 
-  const pickLevel = (lv) => { setLevel(lv); setTopic(null); setText(''); setResult(null); setStep(2); };
-  const pickTopic = (t)  => { setTopic(t);  setText('');    setResult(null); setStep(3); };
-  const goBack    = ()   => { setStep(s => Math.max(1, s - 1)); setResult(null); };
+  const pickLevel = (lv) => { setLevel(lv); setTopic(null); setText(''); setResult(null); setCustomMode(false); setCustomInput(''); setStep(2); };
+  const pickTopic = (t)  => { setTopic(t);  setText('');    setResult(null); setCustomMode(false); setStep(3); };
+  const goBack    = ()   => { setStep(s => Math.max(1, s - 1)); setResult(null); setCustomMode(false); };
 
   const handleSubmit = async () => {
     if (text.trim().length < MIN_LEN || !topic || !level) return;
     setSubmitting(true); setSubmitErr('');
     try {
-      const topicLabel = `${topic.jp}・${topic.kana} (${topic.vi})`;
+      const topicLabel = topic.custom ? topic.jp : `${topic.jp}・${topic.kana} (${topic.vi})`;
       const r = await api.post('/writing/submit', { topic: topicLabel, level: level.id, text });
       setResult(r.data); setStep(4); setHistLoaded(false);
     } catch (e) { setSubmitErr(e.response?.data?.error || 'Gửi bài thất bại.'); }
@@ -214,7 +216,43 @@ export default function Writing() {
                       <p className="text-xs text-on-muted mt-2 line-clamp-2">{t.hint}</p>
                     </button>
                   ))}
+
+                  {/* Card tự nhập chủ đề */}
+                  <button onClick={() => setCustomMode(m => !m)}
+                    className={`glass-card rounded-2xl p-4 text-left transition-all border-2 ${customMode ? 'border-tsubaki-red/50 shadow-md' : 'border-dashed border-outline hover:border-tsubaki-red/40 hover:shadow-md'}`}>
+                    <div className="flex items-start gap-3">
+                      <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 bg-surface-low">
+                        <span className="material-symbols-outlined text-xl text-on-muted">edit_note</span>
+                      </div>
+                      <div>
+                        <p className="font-semibold text-base">Tự nhập chủ đề</p>
+                        <p className="text-xs text-on-muted">Viết về bất kỳ chủ đề nào bạn muốn</p>
+                      </div>
+                    </div>
+                  </button>
                 </div>
+
+                {/* Input tự nhập */}
+                {customMode && (
+                  <div className="mt-3 glass-card rounded-2xl p-4 space-y-3">
+                    <p className="text-sm font-semibold">Nhập chủ đề của bạn</p>
+                    <input
+                      autoFocus
+                      value={customInput}
+                      onChange={e => setCustomInput(e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter' && customInput.trim()) pickTopic({ jp: customInput.trim(), kana: '', vi: 'Chủ đề tự chọn', icon: 'edit_note', hint: '', custom: true }); }}
+                      placeholder="VD: 日本の文化について、私の趣味..."
+                      className="w-full px-3 py-2.5 border border-outline rounded-xl text-sm outline-none focus:border-tsubaki-red"
+                      style={{ fontFamily: "'Noto Sans JP', sans-serif" }}
+                    />
+                    <button
+                      disabled={!customInput.trim()}
+                      onClick={() => pickTopic({ jp: customInput.trim(), kana: '', vi: 'Chủ đề tự chọn', icon: 'edit_note', hint: '', custom: true })}
+                      className="w-full py-2 rounded-xl text-sm font-semibold bg-tsubaki-red text-white disabled:opacity-40 disabled:cursor-not-allowed transition-opacity">
+                      Dùng chủ đề này
+                    </button>
+                  </div>
+                )}
               </div>
             )}
 
@@ -236,7 +274,7 @@ export default function Writing() {
                       <span className="text-xs px-2 py-0.5 rounded-full font-bold" style={{ background: level.bg, color: level.color }}>{level.id}</span>
                       <span className="font-bold text-lg" style={{ fontFamily: "'Noto Sans JP', sans-serif" }}>{topic.jp}</span>
                     </div>
-                    <p className="text-sm text-on-muted">{topic.vi}</p>
+                    <p className="text-sm text-on-muted">{topic.custom ? 'Chủ đề tự chọn' : topic.vi}</p>
                   </div>
                 </div>
 
