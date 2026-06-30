@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import StudentLayout from '../../components/layout/StudentLayout';
 import Alert from '../../components/ui/Alert';
 import FuriganaText from '../../components/ui/FuriganaText';
@@ -80,6 +81,10 @@ export default function Kanji() {
           )}
         </div>
         <div className="flex gap-2 items-center">
+          <Link to="/kanji/writing"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-tsubaki-red text-white text-sm font-semibold hover:opacity-90 transition-all">
+            <span className="material-symbols-outlined text-base">draw</span> Luyện viết
+          </Link>
           <button
             type="button"
             onClick={() => setFurigana(v => !v)}

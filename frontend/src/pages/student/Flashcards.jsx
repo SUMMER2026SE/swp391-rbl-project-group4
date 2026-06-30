@@ -4,7 +4,9 @@ import StudentLayout from '../../components/layout/StudentLayout';
 import Alert from '../../components/ui/Alert';
 import Button from '../../components/ui/Button';
 import Modal from '../../components/ui/Modal';
+import ConfirmDialog from '../../components/ui/ConfirmDialog';
 import api from '../../lib/api';
+import { listDrafts, removeDraft } from '../../lib/flashcardDrafts';
 
 function SkeletonCard() {
   return (
@@ -64,6 +66,7 @@ export default function Flashcards() {
   const [tab, setTab]         = useState('sets'); // 'sets' | 'folders'
   const [sets, setSets]       = useState([]);
   const [folders, setFolders] = useState([]);
+  const [drafts, setDrafts]   = useState(() => listDrafts()); // nháp lưu localStorage
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState('');
 
@@ -75,6 +78,24 @@ export default function Flashcards() {
   const [addToFolderSet, setAddToFolderSet] = useState(null); // null | set
   const [selectedFolders, setSelectedFolders] = useState({}); // { folderId: bool }
   const [addingToFolder, setAddingToFolder] = useState(false);
+
+  // Popup xác nhận xóa dùng chung
+  const [confirm, setConfirm] = useState(null); // null | { title, message, confirmLabel?, onConfirm }
+  const [confirming, setConfirming] = useState(false);
+
+  const runConfirm = async () => {
+    if (!confirm) return;
+    setConfirming(true);
+    try {
+      await confirm.onConfirm();
+      setConfirm(null);
+    } catch (e) {
+      setError(e.message);
+      setConfirm(null);
+    } finally {
+      setConfirming(false);
+    }
+  };
 
   const fetchData = async () => {
     setLoading(true);
@@ -95,21 +116,38 @@ export default function Flashcards() {
 
   useEffect(() => { fetchData(); }, []);
 
-  const handleDeleteSet = async (id) => {
-    if (!window.confirm('Xóa học phần này? Hành động không thể hoàn tác.')) return;
-    try {
+  const handleDeleteSet = (id) => setConfirm({
+    title: 'Xóa học phần',
+    message: 'Bạn có chắc muốn xóa học phần này? Hành động không thể hoàn tác.',
+    confirmLabel: 'Xóa',
+    onConfirm: async () => {
       await api.delete(`/flashcards/sets/${id}`);
       setSets(s => s.filter(x => x.id !== id));
-    } catch (e) { setError(e.message); }
-  };
+    },
+  });
 
-  const handleDeleteFolder = async (id) => {
-    if (!window.confirm('Xóa thư mục này? Các học phần bên trong không bị xóa.')) return;
-    try {
+  const handleDeleteDraft = (id) => setConfirm({
+    title: 'Xóa bản nháp',
+    message: 'Bạn có chắc muốn xóa bản nháp này?',
+    confirmLabel: 'Xóa',
+    onConfirm: async () => {
+      removeDraft(id);
+      setDrafts(listDrafts());
+    },
+  });
+
+  const draftCardCount = (d) =>
+    (d.cards || []).filter(c => c.term?.trim() && c.definition?.trim()).length;
+
+  const handleDeleteFolder = (id) => setConfirm({
+    title: 'Xóa thư mục',
+    message: 'Xóa thư mục này? Các học phần bên trong không bị xóa.',
+    confirmLabel: 'Xóa',
+    onConfirm: async () => {
       await api.delete(`/flashcards/folders/${id}`);
       setFolders(f => f.filter(x => x.id !== id));
-    } catch (e) { setError(e.message); }
-  };
+    },
+  });
 
   const saveFolder = async () => {
     const name = folderModal.name.trim();
@@ -201,13 +239,49 @@ export default function Flashcards() {
           {Array.from({ length: 6 }).map((_, i) => <SkeletonCard key={i} />)}
         </div>
       ) : tab === 'sets' ? (
-        sets.length === 0 ? (
+        sets.length === 0 && drafts.length === 0 ? (
           <EmptyState icon="style" title="Chưa có học phần nào"
             hint="Tạo học phần đầu tiên để bắt đầu ôn tập"
             action={<Button variant="primary" onClick={() => navigate('/flashcards/new')}>Tạo học phần</Button>}
           />
         ) : (
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            {/* ── Bản nháp (lưu localStorage, chưa lưu DB) ── */}
+            {drafts.map(d => (
+              <div
+                key={d.id}
+                onClick={() => navigate(`/flashcards/new?draft=${d.id}`)}
+                className="text-left glass-card rounded-2xl p-5 cursor-pointer border-2 border-dashed border-outline/60 hover:border-tsubaki-red hover:-translate-y-1 transition-all duration-300 flex flex-col group"
+              >
+                <div className="flex items-start justify-between gap-2 mb-2">
+                  <h3 className="font-display text-base font-bold text-on-surface group-hover:text-tsubaki-red transition-colors line-clamp-2 leading-snug">
+                    {d.title?.trim() || 'Chưa có tiêu đề'}
+                  </h3>
+                  <button
+                    onClick={e => { e.stopPropagation(); handleDeleteDraft(d.id); }}
+                    title="Xóa bản nháp"
+                    className="text-on-muted hover:text-error w-8 h-8 flex items-center justify-center rounded-lg hover:bg-error-bg/30 transition-colors shrink-0"
+                  >
+                    <span className="material-symbols-outlined text-xl">delete</span>
+                  </button>
+                </div>
+                <div className="flex items-center gap-2 mb-3">
+                  <span className="inline-flex items-center gap-1 text-xs font-bold text-amber-700 bg-amber-100 px-2.5 py-1 rounded-lg">
+                    <span className="material-symbols-outlined text-sm">edit_note</span>
+                    Bản nháp
+                  </span>
+                  <span className="inline-flex items-center gap-1 text-xs font-semibold text-on-muted bg-surface-low px-2.5 py-1 rounded-lg">
+                    <span className="material-symbols-outlined text-sm">layers</span>
+                    {draftCardCount(d)} thẻ
+                  </span>
+                </div>
+                {d.description?.trim() && (
+                  <p className="text-sm text-on-surface-variant leading-relaxed line-clamp-2 flex-grow">
+                    {d.description}
+                  </p>
+                )}
+              </div>
+            ))}
             {sets.map(s => (
               <div
                 key={s.id}
@@ -242,6 +316,13 @@ export default function Flashcards() {
                     <div className="bg-tsubaki-red h-2 rounded-full transition-all" style={{ width: `${percent(s)}%` }} />
                   </div>
                 </div>
+                <button
+                  onClick={(e) => { e.stopPropagation(); navigate(`/flashcards/${s.id}`); }}
+                  className="mt-4 inline-flex items-center justify-center gap-1.5 text-sm font-semibold text-tsubaki-red border border-tsubaki-red/30 rounded-xl py-2 hover:bg-tsubaki-red/5 transition-colors"
+                >
+                  <span className="material-symbols-outlined text-lg">school</span>
+                  Học ngay
+                </button>
               </div>
             ))}
           </div>
@@ -343,6 +424,17 @@ export default function Flashcards() {
           </div>
         )}
       </Modal>
+
+      {/* ── Popup xác nhận xóa ──────────────────────────────────── */}
+      <ConfirmDialog
+        open={!!confirm}
+        title={confirm?.title}
+        message={confirm?.message}
+        confirmLabel={confirm?.confirmLabel || 'Xác nhận'}
+        loading={confirming}
+        onConfirm={runConfirm}
+        onCancel={() => setConfirm(null)}
+      />
     </StudentLayout>
   );
 }

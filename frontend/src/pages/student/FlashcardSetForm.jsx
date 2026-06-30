@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import StudentLayout from '../../components/layout/StudentLayout';
 import Alert from '../../components/ui/Alert';
 import Button from '../../components/ui/Button';
 import Modal from '../../components/ui/Modal';
 import api from '../../lib/api';
+import { getDraft, saveDraft, removeDraft, newDraftId } from '../../lib/flashcardDrafts';
 
 const emptyCard = () => ({ term: '', definition: '' });
 
@@ -12,10 +13,19 @@ export default function FlashcardSetForm() {
   const { id } = useParams();
   const isEdit = !!id;
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const resumeId = searchParams.get('draft'); // id nháp cần mở lại (nếu có)
 
-  const [title, setTitle]             = useState('');
-  const [description, setDescription] = useState('');
-  const [cards, setCards]             = useState([emptyCard(), emptyCard(), emptyCard()]);
+  // Id nháp ổn định cho phiên form này (chỉ chế độ tạo mới)
+  const [draftKey] = useState(() => (isEdit ? null : (resumeId || newDraftId())));
+  // Nội dung nháp đang mở (nếu đến từ một thẻ nháp trong danh sách)
+  const [loaded] = useState(() => (!isEdit && resumeId ? getDraft(resumeId) : null));
+
+  const [title, setTitle]             = useState(loaded?.title || '');
+  const [description, setDescription] = useState(loaded?.description || '');
+  const [cards, setCards]             = useState(
+    loaded?.cards?.length ? loaded.cards : [emptyCard(), emptyCard(), emptyCard()]
+  );
   const [loading, setLoading]         = useState(isEdit);
   const [saving, setSaving]           = useState(false);
   const [error, setError]             = useState('');
@@ -44,6 +54,15 @@ export default function FlashcardSetForm() {
       }
     })();
   }, [id, isEdit]);
+
+  // ── Tự lưu nháp (chỉ khi tạo mới); xóa nháp nếu form trống ──
+  useEffect(() => {
+    if (isEdit) return;
+    const hasContent = title.trim() || description.trim()
+      || cards.some(c => c.term.trim() || c.definition.trim());
+    if (hasContent) saveDraft({ id: draftKey, title, description, cards });
+    else removeDraft(draftKey);
+  }, [isEdit, draftKey, title, description, cards]);
 
   // ── Thao tác thẻ ──
   const updateCard = (i, field, value) =>
@@ -94,8 +113,12 @@ export default function FlashcardSetForm() {
     setSaving(true);
     try {
       const payload = { title: title.trim(), description: description.trim(), cards: validCards };
-      if (isEdit) await api.put(`/flashcards/sets/${id}`, payload);
-      else        await api.post('/flashcards/sets', payload);
+      if (isEdit) {
+        await api.put(`/flashcards/sets/${id}`, payload);
+      } else {
+        await api.post('/flashcards/sets', payload);
+        removeDraft(draftKey); // tạo xong → xóa nháp
+      }
       navigate('/flashcards');
     } catch (e) {
       setError(e.message);
