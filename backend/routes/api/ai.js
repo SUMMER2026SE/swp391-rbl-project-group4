@@ -4,6 +4,8 @@ const router = require('express').Router();
 const { requireAuth, requireAdmin } = require('../../middleware/auth');
 const { chatCompletion } = require('../../config/ai');
 const { supabaseAdmin } = require('../../config/supabase');
+const checkQuota = require('../../middleware/checkQuota');
+const { incrementUsage } = require('../../services/quotaService');
 
 // GET /api/ai/ping  (admin)
 router.get('/ping', requireAuth, requireAdmin, async (_req, res) => {
@@ -223,7 +225,7 @@ router.delete('/sessions/:id', requireAuth, async (req, res) => {
 
 // POST /api/ai/chat  (all authenticated users)
 // Body: { messages, sessionId?, imageBase64?, imageType? }
-router.post('/chat', requireAuth, async (req, res) => {
+router.post('/chat', requireAuth, checkQuota('ai_chat_daily'), async (req, res) => {
   const { messages, sessionId: incomingSessionId, imageBase64, imageType } = req.body;
   if (!Array.isArray(messages) || messages.length === 0)
     return res.status(400).json({ error: 'messages phải là mảng không rỗng.' });
@@ -386,6 +388,9 @@ router.post('/chat', requireAuth, async (req, res) => {
         .update({ updated_at: new Date().toISOString() })
         .eq('id', sessionId),
     ]);
+
+    // Increment quota usage non-blocking
+    incrementUsage(req.user.id, 'ai_chat_daily').catch(() => {});
 
     res.json({
       reply,

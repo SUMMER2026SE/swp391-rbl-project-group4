@@ -206,6 +206,22 @@ router.post('/news',                   news.create);
 router.put('/news/:id',                news.update);
 router.delete('/news/:id',             news.remove);
 
+// Subscription / payments (admin)
+const sc = require('../../controllers/subscriptionController');
+router.get('/subscriptions',              sc.adminGetSubscriptions);
+router.post('/subscriptions/grant',       sc.adminGrantSubscription);
+router.delete('/subscriptions/:userId',   sc.adminCancelSubscription);
+router.get('/payments',                   sc.adminGetPayments);
+router.post('/payments/reconcile', async (req, res) => {
+  const { reconcilePendingOrders } = require('../../services/paymentMatchingService');
+  try {
+    const result = await reconcilePendingOrders();
+    res.json({ ok: true, ...result });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Placement Test — Question Bank
 const pc = require('../../controllers/placementController');
 router.get('/placement/stats',                pc.adminGetStats);

@@ -1,6 +1,7 @@
 'use strict';
 
-const { supabaseAdmin } = require('../config/supabase');
+const { supabaseAdmin }  = require('../config/supabase');
+const { incrementUsage } = require('../services/quotaService');
 
 const ALL_LEVELS  = ['N5', 'N4', 'N3', 'N2', 'N1'];
 const CATEGORIES  = ['vocabulary', 'kanji', 'grammar'];
@@ -416,6 +417,9 @@ exports.startAttempt = async (req, res) => {
 
   // Non-blocking snapshot creation
   createSnapshots(attempt.id, questionIds);
+
+  // Increment quota usage (non-blocking, best-effort)
+  incrementUsage(userId, 'placement_test_monthly').catch(() => {});
 
   const questions = await fetchQuestionsOrdered(questionIds);
   res.json({ attempt, questions, savedAnswers: {}, isResuming: false });

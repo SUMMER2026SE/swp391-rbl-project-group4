@@ -18,8 +18,10 @@ const STUDENT_LINKS = (t) => [
   { to: '/news',       icon: 'newspaper',      label: 'Đọc báo' },
   { to: '/classes',    icon: 'groups',         label: 'Lớp học' },
   { to: '/exams',      icon: 'quiz',           label: 'Đề thi' },
-  { to: '/chat',       icon: 'smart_toy',      label: 'Trợ lý AI' },
-  { to: '/profile',    icon: 'person',         label: t('profile.title') },
+  { to: '/chat',         icon: 'smart_toy',        label: 'Trợ lý AI' },
+  { to: '/pricing',      icon: 'workspace_premium', label: 'Bảng giá' },
+  { to: '/subscription', icon: 'card_membership',   label: 'Đăng ký' },
+  { to: '/profile',      icon: 'person',             label: t('profile.title') },
 ];
 
 export default function StudentLayout({ children, title }) {

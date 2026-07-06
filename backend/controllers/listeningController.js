@@ -2,6 +2,7 @@
 
 const { supabaseAdmin } = require('../config/supabase');
 const { whisperTranscribe } = require('../config/ai');
+const { incrementUsage } = require('../services/quotaService');
 
 // Tables are in public schema with listening_ prefix (schema exposure workaround)
 const dlg   = () => supabaseAdmin.from('listening_dialogues');
@@ -52,6 +53,7 @@ exports.scorePronunciation = async (req, res) => {
     : score >= 60 ? 'Cần luyện thêm một chút nữa là ổn.'
     : 'Hãy nghe mẫu thêm và luyện tập lại nhé.';
 
+  incrementUsage(req.user.id, 'listening_practice_monthly').catch(() => {});
   res.json({ score, transcript, feedback });
 };
 
