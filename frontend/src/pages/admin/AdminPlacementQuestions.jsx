@@ -8,7 +8,7 @@ const CATEGORIES = [
   { value: 'kanji',      label: 'Kanji' },
   { value: 'grammar',    label: 'Ngữ pháp' },
 ];
-const LEVELS = ['', 'N5', 'N4', 'N3'];
+const LEVELS = ['', 'N5', 'N4', 'N3', 'N2', 'N1'];
 const DIFFICULTIES = [
   { value: '', label: 'Tất cả' },
   { value: 'easy',   label: 'Dễ' },
@@ -265,21 +265,66 @@ export default function AdminPlacementQuestions() {
     <AdminLayout title="Ngân hàng — Kiểm tra năng lực">
       {/* Stats */}
       {stats && (
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
-          {[
-            { label: 'Tổng câu hỏi', value: stats.total,      icon: 'quiz',         color: 'text-charcoal' },
-            { label: 'Đang hoạt động', value: stats.active,   icon: 'check_circle', color: 'text-emerald-600' },
-            { label: 'Từ vựng',       value: stats.vocabulary, icon: 'translate',   color: 'text-blue-600' },
-            { label: 'Kanji',         value: stats.kanji,      icon: 'font_download', color: 'text-purple-600' },
-            { label: 'Ngữ pháp',      value: stats.grammar,   icon: 'spellcheck',  color: 'text-teal-600' },
-            { label: 'Lượt thi',      value: stats.attempts,  icon: 'assignment',  color: 'text-on-muted' },
-          ].map(s => (
-            <div key={s.label} className="glass-card rounded-2xl p-4 text-center">
-              <span className={`material-symbols-outlined text-2xl ${s.color}`}>{s.icon}</span>
-              <p className={`text-2xl font-bold tabular-nums ${s.color}`}>{s.value}</p>
-              <p className="text-xs text-on-muted">{s.label}</p>
+        <div className="space-y-4 mb-6">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 gap-3">
+            {[
+              { label: 'Tổng câu hỏi', value: stats.total,    icon: 'quiz',         color: 'text-charcoal' },
+              { label: 'Đang hoạt động', value: stats.active, icon: 'check_circle', color: 'text-emerald-600' },
+              { label: 'Lượt thi', value: stats.attempts,     icon: 'assignment',   color: 'text-on-muted' },
+            ].map(s => (
+              <div key={s.label} className="glass-card rounded-2xl p-4 text-center">
+                <span className={`material-symbols-outlined text-2xl ${s.color}`}>{s.icon}</span>
+                <p className={`text-2xl font-bold tabular-nums ${s.color}`}>{s.value}</p>
+                <p className="text-xs text-on-muted">{s.label}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* Level breakdown */}
+          {stats.levelStats?.length > 0 && (
+            <div className="glass-card rounded-2xl overflow-hidden">
+              <div className="px-4 py-3 border-b border-outline/20 flex items-center gap-2">
+                <span className="font-bold text-sm text-charcoal">Câu hỏi theo cấp độ JLPT</span>
+                <span className="text-xs text-on-muted">(tối thiểu {stats.config?.minPerCategory} câu/kỹ năng để có thể thi)</span>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-xs text-on-muted uppercase tracking-wide border-b border-outline/20">
+                      <th className="text-left px-4 py-2.5 font-semibold">Cấp độ</th>
+                      <th className="text-right px-4 py-2.5 font-semibold">Từ vựng</th>
+                      <th className="text-right px-4 py-2.5 font-semibold">Kanji</th>
+                      <th className="text-right px-4 py-2.5 font-semibold">Ngữ pháp</th>
+                      <th className="text-right px-4 py-2.5 font-semibold">Tổng</th>
+                      <th className="text-center px-4 py-2.5 font-semibold">Trạng thái</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {stats.levelStats.map(row => (
+                      <tr key={row.level} className="border-b border-outline/10 hover:bg-surface-low/50 transition-colors">
+                        <td className="px-4 py-3 font-bold text-charcoal">{row.level}</td>
+                        <td className={`px-4 py-3 text-right tabular-nums font-medium ${row.vocabulary >= (stats.config?.minPerCategory || 10) ? 'text-emerald-600' : 'text-red-500'}`}>{row.vocabulary}</td>
+                        <td className={`px-4 py-3 text-right tabular-nums font-medium ${row.kanji >= (stats.config?.minPerCategory || 10) ? 'text-emerald-600' : 'text-red-500'}`}>{row.kanji}</td>
+                        <td className={`px-4 py-3 text-right tabular-nums font-medium ${row.grammar >= (stats.config?.minPerCategory || 10) ? 'text-emerald-600' : 'text-red-500'}`}>{row.grammar}</td>
+                        <td className="px-4 py-3 text-right tabular-nums text-on-muted font-medium">{row.total}</td>
+                        <td className="px-4 py-3 text-center">
+                          {row.canStart ? (
+                            <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold ${row.needsFallback ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                              {row.needsFallback ? '⚠ Fallback' : '✓ Sẵn sàng'}
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-red-100 text-red-600">
+                              ✗ Chưa đủ
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
-          ))}
+          )}
         </div>
       )}
 

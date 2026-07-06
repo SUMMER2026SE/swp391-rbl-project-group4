@@ -8,6 +8,7 @@ router.use(requireAuth);
 
 router.get('/check-status',            c.checkStatus);
 router.get('/config',                  c.getConfig);
+router.get('/levels',                  c.getLevels);
 router.post('/start',                  c.startAttempt);
 router.get('/history',                 c.getHistory);
 router.get('/:attemptId/result',       c.getResult);
