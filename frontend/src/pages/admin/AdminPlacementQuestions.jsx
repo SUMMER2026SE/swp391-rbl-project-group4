@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import AdminLayout from '../../components/layout/AdminLayout';
-import api from '../../services/api';
+import api from '../../lib/api';
 
 const CATEGORIES = [
   { value: '', label: 'Tất cả' },

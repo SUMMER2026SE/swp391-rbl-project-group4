@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import StudentLayout from '../../components/layout/StudentLayout';
-import api from '../../services/api';
+import api from '../../lib/api';
 
 // ── Utilities ─────────────────────────────────────────────────────────────────
 
