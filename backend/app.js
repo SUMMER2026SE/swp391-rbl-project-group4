@@ -47,6 +47,7 @@ app.use('/api/ai',         require('./routes/api/ai'));
 app.use('/api/grammar',    require('./routes/api/grammar'));
 app.use('/api/writing',    require('./routes/api/writing'));
 app.use('/api/listening',  require('./routes/api/listening'));
+app.use('/api/placement',  require('./routes/api/placement'));
 
 // ── Health check ──────────────────────────────────────────────────────────────
 app.get('/api/health', (_req, res) => res.json({ status: 'ok' }));

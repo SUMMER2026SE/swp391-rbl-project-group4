@@ -206,4 +206,14 @@ router.post('/news',                   news.create);
 router.put('/news/:id',                news.update);
 router.delete('/news/:id',             news.remove);
 
+// Placement Test — Question Bank
+const pc = require('../../controllers/placementController');
+router.get('/placement/stats',                pc.adminGetStats);
+router.get('/placement/questions',            pc.adminListQuestions);
+router.get('/placement/questions/:id',        pc.adminGetQuestion);
+router.post('/placement/questions',           pc.adminCreateQuestion);
+router.put('/placement/questions/:id',        pc.adminUpdateQuestion);
+router.patch('/placement/questions/:id/toggle', pc.adminToggleQuestion);
+router.delete('/placement/questions/:id',     pc.adminDeleteQuestion);
+
 module.exports = router;
