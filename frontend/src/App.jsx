@@ -35,6 +35,8 @@ import TakeExam     from './pages/student/TakeExam';
 import Flashcards            from './pages/student/Flashcards';
 import FlashcardSetForm      from './pages/student/FlashcardSetForm';
 import FlashcardStudy        from './pages/student/FlashcardStudy';
+import FlashcardLearn        from './pages/student/FlashcardLearn';
+import FlashcardTest         from './pages/student/FlashcardTest';
 import FlashcardFolderDetail from './pages/student/FlashcardFolderDetail';
 // Teacher pages
 import TeacherDashboard  from './pages/teacher/TeacherDashboard';
@@ -120,6 +122,8 @@ export default function App() {
             <Route path="/flashcards/new"         element={<StudentRoute><FlashcardSetForm /></StudentRoute>} />
             <Route path="/flashcards/folders/:id" element={<StudentRoute><FlashcardFolderDetail /></StudentRoute>} />
             <Route path="/flashcards/:id/edit"    element={<StudentRoute><FlashcardSetForm /></StudentRoute>} />
+            <Route path="/flashcards/:id/learn"   element={<StudentRoute><FlashcardLearn /></StudentRoute>} />
+            <Route path="/flashcards/:id/test"    element={<StudentRoute><FlashcardTest /></StudentRoute>} />
             <Route path="/flashcards/:id"         element={<StudentRoute><FlashcardStudy /></StudentRoute>} />
             {/* Dùng chung mọi role (layout hiển thị theo role) */}
             <Route path="/profile"    element={<ProtectedRoute><Profile /></ProtectedRoute>} />
