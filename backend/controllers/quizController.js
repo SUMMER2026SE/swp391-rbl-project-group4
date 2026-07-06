@@ -5,6 +5,19 @@ const { supabaseAdmin } = require('../config/supabase');
 // Bảng quiz đã chuyển sang schema exam_module (question_bank/users vẫn ở public)
 const examDb = supabaseAdmin.schema('exam_module');
 
+// Strict fullscreen: thoát fullscreen quá N lần → khóa thi tạm thời
+const MAX_FULLSCREEN_VIOLATIONS = 5;
+const LOCKOUT_MINUTES = 20;
+
+// Trả về lockout đang còn hiệu lực của (quiz, user), hoặc null
+async function getActiveLockout(quizId, userId) {
+  const { data: lock } = await examDb.from('quiz_lockouts')
+    .select('violation_count,locked_until')
+    .eq('quiz_id', quizId).eq('user_id', userId).maybeSingle();
+  if (lock?.locked_until && new Date(lock.locked_until) > new Date()) return lock;
+  return null;
+}
+
 // GET /api/quizzes
 exports.list = async (req, res) => {
   const { course_id, page = 1, limit = 10 } = req.query;
@@ -33,6 +46,17 @@ exports.getOne = async (req, res) => {
     const { data: quiz, error } = await examDb
       .from('quizzes').select('*').eq('id', req.params.id).single();
     if (error || !quiz) return res.status(404).json({ error: 'Không tìm thấy quiz.' });
+
+    // Strict fullscreen: đang bị khóa thì không trả câu hỏi
+    if (quiz.strict_fullscreen) {
+      const lock = await getActiveLockout(req.params.id, req.user.id);
+      if (lock) {
+        return res.status(403).json({
+          error: 'Bạn đã thoát toàn màn hình quá nhiều lần, bài thi đang bị khóa.',
+          lockedUntil: lock.locked_until,
+        });
+      }
+    }
 
     const { data: questions } = await examDb
       .from('quiz_questions')
@@ -78,7 +102,19 @@ exports.submitAttempt = async (req, res) => {
   const { answers, violation_count, proctor_events, snapshots } = req.body;
 
   try {
-    const { data: quiz } = await examDb.from('quizzes').select('mode').eq('id', req.params.id).single();
+    const { data: quiz } = await examDb.from('quizzes')
+      .select('mode,strict_fullscreen').eq('id', req.params.id).single();
+
+    // Strict fullscreen: đang bị khóa thì không cho nộp bài
+    if (quiz?.strict_fullscreen) {
+      const lock = await getActiveLockout(req.params.id, userId);
+      if (lock) {
+        return res.status(403).json({
+          error: 'Bài thi đã bị khóa do thoát toàn màn hình quá nhiều lần.',
+          lockedUntil: lock.locked_until,
+        });
+      }
+    }
 
     const { data: questions } = await examDb
       .from('quiz_questions')
@@ -109,6 +145,51 @@ exports.submitAttempt = async (req, res) => {
   } catch (err) {
     console.error('Submit attempt error:', err);
     res.status(500).json({ error: 'Không thể lưu kết quả.' });
+  }
+};
+
+// POST /api/quizzes/:id/fullscreen-violation — ghi nhận 1 lần thoát fullscreen (server-side,
+// tránh gian lận reload). Đạt MAX_FULLSCREEN_VIOLATIONS lần → khóa thi LOCKOUT_MINUTES phút.
+exports.fullscreenViolation = async (req, res) => {
+  const userId = req.user.id;
+
+  try {
+    const { data: quiz } = await examDb.from('quizzes')
+      .select('strict_fullscreen').eq('id', req.params.id).single();
+    if (!quiz) return res.status(404).json({ error: 'Không tìm thấy quiz.' });
+    if (!quiz.strict_fullscreen)
+      return res.status(400).json({ error: 'Quiz không bật chế độ toàn màn hình nghiêm ngặt.' });
+
+    const { data: existing } = await examDb.from('quiz_lockouts')
+      .select('violation_count,locked_until')
+      .eq('quiz_id', req.params.id).eq('user_id', userId).maybeSingle();
+
+    // Đang trong thời gian khóa → không tăng đếm nữa
+    if (existing?.locked_until && new Date(existing.locked_until) > new Date())
+      return res.status(200).json({ locked: true, lockedUntil: existing.locked_until });
+
+    // Lần khóa trước đã hết hạn → đếm lại từ đầu
+    const prevCount = existing?.locked_until ? 0 : (existing?.violation_count || 0);
+    const violationCount = prevCount + 1;
+    const locked = violationCount >= MAX_FULLSCREEN_VIOLATIONS;
+    const lockedUntil = locked
+      ? new Date(Date.now() + LOCKOUT_MINUTES * 60 * 1000).toISOString()
+      : null;
+
+    const { error } = await examDb.from('quiz_lockouts').upsert({
+      quiz_id: req.params.id,
+      user_id: userId,
+      violation_count: violationCount,
+      locked_until: lockedUntil,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'quiz_id,user_id' });
+    if (error) throw error;
+
+    if (locked) return res.json({ locked: true, lockedUntil });
+    res.json({ locked: false, violationCount });
+  } catch (err) {
+    console.error('Fullscreen violation error:', err);
+    res.status(500).json({ error: 'Không thể ghi nhận vi phạm.' });
   }
 };
 

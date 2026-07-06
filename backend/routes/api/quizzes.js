@@ -8,6 +8,7 @@ router.use(requireAuth);
 router.get('/',               c.list);
 router.get('/:id',            c.getOne);
 router.post('/:id/attempt',   c.submitAttempt);
+router.post('/:id/fullscreen-violation', c.fullscreenViolation);
 router.post('/:id/proctor-snapshot', c.uploadProctorSnapshot);
 router.get('/:id/results',    c.getResults);
 

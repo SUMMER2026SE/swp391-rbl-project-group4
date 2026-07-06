@@ -1216,12 +1216,13 @@ exports.listQuizzes = async (req, res) => {
 };
 
 exports.createQuiz = async (req, res) => {
-  const { title, title_ja, description, course_id, lesson_id, type, time_limit, mode } = req.body;
+  const { title, title_ja, description, course_id, lesson_id, type, time_limit, mode, strict_fullscreen } = req.body;
   if (!title) return res.status(400).json({ error: 'Tiêu đề không được để trống.' });
   try {
     const { data, error } = await examDb.from('quizzes')
       .insert({ title, title_ja, description, course_id, lesson_id, type: type || 'multiple_choice', time_limit,
-                mode: mode === 'proctored' ? 'proctored' : 'normal' })
+                mode: mode === 'proctored' ? 'proctored' : 'normal',
+                strict_fullscreen: strict_fullscreen === true })
       .select().single();
     if (error) throw error;
     res.status(201).json(data);
@@ -1229,7 +1230,7 @@ exports.createQuiz = async (req, res) => {
 };
 
 exports.updateQuiz = async (req, res) => {
-  const allowed = ['title','title_ja','description','course_id','lesson_id','type','time_limit','is_published','mode'];
+  const allowed = ['title','title_ja','description','course_id','lesson_id','type','time_limit','is_published','mode','strict_fullscreen'];
   const updates = Object.fromEntries(Object.entries(req.body).filter(([k]) => allowed.includes(k)));
   try {
     const { data, error } = await examDb.from('quizzes').update(updates).eq('id', req.params.id).select().single();
