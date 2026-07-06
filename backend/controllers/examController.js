@@ -52,7 +52,7 @@ exports.listMyExams = async (req, res) => {
 
 // POST /api/exams/teacher  — tạo đề thi (nền tảng cho UC42-46)
 exports.createExam = async (req, res) => {
-    const { title, title_ja, description, time_limit, mode } = req.body;
+    const { title, title_ja, description, time_limit, mode, strict_fullscreen } = req.body;
     if (!title) return res.status(400).json({ error: 'Tiêu đề đề thi là bắt buộc.' });
     try {
         const { data, error } = await examDb.from('quizzes')
@@ -60,6 +60,7 @@ exports.createExam = async (req, res) => {
                 title, title_ja: title_ja || null, description: description || null,
                 time_limit: time_limit || null, type: 'multiple_choice',
                 mode: mode === 'proctored' ? 'proctored' : 'normal',
+                strict_fullscreen: strict_fullscreen === true,
                 is_exam: true, is_published: true, teacher_id: req.user.id,
             })
             .select().single();
@@ -89,7 +90,7 @@ exports.updateExam = async (req, res) => {
     try {
         const exam = await getOwnedExam(req.params.id, req.user.id);
         if (!exam) return res.status(403).json({ error: 'Không có quyền với đề thi này.' });
-        const allowed = ['title', 'title_ja', 'description', 'time_limit', 'mode'];
+        const allowed = ['title', 'title_ja', 'description', 'time_limit', 'mode', 'strict_fullscreen'];
         const updates = Object.fromEntries(Object.entries(req.body).filter(([k]) => allowed.includes(k)));
         const { data, error } = await examDb.from('quizzes').update(updates).eq('id', req.params.id).select().single();
         if (error) throw error;

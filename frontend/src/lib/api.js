@@ -31,7 +31,10 @@ api.interceptors.response.use(
     }
 
     const msg = err.response?.data?.error || 'Đã xảy ra lỗi. Vui lòng thử lại.';
-    return Promise.reject(new Error(msg));
+    const wrapped = new Error(msg);
+    wrapped.status = status;
+    wrapped.data = err.response?.data;
+    return Promise.reject(wrapped);
   }
 );
 

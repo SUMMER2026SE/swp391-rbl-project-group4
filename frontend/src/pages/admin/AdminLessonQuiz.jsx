@@ -180,7 +180,7 @@ export default function AdminLessonQuiz() {
 
   // Quiz settings modal
   const [settingsModal, setSettingsModal]   = useState(false);
-  const [quizForm, setQuizForm]             = useState({ title: '', time_limit: '', is_published: false, mode: 'normal' });
+  const [quizForm, setQuizForm]             = useState({ title: '', time_limit: '', is_published: false, mode: 'normal', strict_fullscreen: false });
   const [savingSettings, setSavingSettings] = useState(false);
 
   // Question modal (create / edit)
@@ -248,7 +248,7 @@ export default function AdminLessonQuiz() {
   // ── Quiz settings ───────────────────────────────────────────────────────────
 
   const openSettings = () => {
-    setQuizForm({ title: quiz.title || '', time_limit: quiz.time_limit || '', is_published: quiz.is_published || false, mode: quiz.mode || 'normal' });
+    setQuizForm({ title: quiz.title || '', time_limit: quiz.time_limit || '', is_published: quiz.is_published || false, mode: quiz.mode || 'normal', strict_fullscreen: quiz.strict_fullscreen || false });
     setSettingsModal(true);
   };
 
@@ -260,6 +260,7 @@ export default function AdminLessonQuiz() {
         time_limit: quizForm.time_limit ? Number(quizForm.time_limit) : null,
         is_published: quizForm.is_published,
         mode: quizForm.mode,
+        strict_fullscreen: quizForm.strict_fullscreen,
       });
       setQuiz(r.data);
       setSettingsModal(false);
@@ -580,6 +581,10 @@ export default function AdminLessonQuiz() {
               ))}
             </div>
           </div>
+          <label className="flex items-start gap-2 cursor-pointer">
+            <input type="checkbox" checked={quizForm.strict_fullscreen} onChange={e => setQuizForm(f => ({ ...f, strict_fullscreen: e.target.checked }))} className="w-4 h-4 accent-tsubaki-red mt-0.5" />
+            <span className="text-sm text-on-surface">Bật chế độ toàn màn hình nghiêm ngặt (khóa bài nếu thoát fullscreen quá 5 lần, cấm thi 20 phút)</span>
+          </label>
           <label className="flex items-center gap-3 cursor-pointer">
             <div
               onClick={() => setQuizForm(f => ({ ...f, is_published: !f.is_published }))}

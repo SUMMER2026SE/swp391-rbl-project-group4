@@ -6,6 +6,7 @@ import Alert from '../../components/ui/Alert';
 import FuriganaText from '../../components/ui/FuriganaText';
 import api from '../../lib/api';
 import { useProctoring } from '../../lib/useProctoring';
+import { useFullscreenLockdown, MAX_FULLSCREEN_VIOLATIONS } from '../../lib/useFullscreenLockdown';
 
 function shuffle(arr) {
   const a = [...arr];
@@ -14,6 +15,11 @@ function shuffle(arr) {
     [a[i], a[j]] = [a[j], a[i]];
   }
   return a;
+}
+
+function fmtLock(ms) {
+  const s = Math.max(0, Math.ceil(ms / 1000));
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 }
 
 export default function Quiz() {
@@ -29,13 +35,36 @@ export default function Quiz() {
   const [timeLeft, setTimeLeft] = useState(null);
   const [furigana, setFurigana] = useState(false);
   const [shuffledRights, setShuffledRights] = useState({}); // matching: cột phải đã xáo trộn
+  const [lockedUntil, setLockedUntil] = useState(null); // strict fullscreen: bị khóa đến lúc nào
+  const [kicked, setKicked]           = useState(false); // bị khóa ngay giữa lúc làm bài
+  const [nowTs, setNowTs]             = useState(Date.now());
 
   const isProctored = quiz?.mode === 'proctored';
+  const isStrictFs  = quiz?.strict_fullscreen === true;
   const proctor     = useProctoring(id, { enabled: isProctored });
-  // Thi giám sát: chỉ bắt đầu sau khi học sinh cấp quyền & vào phòng thi
-  const examStarted = !isProctored || proctor.status === 'active';
+  const lockdown    = useFullscreenLockdown(id, {
+    enabled: isStrictFs,
+    onLocked: (until) => {
+      if (isProctored) proctor.stop();
+      setLockedUntil(until);
+      setKicked(true);
+    },
+  });
+  // Chỉ bắt đầu sau khi vào fullscreen (strict) và/hoặc cấp quyền webcam (giám sát)
+  const examStarted = (!isProctored || proctor.status === 'active')
+    && (!isStrictFs || lockdown.active);
 
+  // Bật cả giám sát lẫn strict fullscreen: proctor.start đã xin fullscreen,
+  // chỉ cần kích hoạt theo dõi lockdown khi phòng thi mở
   useEffect(() => {
+    if (isStrictFs && isProctored && proctor.status === 'active' && !lockdown.active)
+      lockdown.activate();
+  }, [isStrictFs, isProctored, proctor.status]);
+
+  const loadQuiz = () => {
+    setLoading(true);
+    setError('');
+    setLockedUntil(null);
     api.get(`/quizzes/${id}`)
       .then(r => {
         setQuiz(r.data);
@@ -47,9 +76,37 @@ export default function Quiz() {
         setShuffledRights(sr);
         if (r.data.time_limit) setTimeLeft(r.data.time_limit);
       })
-      .catch(e => setError(e.message))
+      .catch(e => {
+        if (e.status === 403 && e.data?.lockedUntil) setLockedUntil(e.data.lockedUntil);
+        else setError(e.message);
+      })
       .finally(() => setLoading(false));
-  }, [id]);
+  };
+
+  useEffect(() => { loadQuiz(); }, [id]);
+
+  // Đồng hồ đếm ngược thời gian khóa
+  useEffect(() => {
+    if (!lockedUntil) return;
+    const t = setInterval(() => setNowTs(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [lockedUntil]);
+
+  // Bị khóa giữa lúc làm bài → hiện thông báo rồi tự quay về trang trước
+  useEffect(() => {
+    if (!kicked) return;
+    const t = setTimeout(() => navigate(-1), 6000);
+    return () => clearTimeout(t);
+  }, [kicked]);
+
+  // Chặn copy / cắt / dán / chuột phải trong lúc làm bài thi
+  useEffect(() => {
+    if (!examStarted || result || (!isStrictFs && !isProctored)) return;
+    const block = (e) => e.preventDefault();
+    const events = ['copy', 'cut', 'paste', 'contextmenu'];
+    events.forEach(ev => document.addEventListener(ev, block));
+    return () => events.forEach(ev => document.removeEventListener(ev, block));
+  }, [examStarted, result, isStrictFs, isProctored]);
 
   useEffect(() => {
     if (!timeLeft || !examStarted) return;
@@ -63,13 +120,14 @@ export default function Quiz() {
   }, [timeLeft !== null && !result && examStarted]);
 
   const handleSubmit = async () => {
-    if (submitting) return;
+    if (submitting || kicked) return;
     setSubmitting(true);
     try {
       const payload = { answers };
       if (isProctored) Object.assign(payload, proctor.getProctorData());
       const r = await api.post(`/quizzes/${id}/attempt`, payload);
       if (isProctored) proctor.stop();
+      if (isStrictFs) lockdown.stop();
       setResult(r.data);
     } catch (e) {
       setError(e.message);
@@ -78,8 +136,61 @@ export default function Quiz() {
     }
   };
 
+  const startStrict = async () => {
+    setError('');
+    try { await lockdown.start(); }
+    catch { setError('Không thể bật chế độ toàn màn hình. Vui lòng thử lại.'); }
+  };
+
   if (loading) return <StudentLayout title="Quiz"><div className="flex justify-center py-16"><span className="material-symbols-outlined animate-spin text-tsubaki-red text-4xl">progress_activity</span></div></StudentLayout>;
   if (error && !quiz) return <StudentLayout title="Lỗi"><Alert type="error">{error}</Alert></StudentLayout>;
+
+  const lockRemainMs = lockedUntil ? new Date(lockedUntil).getTime() - nowTs : 0;
+
+  // ── Strict fullscreen: bị khóa ngay giữa lúc làm bài ────────────────────────
+  if (kicked) {
+    return (
+      <StudentLayout title={quiz?.title}>
+        <div className="max-w-md mx-auto text-center">
+          <div className="glass-card rounded-2xl p-10">
+            <span className="material-symbols-outlined text-6xl text-tsubaki-red block mb-4">lock_clock</span>
+            <h1 className="font-display text-2xl font-bold mb-2">Bài thi đã bị khóa</h1>
+            <p className="text-sm text-on-muted mb-4">
+              Bạn đã thoát toàn màn hình quá {MAX_FULLSCREEN_VIOLATIONS} lần, bài thi đã bị khóa, vui lòng quay lại sau 20 phút.
+            </p>
+            {lockRemainMs > 0 && <p className="text-3xl font-bold text-tsubaki-red mb-6">{fmtLock(lockRemainMs)}</p>}
+            <Button onClick={() => navigate(-1)}>Quay lại bài học</Button>
+            <p className="text-xs text-on-muted mt-3">Tự động quay lại sau vài giây…</p>
+          </div>
+        </div>
+      </StudentLayout>
+    );
+  }
+
+  // ── Strict fullscreen: bị chặn ngay khi mở bài (đang trong thời gian khóa) ──
+  if (lockedUntil && !quiz) {
+    return (
+      <StudentLayout title="Bài thi bị khóa">
+        <div className="max-w-md mx-auto text-center">
+          <div className="glass-card rounded-2xl p-10">
+            <span className="material-symbols-outlined text-6xl text-tsubaki-red block mb-4">lock_clock</span>
+            <h1 className="font-display text-2xl font-bold mb-2">Bài thi đang bị khóa</h1>
+            <p className="text-sm text-on-muted mb-4">
+              Bạn đã thoát toàn màn hình quá {MAX_FULLSCREEN_VIOLATIONS} lần. Vui lòng chờ hết thời gian khóa để vào lại.
+            </p>
+            {lockRemainMs > 0 ? (
+              <p className="text-4xl font-bold text-tsubaki-red mb-6">{fmtLock(lockRemainMs)}</p>
+            ) : (
+              <Button onClick={loadQuiz} className="mb-3">Vào lại bài thi</Button>
+            )}
+            <button onClick={() => navigate(-1)} className="w-full text-sm text-on-muted hover:text-charcoal">
+              Quay lại
+            </button>
+          </div>
+        </div>
+      </StudentLayout>
+    );
+  }
 
   // ── Phòng thi giám sát: màn hình chờ cấp quyền ──────────────────────────────
   if (isProctored && !examStarted && !result) {
@@ -112,6 +223,44 @@ export default function Quiz() {
             <Button onClick={proctor.start} loading={proctor.status === 'requesting'} className="w-full">
               <span className="material-symbols-outlined text-lg">play_circle</span>
               {proctor.status === 'denied' ? 'Thử lại — Vào phòng thi' : 'Tôi đã hiểu — Bắt đầu thi'}
+            </Button>
+            <button onClick={() => navigate(-1)} className="w-full mt-3 text-sm text-on-muted hover:text-charcoal">
+              Quay lại
+            </button>
+          </div>
+        </div>
+      </StudentLayout>
+    );
+  }
+
+  // ── Strict fullscreen (không giám sát webcam): màn hình chờ vào fullscreen ──
+  if (!isProctored && isStrictFs && !examStarted && !result) {
+    return (
+      <StudentLayout title={quiz?.title}>
+        <div className="max-w-lg mx-auto">
+          <div className="glass-card rounded-2xl p-8">
+            <div className="text-center mb-6">
+              <span className="material-symbols-outlined text-5xl text-tsubaki-red block mb-2" style={{ fontVariationSettings: "'FILL' 1" }}>fullscreen</span>
+              <h1 className="font-display text-2xl font-bold">Chế độ toàn màn hình nghiêm ngặt</h1>
+              <p className="text-sm text-on-muted mt-1">{quiz?.title}</p>
+            </div>
+
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-900 space-y-2 mb-6">
+              <p className="font-semibold flex items-center gap-1.5">
+                <span className="material-symbols-outlined text-base">info</span> Quy định
+              </p>
+              <ul className="space-y-1.5 list-disc list-inside text-amber-800">
+                <li>Bài thi bắt buộc làm ở chế độ <strong>toàn màn hình</strong>.</li>
+                <li>Thoát toàn màn hình, chuyển tab hoặc chuyển cửa sổ đều bị <strong>ghi nhận vi phạm</strong>.</li>
+                <li>Vi phạm quá <strong>{MAX_FULLSCREEN_VIOLATIONS} lần</strong>, bài thi bị <strong>khóa 20 phút</strong>.</li>
+              </ul>
+            </div>
+
+            {error && <Alert type="error" className="mb-4">{error}</Alert>}
+
+            <Button onClick={startStrict} className="w-full">
+              <span className="material-symbols-outlined text-lg">fullscreen</span>
+              Vào chế độ toàn màn hình — Bắt đầu
             </Button>
             <button onClick={() => navigate(-1)} className="w-full mt-3 text-sm text-on-muted hover:text-charcoal">
               Quay lại
@@ -161,8 +310,8 @@ export default function Quiz() {
     );
   }
 
-  return (
-    <StudentLayout title={quiz?.title}>
+  const examContent = (
+    <>
       {/* ── Giám sát: webcam HUD + overlay che đề ── */}
       {isProctored && examStarted && (
         <>
@@ -190,7 +339,7 @@ export default function Quiz() {
             </div>
           </div>
 
-          {!proctor.isFullscreen && (
+          {!proctor.isFullscreen && !isStrictFs && (
             <div className="fixed inset-0 z-50 bg-charcoal/95 backdrop-blur-xl flex items-center justify-center p-6">
               <div className="text-center max-w-sm">
                 <span className="material-symbols-outlined text-6xl text-amber-400 block mb-4">visibility_off</span>
@@ -209,6 +358,27 @@ export default function Quiz() {
         </>
       )}
 
+      {/* ── Strict fullscreen: che đề + đếm vi phạm khi rời bài thi ── */}
+      {isStrictFs && examStarted && lockdown.breached && (
+        <div className="fixed inset-0 z-50 bg-charcoal/95 backdrop-blur-xl flex items-center justify-center p-6">
+          <div className="text-center max-w-sm">
+            <span className="material-symbols-outlined text-6xl text-amber-400 block mb-4">fullscreen_exit</span>
+            <h2 className="font-display text-2xl font-bold text-white mb-2">Nội dung bị ẩn</h2>
+            <p className="text-white/70 text-sm mb-2">
+              Bạn đã thoát toàn màn hình hoặc chuyển sang tab / cửa sổ khác.
+              Quay lại chế độ toàn màn hình để tiếp tục làm bài.
+            </p>
+            <p className="text-red-400 text-sm font-semibold mb-6">
+              Số lần vi phạm: {lockdown.violationCount}/{MAX_FULLSCREEN_VIOLATIONS} — đủ {MAX_FULLSCREEN_VIOLATIONS} lần bài thi sẽ bị khóa 20 phút
+            </p>
+            <Button onClick={lockdown.resume} className="w-full">
+              <span className="material-symbols-outlined text-lg">fullscreen</span>
+              Quay lại toàn màn hình để tiếp tục
+            </Button>
+          </div>
+        </div>
+      )}
+
       <div className="max-w-2xl mx-auto">
         {error && <Alert type="error" className="mb-4">{error}</Alert>}
 
@@ -217,6 +387,12 @@ export default function Quiz() {
           <div className="flex justify-between items-center mb-2">
             <h1 className="font-display font-bold text-xl">{quiz?.title}</h1>
             <div className="flex items-center gap-3">
+              {isStrictFs && lockdown.violationCount > 0 && (
+                <span className="text-sm font-bold px-3 py-1 rounded-full bg-error-bg text-error"
+                  title="Số lần thoát toàn màn hình">
+                  ⚠ {lockdown.violationCount}/{MAX_FULLSCREEN_VIOLATIONS}
+                </span>
+              )}
               {timeLeft !== null && (
                 <span className={`text-sm font-bold px-3 py-1 rounded-full ${timeLeft < 30 ? 'bg-error-bg text-error' : 'bg-surface-low text-on-muted'}`}>
                   ⏱ {Math.floor(timeLeft / 60)}:{String(timeLeft % 60).padStart(2, '0')}
@@ -372,6 +548,11 @@ export default function Quiz() {
           </div>
         )}
       </div>
-    </StudentLayout>
+    </>
   );
+
+  // Khi vào thi ở chế độ giám sát / toàn màn hình nghiêm ngặt: chỉ hiện bài thi, ẩn sidebar
+  return (isProctored || isStrictFs)
+    ? <div className="min-h-screen bg-surface px-6 py-10">{examContent}</div>
+    : <StudentLayout title={quiz?.title}>{examContent}</StudentLayout>;
 }
