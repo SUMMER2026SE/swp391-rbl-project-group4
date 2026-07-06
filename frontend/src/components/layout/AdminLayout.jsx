@@ -11,6 +11,7 @@ const ADMIN_LINKS = (t) => [
   { to: '/admin/kanji',       icon: 'font_download', label: t('admin.kanji') },
   { to: '/admin/quizzes',      icon: 'quiz',          label: t('admin.quizzes') },
   { to: '/admin/questions',    icon: 'inventory_2',   label: 'Ngân hàng câu hỏi' },
+  { to: '/admin/listening',    icon: 'headphones',    label: 'Hội thoại nghe' },
   { to: '/admin/news',         icon: 'newspaper',     label: 'Đọc báo' },
   { to: '/admin/submissions',  icon: 'pending_actions', label: 'Yêu cầu duyệt' },
   { to: '/admin/classes',      icon: 'groups',          label: 'Lớp học' },

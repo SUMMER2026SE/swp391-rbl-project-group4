@@ -188,6 +188,16 @@ router.post('/listening-passages/:id/transcribe',  c.transcribeListeningPassage)
 router.put('/listening-passages/:id',              c.updateListeningPassage);
 router.delete('/listening-passages/:id',           c.deleteListeningPassage);
 
+// Listening Dialogues (hội thoại luyện nghe UC20-22)
+const lc = require('../../controllers/listeningController');
+router.get('/listening/dialogues',              lc.adminListDialogues);
+router.post('/listening/dialogues',             lc.adminCreateDialogue);
+router.put('/listening/dialogues/:id',          lc.adminUpdateDialogue);
+router.delete('/listening/dialogues/:id',       lc.adminDeleteDialogue);
+router.post('/listening/dialogues/:id/lines',   lc.adminAddLine);
+router.put('/listening/lines/:lineId',          lc.adminUpdateLine);
+router.delete('/listening/lines/:lineId',       lc.adminDeleteLine);
+
 // News (Luyện đọc báo)
 router.post('/news/generate-segments', news.generateSegments);
 router.get('/news',                    news.adminList);
