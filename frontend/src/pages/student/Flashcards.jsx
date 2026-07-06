@@ -198,10 +198,11 @@ export default function Flashcards() {
       {/* ── Header ──────────────────────────────────────────────── */}
       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-8">
         <div>
+          <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-tsubaki-red mb-2">Học từ vựng</p>
           <h1 className="font-display text-display-mobile font-bold text-on-surface mb-2 tracking-tight">
             Thẻ ghi nhớ
           </h1>
-          <p className="text-on-surface-variant text-base">Tạo và ôn tập từ vựng của bạn</p>
+          <p className="text-on-surface-variant text-base">Tạo bộ thẻ của riêng bạn, rồi lật thẻ · học · kiểm tra.</p>
         </div>
         <div className="flex gap-3 shrink-0">
           <Button variant="secondary" onClick={() => setFolderModal({ name: '' })}>
@@ -240,8 +241,8 @@ export default function Flashcards() {
         </div>
       ) : tab === 'sets' ? (
         sets.length === 0 && drafts.length === 0 ? (
-          <EmptyState icon="style" title="Chưa có học phần nào"
-            hint="Tạo học phần đầu tiên để bắt đầu ôn tập"
+          <EmptyState icon="style" title="Bắt đầu bộ thẻ đầu tiên"
+            hint="Tạo học phần để ôn từ vựng theo cách của bạn — lật thẻ, học và kiểm tra."
             action={<Button variant="primary" onClick={() => navigate('/flashcards/new')}>Tạo học phần</Button>}
           />
         ) : (
@@ -329,8 +330,8 @@ export default function Flashcards() {
         )
       ) : (
         folders.length === 0 ? (
-          <EmptyState icon="folder" title="Chưa có thư mục nào"
-            hint="Tạo thư mục để gom các học phần lại với nhau"
+          <EmptyState icon="folder" title="Chưa có thư mục"
+            hint="Gom các học phần cùng chủ đề vào một thư mục để dễ ôn tập."
             action={<Button variant="secondary" onClick={() => setFolderModal({ name: '' })}>Tạo thư mục</Button>}
           />
         ) : (

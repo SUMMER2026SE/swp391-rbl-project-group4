@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import StudentLayout from '../../components/layout/StudentLayout';
 import Alert from '../../components/ui/Alert';
 import SpeakButton from '../../components/dictionary/SpeakButton';
+import FlashcardModeTabs from '../../components/flashcards/FlashcardModeTabs';
 import api from '../../lib/api';
 
 const FRONT_KEY = 'flashcard.frontSide';
@@ -32,6 +33,14 @@ export default function FlashcardStudy() {
   const [trackProgress, setTrackProgress] = useState(false);
   const [frontSide, setFrontSide] = useState(() => localStorage.getItem(FRONT_KEY) || 'term');
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [noAnim, setNoAnim] = useState(false);
+
+  // Đổi thẻ: đưa về mặt trước tức thời (tắt transition 1 nhịp để không xoay ngược thô)
+  const resetFlip = () => {
+    setNoAnim(true);
+    setFlipped(false);
+    requestAnimationFrame(() => requestAnimationFrame(() => setNoAnim(false)));
+  };
 
   // ── Tải set + tiến độ ──
   useEffect(() => {
@@ -69,7 +78,7 @@ export default function FlashcardStudy() {
   // ── Điều hướng thường (chế độ xem lướt — không đánh dấu) ──
   const go = (delta) => {
     if (done) return;
-    setFlipped(false);
+    resetFlip();
     setPos(p => Math.min(Math.max(p + delta, 0), deck.length - 1));
   };
 
@@ -79,7 +88,7 @@ export default function FlashcardStudy() {
     const card = current;
     setHistory(h => [...h, { cardId: card.id, prevStatus: progress[card.id] }]);
     setProgress(p => ({ ...p, [card.id]: status }));
-    setFlipped(false);
+    resetFlip();
     if (pos >= deck.length - 1) setDone(true); // thẻ cuối → màn kết quả
     else setPos(pos + 1);
 
@@ -97,7 +106,7 @@ export default function FlashcardStudy() {
     setHistory(h => h.slice(0, -1));
     if (done) { setDone(false); setPos(deck.length - 1); }
     else setPos(p => Math.max(p - 1, 0));
-    setFlipped(false);
+    resetFlip();
 
     setProgress(p => {
       const next = { ...p };
@@ -121,7 +130,7 @@ export default function FlashcardStudy() {
   const handleShuffle = () => {
     setDeck(d => shuffle(d));
     setPos(0);
-    setFlipped(false);
+    resetFlip();
     setDone(false);
     setHistory([]);
   };
@@ -133,7 +142,7 @@ export default function FlashcardStudy() {
     setProgress({});
     setDeck(cards);
     setPos(0);
-    setFlipped(false);
+    resetFlip();
     setDone(false);
     setHistory([]);
     try {
@@ -147,7 +156,7 @@ export default function FlashcardStudy() {
   const reviewLearning = () => {
     setDeck(d => d.filter(c => progress[c.id] === 'learning'));
     setPos(0);
-    setFlipped(false);
+    resetFlip();
     setDone(false);
     setHistory([]);
   };
@@ -157,7 +166,7 @@ export default function FlashcardStudy() {
     const cards = set?.cards || set?.flashcards || [];
     setDeck(cards);
     setPos(0);
-    setFlipped(false);
+    resetFlip();
     setDone(false);
     setHistory([]);
   };
@@ -205,13 +214,21 @@ export default function FlashcardStudy() {
         Trở về
       </Link>
 
+      <FlashcardModeTabs setId={id} active="cards" />
+
       {/* ── Header ──────────────────────────────────────────────── */}
-      <div className="flex items-center justify-between gap-4 mb-6">
-        <h1 className="font-display text-xl sm:text-2xl font-bold text-on-surface truncate">{set?.title}</h1>
-        <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-tsubaki-red bg-tsubaki-red/10 px-3 py-1.5 rounded-full shrink-0">
-          <span className="material-symbols-outlined text-lg fill">check_circle</span>
-          Đã thuộc {masteredCount}/{totalCards}
-        </span>
+      <div className="flex items-end justify-between gap-4 mb-6">
+        <div className="min-w-0">
+          <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-on-muted mb-1">Chế độ thẻ ghi nhớ</p>
+          <h1 className="font-display text-xl sm:text-2xl font-bold text-on-surface truncate">{set?.title}</h1>
+        </div>
+        <div className="flex items-center gap-3 shrink-0">
+          <div className="text-right hidden sm:block">
+            <p className="text-sm font-bold text-tsubaki-red leading-tight">Đã thuộc</p>
+            <p className="text-xs text-on-muted">{masteredCount}/{totalCards} thẻ</p>
+          </div>
+          <ProgressRing value={masteredCount} total={totalCards} />
+        </div>
       </div>
 
       {error && <div className="mb-6"><Alert type="error" onClose={() => setError('')}>{error}</Alert></div>}
@@ -255,7 +272,7 @@ export default function FlashcardStudy() {
                           type="radio"
                           name="frontSide"
                           checked={frontSide === val}
-                          onChange={() => { setFrontSide(val); setFlipped(false); }}
+                          onChange={() => { setFrontSide(val); resetFlip(); }}
                           className="accent-tsubaki-red"
                         />
                         {label}
@@ -321,17 +338,15 @@ export default function FlashcardStudy() {
         </div>
       ) : current ? (
         <>
-          {/* Flip card */}
-          <div className="relative">
-          {(flipped ? frontSide !== 'term' : frontSide === 'term') && (
-            <SpeakButton text={current.term} className="absolute top-4 left-4 z-10" />
-          )}
-          <button
-            onClick={() => setFlipped(f => !f)}
-            className="w-full glass-card rounded-3xl min-h-[18rem] sm:min-h-[22rem] flex flex-col items-center justify-center p-8 text-center cursor-pointer hover:border-tsubaki-red border-2 border-transparent transition-colors relative select-none"
-          >
+          {/* Flip card 3D */}
+          <div className="relative max-w-3xl mx-auto">
+            {(flipped ? frontSide !== 'term' : frontSide === 'term') && (
+              <span className="absolute top-4 left-4 z-20" onClick={e => e.stopPropagation()}>
+                <SpeakButton text={current.term} />
+              </span>
+            )}
             {progress[current.id] && (
-              <span className={`absolute top-4 right-4 text-xs font-bold px-2.5 py-1 rounded-full ${
+              <span className={`absolute top-4 right-4 z-20 text-xs font-bold px-2.5 py-1 rounded-full ${
                 progress[current.id] === 'mastered'
                   ? 'bg-green-100 text-green-700'
                   : 'bg-amber-100 text-amber-700'
@@ -339,14 +354,39 @@ export default function FlashcardStudy() {
                 {progress[current.id] === 'mastered' ? 'Đã thuộc' : 'Chưa thuộc'}
               </span>
             )}
-            <p className="font-display text-3xl sm:text-5xl font-bold text-on-surface leading-tight break-words">
-              {flipped ? backContent(current) : frontContent(current)}
-            </p>
-            <span className="absolute bottom-4 inset-x-0 text-xs text-on-muted flex items-center justify-center gap-1">
-              <span className="material-symbols-outlined text-sm">touch_app</span>
-              Chạm để lật
-            </span>
-          </button>
+            <div
+              onClick={() => setFlipped(f => !f)}
+              className={`fc-flip h-72 sm:h-96 cursor-pointer select-none ${flipped ? 'is-flipped' : ''} ${noAnim ? 'no-anim' : ''}`}
+            >
+              <div className="fc-flip-inner">
+                {/* Mặt trước */}
+                <div className="fc-face">
+                  <div className="glass-card rounded-3xl w-full h-full flex flex-col items-center justify-center p-8 text-center border-2 border-transparent hover:border-tsubaki-red/60 transition-colors">
+                    <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-on-muted mb-4">
+                      {frontSide === 'term' ? 'Từ vựng' : 'Định nghĩa'}
+                    </p>
+                    <p className="font-display text-3xl sm:text-5xl font-bold text-on-surface leading-tight break-words">
+                      {frontContent(current)}
+                    </p>
+                    <span className="absolute bottom-4 inset-x-0 text-xs text-on-muted flex items-center justify-center gap-1">
+                      <span className="material-symbols-outlined text-sm">touch_app</span>
+                      Chạm để lật
+                    </span>
+                  </div>
+                </div>
+                {/* Mặt sau */}
+                <div className="fc-face fc-back">
+                  <div className="glass-card rounded-3xl w-full h-full flex flex-col items-center justify-center p-8 text-center border-2 border-tsubaki-red/30">
+                    <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-tsubaki-red/70 mb-4">
+                      {frontSide === 'term' ? 'Định nghĩa' : 'Từ vựng'}
+                    </p>
+                    <p className="font-display text-3xl sm:text-5xl font-bold text-on-surface leading-tight break-words">
+                      {backContent(current)}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
 
           {/* Điều hướng — khi theo dõi tiến độ: X (chưa thuộc) / ✓ (đã thuộc) + Hoàn tác */}
@@ -420,6 +460,29 @@ export default function FlashcardStudy() {
         </div>
       )}
     </StudentLayout>
+  );
+}
+
+// ── Vòng tiến độ tròn (SVG) ──
+function ProgressRing({ value, total }) {
+  const pct = total ? Math.round((value / total) * 100) : 0;
+  const r = 20;
+  const c = 2 * Math.PI * r;
+  const off = c - (pct / 100) * c;
+  return (
+    <div className="relative w-14 h-14 shrink-0">
+      <svg className="w-14 h-14 -rotate-90" viewBox="0 0 48 48">
+        <circle cx="24" cy="24" r={r} fill="none" strokeWidth="4" className="stroke-surface-low" />
+        <circle
+          cx="24" cy="24" r={r} fill="none" strokeWidth="4" strokeLinecap="round"
+          className="stroke-tsubaki-red transition-all duration-500"
+          strokeDasharray={c} strokeDashoffset={off}
+        />
+      </svg>
+      <span className="absolute inset-0 flex items-center justify-center text-xs font-bold text-tsubaki-red">
+        {pct}%
+      </span>
+    </div>
   );
 }
 

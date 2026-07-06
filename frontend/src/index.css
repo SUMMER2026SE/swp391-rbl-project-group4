@@ -98,3 +98,35 @@
 .animate-fade-in {
   animation: fade-in 0.6s cubic-bezier(0.4,0,0.2,1) both;
 }
+
+/* ── Thẻ ghi nhớ: hiệu ứng lật 3D ────────────────────────────── */
+.fc-flip {
+  perspective: 1600px;
+}
+.fc-flip-inner {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  transform-style: preserve-3d;
+  transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.fc-flip.is-flipped .fc-flip-inner {
+  transform: rotateY(180deg);
+}
+.fc-face {
+  position: absolute;
+  inset: 0;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+.fc-back {
+  transform: rotateY(180deg);
+}
+/* Tắt transition khi đổi thẻ để không xoay ngược thô */
+.fc-flip.no-anim .fc-flip-inner {
+  transition: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fc-flip-inner { transition: none; }
+}
