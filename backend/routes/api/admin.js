@@ -23,6 +23,16 @@ const audioUpload = multer({
   },
 });
 
+// Video bài học — 50MB: trần upload mỗi file của Supabase gói free, đồng bộ với bucket lesson-videos.
+const videoUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 50 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const ok = ['video/mp4', 'video/webm'].includes(file.mimetype);
+    ok ? cb(null, true) : cb(new Error('Chỉ chấp nhận file video MP4/WebM.'));
+  },
+});
+
 router.use(requireAuth, requireAdmin);
 
 // ── System status ─────────────────────────────────────────────────────────────
@@ -122,6 +132,7 @@ router.post('/lessons',              c.createLesson);
 router.put('/lessons/:id',           c.updateLesson);
 router.delete('/lessons/:id',        c.deleteLesson);
 router.patch('/lessons/reorder',     c.reorderLessons);
+router.post('/lessons/upload-video', videoUpload.single('video'), c.uploadLessonVideo);
 
 // Vocabulary
 router.get('/vocabulary',         c.listVocab);

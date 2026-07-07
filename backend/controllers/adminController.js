@@ -1011,6 +1011,21 @@ exports.deletePassage = async (req, res) => {
   } catch (err) { res.status(500).json({ error: 'Không thể xóa bài đọc.' }); }
 };
 
+// ── Lesson video upload ───────────────────────────────────────────────────────
+exports.uploadLessonVideo = async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'Không có file được tải lên.' });
+  const ext = (req.file.originalname.split('.').pop() || 'mp4').toLowerCase();
+  const filename = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+  try {
+    const { error } = await supabaseAdmin.storage
+      .from('lesson-videos')
+      .upload(filename, req.file.buffer, { contentType: req.file.mimetype, upsert: false });
+    if (error) throw error;
+    const { data: { publicUrl } } = supabaseAdmin.storage.from('lesson-videos').getPublicUrl(filename);
+    res.json({ url: publicUrl });
+  } catch (err) { res.status(500).json({ error: 'Không thể tải file video lên.' }); }
+};
+
 // ── Listening Passages ────────────────────────────────────────────────────────
 exports.uploadListeningAudio = async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'Không có file được tải lên.' });

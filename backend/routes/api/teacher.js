@@ -14,6 +14,16 @@ const upload = multer({
     file.mimetype.startsWith('image/') ? cb(null, true) : cb(new Error('Chỉ chấp nhận file hình ảnh.')),
 });
 
+// Video bài học — 50MB: trần upload mỗi file của Supabase gói free, đồng bộ với bucket lesson-videos.
+const videoUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 50 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const ok = ['video/mp4', 'video/webm'].includes(file.mimetype);
+    ok ? cb(null, true) : cb(new Error('Chỉ chấp nhận file video MP4/WebM.'));
+  },
+});
+
 router.use(requireAuth, requireTeacher);
 
 router.get('/stats',            c.getStats);
@@ -33,6 +43,7 @@ router.post('/lessons',        c.createLesson);
 router.patch('/lessons/reorder', c.reorderLessons);
 router.put('/lessons/:id',     c.updateLesson);
 router.delete('/lessons/:id',  c.deleteLesson);
+router.post('/lessons/upload-video', videoUpload.single('video'), ac.uploadLessonVideo);
 
 // Trình soạn Từ vựng / Kanji của Mục — list/create/update dùng kho chung (admin handler),
 // attach/detach kiểm tra sở hữu khóa (teacher handler).

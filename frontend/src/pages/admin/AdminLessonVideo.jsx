@@ -12,6 +12,9 @@ function toEmbed(url) {
   return null;
 }
 
+// Trần upload mỗi file của Supabase gói free — phải khớp giới hạn multer + bucket lesson-videos ở backend.
+const MAX_VIDEO_MB = 50;
+
 export default function AdminLessonVideo() {
   const { lessonId } = useParams();
   const navigate = useNavigate();
@@ -22,6 +25,8 @@ export default function AdminLessonVideo() {
   const [transcript, setTranscript] = useState('');
   const [loading, setLoading]     = useState(true);
   const [saving, setSaving]       = useState(false);
+  const [sourceMode, setSourceMode] = useState('link'); // 'link' | 'upload'
+  const [uploading, setUploading]   = useState(false);
   const [saved, setSaved]         = useState(false);
   const [alert, setAlert]         = useState({ type: '', msg: '' });
 
@@ -51,6 +56,32 @@ export default function AdminLessonVideo() {
       setAlert({ type: 'error', msg: e.message });
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleFileChange = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // cho phép chọn lại cùng file sau khi lỗi
+    if (!file) return;
+    if (!['video/mp4', 'video/webm'].includes(file.type)) {
+      setAlert({ type: 'error', msg: 'Chỉ chấp nhận file video MP4 hoặc WebM.' });
+      return;
+    }
+    if (file.size > MAX_VIDEO_MB * 1024 * 1024) {
+      setAlert({ type: 'error', msg: `File quá lớn (${(file.size / 1024 / 1024).toFixed(1)}MB). Giới hạn tối đa ${MAX_VIDEO_MB}MB.` });
+      return;
+    }
+    setUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append('video', file);
+      const r = await api.post(`${apiBase}/lessons/upload-video`, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+      setContentUrl(r.data.url);
+      setAlert({ type: 'success', msg: 'Đã tải video lên. Nhấn "Lưu nội dung" để lưu vào bài học.' });
+    } catch (err) {
+      setAlert({ type: 'error', msg: err.response?.data?.error || err.message });
+    } finally {
+      setUploading(false);
     }
   };
 
@@ -87,7 +118,7 @@ export default function AdminLessonVideo() {
           )}
           <button
             onClick={handleSave}
-            disabled={saving}
+            disabled={saving || uploading}
             className="flex items-center gap-2 px-4 py-2.5 bg-tsubaki-red text-white rounded-xl text-sm font-medium hover:shadow-lg active:scale-95 transition-all disabled:opacity-60"
           >
             <span className="material-symbols-outlined text-base">{saving ? 'hourglass_empty' : 'save'}</span>
@@ -98,15 +129,51 @@ export default function AdminLessonVideo() {
 
       <div className="bg-white rounded-2xl border border-outline/20 shadow-sm p-6 space-y-5">
         <div>
-          <label className="block text-sm font-medium text-on-muted mb-1">Đường dẫn video (URL) *</label>
-          <input
-            type="url"
-            value={contentUrl}
-            onChange={e => setContentUrl(e.target.value)}
-            placeholder="https://www.youtube.com/watch?v=..."
-            className="w-full px-4 py-3 border border-outline rounded-xl text-sm outline-none focus:border-tsubaki-red transition-colors"
-          />
-          <p className="text-xs text-on-muted mt-1">Hỗ trợ link YouTube hoặc URL video trực tiếp (.mp4).</p>
+          <label className="block text-sm font-medium text-on-muted mb-1">Nguồn video *</label>
+          <div className="flex gap-2 mb-3">
+            <button
+              type="button"
+              onClick={() => setSourceMode('link')}
+              className={`px-4 py-2 rounded-xl text-sm font-medium border transition-colors ${sourceMode === 'link' ? 'bg-tsubaki-red text-white border-tsubaki-red' : 'border-outline text-on-muted hover:border-tsubaki-red'}`}
+            >
+              Dán link YouTube/URL
+            </button>
+            <button
+              type="button"
+              onClick={() => setSourceMode('upload')}
+              className={`px-4 py-2 rounded-xl text-sm font-medium border transition-colors ${sourceMode === 'upload' ? 'bg-tsubaki-red text-white border-tsubaki-red' : 'border-outline text-on-muted hover:border-tsubaki-red'}`}
+            >
+              Tải file video lên
+            </button>
+          </div>
+
+          {sourceMode === 'link' ? (
+            <>
+              <input
+                type="url"
+                value={contentUrl}
+                onChange={e => setContentUrl(e.target.value)}
+                placeholder="https://www.youtube.com/watch?v=..."
+                className="w-full px-4 py-3 border border-outline rounded-xl text-sm outline-none focus:border-tsubaki-red transition-colors"
+              />
+              <p className="text-xs text-on-muted mt-1">Hỗ trợ link YouTube hoặc URL video trực tiếp (.mp4).</p>
+            </>
+          ) : (
+            <>
+              <label className={`flex items-center justify-center gap-2 w-full px-4 py-6 border-2 border-dashed border-outline rounded-xl text-sm text-on-muted transition-colors ${uploading ? 'opacity-60 cursor-wait' : 'cursor-pointer hover:border-tsubaki-red hover:text-tsubaki-red'}`}>
+                <span className="material-symbols-outlined text-base">{uploading ? 'hourglass_empty' : 'upload_file'}</span>
+                {uploading ? 'Đang tải video lên...' : 'Chọn file video (MP4/WebM)'}
+                <input
+                  type="file"
+                  accept="video/mp4,video/webm"
+                  onChange={handleFileChange}
+                  disabled={uploading}
+                  className="hidden"
+                />
+              </label>
+              <p className="text-xs text-on-muted mt-1">Định dạng MP4 hoặc WebM, tối đa {MAX_VIDEO_MB}MB. Sau khi tải lên, URL sẽ được điền tự động.</p>
+            </>
+          )}
         </div>
 
         {/* Preview */}
