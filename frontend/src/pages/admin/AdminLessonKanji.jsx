@@ -4,6 +4,7 @@ import { useEditorArea } from '../../lib/useEditorArea';
 import Modal from '../../components/ui/Modal';
 import Button from '../../components/ui/Button';
 import Alert from '../../components/ui/Alert';
+import ImportFileModal from '../../components/admin/ImportFileModal';
 import api from '../../lib/api';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -223,6 +224,9 @@ export default function AdminLessonKanji() {
   const [editId, setEditId] = useState(null);
   const [saving, setSaving] = useState(false);
 
+  // Modal "Nhập file"
+  const [importOpen, setImportOpen] = useState(false);
+
   // Picker "Thêm từ thư viện"
   const [picker, setPicker]       = useState(false);
   const [pickerSearch, setSearch] = useState('');
@@ -424,6 +428,10 @@ export default function AdminLessonKanji() {
         </div>
 
         <div className="flex gap-2 shrink-0">
+          <Button variant="secondary" onClick={() => setImportOpen(true)}>
+            <span className="material-symbols-outlined text-base">upload_file</span>
+            Nhập file
+          </Button>
           <Button variant="secondary" onClick={openPicker}>
             <span className="material-symbols-outlined text-base">library_add</span>
             Thêm từ thư viện
@@ -504,6 +512,16 @@ export default function AdminLessonKanji() {
       >
         <KanjiForm form={form} onChange={setForm} />
       </Modal>
+
+      {/* Nhập file */}
+      <ImportFileModal
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        type="kanji"
+        lessonId={lessonId}
+        apiBase={apiBase}
+        onImported={async (msg) => { await load(); setAlert({ type: 'success', msg }); }}
+      />
 
       {/* Picker thư viện */}
       <Modal

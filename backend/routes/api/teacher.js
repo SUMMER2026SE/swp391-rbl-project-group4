@@ -59,6 +59,30 @@ router.put('/kanji/:id',                               ac.updateKanji);
 router.post('/lessons/:lessonId/kanji/attach',         c.attachKanji);
 router.delete('/lessons/:lessonId/kanji/:kanjiId',     c.detachKanji);
 
+router.get('/grammar-points',                                 ac.listGrammarPoints);
+router.post('/grammar-points',                                ac.createGrammarPoint);
+router.put('/grammar-points/:id',                             ac.updateGrammarPoint);
+router.post('/lessons/:lessonId/grammar-points/attach',       c.attachGrammar);
+router.delete('/lessons/:lessonId/grammar-points/:grammarId', c.detachGrammar);
+
+// Bulk import vào Mục qua file — preview (parse + AI fallback, chưa ghi DB),
+// xác nhận nhập qua các endpoint import bên dưới với lesson_id trên từng dòng.
+const fic = require('../../controllers/importFileController');
+const importFileUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const ok = /\.(json|csv|xlsx|xls|docx)$/i.test(file.originalname);
+    ok ? cb(null, true) : cb(new Error('Chỉ chấp nhận file .json, .csv, .xlsx, .xls, .docx.'));
+  },
+});
+router.post('/lessons/:lessonId/vocabulary/import-file',     importFileUpload.single('file'), fic.previewVocabFile);
+router.post('/lessons/:lessonId/kanji/import-file',          importFileUpload.single('file'), fic.previewKanjiFile);
+router.post('/lessons/:lessonId/grammar-points/import-file', importFileUpload.single('file'), fic.previewGrammarFile);
+router.post('/vocabulary/import',     ac.importVocab);
+router.post('/kanji/import',          ac.importKanji);
+router.post('/grammar-points/import', ac.importGrammarPoints);
+
 // My vocabulary
 router.get('/my-vocab',                c.listMyVocab);
 router.post('/my-vocab',               c.createMyVocab);
