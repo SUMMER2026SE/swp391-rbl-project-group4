@@ -3,25 +3,24 @@ import { Link, useNavigate } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import { useAuth } from '../../contexts/AuthContext';
 import { useLang } from '../../contexts/LangContext';
+import { useSubscription } from '../../hooks/useSubscription';
 
 const STUDENT_LINKS = (t) => [
-  { to: '/dashboard',  icon: 'dashboard',     label: t('dashboard.title') },
-  { to: '/courses',    icon: 'menu_book',      label: t('courses.title') },
-  { to: '/vocabulary', icon: 'translate',      label: t('vocab.title') },
-  { to: '/grammar',   icon: 'spellcheck',     label: 'Ngữ pháp' },
-  { to: '/kanji',      icon: 'font_download',  label: 'Kanji' },
+  { to: '/dashboard',      icon: 'dashboard',       label: t('dashboard.title') },
+  { to: '/courses',        icon: 'menu_book',        label: t('courses.title') },
+  { to: '/vocabulary',     icon: 'translate',        label: t('vocab.title') },
+  { to: '/grammar',        icon: 'spellcheck',       label: 'Ngữ pháp' },
+  { to: '/kanji',          icon: 'font_download',    label: 'Kanji' },
   { to: '/listening',      icon: 'headphones',       label: 'Luyện nghe' },
-  { to: '/placement-test', icon: 'assignment_ind',  label: 'Kiểm tra NL' },
-  { to: '/writing',    icon: 'edit_note',      label: 'Luyện viết' },
-  { to: '/dictionary', icon: 'auto_stories',   label: t('dictionary.title') },
-  { to: '/flashcards', icon: 'style',          label: 'Thẻ ghi nhớ' },
-  { to: '/news',       icon: 'newspaper',      label: 'Đọc báo' },
-  { to: '/classes',    icon: 'groups',         label: 'Lớp học' },
-  { to: '/exams',      icon: 'quiz',           label: 'Đề thi' },
-  { to: '/chat',         icon: 'smart_toy',        label: 'Trợ lý AI' },
-  { to: '/pricing',      icon: 'workspace_premium', label: 'Bảng giá' },
-  { to: '/subscription', icon: 'card_membership',   label: 'Đăng ký' },
-  { to: '/profile',      icon: 'person',             label: t('profile.title') },
+  { to: '/placement-test', icon: 'assignment_ind',   label: 'Kiểm tra NL' },
+  { to: '/writing',        icon: 'edit_note',        label: 'Luyện viết' },
+  { to: '/dictionary',     icon: 'auto_stories',     label: t('dictionary.title') },
+  { to: '/flashcards',     icon: 'style',            label: 'Thẻ ghi nhớ' },
+  { to: '/news',           icon: 'newspaper',        label: 'Đọc báo' },
+  { to: '/classes',        icon: 'groups',           label: 'Lớp học' },
+  { to: '/exams',          icon: 'quiz',             label: 'Đề thi' },
+  { to: '/chat',           icon: 'smart_toy',        label: 'Trợ lý AI' },
+  { to: '/profile',        icon: 'person',           label: t('profile.title') },
 ];
 
 export default function StudentLayout({ children, title }) {
@@ -29,6 +28,8 @@ export default function StudentLayout({ children, title }) {
   const { t, lang, switchLang } = useLang();
   const navigate = useNavigate();
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const { data: subData, loading: subLoading } = useSubscription();
+  const isPremium = subData?.tier === 'premium';
 
   const handleLogout = async () => {
     await logout();
@@ -58,6 +59,25 @@ export default function StudentLayout({ children, title }) {
                 </button>
               ))}
             </div>
+
+            {/* Subscription chip */}
+            {!subLoading && (
+              isPremium ? (
+                <button
+                  onClick={() => navigate('/subscription')}
+                  className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-400 hover:bg-amber-500 text-white text-xs font-bold transition-colors shadow-sm shadow-amber-200">
+                  <span className="material-symbols-outlined text-sm">workspace_premium</span>
+                  Premium
+                </button>
+              ) : (
+                <button
+                  onClick={() => navigate('/subscription')}
+                  className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border-2 border-amber-400 text-amber-600 hover:bg-amber-50 text-xs font-bold transition-colors">
+                  <span className="material-symbols-outlined text-sm">bolt</span>
+                  Nâng cấp
+                </button>
+              )
+            )}
 
             {/* Avatar dropdown */}
             <div className="relative">
