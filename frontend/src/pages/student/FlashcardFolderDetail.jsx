@@ -22,6 +22,7 @@ export default function FlashcardFolderDetail() {
   const [selected, setSelected]     = useState({});
   const [loadingAll, setLoadingAll] = useState(false);
   const [adding, setAdding]         = useState(false);
+  const [setSearch, setSetSearch]   = useState(''); // lọc học phần theo tiêu đề trong modal
 
   // Popup xác nhận gỡ học phần khỏi thư mục
   const [confirmSet, setConfirmSet] = useState(null); // null | set
@@ -47,6 +48,7 @@ export default function FlashcardFolderDetail() {
   const openAddModal = async () => {
     setAddOpen(true);
     setSelected({});
+    setSetSearch('');
     setLoadingAll(true);
     try {
       const r = await api.get('/flashcards/sets');
@@ -157,9 +159,11 @@ export default function FlashcardFolderDetail() {
                 <span className="material-symbols-outlined text-sm">layers</span>
                 {s.card_count || 0} thẻ
               </span>
-              {s.description && (
-                <p className="text-sm text-on-surface-variant leading-relaxed line-clamp-2 flex-grow mb-4">{s.description}</p>
-              )}
+              <div className="flex-grow min-h-[2.5rem] mb-4">
+                {s.description && (
+                  <p className="text-sm text-on-surface-variant leading-relaxed line-clamp-2">{s.description}</p>
+                )}
+              </div>
               <div className="mt-auto mb-4">
                 <div className="flex items-center justify-between mb-1.5">
                   <span className="text-xs text-on-muted">Tiến độ</span>
@@ -202,9 +206,26 @@ export default function FlashcardFolderDetail() {
           </div>
         ) : allSets.length === 0 ? (
           <p className="text-center text-sm text-on-muted py-8">Không còn học phần nào để thêm.</p>
-        ) : (
+        ) : (() => {
+          const q = setSearch.trim().toLowerCase();
+          const shown = q ? allSets.filter(s => (s.title || '').toLowerCase().includes(q)) : allSets;
+          return (
+          <>
+          <div className="mb-3 relative">
+            <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-muted text-lg">search</span>
+            <input
+              autoFocus
+              value={setSearch}
+              onChange={e => setSetSearch(e.target.value)}
+              placeholder="Tìm học phần..."
+              className="w-full pl-10 pr-4 py-2.5 bg-surface-low border border-outline/40 rounded-xl text-sm outline-none focus:border-tsubaki-red transition-colors"
+            />
+          </div>
+          {shown.length === 0 ? (
+            <p className="text-center text-sm text-on-muted py-8">Không tìm thấy kết quả.</p>
+          ) : (
           <div className="space-y-1 max-h-80 overflow-y-auto">
-            {allSets.map(s => (
+            {shown.map(s => (
               <label key={s.id} className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-surface-low cursor-pointer transition-colors">
                 <input
                   type="checkbox"
@@ -219,7 +240,10 @@ export default function FlashcardFolderDetail() {
               </label>
             ))}
           </div>
-        )}
+          )}
+          </>
+          );
+        })()}
       </Modal>
 
       {/* ── Popup xác nhận gỡ học phần ──────────────────────────── */}

@@ -197,7 +197,7 @@ export default function FlashcardLearn() {
     startSession(allCards, allCards);
   };
 
-  // ── Phím tắt: Enter xác nhận/sang câu; 1–4 chọn đáp án trắc nghiệm ──
+  // ── Phím tắt: Enter/→ xác nhận, sang câu; 1–4 chọn đáp án trắc nghiệm ──
   useEffect(() => {
     const onKey = (e) => {
       if (composingRef.current) return;
@@ -207,6 +207,7 @@ export default function FlashcardLearn() {
         else if (q?.type === 'write' && tag !== 'TEXTAREA') { e.preventDefault(); submitWrite(); }
         return;
       }
+      if (e.key === 'ArrowRight' && answered) { e.preventDefault(); proceed(); return; }
       if (!answered && q?.type === 'mc' && tag !== 'INPUT' && tag !== 'TEXTAREA') {
         const idx = ['1', '2', '3', '4'].indexOf(e.key);
         if (idx >= 0 && idx < q.options.length) { e.preventDefault(); submitMc(q.options[idx]); }
@@ -215,7 +216,7 @@ export default function FlashcardLearn() {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [answered, q, input, pos, work]);
+  }, [answered, q, input, pos, work, mcAtt, wrAtt]);
 
   if (loading) {
     return (
@@ -231,58 +232,57 @@ export default function FlashcardLearn() {
   const sessionCards = sessionList.length;
   const masteredNow = allCards.filter(c => progress[c.id] === 'mastered').length; // theo DB
   const pct = total ? Math.round((masteredNow / total) * 100) : 0; // % tiến độ tổng học phần
-  const estRounds = Math.ceil(sessionCards / BATCH); // mỗi đợt = BATCH thẻ
   const answerSide = q?.answerSide;
   const promptText = q ? q.card[q.promptSide] : '';
   const showSpeaker = q && q.promptSide === 'term'; // mặt hỏi là tiếng Nhật
 
   return (
     <StudentLayout title="Thẻ ghi nhớ">
-      <Link to="/flashcards" className="inline-flex items-center gap-1 text-sm text-on-muted hover:text-tsubaki-red transition-colors mb-4">
-        <span className="material-symbols-outlined text-lg">arrow_back</span>
-        Trở về
-      </Link>
+      {/* ── Header: nút back + tên học phần ─────────────────────── */}
+      <div className="flex items-center gap-3 mb-4">
+        <Link
+          to="/flashcards"
+          title="Trở về"
+          className="w-9 h-9 flex items-center justify-center rounded-lg hover:bg-surface-low text-on-muted hover:text-charcoal transition-colors shrink-0"
+        >
+          <span className="material-symbols-outlined">arrow_back</span>
+        </Link>
+        <h1 className="font-display text-xl sm:text-2xl font-bold text-on-surface truncate flex-1">{set?.title}</h1>
+      </div>
 
       <FlashcardModeTabs setId={id} active="learn" />
 
-      {/* ── Header ──────────────────────────────────────────────── */}
-      <div className="mb-4">
-        <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-on-muted mb-1">Chế độ học</p>
-        <h1 className="font-display text-xl sm:text-2xl font-bold text-on-surface truncate">{set?.title}</h1>
-      </div>
-
-      {/* Thanh tiến độ TỔNG của học phần (số thẻ đã thuộc / tổng) — kiểu Quizlet */}
-      <div className="mb-6">
+      {/* ── Khối tiến độ: tổng học phần + vị trí câu trong đợt ──── */}
+      <div className="glass-card rounded-2xl p-4 mb-6">
         <div className="flex items-center justify-between text-[11px] font-bold uppercase tracking-[0.14em] text-on-muted mb-1.5">
-          <span>Tiến độ học phần</span>
+          <span>Tiến độ học phần · đã thuộc {masteredNow}/{total} thẻ</span>
           <span className="text-tsubaki-red text-sm">{pct}%</span>
         </div>
         <div className="w-full bg-surface-low rounded-full h-2.5">
           <div className="bg-tsubaki-red h-2.5 rounded-full transition-all"
             style={{ width: `${pct}%` }} />
         </div>
-        <p className="text-[11px] text-on-muted mt-1.5">Đã thuộc {masteredNow}/{total} thẻ</p>
-      </div>
 
-      {/* Vị trí câu trong đợt hiện tại */}
-      {!roundOver && !sessionOver && work.length > 0 && (
-        <div className="mb-6">
-          <p className="text-[11px] text-on-muted mb-2">
-            Đợt {roundNum}/{estRounds} · Câu {Math.min(pos + 1, work.length)}/{work.length}
-            <span className="ml-1">({q?.type === 'mc' ? 'trắc nghiệm' : 'tự luận'})</span>
-          </p>
-          <div className="flex gap-1">
-            {work.map((_, i) => (
-              <div
-                key={i}
-                className={`h-1.5 flex-1 rounded-full transition-colors ${
-                  i < pos ? 'bg-tsubaki-red' : i === pos ? 'bg-tsubaki-red/40' : 'bg-surface-low'
-                }`}
-              />
-            ))}
+        {/* Vị trí câu trong đợt hiện tại */}
+        {!roundOver && !sessionOver && work.length > 0 && (
+          <div className="mt-3 pt-3 border-t border-outline/20">
+            <p className="text-[11px] text-on-muted mb-2">
+              Đợt {roundNum} · Câu {Math.min(pos + 1, work.length)}/{work.length}
+              <span className="ml-1">({q?.type === 'mc' ? 'trắc nghiệm' : 'tự luận'})</span>
+            </p>
+            <div className="flex gap-0.5">
+              {work.map((_, i) => (
+                <div
+                  key={i}
+                  className={`h-2 flex-1 min-w-[4px] rounded-full transition-colors ${
+                    i < pos ? 'bg-tsubaki-red' : i === pos ? 'bg-tsubaki-red/40' : 'bg-surface-low'
+                  }`}
+                />
+              ))}
+            </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
       {error && <div className="mb-6"><Alert type="error" onClose={() => setError('')}>{error}</Alert></div>}
 
@@ -291,7 +291,7 @@ export default function FlashcardLearn() {
         const notMastered = sessionList.filter(c => !masteredIds.includes(c.id));
         return (
           <div className="flex flex-col items-center justify-center py-16 text-center glass-card rounded-2xl px-6">
-            <span className="material-symbols-outlined text-6xl text-tsubaki-red/30 mb-3">military_tech</span>
+            <span className="material-symbols-outlined text-6xl text-tsubaki-red/30 mb-3 animate-bounce">military_tech</span>
             <p className="font-display text-lg font-bold text-on-surface mb-1">
               {sessionCards === 0
                 ? 'Bạn đã thuộc tất cả thẻ của học phần này!'
@@ -357,7 +357,7 @@ export default function FlashcardLearn() {
                   let badge = 'bg-surface-low text-on-muted';
                   if (answered) {
                     if (isCorrect) { cls = 'border-green-500 bg-green-50 text-green-800'; badge = 'bg-green-500 text-white'; }
-                    else if (isPicked) { cls = 'border-error bg-error-bg/40 text-error'; badge = 'bg-error text-white'; }
+                    else if (isPicked) { cls = 'border-error bg-error-bg/40 text-error animate-shake'; badge = 'bg-error text-white'; }
                     else cls = 'border-outline opacity-60';
                   }
                   return (
@@ -371,7 +371,7 @@ export default function FlashcardLearn() {
                         {'ABCD'[i]}
                       </span>
                       <span className="flex-1">{opt}</span>
-                      {answered && isCorrect && <span className="material-symbols-outlined text-green-600 text-lg">check</span>}
+                      {answered && isCorrect && <span className="material-symbols-outlined text-success text-lg">check</span>}
                       {answered && isPicked && !isCorrect && <span className="material-symbols-outlined text-error text-lg">close</span>}
                     </button>
                   );
@@ -424,6 +424,7 @@ export default function FlashcardLearn() {
                 Tiếp tục
                 <span className="material-symbols-outlined text-lg">arrow_forward</span>
               </button>
+              <p className="hidden sm:block text-center text-xs text-on-muted mt-2">Mẹo: nhấn Enter hoặc phím → để tiếp tục</p>
             </div>
           )}
         </div>
@@ -450,8 +451,8 @@ function RoundSummary({ batchCards, masteredIds, results, remaining, onContinue 
       </div>
 
       <div className="space-y-6 mb-6">
-        <SummaryGroup title="Từ vựng đã thuộc" icon="check_circle" color="text-green-600" cards={mastered} />
-        <SummaryGroup title="Từ vựng chưa thuộc" icon="hourglass_top" color="text-amber-600" cards={notMastered} />
+        <SummaryGroup title="Từ vựng đã thuộc" icon="check_circle" color="text-success" cards={mastered} />
+        <SummaryGroup title="Từ vựng chưa thuộc" icon="hourglass_top" color="text-warning" cards={notMastered} />
       </div>
 
       <div className="flex flex-col sm:flex-row gap-3">
