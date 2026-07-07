@@ -2,8 +2,11 @@ import { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import StudentLayout from '../../components/layout/StudentLayout';
 import Alert from '../../components/ui/Alert';
+import Button from '../../components/ui/Button';
 import FuriganaText from '../../components/ui/FuriganaText';
+import WorksheetPreview from '../../components/kanji/WorksheetPreview';
 import api from '../../lib/api';
+import { downloadWorksheetPDF } from '../../lib/kanjiWorksheet';
 import { renderMarkdown, renderReadingText } from '../../lib/renderPreview';
 
 // Reading lưu trong `content` dạng JSON { text, imageUrl } (hoặc chuỗi thuần — legacy).
@@ -26,6 +29,16 @@ function toEmbed(url) {
   return yt ? `https://www.youtube.com/embed/${yt[1]}` : null;
 }
 
+// Slug hóa tên bài học để đặt tên file PDF (bỏ dấu tiếng Việt, ký tự đặc biệt).
+function slugify(s) {
+  return (s || '')
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .replace(/[đĐ]/g, 'd')
+    .replace(/[^a-zA-Z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .toLowerCase() || 'bai-hoc';
+}
+
 const QUIZ_TYPE_LABEL = {
   single_choice:   'Trắc nghiệm',
   multiple_choice: 'Nhiều đáp án',
@@ -42,6 +55,7 @@ export default function LessonView() {
   const [error, setError]     = useState('');
   const [furigana, setFurigana] = useState(false);
   const [working, setWorking] = useState(false);
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
 
   useEffect(() => {
     setLoading(true);
@@ -68,6 +82,21 @@ export default function LessonView() {
   const nav = lesson.nav || {};
   const readingImage = getReadingImage(lesson.content);
   const embed = toEmbed(lesson.content_url);
+
+  // Bộ luyện viết chỉ gồm đúng các kanji của bài học (map `character` → `char` cho worksheet).
+  const worksheetList = (lesson.kanji || []).map(k => ({
+    char: k.character,
+    reading_on: k.reading_on,
+    reading_kun: k.reading_kun,
+    meaning_vi: k.meaning_vi,
+    han_viet: k.han_viet,
+  }));
+
+  const downloadLessonWorksheet = async () => {
+    setDownloadingPdf(true);
+    try { await downloadWorksheetPDF('ws-print', `bo-luyen-viet-${slugify(lesson.title)}.pdf`); }
+    finally { setDownloadingPdf(false); }
+  };
 
   // Đánh dấu hoàn thành rồi đi tiếp (hoặc về khóa học nếu là mục cuối).
   const finishAndContinue = async () => {
@@ -197,11 +226,14 @@ export default function LessonView() {
         {/* ── Kanji ──────────────────────────────────────────────────── */}
         {lesson.kanji?.length > 0 && (
           <div className="glass-card rounded-2xl overflow-hidden mb-6">
-            <div className="p-5 border-b border-outline/30">
+            <div className="p-5 border-b border-outline/30 flex items-center justify-between gap-3 flex-wrap">
               <h2 className="font-display font-bold text-lg flex items-center gap-2">
                 <span className="material-symbols-outlined text-sumire-purple">draw</span>
                 Kanji trong bài ({lesson.kanji.length})
               </h2>
+              <Button size="sm" variant="secondary" loading={downloadingPdf} onClick={downloadLessonWorksheet}>
+                <span className="material-symbols-outlined text-lg">download</span> Tải PDF bộ luyện viết
+              </Button>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-5">
               {lesson.kanji.map(k => (
@@ -221,6 +253,10 @@ export default function LessonView() {
                   </div>
                 </div>
               ))}
+            </div>
+            {/* Nội dung worksheet render ẩn ngoài màn hình để html2canvas chụp khi tải PDF */}
+            <div style={{ position: 'fixed', left: -10000, top: 0, width: 672 }} aria-hidden="true">
+              <WorksheetPreview list={worksheetList} />
             </div>
           </div>
         )}

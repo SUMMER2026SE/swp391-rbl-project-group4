@@ -137,6 +137,13 @@ router.post('/kanji',        c.createKanji);
 router.put('/kanji/:id',     c.updateKanji);
 router.delete('/kanji/:id',  c.deleteKanji);
 
+// Grammar Points (từ điển ngữ pháp chuẩn — khác với /grammar quản lý lesson_grammar)
+router.get('/grammar-points',         c.listGrammarPoints);
+router.post('/grammar-points/import', c.importGrammarPoints);
+router.post('/grammar-points',        c.createGrammarPoint);
+router.put('/grammar-points/:id',     c.updateGrammarPoint);
+router.delete('/grammar-points/:id',  c.deleteGrammarPoint);
+
 // Gắn/gỡ từ vựng & kanji có sẵn vào Mục (bảng nối nhiều–nhiều)
 router.post('/lessons/:lessonId/vocabulary/attach',     c.attachVocab);
 router.delete('/lessons/:lessonId/vocabulary/:vocabId', c.detachVocab);

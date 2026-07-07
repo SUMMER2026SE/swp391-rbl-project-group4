@@ -15,7 +15,7 @@ import {
   QUESTION_TYPES, TYPE_MAP, LEVEL_COLORS, DIFF_COLORS,
 } from '../../utils/questionFormHelpers';
 
-const EMPTY_QUIZ = { title: '', title_ja: '', description: '', type: 'mixed', time_limit: '', is_published: false, mode: 'normal' };
+const EMPTY_QUIZ = { title: '', title_ja: '', description: '', type: 'mixed', time_limit: '', is_published: false, mode: 'normal', strict_fullscreen: false };
 
 // ── Type badge ────────────────────────────────────────────────────────────────
 function TypeBadge({ type }) {
@@ -240,7 +240,7 @@ export default function AdminQuizzes() {
   const openEdit   = (row) => {
     setForm({ title: row.title||'', title_ja: row.title_ja||'', description: row.description||'',
               type: row.type||'mixed', time_limit: row.time_limit||'', is_published: row.is_published||false,
-              mode: row.mode||'normal' });
+              mode: row.mode||'normal', strict_fullscreen: row.strict_fullscreen||false });
     setEditQuizId(row.id); setQuizModal(true);
   };
 
@@ -502,6 +502,10 @@ export default function AdminQuizzes() {
               ))}
             </div>
           </div>
+          <label className="flex items-start gap-2 cursor-pointer">
+            <input type="checkbox" checked={form.strict_fullscreen} onChange={e => setForm({ ...form, strict_fullscreen: e.target.checked })} className="w-4 h-4 accent-tsubaki-red mt-0.5" />
+            <span className="text-sm font-medium">Bật chế độ toàn màn hình nghiêm ngặt (khóa bài nếu thoát fullscreen quá 5 lần, cấm thi 20 phút)</span>
+          </label>
           <label className="flex items-center gap-2 cursor-pointer">
             <input type="checkbox" checked={form.is_published} onChange={e => setForm({ ...form, is_published: e.target.checked })} className="w-4 h-4 accent-tsubaki-red" />
             <span className="text-sm font-medium">{t('admin.published')}</span>

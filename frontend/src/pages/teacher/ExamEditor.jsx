@@ -590,6 +590,14 @@ export default function ExamEditor() {
         catch { setExam(e => ({ ...e, mode: mode === 'proctored' ? 'normal' : 'proctored' })); }
     };
 
+    const toggleStrictFullscreen = async () => {
+        if (!exam) return;
+        const next = !exam.strict_fullscreen;
+        setExam(e => ({ ...e, strict_fullscreen: next }));
+        try { await api.put(`/exams/teacher/${id}`, { strict_fullscreen: next }); }
+        catch { setExam(e => ({ ...e, strict_fullscreen: !next })); }
+    };
+
     if (loading) return <TeacherLayout title="Đề thi"><div className="flex justify-center py-16"><span className="material-symbols-outlined animate-spin text-tsubaki-red text-4xl">progress_activity</span></div></TeacherLayout>;
     if (error || !exam) return <TeacherLayout title="Đề thi"><Alert>{error || 'Không tìm thấy đề thi.'}</Alert></TeacherLayout>;
 
@@ -602,7 +610,7 @@ export default function ExamEditor() {
             {exam.description && <p className="text-sm text-on-muted mb-3">{exam.description}</p>}
 
             {/* Chế độ thi: thường / giám sát */}
-            <div className="flex items-center gap-2 mb-5">
+            <div className="flex items-center gap-2 mb-2">
                 <span className="text-sm text-on-muted">Hình thức:</span>
                 {[['normal','Thường','edit_note'],['proctored','Giám sát','verified_user']].map(([v, l, ic]) => (
                     <button key={v} onClick={() => changeMode(v)}
@@ -611,6 +619,10 @@ export default function ExamEditor() {
                     </button>
                 ))}
             </div>
+            <label className="flex items-start gap-2 cursor-pointer mb-5">
+                <input type="checkbox" checked={!!exam.strict_fullscreen} onChange={toggleStrictFullscreen} className="w-4 h-4 accent-tsubaki-red mt-0.5" />
+                <span className="text-sm text-on-muted">Bật chế độ toàn màn hình nghiêm ngặt (khóa bài nếu thoát fullscreen quá 5 lần, cấm thi 20 phút)</span>
+            </label>
 
             <div className="flex gap-2 mb-5 border-b border-outline/30">
                 {TABS.map(t => (

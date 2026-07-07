@@ -148,9 +148,12 @@ export default function FlashcardSetForm() {
           >
             <span className="material-symbols-outlined">arrow_back</span>
           </button>
-          <h1 className="font-display text-xl font-bold text-on-surface truncate">
-            {isEdit ? 'Chỉnh sửa học phần' : 'Tạo học phần mới'}
-          </h1>
+          <div className="min-w-0">
+            <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-on-muted mb-0.5">Học phần</p>
+            <h1 className="font-display text-xl font-bold text-on-surface truncate">
+              {isEdit ? 'Chỉnh sửa học phần' : 'Tạo học phần mới'}
+            </h1>
+          </div>
         </div>
         <Button variant="primary" loading={saving} onClick={handleSubmit}>
           {isEdit ? 'Lưu' : 'Tạo'}
@@ -194,6 +197,9 @@ export default function FlashcardSetForm() {
       </div>
 
       {/* ── Danh sách thẻ ───────────────────────────────────────── */}
+      <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-on-muted mb-2">
+        {cards.length} thẻ
+      </p>
       <div>
         {cards.map((card, i) => (
           <div key={i}>

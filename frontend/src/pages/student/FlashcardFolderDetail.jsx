@@ -119,6 +119,7 @@ export default function FlashcardFolderDetail() {
             <span className="material-symbols-outlined text-tsubaki-red text-2xl">folder</span>
           </div>
           <div className="min-w-0">
+            <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-on-muted mb-0.5">Thư mục</p>
             <h1 className="font-display text-xl sm:text-2xl font-bold text-on-surface truncate">{folder?.name}</h1>
             <p className="text-sm text-on-muted">{sets.length} học phần</p>
           </div>

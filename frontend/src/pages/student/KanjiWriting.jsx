@@ -3,120 +3,11 @@ import { Link } from 'react-router-dom';
 import StudentLayout from '../../components/layout/StudentLayout';
 import Button from '../../components/ui/Button';
 import api from '../../lib/api';
-
-async function downloadWorksheetPDF(elementId, filename = 'kanji-luyen-viet.pdf') {
-  const { default: html2canvas } = await import('html2canvas');
-  const { jsPDF } = await import('jspdf');
-
-  const el = document.getElementById(elementId);
-  if (!el) return;
-
-  // đợi font CJK load xong trước khi chụp
-  await document.fonts.ready;
-
-  const canvas = await html2canvas(el, {
-    scale: 2,
-    useCORS: true,
-    backgroundColor: '#ffffff',
-    logging: false,
-    allowTaint: true,
-  });
-
-  const A4_W = 210, A4_H = 297; // mm
-  const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
-  const margin = 10;
-  const imgW = A4_W - margin * 2;
-  const imgH = (canvas.height / canvas.width) * imgW;
-  const pageH = A4_H - margin * 2;
-
-  let y = 0;
-  while (y < imgH) {
-    if (y > 0) pdf.addPage();
-    const srcY  = (y / imgH) * canvas.height;
-    const srcH  = Math.min((pageH / imgH) * canvas.height, canvas.height - srcY);
-    const sliceH = (srcH / canvas.height) * imgH;
-
-    // cắt từng trang từ canvas
-    const pageCanvas = document.createElement('canvas');
-    pageCanvas.width  = canvas.width;
-    pageCanvas.height = srcH;
-    pageCanvas.getContext('2d').drawImage(canvas, 0, srcY, canvas.width, srcH, 0, 0, canvas.width, srcH);
-
-    pdf.addImage(pageCanvas.toDataURL('image/jpeg', 0.95), 'JPEG', margin, margin, imgW, sliceH);
-    y += pageH;
-  }
-
-  pdf.save(filename);
-}
+import { downloadWorksheetPDF, SERIF } from '../../lib/kanjiWorksheet';
+import WorksheetPreview from '../../components/kanji/WorksheetPreview';
 
 const LEVELS = ['N5','N4','N3','N2','N1'];
 const KANJI_RE = /[一-龯㐀-䶿]/g;
-const SERIF = "'Noto Sans JP','Yu Mincho','Hiragino Mincho Pro',serif";
-
-// ─── Ô luyện viết (CSS-only, dùng trong worksheet) ───────────────────────────
-function PracticeBox({ char, opacity = 0, size = 68 }) {
-  return (
-    <div style={{ position:'relative', width:size, height:size, border:'1px solid #bbb', flexShrink:0, background:'#fff' }}>
-      {/* đường gióng chữ thập */}
-      <div style={{ position:'absolute', left:'50%', top:0, bottom:0, width:1,
-        background:'repeating-linear-gradient(to bottom,#d0d0d0 0,#d0d0d0 3px,transparent 3px,transparent 7px)' }} />
-      <div style={{ position:'absolute', top:'50%', left:0, right:0, height:1,
-        background:'repeating-linear-gradient(to right,#d0d0d0 0,#d0d0d0 3px,transparent 3px,transparent 7px)' }} />
-      {/* đường chéo mờ */}
-      <div style={{ position:'absolute', top:0, left:0, right:0, bottom:0, backgroundImage:
-        'linear-gradient(45deg,transparent 49.2%,#e8e8e8 49.2%,#e8e8e8 50.8%,transparent 50.8%),' +
-        'linear-gradient(-45deg,transparent 49.2%,#e8e8e8 49.2%,#e8e8e8 50.8%,transparent 50.8%)' }} />
-      {char && opacity > 0 && (
-        <span style={{
-          position:'absolute', top:'50%', left:'50%',
-          transform:'translate(-50%, -50%)',
-          fontSize:size*0.72, fontFamily:SERIF, color:`rgba(0,0,0,${opacity})`,
-          userSelect:'none', pointerEvents:'none', lineHeight:1, display:'block',
-        }}>{char}</span>
-      )}
-    </div>
-  );
-}
-
-// ─── Một khối kanji trong worksheet ──────────────────────────────────────────
-function WorksheetEntry({ k, boxSize, guideCount }) {
-  const REF = boxSize * 1.6;
-  const FADE = [0.22, 0.13, 0.07].slice(0, guideCount);
-  const empty = Math.max(0, 10 - guideCount);
-  return (
-    <div style={{ marginBottom:20, pageBreakInside:'avoid', border:'1px solid #ccc', borderRadius:6, overflow:'hidden' }}>
-      {/* hàng thông tin */}
-      <div style={{ display:'flex', alignItems:'stretch', borderBottom:'1px solid #e0e0e0' }}>
-        {/* ô mẫu lớn */}
-        <div style={{ position:'relative', width:REF, height:REF, flexShrink:0,
-          borderRight:'1px solid #e0e0e0', background:'#fafafa' }}>
-          <div style={{ position:'absolute', left:'50%', top:0, bottom:0, width:1, background:'#ddd' }} />
-          <div style={{ position:'absolute', top:'50%', left:0, right:0, height:1, background:'#ddd' }} />
-          <div style={{ position:'absolute', top:0, left:0, right:0, bottom:0, backgroundImage:
-            'linear-gradient(45deg,transparent 49.2%,#ececec 49.2%,#ececec 50.8%,transparent 50.8%),' +
-            'linear-gradient(-45deg,transparent 49.2%,#ececec 49.2%,#ececec 50.8%,transparent 50.8%)' }} />
-          <span style={{
-            position:'absolute', top:'50%', left:'50%',
-            transform:'translate(-50%, -50%)',
-            fontSize:REF*0.72, fontFamily:SERIF, lineHeight:1, userSelect:'none', display:'block',
-          }}>{k.char}</span>
-        </div>
-        {/* thông tin */}
-        <div style={{ padding:'10px 14px', fontSize:13, lineHeight:1.9, color:'#333' }}>
-          {k.reading_on?.length  > 0 && <div><b>Âm On:</b> {k.reading_on.join('、')}</div>}
-          {k.reading_kun?.length > 0 && <div><b>Âm Kun:</b> {k.reading_kun.join('、')}</div>}
-          {k.han_viet             && <div><b>Hán Việt:</b> {k.han_viet}</div>}
-          {k.meaning_vi           && <div><b>Nghĩa:</b> {k.meaning_vi}</div>}
-        </div>
-      </div>
-      {/* hàng ô luyện viết */}
-      <div style={{ display:'flex', flexWrap:'wrap', gap:2, padding:6, background:'#fff' }}>
-        {FADE.map((op, i) => <PracticeBox key={i} char={k.char} opacity={op} size={boxSize} />)}
-        {Array.from({ length: empty }, (_, i) => <PracticeBox key={i+guideCount} size={boxSize} />)}
-      </div>
-    </div>
-  );
-}
 
 // ─── Canvas vẽ tay ───────────────────────────────────────────────────────────
 const KanjiCanvas = forwardRef(function KanjiCanvas({ char, showGuide, brush, onCount }, ref) {
@@ -408,12 +299,7 @@ export default function KanjiWriting() {
               </div>
             ) : (
               /* Preview — cũng là nội dung được in */
-              <div id="ws-print" className="bg-white rounded-2xl shadow-sm p-6">
-                <div className="hidden print:block text-center mb-5">
-                  <p className="text-xl font-bold tracking-wide">Luyện viết Kanji — Kizuna Nihongo</p>
-                </div>
-                {list.map((k,i) => <WorksheetEntry key={i} k={k} boxSize={boxSize} guideCount={guideCount} />)}
-              </div>
+              <WorksheetPreview list={list} boxSize={boxSize} guideCount={guideCount} />
             )}
           </div>
         )}
