@@ -423,13 +423,15 @@ CREATE TABLE IF NOT EXISTS flashcard_module.flashcards (
   created_at  timestamptz DEFAULT now()
 );
 
--- Tiến độ học per (student, card): không có row = trạng thái 'new' (chưa học)
+-- Tiến độ học per (student, card, mode): không có row = trạng thái 'new' (chưa học).
+-- mode: 'cards' = Thẻ ghi nhớ (lật thẻ) | 'learn' = chế độ Học — tiến độ 2 chế độ độc lập.
 CREATE TABLE IF NOT EXISTS flashcard_module.flashcard_progress (
   student_id       uuid NOT NULL REFERENCES auth.users(id)                  ON DELETE CASCADE,
   card_id          uuid NOT NULL REFERENCES flashcard_module.flashcards(id) ON DELETE CASCADE,
   status           text NOT NULL DEFAULT 'learning' CHECK (status IN ('learning','mastered')),
+  mode             text NOT NULL DEFAULT 'learn'    CHECK (mode IN ('cards','learn')),
   last_reviewed_at timestamptz DEFAULT now(),
-  PRIMARY KEY (student_id, card_id)
+  PRIMARY KEY (student_id, card_id, mode)
 );
 
 CREATE INDEX IF NOT EXISTS idx_flashcards_set            ON flashcard_module.flashcards (set_id, order_index);

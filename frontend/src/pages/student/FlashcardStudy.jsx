@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import StudentLayout from '../../components/layout/StudentLayout';
 import Alert from '../../components/ui/Alert';
@@ -7,6 +7,9 @@ import FlashcardModeTabs from '../../components/flashcards/FlashcardModeTabs';
 import api from '../../lib/api';
 
 const FRONT_KEY = 'flashcard.frontSide';
+const TRACK_KEY = 'flashcard.trackProgress';
+const posKeyOf = (setId) => `flashcard.pos.${setId}`;
+const END_MARK  = '__end__'; // đã xem đến cuối lượt → lần vào sau bắt đầu lượt mới
 const shuffle = (arr) => {
   const a = arr.slice();
   for (let i = a.length - 1; i > 0; i--) {
@@ -30,7 +33,8 @@ export default function FlashcardStudy() {
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState('');
 
-  const [trackProgress, setTrackProgress] = useState(false);
+  const [trackProgress, setTrackProgress] = useState(() => localStorage.getItem(TRACK_KEY) === '1');
+  const skipSaveRef = useRef(false); // chặn effect lưu vị trí ghi đè key ngay sau khi resume (StrictMode chạy load 2 lần)
   const [frontSide, setFrontSide] = useState(() => localStorage.getItem(FRONT_KEY) || 'term');
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [noAnim, setNoAnim] = useState(false);
@@ -47,7 +51,7 @@ export default function FlashcardStudy() {
     (async () => {
       const [setRes, progRes] = await Promise.allSettled([
         api.get(`/flashcards/sets/${id}`),
-        api.get(`/flashcards/sets/${id}/progress`),
+        api.get(`/flashcards/sets/${id}/progress?mode=cards`),
       ]);
       const prog = progRes.status === 'fulfilled'
         ? (progRes.value.data.data || progRes.value.data || {})
@@ -57,7 +61,30 @@ export default function FlashcardStudy() {
         const data = setRes.value.data.data || setRes.value.data;
         const cards = data.cards || data.flashcards || [];
         setSet(data);
-        setDeck(cards); // nạp toàn bộ thẻ → bộ đếm luôn 1/N … N/N
+        const saved = localStorage.getItem(posKeyOf(id));
+        skipSaveRef.current = true; // deck/pos sắp đổi do resume, KHÔNG phải do người dùng → đừng ghi đè key
+        if (saved === END_MARK) {
+          // Lượt trước đã xem đến cuối → lượt mới chỉ gồm thẻ CHƯA thuộc (thuộc hết → toàn bộ), từ thẻ 1
+          const learning = cards.filter(c => prog[c.id] !== 'mastered');
+          setDeck(learning.length ? learning : cards);
+          setPos(0);
+        } else {
+          // Đang xem dở → khôi phục NGUYÊN lượt trước đó: đúng bộ thẻ của lượt (kể cả đã lọc/trộn) + đúng vị trí
+          let roundDeck = cards;
+          let curId = saved;
+          if (saved && saved.startsWith('{')) {
+            try {
+              const r = JSON.parse(saved);
+              const byId = new Map(cards.map(c => [String(c.id), c]));
+              const restored = (r.ids || []).map(x => byId.get(String(x))).filter(Boolean);
+              if (restored.length) roundDeck = restored;
+              curId = r.cur;
+            } catch { /* key hỏng → rơi về toàn bộ thẻ */ }
+          }
+          setDeck(roundDeck);
+          const idx = roundDeck.findIndex(c => String(c.id) === String(curId));
+          setPos(idx >= 0 ? idx : 0);
+        }
       } else {
         setError(setRes.reason?.message || 'Không thể tải học phần.');
       }
@@ -66,6 +93,18 @@ export default function FlashcardStudy() {
   }, [id]);
 
   useEffect(() => { localStorage.setItem(FRONT_KEY, frontSide); }, [frontSide]);
+  useEffect(() => { localStorage.setItem(TRACK_KEY, trackProgress ? '1' : '0'); }, [trackProgress]);
+  // Lưu TRẠNG THÁI LƯỢT đang học: bộ thẻ của lượt + thẻ đang đứng (kể cả đứng ở thẻ cuối);
+  // chỉ khi HOÀN THÀNH lượt (đã đi qua hết thẻ) → đánh dấu END để lần sau bắt đầu lượt mới
+  useEffect(() => {
+    const card = deck[pos];
+    if (!card) return;
+    if (skipSaveRef.current) { skipSaveRef.current = false; return; } // lần đổi deck/pos do resume → bỏ qua
+    localStorage.setItem(
+      posKeyOf(id),
+      done ? END_MARK : JSON.stringify({ ids: deck.map(c => c.id), cur: card.id })
+    );
+  }, [deck, pos, id, done]);
 
   const totalCards = set?.cards?.length ?? set?.flashcards?.length ?? deck.length;
   const masteredCount = useMemo(
@@ -93,7 +132,7 @@ export default function FlashcardStudy() {
     else setPos(pos + 1);
 
     try {
-      await api.put(`/flashcards/sets/${id}/progress`, { card_id: card.id, status });
+      await api.put(`/flashcards/sets/${id}/progress`, { card_id: card.id, status, mode: 'cards' });
     } catch (e) {
       setError(e.message);
     }
@@ -117,9 +156,9 @@ export default function FlashcardStudy() {
 
     try {
       if (last.prevStatus === undefined) {
-        await api.delete(`/flashcards/sets/${id}/progress/${last.cardId}`);
+        await api.delete(`/flashcards/sets/${id}/progress/${last.cardId}?mode=cards`);
       } else {
-        await api.put(`/flashcards/sets/${id}/progress`, { card_id: last.cardId, status: last.prevStatus });
+        await api.put(`/flashcards/sets/${id}/progress`, { card_id: last.cardId, status: last.prevStatus, mode: 'cards' });
       }
     } catch (e) {
       setError(e.message);
@@ -146,7 +185,7 @@ export default function FlashcardStudy() {
     setDone(false);
     setHistory([]);
     try {
-      await api.delete(`/flashcards/sets/${id}/progress`);
+      await api.delete(`/flashcards/sets/${id}/progress?mode=cards`);
     } catch (e) {
       setError(e.message);
     }
