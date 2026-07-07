@@ -141,7 +141,8 @@ export default function FlashcardTest() {
     if (visible) scroll();
     else {
       setResultFilter('all');
-      setTimeout(scroll, 60); // chờ danh sách render lại sau khi đổi tab
+      // Chờ danh sách render lại sau khi đổi tab rồi mới cuộn (2 khung hình cho chắc)
+      requestAnimationFrame(() => requestAnimationFrame(scroll));
     }
   };
 
@@ -160,19 +161,22 @@ export default function FlashcardTest() {
 
   return (
     <StudentLayout title="Thẻ ghi nhớ">
-      <Link to="/flashcards" className="inline-flex items-center gap-1 text-sm text-on-muted hover:text-tsubaki-red transition-colors mb-4">
-        <span className="material-symbols-outlined text-lg">arrow_back</span>
-        Trở về
-      </Link>
-
-      <FlashcardModeTabs setId={id} active="test" />
-
-      <div className="flex items-center justify-between gap-4 mb-6">
-        <h1 className="font-display text-xl sm:text-2xl font-bold text-on-surface truncate">{set?.title}</h1>
+      {/* ── Header: nút back + tên học phần ─────────────────────── */}
+      <div className="flex items-center gap-3 mb-4">
+        <Link
+          to="/flashcards"
+          title="Trở về"
+          className="w-9 h-9 flex items-center justify-center rounded-lg hover:bg-surface-low text-on-muted hover:text-charcoal transition-colors shrink-0"
+        >
+          <span className="material-symbols-outlined">arrow_back</span>
+        </Link>
+        <h1 className="font-display text-xl sm:text-2xl font-bold text-on-surface truncate flex-1">{set?.title}</h1>
         {stage === 'doing' && (
           <span className="text-sm font-semibold text-on-muted shrink-0">{questions.length} câu</span>
         )}
       </div>
+
+      <FlashcardModeTabs setId={id} active="test" />
 
       {error && <div className="mb-6"><Alert type="error" onClose={() => setError('')}>{error}</Alert></div>}
 
@@ -525,7 +529,7 @@ function ResultCard({ index, q, value, correct }) {
   return (
     <div className={`rounded-2xl p-4 border-2 ${correct ? 'border-green-200 bg-green-50/50' : 'border-error/30 bg-error-bg/20'}`}>
       <div className="flex items-start gap-2">
-        <span className={`material-symbols-outlined text-lg shrink-0 ${correct ? 'text-green-600' : 'text-error'}`}>
+        <span className={`material-symbols-outlined text-lg shrink-0 ${correct ? 'text-success' : 'text-error'}`}>
           {correct ? 'check_circle' : 'cancel'}
         </span>
         <div className="min-w-0 flex-1">

@@ -247,20 +247,16 @@ export default function FlashcardStudy() {
 
   return (
     <StudentLayout title="Thẻ ghi nhớ">
-      {/* ── Quay lại ────────────────────────────────────────────── */}
-      <Link to="/flashcards" className="inline-flex items-center gap-1 text-sm text-on-muted hover:text-tsubaki-red transition-colors mb-4">
-        <span className="material-symbols-outlined text-lg">arrow_back</span>
-        Trở về
-      </Link>
-
-      <FlashcardModeTabs setId={id} active="cards" />
-
-      {/* ── Header ──────────────────────────────────────────────── */}
-      <div className="flex items-end justify-between gap-4 mb-6">
-        <div className="min-w-0">
-          <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-on-muted mb-1">Chế độ thẻ ghi nhớ</p>
-          <h1 className="font-display text-xl sm:text-2xl font-bold text-on-surface truncate">{set?.title}</h1>
-        </div>
+      {/* ── Header: nút back + tên học phần + vòng tiến độ ──────── */}
+      <div className="flex items-center gap-3 mb-4">
+        <Link
+          to="/flashcards"
+          title="Trở về"
+          className="w-9 h-9 flex items-center justify-center rounded-lg hover:bg-surface-low text-on-muted hover:text-charcoal transition-colors shrink-0"
+        >
+          <span className="material-symbols-outlined">arrow_back</span>
+        </Link>
+        <h1 className="font-display text-xl sm:text-2xl font-bold text-on-surface truncate flex-1">{set?.title}</h1>
         <div className="flex items-center gap-3 shrink-0">
           <div className="text-right hidden sm:block">
             <p className="text-sm font-bold text-tsubaki-red leading-tight">Đã thuộc</p>
@@ -270,12 +266,15 @@ export default function FlashcardStudy() {
         </div>
       </div>
 
+      <FlashcardModeTabs setId={id} active="cards" />
+
       {error && <div className="mb-6"><Alert type="error" onClose={() => setError('')}>{error}</Alert></div>}
 
       {/* ── Toolbar ─────────────────────────────────────────────── */}
       <div className="flex items-center justify-between gap-3 mb-6">
         <button
           onClick={() => setTrackProgress(t => !t)}
+          aria-pressed={trackProgress}
           className="inline-flex items-center gap-2 text-sm font-semibold transition-colors"
         >
           <span className={`relative w-10 h-6 rounded-full transition-colors ${trackProgress ? 'bg-tsubaki-red' : 'bg-outline'}`}>
@@ -295,6 +294,9 @@ export default function FlashcardStudy() {
           <div className="relative">
             <button
               onClick={() => setSettingsOpen(o => !o)}
+              aria-haspopup="menu"
+              aria-expanded={settingsOpen}
+              aria-label="Cài đặt"
               className="w-9 h-9 flex items-center justify-center rounded-xl text-on-muted hover:text-tsubaki-red hover:bg-surface-low transition-colors"
             >
               <span className="material-symbols-outlined">settings</span>
@@ -335,15 +337,15 @@ export default function FlashcardStudy() {
       {/* ── Thẻ / kết quả ───────────────────────────────────────── */}
       {done ? (
         <div className="flex flex-col items-center justify-center py-16 text-center glass-card rounded-2xl px-6">
-          <span className="material-symbols-outlined text-6xl text-tsubaki-red/30 mb-3">celebration</span>
+          <span className="material-symbols-outlined text-6xl text-tsubaki-red/30 mb-3 animate-bounce">celebration</span>
           <p className="font-display text-lg font-bold text-on-surface mb-1">Hoàn thành lượt học!</p>
           <div className="flex items-center gap-8 my-5">
             <div className="text-center">
-              <p className="text-3xl font-bold text-green-600">{roundMastered}</p>
+              <p className="text-3xl font-bold text-success">{roundMastered}</p>
               <p className="text-xs text-on-muted">Đã thuộc</p>
             </div>
             <div className="text-center">
-              <p className="text-3xl font-bold text-amber-600">{roundLearning}</p>
+              <p className="text-3xl font-bold text-warning">{roundLearning}</p>
               <p className="text-xs text-on-muted">Chưa thuộc</p>
             </div>
           </div>
@@ -387,15 +389,19 @@ export default function FlashcardStudy() {
             {progress[current.id] && (
               <span className={`absolute top-4 right-4 z-20 text-xs font-bold px-2.5 py-1 rounded-full ${
                 progress[current.id] === 'mastered'
-                  ? 'bg-green-100 text-green-700'
-                  : 'bg-amber-100 text-amber-700'
+                  ? 'bg-success-bg text-green-700'
+                  : 'bg-warning-bg text-amber-700'
               }`}>
                 {progress[current.id] === 'mastered' ? 'Đã thuộc' : 'Chưa thuộc'}
               </span>
             )}
             <div
+              role="button"
+              tabIndex={0}
+              aria-label="Lật thẻ (Space hoặc Enter)"
               onClick={() => setFlipped(f => !f)}
-              className={`fc-flip h-72 sm:h-96 cursor-pointer select-none ${flipped ? 'is-flipped' : ''} ${noAnim ? 'no-anim' : ''}`}
+              onKeyDown={e => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); setFlipped(f => !f); } }}
+              className={`fc-flip h-72 sm:h-96 cursor-pointer select-none focus-visible:outline-none ${flipped ? 'is-flipped' : ''} ${noAnim ? 'no-anim' : ''}`}
             >
               <div className="fc-flip-inner">
                 {/* Mặt trước */}
@@ -430,35 +436,33 @@ export default function FlashcardStudy() {
 
           {/* Điều hướng — khi theo dõi tiến độ: X (chưa thuộc) / ✓ (đã thuộc) + Hoàn tác */}
           {trackProgress ? (
-            <>
-              <div className="flex items-center justify-center gap-8 mt-6">
-                <button
-                  onClick={() => answer('learning')}
-                  title="Chưa thuộc"
-                  className="w-14 h-14 flex items-center justify-center rounded-full border-2 border-error/40 text-error hover:bg-error hover:text-white transition-colors"
-                >
-                  <span className="material-symbols-outlined text-2xl">close</span>
-                </button>
+            <div className="flex items-center justify-center gap-8 mt-6">
+              <button
+                onClick={() => answer('learning')}
+                title="Chưa thuộc"
+                className="w-14 h-14 flex items-center justify-center rounded-full border-2 border-error/40 text-error hover:bg-error hover:text-white transition-colors"
+              >
+                <span className="material-symbols-outlined text-2xl">close</span>
+              </button>
+              <div className="flex flex-col items-center gap-1">
                 <span className="text-sm font-medium text-on-muted tabular-nums">{pos + 1}/{deck.length}</span>
-                <button
-                  onClick={() => answer('mastered')}
-                  title="Đã thuộc"
-                  className="w-14 h-14 flex items-center justify-center rounded-full border-2 border-green-500/40 text-green-600 hover:bg-green-500 hover:text-white transition-colors"
-                >
-                  <span className="material-symbols-outlined text-2xl">check</span>
-                </button>
-              </div>
-              <div className="flex justify-center mt-4">
                 <button
                   onClick={handleUndo}
                   disabled={!history.length}
-                  className="inline-flex items-center gap-1.5 text-sm font-medium text-on-muted hover:text-tsubaki-red disabled:opacity-30 disabled:hover:text-on-muted px-3 py-2 rounded-xl hover:bg-surface-low transition-colors"
+                  className="inline-flex items-center gap-1 text-xs font-medium text-on-muted hover:text-tsubaki-red disabled:opacity-30 disabled:hover:text-on-muted transition-colors"
                 >
-                  <span className="material-symbols-outlined text-lg">undo</span>
+                  <span className="material-symbols-outlined text-base">undo</span>
                   Hoàn tác
                 </button>
               </div>
-            </>
+              <button
+                onClick={() => answer('mastered')}
+                title="Đã thuộc"
+                className="w-14 h-14 flex items-center justify-center rounded-full border-2 border-green-500/40 text-success hover:bg-green-500 hover:text-white transition-colors"
+              >
+                <span className="material-symbols-outlined text-2xl">check</span>
+              </button>
+            </div>
           ) : (
             <div className="flex items-center justify-center gap-8 mt-6">
               <button
@@ -479,7 +483,13 @@ export default function FlashcardStudy() {
             </div>
           )}
         </>
-      ) : null}
+      ) : (
+        <div className="flex flex-col items-center justify-center py-24 text-center">
+          <span className="material-symbols-outlined text-6xl text-on-muted/20 mb-4">style</span>
+          <p className="font-semibold text-on-surface mb-1">Học phần chưa có thẻ nào</p>
+          <p className="text-sm text-on-muted">Thêm thẻ để bắt đầu học.</p>
+        </div>
+      )}
 
       {/* ── Danh sách toàn bộ thẻ, phân theo trạng thái ─────────── */}
       {allCards.length > 0 && (
@@ -487,13 +497,13 @@ export default function FlashcardStudy() {
           <CardGroup
             title="Đang học"
             icon="hourglass_top"
-            color="text-amber-600"
+            color="text-warning"
             cards={learningCards}
           />
           <CardGroup
             title="Đã thuộc"
             icon="check_circle"
-            color="text-green-600"
+            color="text-success"
             cards={masteredCards}
           />
         </div>
