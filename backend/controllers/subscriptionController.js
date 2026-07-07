@@ -92,7 +92,8 @@ async function getBillingHistory(req, res) {
         plan:subscription_plans(code, name)
       `, { count: 'exact' })
       .eq('user_id', req.user.id)
-      .order('created_at', { ascending: false })
+      .eq('status', 'paid')
+      .order('paid_at', { ascending: false })
       .range((page - 1) * limit, page * limit - 1);
 
     if (error) return res.status(500).json({ error: error.message });

@@ -2,26 +2,10 @@ import { useState, useEffect } from 'react';
 import StudentLayout from '../../components/layout/StudentLayout';
 import api from '../../lib/api';
 
-const STATUS_STYLE = {
-  paid:      'bg-emerald-100 text-emerald-700',
-  pending:   'bg-amber-100 text-amber-700',
-  expired:   'bg-gray-100 text-gray-500',
-  cancelled: 'bg-gray-100 text-gray-500',
-  failed:    'bg-red-100 text-red-600',
-};
-
-const STATUS_LABEL = {
-  paid:      'Đã thanh toán',
-  pending:   'Chờ thanh toán',
-  expired:   'Hết hạn',
-  cancelled: 'Đã huỷ',
-  failed:    'Thất bại',
-};
-
 export default function BillingHistory() {
-  const [orders, setOrders] = useState([]);
-  const [total,  setTotal]  = useState(0);
-  const [page,   setPage]   = useState(1);
+  const [orders,  setOrders]  = useState([]);
+  const [total,   setTotal]   = useState(0);
+  const [page,    setPage]    = useState(1);
   const [loading, setLoading] = useState(true);
   const LIMIT = 20;
 
@@ -54,29 +38,25 @@ export default function BillingHistory() {
             <div className="glass-card rounded-2xl overflow-hidden">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-outline/20 text-left text-xs text-on-muted">
+                  <tr className="border-b border-outline/20 text-left text-xs text-on-muted uppercase tracking-wide">
                     <th className="px-5 py-4 font-semibold">Mã đơn</th>
                     <th className="px-5 py-4 font-semibold">Gói</th>
                     <th className="px-5 py-4 font-semibold text-right">Số tiền</th>
-                    <th className="px-5 py-4 font-semibold">Trạng thái</th>
-                    <th className="px-5 py-4 font-semibold">Ngày tạo</th>
+                    <th className="px-5 py-4 font-semibold">Ngày thanh toán</th>
                   </tr>
                 </thead>
                 <tbody>
                   {orders.map(order => (
                     <tr key={order.id} className="border-b border-outline/10 hover:bg-surface-low/50">
-                      <td className="px-5 py-4 font-mono text-xs">{order.order_code}</td>
-                      <td className="px-5 py-4">{order.plan?.name || '—'}</td>
-                      <td className="px-5 py-4 text-right tabular-nums font-semibold">
+                      <td className="px-5 py-4 font-mono text-xs text-on-muted">{order.order_code}</td>
+                      <td className="px-5 py-4 font-semibold">{order.plan?.name || '—'}</td>
+                      <td className="px-5 py-4 text-right tabular-nums font-semibold text-emerald-600">
                         {Number(order.amount).toLocaleString('vi-VN')}₫
                       </td>
-                      <td className="px-5 py-4">
-                        <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${STATUS_STYLE[order.status] || 'bg-gray-100 text-gray-500'}`}>
-                          {STATUS_LABEL[order.status] || order.status}
-                        </span>
-                      </td>
-                      <td className="px-5 py-4 text-on-muted">
-                        {new Date(order.created_at).toLocaleDateString('vi-VN')}
+                      <td className="px-5 py-4 text-on-muted tabular-nums">
+                        {order.paid_at
+                          ? new Date(order.paid_at).toLocaleString('vi-VN', { dateStyle: 'short', timeStyle: 'short' })
+                          : '—'}
                       </td>
                     </tr>
                   ))}
@@ -84,7 +64,6 @@ export default function BillingHistory() {
               </table>
             </div>
 
-            {/* Pagination */}
             {pages > 1 && (
               <div className="flex justify-center gap-2 mt-6">
                 <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}
