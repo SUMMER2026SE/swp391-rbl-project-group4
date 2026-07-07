@@ -215,6 +215,7 @@ router.delete('/news/:id',             news.remove);
 
 // Subscription / payments (admin)
 const sc = require('../../controllers/subscriptionController');
+router.get('/subscriptions/users',        sc.adminGetUsersWithSubscription);
 router.get('/subscriptions',              sc.adminGetSubscriptions);
 router.post('/subscriptions/grant',       sc.adminGrantSubscription);
 router.delete('/subscriptions/:userId',   sc.adminCancelSubscription);
