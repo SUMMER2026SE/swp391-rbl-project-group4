@@ -25,7 +25,7 @@ const STUDENT_LINKS = (t) => [
 
 export default function StudentLayout({ children, title }) {
   const { user, logout } = useAuth();
-  const { t, lang, switchLang } = useLang();
+  const { t } = useLang();
   const navigate = useNavigate();
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const { data: subData, loading: subLoading } = useSubscription();
@@ -50,16 +50,6 @@ export default function StudentLayout({ children, title }) {
           </div>
 
           <div className="flex items-center gap-3">
-            {/* Lang toggle */}
-            <div className="flex gap-1">
-              {['vi','ja'].map(l => (
-                <button key={l} onClick={() => switchLang(l)}
-                  className={`text-xs px-2 py-1 rounded-lg font-semibold transition-colors ${lang === l ? 'bg-tsubaki-red text-white' : 'text-on-muted hover:bg-surface-low'}`}>
-                  {l === 'vi' ? 'VI' : 'JP'}
-                </button>
-              ))}
-            </div>
-
             {/* Subscription chip */}
             {!subLoading && (
               isPremium ? (
