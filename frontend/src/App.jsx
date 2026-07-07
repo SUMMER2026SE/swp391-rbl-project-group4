@@ -38,6 +38,8 @@ import FlashcardStudy        from './pages/student/FlashcardStudy';
 import FlashcardLearn        from './pages/student/FlashcardLearn';
 import FlashcardTest         from './pages/student/FlashcardTest';
 import FlashcardFolderDetail from './pages/student/FlashcardFolderDetail';
+import StudyListBrowse from './pages/student/StudyListBrowse';
+import StudyListDetail from './pages/student/StudyListDetail';
 // Teacher pages
 import TeacherDashboard  from './pages/teacher/TeacherDashboard';
 import TeacherCourses    from './pages/teacher/TeacherCourses';
@@ -50,6 +52,7 @@ import TeacherDictionary from './pages/teacher/TeacherDictionary';
 import TeacherQuestionBank from './pages/teacher/TeacherQuestionBank';
 import TeacherExams      from './pages/teacher/TeacherExams';
 import ExamEditor        from './pages/teacher/ExamEditor';
+import TeacherStudyLists from './pages/teacher/TeacherStudyLists';
 // Admin pages
 import AdminDashboard  from './pages/admin/AdminDashboard';
 import AdminUsers      from './pages/admin/AdminUsers';
@@ -71,6 +74,7 @@ import AdminLessonQuiz         from './pages/admin/AdminLessonQuiz';
 import AdminLessonReading      from './pages/admin/AdminLessonReading';
 import AdminLessonKanji        from './pages/admin/AdminLessonKanji';
 import AdminLessonVideo        from './pages/admin/AdminLessonVideo';
+import AdminGrammarPoints      from './pages/admin/AdminGrammarPoints';
 
 import ChatPage from './pages/ChatPage';
 import ClassBoard from './pages/ClassBoard';
@@ -109,6 +113,8 @@ export default function App() {
             <Route path="/grammar"    element={<StudentRoute><Grammar /></StudentRoute>} />
             <Route path="/kanji"      element={<StudentRoute><Kanji /></StudentRoute>} />
             <Route path="/kanji/writing" element={<StudentRoute><KanjiWriting /></StudentRoute>} />
+            <Route path="/study-lists/:type"     element={<StudentRoute><StudyListBrowse /></StudentRoute>} />
+            <Route path="/study-lists/:type/:id" element={<StudentRoute><StudyListDetail /></StudentRoute>} />
             <Route path="/writing"    element={<StudentRoute><Writing /></StudentRoute>} />
             <Route path="/listening"  element={<StudentRoute><Listening /></StudentRoute>} />
             <Route path="/classes"    element={<StudentRoute><Classes /></StudentRoute>} />
@@ -143,6 +149,7 @@ export default function App() {
             <Route path="/teacher/lessons/:lessonId/kanji"      element={<TeacherRoute><AdminLessonKanji /></TeacherRoute>} />
             <Route path="/teacher/vocab" element={<TeacherRoute><TeacherVocabulary /></TeacherRoute>} />
             <Route path="/teacher/kanji"    element={<TeacherRoute><TeacherKanji /></TeacherRoute>} />
+            <Route path="/teacher/study-lists" element={<TeacherRoute><TeacherStudyLists /></TeacherRoute>} />
             <Route path="/teacher/classes"  element={<TeacherRoute><TeacherClasses /></TeacherRoute>} />
             <Route path="/teacher/dictionary" element={<TeacherRoute><TeacherDictionary /></TeacherRoute>} />
             <Route path="/teacher/question-bank" element={<TeacherRoute><TeacherQuestionBank /></TeacherRoute>} />
@@ -155,6 +162,7 @@ export default function App() {
             <Route path="/admin/vocabulary"  element={<AdminRoute><AdminVocabulary /></AdminRoute>} />
             <Route path="/admin/grammar"    element={<AdminRoute><AdminGrammar /></AdminRoute>} />
             <Route path="/admin/kanji"       element={<AdminRoute><AdminKanji /></AdminRoute>} />
+            <Route path="/admin/grammar-points" element={<AdminRoute><AdminGrammarPoints /></AdminRoute>} />
             <Route path="/admin/quizzes"      element={<AdminRoute><AdminQuizzes /></AdminRoute>} />
             <Route path="/admin/submissions" element={<AdminRoute><AdminSubmissions /></AdminRoute>} />
             <Route path="/admin/classes"     element={<AdminRoute><AdminClasses /></AdminRoute>} />

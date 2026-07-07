@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import StudentLayout from '../../components/layout/StudentLayout';
 import Alert from '../../components/ui/Alert';
 import api from '../../lib/api';
@@ -80,17 +81,23 @@ export default function Grammar() {
             <p className="text-sm text-on-muted mt-0.5">{total} bài ngữ pháp</p>
           )}
         </div>
-        <form onSubmit={handleSearch} className="flex gap-2">
-          <input
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            placeholder="Tìm bài ngữ pháp..."
-            className="px-4 py-2 border border-outline rounded-xl text-sm outline-none focus:border-tsubaki-red w-48 transition-colors"
-          />
-          <button type="submit" className="p-2 bg-tsubaki-red text-white rounded-xl hover:opacity-90 active:scale-95 transition-all">
-            <span className="material-symbols-outlined text-lg">search</span>
-          </button>
-        </form>
+        <div className="flex gap-2 items-center">
+          <Link to="/study-lists/grammar"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-outline text-charcoal text-sm font-semibold hover:border-tsubaki-red transition-all">
+            <span className="material-symbols-outlined text-base">library_books</span> Bài đăng
+          </Link>
+          <form onSubmit={handleSearch} className="flex gap-2">
+            <input
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Tìm bài ngữ pháp..."
+              className="px-4 py-2 border border-outline rounded-xl text-sm outline-none focus:border-tsubaki-red w-48 transition-colors"
+            />
+            <button type="submit" className="p-2 bg-tsubaki-red text-white rounded-xl hover:opacity-90 active:scale-95 transition-all">
+              <span className="material-symbols-outlined text-lg">search</span>
+            </button>
+          </form>
+        </div>
       </div>
 
       {/* Level filter */}
