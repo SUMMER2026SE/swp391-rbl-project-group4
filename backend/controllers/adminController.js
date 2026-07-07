@@ -552,6 +552,91 @@ exports.deleteVocab = async (req, res) => {
   } catch (err) { res.status(500).json({ error: 'Không thể xóa.' }); }
 };
 
+// ── Grammar Points (từ điển ngữ pháp chuẩn, độc lập với lesson_grammar) ───────
+exports.importGrammarPoints = async (req, res) => {
+  const rows = req.body;
+  if (!Array.isArray(rows) || rows.length === 0)
+    return res.status(400).json({ error: 'Dữ liệu phải là một mảng JSON không rỗng.' });
+  if (rows.length > 500)
+    return res.status(400).json({ error: 'Tối đa 500 mẫu ngữ pháp mỗi lần nhập.' });
+
+  const LEVELS  = new Set(['N5','N4','N3','N2','N1']);
+  const errors  = [];
+  const cleaned = [];
+
+  rows.forEach((row, i) => {
+    const n = i + 1;
+    if (!row.title)      errors.push(`Dòng ${n}: thiếu trường "title".`);
+    if (!row.meaning_vi) errors.push(`Dòng ${n}: thiếu trường "meaning_vi".`);
+    if (row.level && !LEVELS.has(row.level))
+      errors.push(`Dòng ${n}: level "${row.level}" không hợp lệ (N5/N4/N3/N2/N1).`);
+    cleaned.push({
+      title: row.title, title_ja: row.title_ja || null, meaning_vi: row.meaning_vi,
+      explanation: row.explanation || null, example_sentence: row.example_sentence || null,
+      level: row.level || null,
+    });
+  });
+
+  if (errors.length > 0) {
+    const preview = errors.slice(0, 5).join('\n• ');
+    const suffix  = errors.length > 5 ? `\n... và ${errors.length - 5} lỗi khác.` : '';
+    return res.status(400).json({ error: `Có ${errors.length} lỗi:\n• ${preview}${suffix}` });
+  }
+
+  try {
+    const { data, error } = await supabaseAdmin.from('grammar_points').insert(cleaned).select('id');
+    if (error) throw error;
+    res.status(201).json({ imported: data.length, message: `Đã nhập ${data.length} mẫu ngữ pháp thành công.` });
+  } catch (err) {
+    console.error('Import grammar points error:', err);
+    res.status(500).json({ error: 'Không thể nhập ngữ pháp vào cơ sở dữ liệu.' });
+  }
+};
+
+exports.listGrammarPoints = async (req, res) => {
+  const { level, search, page = 1, limit = 50 } = req.query;
+  const offset = (Number(page) - 1) * Number(limit);
+  try {
+    let q = supabaseAdmin.from('grammar_points').select('*', { count: 'exact' })
+      .order('created_at', { ascending: true })
+      .range(offset, offset + Number(limit) - 1);
+    if (level)  q = q.eq('level', level);
+    if (search) q = q.or(`title.ilike.%${search}%,meaning_vi.ilike.%${search}%`);
+    const { data, error, count } = await q;
+    if (error) throw error;
+    res.json({ data: data || [], total: count || 0 });
+  } catch (err) { res.status(500).json({ error: 'Không thể tải ngữ pháp.' }); }
+};
+
+exports.createGrammarPoint = async (req, res) => {
+  const { title, title_ja, meaning_vi, explanation, example_sentence, level } = req.body;
+  if (!title || !meaning_vi) return res.status(400).json({ error: 'Thiếu thông tin bắt buộc.' });
+  try {
+    const { data, error } = await supabaseAdmin.from('grammar_points')
+      .insert({ title, title_ja, meaning_vi, explanation, example_sentence, level })
+      .select().single();
+    if (error) throw error;
+    res.status(201).json(data);
+  } catch (err) { res.status(500).json({ error: 'Không thể tạo.' }); }
+};
+
+exports.updateGrammarPoint = async (req, res) => {
+  const allowed = ['title','title_ja','meaning_vi','explanation','example_sentence','level'];
+  const updates = Object.fromEntries(Object.entries(req.body).filter(([k]) => allowed.includes(k)));
+  try {
+    const { data, error } = await supabaseAdmin.from('grammar_points').update(updates).eq('id', req.params.id).select().single();
+    if (error) throw error;
+    res.json(data);
+  } catch (err) { res.status(500).json({ error: 'Không thể cập nhật.' }); }
+};
+
+exports.deleteGrammarPoint = async (req, res) => {
+  try {
+    await supabaseAdmin.from('grammar_points').delete().eq('id', req.params.id);
+    res.json({ message: 'Đã xóa.' });
+  } catch (err) { res.status(500).json({ error: 'Không thể xóa.' }); }
+};
+
 // ── Kanji Import ──────────────────────────────────────────────────────────────
 exports.importKanji = async (req, res) => {
   const rows = req.body;

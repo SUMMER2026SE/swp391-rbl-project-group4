@@ -9,6 +9,7 @@ const ADMIN_LINKS = (t) => [
   { to: '/admin/vocabulary',  icon: 'translate',     label: t('admin.vocabulary') },
   { to: '/admin/grammar',    icon: 'spellcheck',    label: 'Ngữ pháp' },
   { to: '/admin/kanji',       icon: 'font_download', label: t('admin.kanji') },
+  { to: '/admin/grammar-points', icon: 'menu_book',  label: 'Ngữ pháp (từ điển)' },
   { to: '/admin/quizzes',      icon: 'quiz',          label: t('admin.quizzes') },
   { to: '/admin/questions',    icon: 'inventory_2',   label: 'Ngân hàng câu hỏi' },
   { to: '/admin/listening',    icon: 'headphones',    label: 'Hội thoại nghe' },
