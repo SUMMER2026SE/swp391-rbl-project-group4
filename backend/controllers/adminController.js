@@ -459,6 +459,15 @@ exports.importVocab = async (req, res) => {
   try {
     const { data, error } = await supabaseAdmin.from('vocabulary').insert(cleaned).select('id');
     if (error) throw error;
+    // Dòng có lesson_id (import từ trình soạn Mục) → gắn vào bài qua bảng nối.
+    const links = data
+      .map((d, i) => cleaned[i].lesson_id ? { lesson_id: cleaned[i].lesson_id, vocabulary_id: d.id } : null)
+      .filter(Boolean);
+    if (links.length > 0) {
+      const { error: linkErr } = await contentDb.from('lesson_vocabulary')
+        .upsert(links, { onConflict: 'lesson_id,vocabulary_id' });
+      if (linkErr) throw linkErr;
+    }
     res.status(201).json({ imported: data.length, message: `Đã nhập ${data.length} từ vựng thành công.` });
   } catch (err) {
     console.error('Import vocab error:', err);
@@ -563,6 +572,8 @@ exports.importGrammarPoints = async (req, res) => {
   const LEVELS  = new Set(['N5','N4','N3','N2','N1']);
   const errors  = [];
   const cleaned = [];
+  // grammar_points không có cột lesson_id — giữ riêng để gắn qua bảng nối sau khi insert.
+  const lessonIds = [];
 
   rows.forEach((row, i) => {
     const n = i + 1;
@@ -575,6 +586,7 @@ exports.importGrammarPoints = async (req, res) => {
       explanation: row.explanation || null, example_sentence: row.example_sentence || null,
       level: row.level || null,
     });
+    lessonIds.push(row.lesson_id || null);
   });
 
   if (errors.length > 0) {
@@ -586,6 +598,15 @@ exports.importGrammarPoints = async (req, res) => {
   try {
     const { data, error } = await supabaseAdmin.from('grammar_points').insert(cleaned).select('id');
     if (error) throw error;
+    // Dòng có lesson_id (import từ trình soạn Mục) → gắn vào bài qua bảng nối.
+    const links = data
+      .map((d, i) => lessonIds[i] ? { lesson_id: lessonIds[i], grammar_point_id: d.id } : null)
+      .filter(Boolean);
+    if (links.length > 0) {
+      const { error: linkErr } = await contentDb.from('lesson_grammar_points')
+        .upsert(links, { onConflict: 'lesson_id,grammar_point_id' });
+      if (linkErr) throw linkErr;
+    }
     res.status(201).json({ imported: data.length, message: `Đã nhập ${data.length} mẫu ngữ pháp thành công.` });
   } catch (err) {
     console.error('Import grammar points error:', err);
@@ -594,9 +615,21 @@ exports.importGrammarPoints = async (req, res) => {
 };
 
 exports.listGrammarPoints = async (req, res) => {
-  const { level, search, page = 1, limit = 50 } = req.query;
+  const { level, search, lesson_id, page = 1, limit = 50 } = req.query;
   const offset = (Number(page) - 1) * Number(limit);
   try {
+    // Ngữ pháp trong một Mục được lấy qua bảng nối lesson_grammar_points (nhiều–nhiều).
+    if (lesson_id) {
+      const { data: links } = await contentDb.from('lesson_grammar_points')
+        .select('grammar_point_id').eq('lesson_id', lesson_id);
+      const ids = (links || []).map(l => l.grammar_point_id);
+      if (ids.length === 0) return res.json({ data: [], total: 0 });
+      const { data, error } = await supabaseAdmin.from('grammar_points')
+        .select('*').in('id', ids).order('created_at', { ascending: true });
+      if (error) throw error;
+      return res.json({ data: data || [], total: data?.length || 0 });
+    }
+
     let q = supabaseAdmin.from('grammar_points').select('*', { count: 'exact' })
       .order('created_at', { ascending: true })
       .range(offset, offset + Number(limit) - 1);
@@ -609,15 +642,45 @@ exports.listGrammarPoints = async (req, res) => {
 };
 
 exports.createGrammarPoint = async (req, res) => {
-  const { title, title_ja, meaning_vi, explanation, example_sentence, level } = req.body;
+  const { title, title_ja, meaning_vi, explanation, example_sentence, level, lesson_id } = req.body;
   if (!title || !meaning_vi) return res.status(400).json({ error: 'Thiếu thông tin bắt buộc.' });
   try {
     const { data, error } = await supabaseAdmin.from('grammar_points')
       .insert({ title, title_ja, meaning_vi, explanation, example_sentence, level })
       .select().single();
     if (error) throw error;
+    // Gắn điểm ngữ pháp mới vào Mục qua bảng nối để hiển thị trong bài.
+    if (lesson_id) {
+      await contentDb.from('lesson_grammar_points')
+        .upsert({ lesson_id, grammar_point_id: data.id }, { onConflict: 'lesson_id,grammar_point_id' });
+    }
     res.status(201).json(data);
   } catch (err) { res.status(500).json({ error: 'Không thể tạo.' }); }
+};
+
+// Gắn nhiều điểm ngữ pháp có sẵn vào một Mục (chọn từ list tổng).
+exports.attachGrammar = async (req, res) => {
+  const { lessonId } = req.params;
+  const ids = Array.isArray(req.body?.ids) ? req.body.ids : [];
+  if (ids.length === 0) return res.status(400).json({ error: 'Chưa chọn ngữ pháp nào.' });
+  try {
+    const rows = ids.map(grammar_point_id => ({ lesson_id: lessonId, grammar_point_id }));
+    const { error } = await contentDb.from('lesson_grammar_points')
+      .upsert(rows, { onConflict: 'lesson_id,grammar_point_id' });
+    if (error) throw error;
+    res.json({ message: `Đã thêm ${ids.length} ngữ pháp vào bài.` });
+  } catch (err) { res.status(500).json({ error: 'Không thể thêm ngữ pháp.' }); }
+};
+
+// Gỡ một điểm ngữ pháp khỏi Mục (không xóa khỏi thư viện).
+exports.detachGrammar = async (req, res) => {
+  const { lessonId, grammarId } = req.params;
+  try {
+    const { error } = await contentDb.from('lesson_grammar_points')
+      .delete().eq('lesson_id', lessonId).eq('grammar_point_id', grammarId);
+    if (error) throw error;
+    res.json({ message: 'Đã gỡ khỏi bài.' });
+  } catch (err) { res.status(500).json({ error: 'Không thể gỡ ngữ pháp.' }); }
 };
 
 exports.updateGrammarPoint = async (req, res) => {
@@ -671,6 +734,7 @@ exports.importKanji = async (req, res) => {
       stroke_count: row.stroke_count ? Number(row.stroke_count) : null,
       level:        row.level || null,
       han_viet:     row.han_viet || null,
+      lesson_id:    row.lesson_id || null,
     });
   });
 
@@ -687,6 +751,15 @@ exports.importKanji = async (req, res) => {
       .insert(cleaned)
       .select('id');
     if (error) throw error;
+    // Dòng có lesson_id (import từ trình soạn Mục) → gắn vào bài qua bảng nối.
+    const links = data
+      .map((d, i) => cleaned[i].lesson_id ? { lesson_id: cleaned[i].lesson_id, kanji_id: d.id } : null)
+      .filter(Boolean);
+    if (links.length > 0) {
+      const { error: linkErr } = await contentDb.from('lesson_kanji')
+        .upsert(links, { onConflict: 'lesson_id,kanji_id' });
+      if (linkErr) throw linkErr;
+    }
     res.status(201).json({ imported: data.length, message: `Đã nhập ${data.length} kanji thành công.` });
   } catch (err) {
     console.error('Import kanji error:', err);
@@ -1009,6 +1082,21 @@ exports.deletePassage = async (req, res) => {
     }
     res.json({ message: 'Đã xóa bài đọc.' });
   } catch (err) { res.status(500).json({ error: 'Không thể xóa bài đọc.' }); }
+};
+
+// ── Lesson video upload ───────────────────────────────────────────────────────
+exports.uploadLessonVideo = async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'Không có file được tải lên.' });
+  const ext = (req.file.originalname.split('.').pop() || 'mp4').toLowerCase();
+  const filename = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+  try {
+    const { error } = await supabaseAdmin.storage
+      .from('lesson-videos')
+      .upload(filename, req.file.buffer, { contentType: req.file.mimetype, upsert: false });
+    if (error) throw error;
+    const { data: { publicUrl } } = supabaseAdmin.storage.from('lesson-videos').getPublicUrl(filename);
+    res.json({ url: publicUrl });
+  } catch (err) { res.status(500).json({ error: 'Không thể tải file video lên.' }); }
 };
 
 // ── Listening Passages ────────────────────────────────────────────────────────

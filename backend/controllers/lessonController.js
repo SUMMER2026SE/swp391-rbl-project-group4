@@ -28,15 +28,17 @@ exports.getOne = async (req, res) => {
       .from('lessons').select('*').eq('id', id).single();
     if (error || !lesson) return res.status(404).json({ error: 'Không tìm thấy mục học.' });
 
-    // Từ vựng & kanji của Mục lấy qua bảng nối (nhiều–nhiều)
-    const [{ data: vocabLinks }, { data: kanjiLinks }] = await Promise.all([
+    // Từ vựng & kanji & ngữ pháp của Mục lấy qua bảng nối (nhiều–nhiều)
+    const [{ data: vocabLinks }, { data: kanjiLinks }, { data: grammarLinks }] = await Promise.all([
       contentDb.from('lesson_vocabulary').select('vocabulary_id').eq('lesson_id', id),
       contentDb.from('lesson_kanji').select('kanji_id').eq('lesson_id', id),
+      contentDb.from('lesson_grammar_points').select('grammar_point_id').eq('lesson_id', id),
     ]);
-    const vocabIds = (vocabLinks || []).map(l => l.vocabulary_id);
-    const kanjiIds = (kanjiLinks || []).map(l => l.kanji_id);
+    const vocabIds   = (vocabLinks || []).map(l => l.vocabulary_id);
+    const kanjiIds   = (kanjiLinks || []).map(l => l.kanji_id);
+    const grammarIds = (grammarLinks || []).map(l => l.grammar_point_id);
 
-    const [{ data: vocab }, { data: kanji }, { data: quiz }, order, { data: progress }] = await Promise.all([
+    const [{ data: vocab }, { data: kanji }, { data: grammarPoints }, { data: quiz }, order, { data: progress }] = await Promise.all([
       vocabIds.length
         ? supabaseAdmin.from('vocabulary')
             .select('id,kanji,reading,meaning_vi,meaning_ja,type,example_sentence')
@@ -46,6 +48,11 @@ exports.getOne = async (req, res) => {
         ? supabaseAdmin.from('kanji')
             .select('id,character,reading_on,reading_kun,meaning_vi,stroke_count,level,han_viet')
             .in('id', kanjiIds).order('created_at')
+        : Promise.resolve({ data: [] }),
+      grammarIds.length
+        ? supabaseAdmin.from('grammar_points')
+            .select('id,title,title_ja,meaning_vi,explanation,example_sentence,level')
+            .in('id', grammarIds).order('created_at')
         : Promise.resolve({ data: [] }),
       examDb.from('quizzes')
         .select('id,title,time_limit,type')
@@ -70,6 +77,7 @@ exports.getOne = async (req, res) => {
       ...lesson,
       vocabulary: vocab || [],
       kanji: kanji || [],
+      grammar_points: grammarPoints || [],
       quiz: quiz || null,
       nav,
       completed: progress?.status === 'completed',

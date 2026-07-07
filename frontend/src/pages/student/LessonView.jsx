@@ -3,6 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import StudentLayout from '../../components/layout/StudentLayout';
 import Alert from '../../components/ui/Alert';
 import Button from '../../components/ui/Button';
+import Modal from '../../components/ui/Modal';
 import FuriganaText from '../../components/ui/FuriganaText';
 import WorksheetPreview from '../../components/kanji/WorksheetPreview';
 import api from '../../lib/api';
@@ -57,8 +58,24 @@ export default function LessonView() {
   const [working, setWorking] = useState(false);
   const [downloadingPdf, setDownloadingPdf] = useState(false);
 
+  // Chọn vocab/kanji để thêm vào flashcard cá nhân. Key: `v-<id>` | `k-<id>`.
+  const [selecting, setSelecting] = useState(false); // bật/tắt chế độ chọn (hiện checkbox)
+  const [selected, setSelected] = useState({});
+  const [notice, setNotice] = useState(null); // { type, msg } — Alert cấp trang
+  const [fcModalOpen, setFcModalOpen] = useState(false);
+  const [fcSets, setFcSets] = useState([]);
+  const [fcSetsLoading, setFcSetsLoading] = useState(false);
+  const [fcMode, setFcMode] = useState('existing'); // 'existing' | 'new'
+  const [fcTargetId, setFcTargetId] = useState('');
+  const [fcNewTitle, setFcNewTitle] = useState('');
+  const [fcSaving, setFcSaving] = useState(false);
+  const [fcError, setFcError] = useState('');
+
   useEffect(() => {
     setLoading(true);
+    setSelecting(false);
+    setSelected({});
+    setNotice(null);
     api.get(`/lessons/${id}`)
       .then(r => setLesson(r.data))
       .catch(e => setError(e.message))
@@ -116,12 +133,121 @@ export default function LessonView() {
     ? 'Hoàn thành khóa học'
     : nav.nextIsNewUnit ? 'Hoàn thành • Bài học tiếp theo' : 'Hoàn thành • Mục tiếp theo';
 
+  // ── Chọn vocab/kanji → thêm vào flashcard ─────────────────────────
+  const vocabList = lesson.vocabulary || [];
+  const kanjiList = lesson.kanji || [];
+  const selectedCount = Object.keys(selected).length;
+
+  const toggleSelect = (key) => setSelected(s => {
+    const next = { ...s };
+    if (next[key]) delete next[key]; else next[key] = true;
+    return next;
+  });
+  const allVocabSelected = vocabList.length > 0 && vocabList.every(v => selected[`v-${v.id}`]);
+  const allKanjiSelected = kanjiList.length > 0 && kanjiList.every(k => selected[`k-${k.id}`]);
+  const toggleAllVocab = () => setSelected(s => {
+    const next = { ...s };
+    vocabList.forEach(v => { if (allVocabSelected) delete next[`v-${v.id}`]; else next[`v-${v.id}`] = true; });
+    return next;
+  });
+  const toggleAllKanji = () => setSelected(s => {
+    const next = { ...s };
+    kanjiList.forEach(k => { if (allKanjiSelected) delete next[`k-${k.id}`]; else next[`k-${k.id}`] = true; });
+    return next;
+  });
+
+  // Map các mục đã chọn sang {term, definition}; bỏ term trùng ngay trong lựa chọn.
+  const buildSelectedCards = () => {
+    const cards = [];
+    const seen = new Set();
+    vocabList.forEach(v => {
+      if (!selected[`v-${v.id}`]) return;
+      const term = v.kanji || v.reading;
+      const definition = v.kanji ? `${v.reading} - ${v.meaning_vi}` : (v.meaning_vi || '');
+      if (term && definition && !seen.has(term)) { seen.add(term); cards.push({ term, definition }); }
+    });
+    kanjiList.forEach(k => {
+      if (!selected[`k-${k.id}`]) return;
+      if (!k.character || seen.has(k.character)) return;
+      seen.add(k.character);
+      cards.push({
+        term: k.character,
+        definition: `On: ${k.reading_on?.join(', ') || '-'} / Kun: ${k.reading_kun?.join(', ') || '-'} - ${k.meaning_vi || ''}`,
+      });
+    });
+    return cards;
+  };
+
+  const openFcModal = async () => {
+    setFcError('');
+    setFcNewTitle(`Từ bài: ${lesson.title}`);
+    setFcModalOpen(true);
+    setFcSetsLoading(true);
+    try {
+      const r = await api.get('/flashcards/sets');
+      const sets = r.data.data || [];
+      setFcSets(sets);
+      setFcMode(sets.length ? 'existing' : 'new');
+      setFcTargetId(sets.length ? String(sets[0].id) : '');
+    } catch {
+      setFcSets([]);
+      setFcMode('new');
+      setFcTargetId('');
+    } finally {
+      setFcSetsLoading(false);
+    }
+  };
+
+  const addToFlashcards = async () => {
+    const newCards = buildSelectedCards();
+    if (!newCards.length) return;
+    setFcError('');
+    setFcSaving(true);
+    try {
+      if (fcMode === 'existing') {
+        // PUT ghi đè toàn bộ cards → lấy cards hiện tại, nối thêm rồi gửi lại nguyên mảng.
+        const r = await api.get(`/flashcards/sets/${fcTargetId}`);
+        const set = r.data.data || r.data;
+        const existing = (set.cards || []).map(c => ({ term: c.term, definition: c.definition }));
+        const existingTerms = new Set(existing.map(c => c.term));
+        const toAdd = newCards.filter(c => !existingTerms.has(c.term));
+        if (!toAdd.length) {
+          setNotice({ type: 'info', msg: `Các mục đã chọn đều có sẵn trong bộ "${set.title}".` });
+        } else {
+          await api.put(`/flashcards/sets/${fcTargetId}`, {
+            title: set.title,
+            description: set.description || '',
+            cards: [...existing, ...toAdd],
+          });
+          setNotice({ type: 'success', msg: `Đã thêm ${toAdd.length} thẻ vào bộ "${set.title}".` });
+        }
+      } else {
+        const title = fcNewTitle.trim();
+        await api.post('/flashcards/sets', { title, description: '', cards: newCards });
+        setNotice({ type: 'success', msg: `Đã thêm ${newCards.length} thẻ vào bộ mới "${title}".` });
+      }
+      setFcModalOpen(false);
+      setSelecting(false);
+      setSelected({});
+    } catch (e) {
+      setFcError(e.response?.data?.error || e.message);
+    } finally {
+      setFcSaving(false);
+    }
+  };
+
   return (
     <StudentLayout title={lesson.title}>
       <div className="max-w-3xl mx-auto">
         <Link to={`/courses/${lesson.course_id}`} className="inline-flex items-center gap-1 text-sm text-on-muted hover:text-tsubaki-red mb-6 transition-colors">
           <span className="material-symbols-outlined text-lg">arrow_back</span> Quay lại khoá học
         </Link>
+
+        {notice && (
+          <div className="mb-6">
+            <Alert type={notice.type} onClose={() => setNotice(null)}>{notice.msg}</Alert>
+          </div>
+        )}
 
         {/* ── Title card ──────────────────────────────────────────────── */}
         <div className="glass-card rounded-2xl p-8 mb-6">
@@ -164,7 +290,39 @@ export default function LessonView() {
           </div>
         )}
 
-        {/* ── Grammar ─────────────────────────────────────────────────── */}
+        {/* ── Grammar points (item rời, gắn qua lesson_grammar_points) ── */}
+        {lesson.grammar_points?.length > 0 && (
+          <div className="glass-card rounded-2xl overflow-hidden mb-6">
+            <div className="p-5 border-b border-outline/30">
+              <h2 className="font-display font-bold text-lg flex items-center gap-2">
+                <span className="material-symbols-outlined text-amber-600">spellcheck</span>
+                Ngữ pháp trong bài ({lesson.grammar_points.length})
+              </h2>
+            </div>
+            <div className="divide-y divide-outline/20">
+              {lesson.grammar_points.map(g => (
+                <div key={g.id} className="p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="font-bold text-base text-on-surface">{g.title}</p>
+                      {g.title_ja && <p className="text-xs text-on-muted">{g.title_ja}</p>}
+                      <p className="text-sm text-tsubaki-red font-semibold mt-0.5">{g.meaning_vi}</p>
+                    </div>
+                    {g.level && <span className="text-xs px-2 py-0.5 rounded-full bg-surface-low text-on-muted shrink-0 font-bold">{g.level}</span>}
+                  </div>
+                  {g.explanation && (
+                    <p className="text-xs text-on-muted mt-1.5 leading-relaxed whitespace-pre-wrap">{g.explanation}</p>
+                  )}
+                  {g.example_sentence && (
+                    <p className="text-xs text-on-muted italic mt-1.5 border-l-2 border-amber-400/40 pl-2">{g.example_sentence}</p>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ── Grammar notes (ghi chú tổng quan markdown, tùy chọn) ────── */}
         {lesson.grammar_notes && (
           <div className="glass-card rounded-2xl overflow-hidden mb-6">
             <div className="p-5 border-b border-outline/30">
@@ -196,15 +354,33 @@ export default function LessonView() {
         {/* ── Vocabulary ─────────────────────────────────────────────── */}
         {lesson.vocabulary?.length > 0 && (
           <div className="glass-card rounded-2xl overflow-hidden mb-6">
-            <div className="p-5 border-b border-outline/30">
+            <div className="p-5 border-b border-outline/30 flex items-center justify-between gap-3 flex-wrap">
               <h2 className="font-display font-bold text-lg flex items-center gap-2">
                 <span className="material-symbols-outlined text-tsubaki-red">translate</span>
                 Từ vựng trong bài ({lesson.vocabulary.length})
               </h2>
+              {selecting ? (
+                <label className="flex items-center gap-2 text-xs text-on-muted cursor-pointer select-none">
+                  <input type="checkbox" checked={allVocabSelected} onChange={toggleAllVocab} className="w-4 h-4 accent-tsubaki-red" />
+                  Chọn tất cả
+                </label>
+              ) : (
+                <Button size="sm" variant="secondary" onClick={() => setSelecting(true)}>
+                  <span className="material-symbols-outlined text-lg">library_add</span> Thêm vào thẻ ghi nhớ
+                </Button>
+              )}
             </div>
             <div className="divide-y divide-outline/20">
               {lesson.vocabulary.map(v => (
                 <div key={v.id} className="flex items-start gap-4 p-4">
+                  {selecting && (
+                    <input
+                      type="checkbox"
+                      checked={!!selected[`v-${v.id}`]}
+                      onChange={() => toggleSelect(`v-${v.id}`)}
+                      className="w-4 h-4 accent-tsubaki-red shrink-0 mt-2.5"
+                    />
+                  )}
                   <div className="text-2xl font-bold text-tsubaki-red w-16 shrink-0 text-center pt-1">
                     <FuriganaText text={v.kanji || v.reading} enabled={furigana} textClassName="text-2xl font-bold text-tsubaki-red" />
                   </div>
@@ -231,13 +407,33 @@ export default function LessonView() {
                 <span className="material-symbols-outlined text-sumire-purple">draw</span>
                 Kanji trong bài ({lesson.kanji.length})
               </h2>
-              <Button size="sm" variant="secondary" loading={downloadingPdf} onClick={downloadLessonWorksheet}>
-                <span className="material-symbols-outlined text-lg">download</span> Tải PDF bộ luyện viết
-              </Button>
+              <div className="flex items-center gap-4">
+                {selecting ? (
+                  <label className="flex items-center gap-2 text-xs text-on-muted cursor-pointer select-none">
+                    <input type="checkbox" checked={allKanjiSelected} onChange={toggleAllKanji} className="w-4 h-4 accent-tsubaki-red" />
+                    Chọn tất cả
+                  </label>
+                ) : (
+                  <Button size="sm" variant="secondary" onClick={() => setSelecting(true)}>
+                    <span className="material-symbols-outlined text-lg">library_add</span> Thêm vào thẻ ghi nhớ
+                  </Button>
+                )}
+                <Button size="sm" variant="secondary" loading={downloadingPdf} onClick={downloadLessonWorksheet}>
+                  <span className="material-symbols-outlined text-lg">download</span> Tải PDF bộ luyện viết
+                </Button>
+              </div>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-5">
               {lesson.kanji.map(k => (
                 <div key={k.id} className="bg-white rounded-xl border border-outline-variant/50 p-4 flex gap-4 items-start hover:border-sumire-purple/40 transition-colors">
+                  {selecting && (
+                    <input
+                      type="checkbox"
+                      checked={!!selected[`k-${k.id}`]}
+                      onChange={() => toggleSelect(`k-${k.id}`)}
+                      className="w-4 h-4 accent-tsubaki-red shrink-0 mt-1"
+                    />
+                  )}
                   <div className="flex flex-col items-center shrink-0">
                     <span className="text-5xl font-bold text-on-surface leading-none" style={{ fontFamily: 'serif' }}>{k.character}</span>
                     {k.stroke_count && <span className="text-[10px] text-on-muted mt-1">{k.stroke_count} nét</span>}
@@ -308,6 +504,107 @@ export default function LessonView() {
           </button>
         </div>
       </div>
+
+      {/* ── Thanh hành động: thêm mục đã chọn vào flashcard ─────────── */}
+      {selecting && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 bg-white border border-outline/40 rounded-2xl shadow-xl px-5 py-3">
+          <p className="text-sm text-on-surface">
+            Đã chọn <strong className="text-tsubaki-red">{selectedCount}</strong> mục
+          </p>
+          <Button size="sm" disabled={!selectedCount} onClick={openFcModal}>
+            <span className="material-symbols-outlined text-lg">library_add</span> Thêm vào flashcard
+          </Button>
+          <button
+            type="button"
+            onClick={() => { setSelecting(false); setSelected({}); }}
+            title="Hủy chọn"
+            className="w-8 h-8 flex items-center justify-center rounded-lg text-on-muted hover:text-charcoal hover:bg-surface-low transition-colors"
+          >
+            <span className="material-symbols-outlined text-lg">close</span>
+          </button>
+        </div>
+      )}
+
+      {/* ── Modal chọn bộ flashcard ─────────────────────────────────── */}
+      <Modal
+        open={fcModalOpen}
+        onClose={() => !fcSaving && setFcModalOpen(false)}
+        title="Thêm vào flashcard"
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setFcModalOpen(false)} disabled={fcSaving}>Hủy</Button>
+            <Button
+              variant="primary"
+              loading={fcSaving}
+              disabled={fcMode === 'existing' ? !fcTargetId : !fcNewTitle.trim()}
+              onClick={addToFlashcards}
+            >
+              Thêm {selectedCount} thẻ
+            </Button>
+          </>
+        }
+      >
+        {fcError && (
+          <div className="mb-4">
+            <Alert type="error" onClose={() => setFcError('')}>{fcError}</Alert>
+          </div>
+        )}
+        <p className="text-sm text-on-muted mb-4">
+          Thêm <strong className="text-on-surface">{selectedCount}</strong> mục đã chọn vào một bộ thẻ ghi nhớ của bạn.
+        </p>
+
+        <div className="space-y-4">
+          <div>
+            <label className={`flex items-center gap-2 text-sm cursor-pointer ${!fcSets.length && !fcSetsLoading ? 'opacity-50 cursor-not-allowed' : ''}`}>
+              <input
+                type="radio"
+                name="fcMode"
+                checked={fcMode === 'existing'}
+                onChange={() => setFcMode('existing')}
+                disabled={!fcSets.length && !fcSetsLoading}
+                className="accent-tsubaki-red"
+              />
+              Thêm vào bộ có sẵn
+            </label>
+            {fcMode === 'existing' && (
+              fcSetsLoading ? (
+                <p className="text-xs text-on-muted mt-2 ml-6">Đang tải danh sách bộ thẻ...</p>
+              ) : (
+                <select
+                  value={fcTargetId}
+                  onChange={e => setFcTargetId(e.target.value)}
+                  className="w-full mt-2 px-3 py-2.5 bg-surface-low border border-outline rounded-xl text-sm outline-none focus:border-tsubaki-red"
+                >
+                  {fcSets.map(s => (
+                    <option key={s.id} value={s.id}>{s.title} ({s.card_count} thẻ)</option>
+                  ))}
+                </select>
+              )
+            )}
+          </div>
+
+          <div>
+            <label className="flex items-center gap-2 text-sm cursor-pointer">
+              <input
+                type="radio"
+                name="fcMode"
+                checked={fcMode === 'new'}
+                onChange={() => setFcMode('new')}
+                className="accent-tsubaki-red"
+              />
+              Tạo bộ mới
+            </label>
+            {fcMode === 'new' && (
+              <input
+                value={fcNewTitle}
+                onChange={e => setFcNewTitle(e.target.value)}
+                placeholder="Tiêu đề bộ thẻ mới"
+                className="w-full mt-2 px-3 py-2.5 bg-surface-low border border-outline rounded-xl text-sm outline-none focus:border-tsubaki-red"
+              />
+            )}
+          </div>
+        </div>
+      </Modal>
     </StudentLayout>
   );
 }
