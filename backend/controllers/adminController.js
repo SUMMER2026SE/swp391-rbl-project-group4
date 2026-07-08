@@ -1134,11 +1134,11 @@ exports.listListeningPassages = async (req, res) => {
 };
 
 exports.createListeningPassage = async (req, res) => {
-  const { title, audio_url, transcript, description, level, topic, source, duration_sec } = req.body;
+  const { title, audio_url, transcript, description, level, topic, source, duration_sec, image_url } = req.body;
   if (!audio_url) return res.status(400).json({ error: 'Bài nghe phải có file âm thanh.' });
   try {
     const { data, error } = await supabaseAdmin.from('listening_passages')
-      .insert({ title, audio_url, transcript: transcript || null, description: description || null, level, topic, source, duration_sec: duration_sec || null, created_by: req.user?.id })
+      .insert({ title, audio_url, transcript: transcript || null, description: description || null, level, topic, source, duration_sec: duration_sec || null, image_url: image_url || null, created_by: req.user?.id })
       .select().single();
     if (error) throw error;
     res.status(201).json({ ...data, question_count: 0 });
@@ -1146,11 +1146,12 @@ exports.createListeningPassage = async (req, res) => {
 };
 
 exports.updateListeningPassage = async (req, res) => {
-  const allowed = ['title', 'audio_url', 'transcript', 'description', 'level', 'topic', 'source', 'duration_sec', 'transcript_segments'];
+  const allowed = ['title', 'audio_url', 'transcript', 'description', 'level', 'topic', 'source', 'duration_sec', 'transcript_segments', 'image_url'];
   const updates = Object.fromEntries(Object.entries(req.body).filter(([k]) => allowed.includes(k)));
   if ('transcript'   in updates && !updates.transcript)   updates.transcript   = null;
   if ('description'  in updates && !updates.description)  updates.description  = null;
   if ('duration_sec' in updates && !updates.duration_sec) updates.duration_sec = null;
+  if ('image_url'    in updates && !updates.image_url)    updates.image_url    = null;
   try {
     const { data, error } = await supabaseAdmin.from('listening_passages')
       .update(updates).eq('id', req.params.id).select().single();

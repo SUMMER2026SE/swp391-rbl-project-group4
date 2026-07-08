@@ -242,4 +242,33 @@ router.post('/news',                   news.create);
 router.put('/news/:id',                news.update);
 router.delete('/news/:id',             news.remove);
 
+// Subscription / payments (admin)
+const sc = require('../../controllers/subscriptionController');
+router.get('/subscriptions/users',        sc.adminGetUsersWithSubscription);
+router.get('/subscriptions',              sc.adminGetSubscriptions);
+router.post('/subscriptions/grant',       sc.adminGrantSubscription);
+router.delete('/subscriptions/:userId',   sc.adminCancelSubscription);
+router.get('/payments',                   sc.adminGetPayments);
+router.post('/payments/reconcile', async (req, res) => {
+  const { reconcilePendingOrders } = require('../../services/paymentMatchingService');
+  try {
+    const result = await reconcilePendingOrders();
+    res.json({ ok: true, ...result });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Placement Test — Question Bank
+const pc = require('../../controllers/placementController');
+router.get('/placement/stats',                pc.adminGetStats);
+router.get('/placement/config',               pc.adminGetConfig);
+router.put('/placement/config',               pc.adminUpdateConfig);
+router.get('/placement/questions',            pc.adminListQuestions);
+router.get('/placement/questions/:id',        pc.adminGetQuestion);
+router.post('/placement/questions',           pc.adminCreateQuestion);
+router.put('/placement/questions/:id',        pc.adminUpdateQuestion);
+router.patch('/placement/questions/:id/toggle', pc.adminToggleQuestion);
+router.delete('/placement/questions/:id',     pc.adminDeleteQuestion);
+
 module.exports = router;

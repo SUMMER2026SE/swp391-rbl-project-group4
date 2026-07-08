@@ -12,12 +12,15 @@ const ADMIN_LINKS = (t) => [
   { to: '/admin/grammar-points', icon: 'menu_book',  label: 'Ngữ pháp (từ điển)' },
   { to: '/admin/quizzes',      icon: 'quiz',          label: t('admin.quizzes') },
   { to: '/admin/questions',    icon: 'inventory_2',   label: 'Ngân hàng câu hỏi' },
-  { to: '/admin/listening',    icon: 'headphones',    label: 'Hội thoại nghe' },
+  { to: '/admin/listening',    icon: 'headphones',      label: 'Hội thoại nghe' },
+  { to: '/admin/placement',   icon: 'assignment_ind',  label: 'Kiểm tra NL' },
   { to: '/admin/news',         icon: 'newspaper',     label: 'Đọc báo' },
   { to: '/admin/submissions',  icon: 'pending_actions', label: 'Yêu cầu duyệt' },
   { to: '/admin/classes',      icon: 'groups',          label: 'Lớp học' },
   { to: '/chat',               icon: 'smart_toy',       label: 'Trợ lý AI' },
-  { to: '/admin/system',       icon: 'monitor_heart',   label: 'Hoạt động HT' },
+  { to: '/admin/subscriptions', icon: 'workspace_premium', label: 'Đăng ký' },
+  { to: '/admin/payments',      icon: 'payments',          label: 'Thanh toán' },
+  { to: '/admin/system',        icon: 'monitor_heart',     label: 'Hoạt động HT' },
   { to: '/profile',            icon: 'person',          label: 'Hồ sơ' },
 ];
 
