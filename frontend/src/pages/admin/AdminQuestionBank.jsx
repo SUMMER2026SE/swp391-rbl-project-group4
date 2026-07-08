@@ -661,6 +661,278 @@ function QuestionForm({ form, setForm, passages, listeningPassages }) {
   );
 }
 
+// ── Passage Preview Sheet ─────────────────────────────────────────────────────
+function PassagePreviewSheet({ passage, questions, onClose }) {
+  const [answers, setAnswers]     = useState({});
+  const [submitted, setSubmitted] = useState(false);
+
+  const optLabel = i => String.fromCharCode(65 + i);
+
+  const setAnswer = (qi, qType, val) => {
+    if (submitted) return;
+    if (qType === 'multiple_choice') {
+      setAnswers(a => {
+        const prev = Array.isArray(a[qi]) ? a[qi] : [];
+        return { ...a, [qi]: prev.includes(val) ? prev.filter(x => x !== val) : [...prev, val] };
+      });
+    } else {
+      setAnswers(a => ({ ...a, [qi]: val }));
+    }
+  };
+
+  const score = useMemo(() => {
+    if (!submitted) return null;
+    let correct = 0, total = 0;
+    questions.forEach((q, qi) => {
+      if (!['single_choice', 'multiple_choice'].includes(q.question_type)) return;
+      total++;
+      const ans = answers[qi];
+      if (q.question_type === 'single_choice') {
+        if (ans === q.correct_answer) correct++;
+      } else {
+        const sel = Array.isArray(ans) ? [...ans].sort() : [];
+        const cor = Array.isArray(q.correct_answer) ? [...q.correct_answer].sort() : [];
+        if (JSON.stringify(sel) === JSON.stringify(cor)) correct++;
+      }
+    });
+    return { correct, total };
+  }, [submitted, answers, questions]);
+
+  const QNum = ({ n }) => (
+    <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-tsubaki-red text-white text-xs font-bold mr-2 shrink-0">{n}</span>
+  );
+
+  const renderQuestion = (q, qi) => {
+    const ans = answers[qi];
+    const explanation = submitted && q.explanation ? (
+      <div className="mt-2 px-3 py-2 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-800">
+        <strong>💡 Giải thích:</strong> {q.explanation}
+      </div>
+    ) : null;
+
+    if (q.question_type === 'single_choice') {
+      const opts = Array.isArray(q.options) ? q.options : [];
+      return (
+        <div>
+          <p className="font-medium text-sm mb-3 flex items-start"><QNum n={qi + 1} />{q.question_text}</p>
+          <div className="space-y-2">
+            {opts.map((opt, oi) => {
+              const sel = ans === opt;
+              const correct = submitted && opt === q.correct_answer;
+              const wrong   = submitted && sel && opt !== q.correct_answer;
+              return (
+                <button key={oi} onClick={() => setAnswer(qi, 'single_choice', opt)} disabled={submitted}
+                  className={`w-full text-left flex items-center gap-3 px-4 py-2.5 rounded-xl border text-sm transition-all ${
+                    correct ? 'border-emerald-400 bg-emerald-50 text-emerald-800' :
+                    wrong   ? 'border-red-300   bg-red-50   text-red-700' :
+                    sel     ? 'border-tsubaki-red bg-tsubaki-red/5 text-charcoal' :
+                    submitted ? 'border-outline/30 text-on-muted/50' :
+                    'border-outline hover:border-tsubaki-red/50 hover:bg-surface-low'}`}>
+                  <span className={`w-6 h-6 rounded-full border-2 flex items-center justify-center text-xs font-bold shrink-0 ${
+                    correct ? 'border-emerald-500 bg-emerald-500 text-white' :
+                    wrong   ? 'border-red-400 bg-red-100 text-red-700' :
+                    sel     ? 'border-tsubaki-red bg-tsubaki-red text-white' : 'border-outline/50 text-on-muted'}`}>
+                    {correct ? '✓' : wrong ? '✗' : optLabel(oi)}
+                  </span>
+                  {opt}
+                </button>
+              );
+            })}
+          </div>
+          {submitted && <p className="mt-1.5 text-xs text-emerald-700 font-medium">Đáp án đúng: {q.correct_answer}</p>}
+          {explanation}
+        </div>
+      );
+    }
+
+    if (q.question_type === 'multiple_choice') {
+      const opts = Array.isArray(q.options) ? q.options : [];
+      const sel  = Array.isArray(ans) ? ans : [];
+      const cor  = Array.isArray(q.correct_answer) ? q.correct_answer : [];
+      return (
+        <div>
+          <p className="font-medium text-sm mb-1 flex items-start"><QNum n={qi + 1} />{q.question_text}</p>
+          <p className="text-xs text-on-muted mb-3 ml-8">Chọn tất cả đáp án đúng</p>
+          <div className="space-y-2">
+            {opts.map((opt, oi) => {
+              const isSelected = sel.includes(opt);
+              const isCorrect  = submitted && cor.includes(opt);
+              const isWrong    = submitted && isSelected && !cor.includes(opt);
+              return (
+                <button key={oi} onClick={() => setAnswer(qi, 'multiple_choice', opt)} disabled={submitted}
+                  className={`w-full text-left flex items-center gap-3 px-4 py-2.5 rounded-xl border text-sm transition-all ${
+                    isCorrect  ? 'border-emerald-400 bg-emerald-50 text-emerald-800' :
+                    isWrong    ? 'border-red-300   bg-red-50   text-red-700' :
+                    isSelected ? 'border-tsubaki-red bg-tsubaki-red/5 text-charcoal' :
+                    submitted  ? 'border-outline/30 text-on-muted/50' :
+                    'border-outline hover:border-tsubaki-red/50 hover:bg-surface-low'}`}>
+                  <span className={`w-5 h-5 rounded border-2 flex items-center justify-center text-xs font-bold shrink-0 ${
+                    isCorrect  ? 'border-emerald-500 bg-emerald-500 text-white' :
+                    isWrong    ? 'border-red-400 bg-red-100 text-red-700' :
+                    isSelected ? 'border-tsubaki-red bg-tsubaki-red text-white' : 'border-outline/50'}`}>
+                    {isCorrect ? '✓' : isWrong ? '✗' : isSelected ? '✓' : ''}
+                  </span>
+                  {opt}
+                </button>
+              );
+            })}
+          </div>
+          {submitted && <p className="mt-1.5 text-xs text-emerald-700 font-medium">Đáp án đúng: {cor.join(', ')}</p>}
+          {explanation}
+        </div>
+      );
+    }
+
+    if (q.question_type === 'fill_blank') {
+      const correctVals = Array.isArray(q.correct_answer) ? q.correct_answer : [q.correct_answer];
+      const isRight = submitted && correctVals.some(v => String(v).trim().toLowerCase() === String(ans || '').trim().toLowerCase());
+      return (
+        <div>
+          <p className="font-medium text-sm mb-3 flex items-start"><QNum n={qi + 1} />{q.question_text}</p>
+          <input type="text" disabled={submitted} value={typeof ans === 'string' ? ans : ''}
+            onChange={e => setAnswer(qi, 'fill_blank', e.target.value)}
+            placeholder="Nhập đáp án..."
+            className={`w-full px-4 py-2.5 border rounded-xl text-sm outline-none transition-colors disabled:cursor-not-allowed ${
+              !submitted ? 'border-outline focus:border-tsubaki-red' :
+              isRight    ? 'border-emerald-400 bg-emerald-50'       : 'border-red-300 bg-red-50'}`} />
+          {submitted && <p className="mt-1.5 text-xs text-emerald-700 font-medium">Đáp án: {correctVals.join(' / ')}</p>}
+          {explanation}
+        </div>
+      );
+    }
+
+    if (q.question_type === 'short_answer') {
+      return (
+        <div>
+          <p className="font-medium text-sm mb-3 flex items-start"><QNum n={qi + 1} />{q.question_text}</p>
+          <textarea disabled={submitted} value={typeof ans === 'string' ? ans : ''}
+            onChange={e => setAnswer(qi, 'short_answer', e.target.value)}
+            rows={3} placeholder="Nhập câu trả lời..."
+            className="w-full px-4 py-2.5 border border-outline rounded-xl text-sm outline-none focus:border-tsubaki-red resize-none disabled:bg-surface-low disabled:cursor-not-allowed" />
+          {submitted && q.correct_answer && (
+            <p className="mt-1.5 text-xs text-emerald-700 font-medium">Đáp án mẫu: {q.correct_answer}</p>
+          )}
+          {explanation}
+        </div>
+      );
+    }
+
+    if (q.question_type === 'matching') {
+      const pairs = Array.isArray(q.options) ? q.options : [];
+      return (
+        <div>
+          <p className="font-medium text-sm mb-3 flex items-start"><QNum n={qi + 1} />{q.question_text}</p>
+          <div className="space-y-2">
+            {pairs.map((pair, pi) => (
+              <div key={pi} className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+                <div className="px-3 py-2 bg-surface-low rounded-xl text-sm">{pair.left}</div>
+                <span className="material-symbols-outlined text-on-muted text-[18px]">compare_arrows</span>
+                <div className={`px-3 py-2 rounded-xl text-sm border ${submitted ? 'border-emerald-300 bg-emerald-50 text-emerald-800' : 'border-dashed border-outline/50 text-on-muted italic text-xs'}`}>
+                  {submitted ? pair.right : '???'}
+                </div>
+              </div>
+            ))}
+          </div>
+          {!submitted && <p className="text-xs text-on-muted mt-2">Đáp án sẽ hiện sau khi nộp bài.</p>}
+          {explanation}
+        </div>
+      );
+    }
+
+    if (q.question_type === 'ordering') {
+      const items = Array.isArray(q.correct_answer) ? q.correct_answer : (Array.isArray(q.options) ? q.options : []);
+      return (
+        <div>
+          <p className="font-medium text-sm mb-3 flex items-start"><QNum n={qi + 1} />{q.question_text}</p>
+          <div className="space-y-2">
+            {items.map((item, ii) => (
+              <div key={ii} className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border text-sm ${submitted ? 'border-emerald-300 bg-emerald-50' : 'border-outline/40 bg-surface-low'}`}>
+                <span className="w-6 h-6 rounded-full bg-tsubaki-red/10 text-tsubaki-red text-xs font-bold flex items-center justify-center shrink-0">{ii + 1}</span>
+                {item}
+              </div>
+            ))}
+          </div>
+          {!submitted && <p className="text-xs text-on-muted mt-2">Thứ tự đúng sẽ hiện sau khi nộp bài.</p>}
+          {explanation}
+        </div>
+      );
+    }
+
+    const qt = TYPE_MAP[q.question_type];
+    return (
+      <div className="glass-card rounded-xl p-4">
+        <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${qt?.color || 'bg-surface'}`}>{qt?.label || q.question_type}</span>
+        <p className="text-sm font-medium mt-2">{qi + 1}. {q.question_text}</p>
+      </div>
+    );
+  };
+
+  const pct = score ? Math.round((score.correct / score.total) * 100) : 0;
+
+  return (
+    <div className="fixed inset-0 z-[70] bg-gray-50 flex flex-col overflow-hidden">
+      {/* Top bar */}
+      <div className="h-14 flex items-center px-5 border-b border-outline/30 gap-3 bg-white shrink-0">
+        <button onClick={onClose}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg hover:bg-surface-low text-on-muted text-sm font-medium transition-colors">
+          <span className="material-symbols-outlined text-[18px]">close</span>Đóng
+        </button>
+        <span className="px-2.5 py-0.5 text-xs font-bold bg-sumire-purple/10 text-sumire-purple rounded-full">Xem trước</span>
+        <div className="flex-1" />
+        {submitted && score && score.total > 0 && (
+          <span className={`text-sm font-bold px-3 py-1.5 rounded-xl ${pct >= 80 ? 'bg-emerald-50 text-emerald-700' : pct >= 50 ? 'bg-amber-50 text-amber-700' : 'bg-red-50 text-red-700'}`}>
+            {score.correct}/{score.total} câu đúng ({pct}%)
+          </span>
+        )}
+        {submitted
+          ? <button onClick={() => { setAnswers({}); setSubmitted(false); }}
+              className="px-4 py-2 border border-outline rounded-xl text-sm font-medium hover:bg-surface-low transition-colors">
+              Làm lại
+            </button>
+          : questions.length > 0 && (
+            <button onClick={() => setSubmitted(true)}
+              className="px-4 py-2 bg-tsubaki-red text-white rounded-xl text-sm font-semibold hover:opacity-90 transition-opacity">
+              Nộp bài
+            </button>
+          )
+        }
+      </div>
+
+      {/* Body */}
+      <div className="flex-1 flex overflow-hidden">
+        {/* Left: passage */}
+        <div className="w-1/2 border-r border-outline/30 overflow-y-auto p-6 bg-white">
+          {passage.title && <h2 className="font-bold text-lg mb-4">{passage.title}</h2>}
+          {passage.image_url && (
+            <img src={passage.image_url} alt={passage.title || ''} className="w-full rounded-xl mb-5 object-contain max-h-64 bg-surface-low border border-outline" />
+          )}
+          {passage.content
+            ? <p className="text-sm leading-[2] whitespace-pre-wrap" style={{ fontFamily: '"Noto Sans JP", "Hiragino Sans", sans-serif' }}>{passage.content}</p>
+            : !passage.image_url && <p className="text-sm text-on-muted italic">Chưa có nội dung bài đọc.</p>}
+        </div>
+
+        {/* Right: questions */}
+        <div className="flex-1 overflow-y-auto p-6">
+          {questions.length === 0 ? (
+            <div className="text-center py-20">
+              <span className="material-symbols-outlined text-5xl text-on-muted/20 block mb-3">help</span>
+              <p className="text-sm text-on-muted">Chưa có câu hỏi nào để xem trước.</p>
+            </div>
+          ) : (
+            <div className="space-y-7">
+              {questions.map((q, qi) => (
+                <div key={q.id || qi} className="bg-white rounded-2xl border border-outline/40 shadow-sm p-5">
+                  {renderQuestion(q, qi)}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Passage Editor Sheet ─────────────────────────────────────────────────────
 function PassageEditorSheet({ passageId, initialPassage, onClose, onSaved, setAlert, apiBase = '/admin' }) {
   const [form, setForm] = useState(
@@ -679,6 +951,7 @@ function PassageEditorSheet({ passageId, initialPassage, onClose, onSaved, setAl
   const [qForm, setQForm]         = useState({ ...EMPTY_FORM });
   const [qEditId, setQEditId]     = useState(null);
   const [qSaving, setQSaving]     = useState(false);
+  const [preview, setPreview]     = useState(false);
 
   const loadQuestions = useCallback(async (pid) => {
     if (!pid) return;
@@ -772,6 +1045,11 @@ function PassageEditorSheet({ passageId, initialPassage, onClose, onSaved, setAl
           <h2 className="font-bold text-sm truncate">{form.title || (currentId ? 'Bài đọc' : 'Bài đọc mới')}</h2>
           {currentId && <p className="text-xs text-on-muted">{questions.length} câu hỏi</p>}
         </div>
+        <button onClick={() => setPreview(true)} disabled={!currentId && !form.content.trim() && !form.image_url}
+          className="flex items-center gap-1.5 px-3 py-2 border border-outline rounded-xl text-sm font-medium hover:bg-surface-low disabled:opacity-40 transition-colors">
+          <span className="material-symbols-outlined text-[18px]">visibility</span>
+          Xem trước
+        </button>
         <button onClick={handleSavePassage} disabled={saving}
           className="flex items-center gap-1.5 px-4 py-2 bg-tsubaki-red text-white rounded-xl text-sm font-semibold hover:opacity-90 disabled:opacity-50 transition-opacity">
           {saving
@@ -948,6 +1226,15 @@ function PassageEditorSheet({ passageId, initialPassage, onClose, onSaved, setAl
           </div>
         </div>
       </div>
+    )}
+
+    {/* Preview sheet — above the editor and above the question modal */}
+    {preview && (
+      <PassagePreviewSheet
+        passage={{ title: form.title, content: form.content, image_url: form.image_url }}
+        questions={questions}
+        onClose={() => setPreview(false)}
+      />
     )}
     </>
   );
