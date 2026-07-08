@@ -82,9 +82,6 @@ import AdminLessonReading      from './pages/admin/AdminLessonReading';
 import AdminLessonKanji        from './pages/admin/AdminLessonKanji';
 import AdminLessonVideo        from './pages/admin/AdminLessonVideo';
 import AdminGrammarPoints      from './pages/admin/AdminGrammarPoints';
-import AdminReadingSets        from './pages/admin/AdminReadingSets';
-import ReadingSetEditor        from './pages/admin/ReadingSetEditor';
-import ReadingSetPlayer        from './pages/student/ReadingSetPlayer';
 
 import ChatPage from './pages/ChatPage';
 import ClassBoard from './pages/ClassBoard';
@@ -136,8 +133,6 @@ export default function App() {
             <Route path="/dictionary" element={<StudentRoute><Dictionary /></StudentRoute>} />
             <Route path="/news"       element={<StudentRoute><NewsList /></StudentRoute>} />
             <Route path="/news/:id"   element={<StudentRoute><NewsReader /></StudentRoute>} />
-            <Route path="/reading"    element={<StudentRoute><ReadingSetPlayer /></StudentRoute>} />
-            <Route path="/reading/:id" element={<StudentRoute><ReadingSetPlayer /></StudentRoute>} />
             <Route path="/exams"      element={<StudentRoute><Exams /></StudentRoute>} />
             <Route path="/exams/:assignmentId" element={<StudentRoute><TakeExam /></StudentRoute>} />
             <Route path="/flashcards"             element={<StudentRoute><Flashcards /></StudentRoute>} />
@@ -197,9 +192,6 @@ export default function App() {
             <Route path="/admin/lessons/:lessonId/reading"     element={<AdminRoute><AdminLessonReading /></AdminRoute>} />
             <Route path="/admin/lessons/:lessonId/kanji"       element={<AdminRoute><AdminLessonKanji /></AdminRoute>} />
             <Route path="/admin/lessons/:lessonId/video"       element={<AdminRoute><AdminLessonVideo /></AdminRoute>} />
-            <Route path="/admin/reading-sets"                element={<AdminRoute><AdminReadingSets /></AdminRoute>} />
-            <Route path="/admin/reading-sets/new"            element={<AdminRoute><ReadingSetEditor /></AdminRoute>} />
-            <Route path="/admin/reading-sets/:id/edit"       element={<AdminRoute><ReadingSetEditor /></AdminRoute>} />
 
             {/* Fallback */}
             <Route path="*" element={<NotFound />} />

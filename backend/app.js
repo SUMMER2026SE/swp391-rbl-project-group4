@@ -52,7 +52,6 @@ app.use('/api/study-lists',    require('./routes/api/studyLists'));
 app.use('/api/grammar-points', require('./routes/api/grammarPoints'));
 app.use('/api/subscription',   require('./routes/api/subscription'));
 app.use('/api/webhooks',       require('./routes/api/webhooks'));
-app.use('/api/reading-sets',   require('./routes/api/readingSets'));
 
 // ── Health check ──────────────────────────────────────────────────────────────
 app.get('/api/health', (_req, res) => res.json({ status: 'ok' }));

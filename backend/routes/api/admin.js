@@ -242,21 +242,4 @@ router.put('/placement/questions/:id',        pc.adminUpdateQuestion);
 router.patch('/placement/questions/:id/toggle', pc.adminToggleQuestion);
 router.delete('/placement/questions/:id',     pc.adminDeleteQuestion);
 
-// Reading Sets
-const rs = require('../../controllers/readingSetController');
-router.get('/reading-sets',                    rs.adminList);
-router.post('/reading-sets',                   rs.create);
-router.post('/reading-sets/ai-generate',       rs.aiGenerate);
-router.post('/reading-sets/import',            rs.importSet);
-router.post('/reading-sets/validate',          rs.validate);
-router.get('/reading-sets/:id',                rs.adminGetOne);
-router.put('/reading-sets/:id',                rs.update);
-router.delete('/reading-sets/:id',             rs.remove);
-router.post('/reading-sets/:id/publish',       rs.publish);
-router.post('/reading-sets/:id/unpublish',     rs.unpublish);
-router.post('/reading-sets/:id/duplicate',     rs.duplicate);
-router.get('/reading-sets/:id/export',         rs.exportSet);
-router.get('/reading-sets/:id/draft',          rs.getDraft);
-router.post('/reading-sets/:id/draft',         rs.saveDraft);
-
 module.exports = router;
