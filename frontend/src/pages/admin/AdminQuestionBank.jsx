@@ -79,9 +79,8 @@ function formFromRow(row) {
 function buildPayload(form) {
   const base = {
     question_type: form.question_type, question_text: form.question_text,
-    explanation: form.explanation, level: form.level, skill: form.skill,
-    topic: form.topic, difficulty: form.difficulty, status: form.status,
-    is_ai_generated: form.is_ai_generated, passage_id: form.passage_id || null, listening_passage_id: form.listening_passage_id || null,
+    explanation: form.explanation, status: 'approved',
+    passage_id: form.passage_id || null, listening_passage_id: form.listening_passage_id || null,
   };
   switch (form.question_type) {
     case 'single_choice':   return { ...base, options: form.options.filter(Boolean), correct_answer: form.correct_answer_single };
@@ -658,33 +657,6 @@ function QuestionForm({ form, setForm, passages, listeningPassages }) {
           rows={2} placeholder="Giải thích thêm về đáp án..."
           className="w-full px-4 py-3 bg-white border border-outline rounded-xl text-sm outline-none focus:border-tsubaki-red resize-none transition-colors" />
       </div>
-
-      {/* Metadata */}
-      <div className="grid grid-cols-2 gap-3">
-        {[
-          { label: 'Cấp độ JLPT', value: form.level, key: 'level', opts: [['', '-- Không có --'], ...LEVELS.map(l => [l, l])] },
-          { label: 'Kỹ năng',     value: form.skill, key: 'skill', opts: [['', '-- Không có --'], ...SKILLS.map(s => [s, s])] },
-          { label: 'Độ khó',      value: form.difficulty, key: 'difficulty', opts: DIFFICULTIES.map(d => [d.value, d.label]) },
-          { label: 'Trạng thái',  value: form.status, key: 'status', opts: STATUSES.map(s => [s.value, s.label]) },
-        ].map(({ label, value, key, opts }) => (
-          <div key={key}>
-            <label className="block text-sm font-medium text-on-muted mb-1">{label}</label>
-            <select value={value} onChange={e => setForm({ ...form, [key]: e.target.value })}
-              className="w-full px-3 py-2.5 bg-white border border-outline rounded-xl text-sm outline-none focus:border-tsubaki-red transition-colors">
-              {opts.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-            </select>
-          </div>
-        ))}
-      </div>
-
-      <Input label="Chủ đề" value={form.topic} onChange={e => setForm({ ...form, topic: e.target.value })} placeholder="Cuộc sống hàng ngày, Kinh doanh..." />
-
-      <label className="flex items-center gap-2 cursor-pointer">
-        <input type="checkbox" checked={form.is_ai_generated} onChange={e => setForm({ ...form, is_ai_generated: e.target.checked })} className="w-4 h-4 accent-sumire-purple rounded" />
-        <span className="text-sm font-medium text-on-muted flex items-center gap-1">
-          <span className="material-symbols-outlined text-[16px] text-sumire-purple">auto_awesome</span>Được tạo bởi AI
-        </span>
-      </label>
     </div>
   );
 }
