@@ -261,6 +261,13 @@ export default function FlashcardSetForm() {
         Thêm thẻ
       </button>
 
+      {/* Nút submit cuối form — khỏi phải cuộn lên đầu trang */}
+      <div className="mt-6 flex justify-end">
+        <Button variant="primary" loading={saving} onClick={handleSubmit}>
+          {isEdit ? 'Lưu thay đổi' : 'Tạo học phần'}
+        </Button>
+      </div>
+
       {/* ── Modal nhập nhanh ────────────────────────────────────── */}
       <Modal
         open={bulkOpen}

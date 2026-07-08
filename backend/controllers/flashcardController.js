@@ -18,6 +18,9 @@ const ownFolder = async (id, userId) => {
   return data || null;
 };
 
+// ── Chế độ của tiến độ: 'cards' (Thẻ ghi nhớ) | 'learn' (Học) — mặc định 'learn' ──
+const modeOf = (v) => (v === 'cards' ? 'cards' : 'learn');
+
 // ── Lấy danh sách id thẻ thuộc 1 set ──────────────────────────────────────────
 const cardIdsOfSet = async (setId) => {
   const { data, error } = await fcDb.from('flashcards').select('id').eq('set_id', setId);
@@ -54,6 +57,7 @@ exports.listSets = async (req, res) => {
         .select('card_id')
         .eq('student_id', userId)
         .eq('status', 'mastered')
+        .eq('mode', 'learn') // thanh % hub/thư mục = tiến độ chế độ Học
         .in('card_id', cards.map(c => c.id));
       if (pErr) throw pErr;
       prog.forEach(p => {
@@ -170,7 +174,7 @@ exports.deleteSet = async (req, res) => {
 
 // ─── PROGRESS ─────────────────────────────────────────────────────────────────
 
-// GET /api/flashcards/sets/:id/progress  → map { card_id: 'learning' | 'mastered' }
+// GET /api/flashcards/sets/:id/progress?mode=cards|learn  → map { card_id: 'learning' | 'mastered' }
 exports.getProgress = async (req, res) => {
   const userId = req.user.id;
   try {
@@ -183,6 +187,7 @@ exports.getProgress = async (req, res) => {
     const { data, error } = await fcDb.from('flashcard_progress')
       .select('card_id,status')
       .eq('student_id', userId)
+      .eq('mode', modeOf(req.query.mode))
       .in('card_id', cardIds);
     if (error) throw error;
 
@@ -195,17 +200,17 @@ exports.getProgress = async (req, res) => {
   }
 };
 
-// PUT /api/flashcards/sets/:id/progress   Body: { card_id, status }
+// PUT /api/flashcards/sets/:id/progress   Body: { card_id, status, mode }
 exports.upsertProgress = async (req, res) => {
   const userId = req.user.id;
-  const { card_id, status } = req.body;
+  const { card_id, status, mode } = req.body;
   if (!card_id) return res.status(400).json({ error: 'Thiếu card_id.' });
   if (!['learning', 'mastered'].includes(status)) return res.status(400).json({ error: 'Trạng thái không hợp lệ.' });
   try {
     const { error } = await fcDb.from('flashcard_progress')
       .upsert(
-        { student_id: userId, card_id, status, last_reviewed_at: new Date().toISOString() },
-        { onConflict: 'student_id,card_id' }
+        { student_id: userId, card_id, status, mode: modeOf(mode), last_reviewed_at: new Date().toISOString() },
+        { onConflict: 'student_id,card_id,mode' }
       );
     if (error) throw error;
     res.json({ data: { ok: true } });
@@ -215,7 +220,7 @@ exports.upsertProgress = async (req, res) => {
   }
 };
 
-// DELETE /api/flashcards/sets/:id/progress/:cardId  → xóa tiến độ 1 thẻ (dùng cho Hoàn tác)
+// DELETE /api/flashcards/sets/:id/progress/:cardId?mode=  → xóa tiến độ 1 thẻ (dùng cho Hoàn tác)
 exports.deleteCardProgress = async (req, res) => {
   const userId = req.user.id;
   try {
@@ -223,7 +228,8 @@ exports.deleteCardProgress = async (req, res) => {
     if (!set) return res.status(404).json({ error: 'Không tìm thấy học phần.' });
 
     const { error } = await fcDb.from('flashcard_progress')
-      .delete().eq('student_id', userId).eq('card_id', req.params.cardId);
+      .delete().eq('student_id', userId).eq('card_id', req.params.cardId)
+      .eq('mode', modeOf(req.query.mode));
     if (error) throw error;
     res.json({ data: { ok: true } });
   } catch (err) {
@@ -232,7 +238,7 @@ exports.deleteCardProgress = async (req, res) => {
   }
 };
 
-// DELETE /api/flashcards/sets/:id/progress  → khởi động lại (xóa tiến độ của user cho set)
+// DELETE /api/flashcards/sets/:id/progress?mode=  → khởi động lại (xóa tiến độ của user cho set, theo chế độ)
 exports.resetProgress = async (req, res) => {
   const userId = req.user.id;
   try {
@@ -242,7 +248,8 @@ exports.resetProgress = async (req, res) => {
     const cardIds = await cardIdsOfSet(set.id);
     if (cardIds.length) {
       const { error } = await fcDb.from('flashcard_progress')
-        .delete().eq('student_id', userId).in('card_id', cardIds);
+        .delete().eq('student_id', userId).in('card_id', cardIds)
+        .eq('mode', modeOf(req.query.mode));
       if (error) throw error;
     }
     res.json({ data: { ok: true } });
@@ -313,6 +320,7 @@ exports.getFolder = async (req, res) => {
         .select('card_id')
         .eq('student_id', userId)
         .eq('status', 'mastered')
+        .eq('mode', 'learn') // thanh % hub/thư mục = tiến độ chế độ Học
         .in('card_id', cards.map(c => c.id));
       if (pErr) throw pErr;
       prog.forEach(p => {

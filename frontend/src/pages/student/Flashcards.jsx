@@ -26,6 +26,9 @@ function KebabMenu({ onEdit, onDelete, onAddToFolder }) {
     <div className="relative" onClick={e => e.stopPropagation()}>
       <button
         onClick={() => setOpen(o => !o)}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-label="Tùy chọn"
         className="text-on-muted hover:text-charcoal w-8 h-8 flex items-center justify-center rounded-lg hover:bg-surface-low transition-colors"
       >
         <span className="material-symbols-outlined text-xl">more_vert</span>
@@ -33,7 +36,7 @@ function KebabMenu({ onEdit, onDelete, onAddToFolder }) {
       {open && (
         <>
           <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 mt-1 w-44 bg-white rounded-xl shadow-xl border border-outline/30 z-20 overflow-hidden">
+          <div role="menu" className="absolute right-0 mt-1 w-44 bg-white rounded-xl shadow-xl border border-outline/30 z-20 overflow-hidden">
             {onAddToFolder && (
               <button
                 onClick={() => { setOpen(false); onAddToFolder(); }}
@@ -78,6 +81,7 @@ export default function Flashcards() {
   const [addToFolderSet, setAddToFolderSet] = useState(null); // null | set
   const [selectedFolders, setSelectedFolders] = useState({}); // { folderId: bool }
   const [addingToFolder, setAddingToFolder] = useState(false);
+  const [folderSearch, setFolderSearch] = useState(''); // lọc thư mục theo tên trong modal
 
   // Popup xác nhận xóa dùng chung
   const [confirm, setConfirm] = useState(null); // null | { title, message, confirmLabel?, onConfirm }
@@ -171,6 +175,7 @@ export default function Flashcards() {
   const openAddToFolder = (set) => {
     setAddToFolderSet(set);
     setSelectedFolders({});
+    setFolderSearch('');
   };
 
   const confirmAddToFolder = async () => {
@@ -267,7 +272,7 @@ export default function Flashcards() {
                   </button>
                 </div>
                 <div className="flex items-center gap-2 mb-3">
-                  <span className="inline-flex items-center gap-1 text-xs font-bold text-amber-700 bg-amber-100 px-2.5 py-1 rounded-lg">
+                  <span className="inline-flex items-center gap-1 text-xs font-bold text-amber-700 bg-warning-bg px-2.5 py-1 rounded-lg">
                     <span className="material-symbols-outlined text-sm">edit_note</span>
                     Bản nháp
                   </span>
@@ -276,11 +281,13 @@ export default function Flashcards() {
                     {draftCardCount(d)} thẻ
                   </span>
                 </div>
-                {d.description?.trim() && (
-                  <p className="text-sm text-on-surface-variant leading-relaxed line-clamp-2 flex-grow">
-                    {d.description}
-                  </p>
-                )}
+                <div className="flex-grow min-h-[2.5rem]">
+                  {d.description?.trim() && (
+                    <p className="text-sm text-on-surface-variant leading-relaxed line-clamp-2">
+                      {d.description}
+                    </p>
+                  )}
+                </div>
               </div>
             ))}
             {sets.map(s => (
@@ -303,11 +310,13 @@ export default function Flashcards() {
                   <span className="material-symbols-outlined text-sm">layers</span>
                   {s.card_count || 0} thẻ
                 </span>
-                {s.description && (
-                  <p className="text-sm text-on-surface-variant leading-relaxed line-clamp-2 flex-grow">
-                    {s.description}
-                  </p>
-                )}
+                <div className="flex-grow min-h-[2.5rem]">
+                  {s.description && (
+                    <p className="text-sm text-on-surface-variant leading-relaxed line-clamp-2">
+                      {s.description}
+                    </p>
+                  )}
+                </div>
                 <div className="mt-4 pt-3 border-t border-outline/20">
                   <div className="flex items-center justify-between mb-1.5">
                     <span className="text-xs text-on-muted">Tiến độ</span>
@@ -403,9 +412,26 @@ export default function Flashcards() {
       >
         {folders.length === 0 ? (
           <p className="text-center text-sm text-on-muted py-8">Chưa có thư mục nào, hãy tạo thư mục trước.</p>
-        ) : (
+        ) : (() => {
+          const q = folderSearch.trim().toLowerCase();
+          const shown = q ? folders.filter(f => (f.name || '').toLowerCase().includes(q)) : folders;
+          return (
+          <>
+          <div className="mb-3 relative">
+            <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-muted text-lg">search</span>
+            <input
+              autoFocus
+              value={folderSearch}
+              onChange={e => setFolderSearch(e.target.value)}
+              placeholder="Tìm thư mục..."
+              className="w-full pl-10 pr-4 py-2.5 bg-surface-low border border-outline/40 rounded-xl text-sm outline-none focus:border-tsubaki-red transition-colors"
+            />
+          </div>
+          {shown.length === 0 ? (
+            <p className="text-center text-sm text-on-muted py-8">Không tìm thấy kết quả.</p>
+          ) : (
           <div className="space-y-1 max-h-80 overflow-y-auto">
-            {folders.map(f => (
+            {shown.map(f => (
               <label key={f.id} className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-surface-low cursor-pointer transition-colors">
                 <input
                   type="checkbox"
@@ -423,7 +449,10 @@ export default function Flashcards() {
               </label>
             ))}
           </div>
-        )}
+          )}
+          </>
+          );
+        })()}
       </Modal>
 
       {/* ── Popup xác nhận xóa ──────────────────────────────────── */}
