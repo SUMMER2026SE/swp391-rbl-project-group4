@@ -1897,8 +1897,6 @@ function ListeningPassageEditorSheet({ passageId, initialPassage, onClose, onSav
   const [currentId, setCurrentId]     = useState(passageId || null);
   const [uploading, setUploading]     = useState(false);
   const [imgUploading, setImgUploading] = useState(false);
-  const [transcribing, setTranscribing] = useState(false);
-  const transcribingRef = useRef(false);
   const audioFileRef = useRef(null);
   const imgFileRef   = useRef(null);
 
@@ -1968,19 +1966,6 @@ function ListeningPassageEditorSheet({ passageId, initialPassage, onClose, onSav
       onSaved();
     } catch (e) { setAlert({ type: 'error', msg: e.message }); }
     finally { setSaving(false); }
-  };
-
-  const handleTranscribe = async () => {
-    if (!currentId || transcribingRef.current) return;
-    transcribingRef.current = true;
-    setTranscribing(true);
-    try {
-      const r = await api.post(`${apiBase}/listening-passages/${currentId}/transcribe`);
-      setAlert({ type: 'success', msg: `Đã chép lời: ${r.data.count} đoạn.` });
-      setForm(prev => ({ ...prev, transcript: r.data.transcript || prev.transcript }));
-      onSaved();
-    } catch (e) { setAlert({ type: 'error', msg: e.message }); }
-    finally { transcribingRef.current = false; setTranscribing(false); }
   };
 
   const openAddQuestion = () => {
@@ -2187,28 +2172,6 @@ function ListeningPassageEditorSheet({ passageId, initialPassage, onClose, onSav
             <textarea value={form.description} onChange={e => setForm({ ...form, description: e.target.value })}
               rows={2} placeholder="Tóm tắt nội dung bài nghe..."
               className="w-full px-4 py-3 bg-white border border-outline rounded-xl text-sm outline-none focus:border-sky-400 resize-y transition-colors" />
-          </div>
-
-          {/* Transcript */}
-          <div>
-            <div className="flex items-center justify-between mb-1">
-              <label className="block text-sm font-medium text-on-muted flex items-center gap-1">
-                <span className="material-symbols-outlined text-[15px]">subject</span>
-                Transcript <span className="font-normal text-xs">(tùy chọn)</span>
-              </label>
-              {currentId && (
-                <button onClick={handleTranscribe} disabled={transcribing || !form.audio_url}
-                  title="Chép lời tự động bằng Whisper"
-                  className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-lg border border-sky-300 text-sky-700 hover:bg-sky-50 disabled:opacity-50 transition-colors">
-                  {transcribing
-                    ? <><span className="w-3 h-3 border-2 border-sky-500 border-t-transparent rounded-full animate-spin inline-block" />Đang chép...</>
-                    : <><span className="material-symbols-outlined text-[13px]">closed_caption</span>Chép lời tự động</>}
-                </button>
-              )}
-            </div>
-            <textarea value={form.transcript} onChange={e => setForm({ ...form, transcript: e.target.value })}
-              rows={6} placeholder="Nhập nội dung lời thoại/transcript tiếng Nhật..."
-              className="w-full px-4 py-3 bg-white border border-outline rounded-xl text-sm outline-none focus:border-sky-400 resize-y transition-colors leading-loose" />
           </div>
 
           <div className="grid grid-cols-2 gap-3">
