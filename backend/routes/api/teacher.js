@@ -48,19 +48,19 @@ router.post('/lessons/upload-video', videoUpload.single('video'), ac.uploadLesso
 // Trình soạn Từ vựng / Kanji của Mục — list/create/update dùng kho chung (admin handler),
 // attach/detach kiểm tra sở hữu khóa (teacher handler).
 router.get('/vocabulary',                              ac.listVocab);
-router.post('/vocabulary',                             ac.createVocab);
+router.post('/vocabulary',                             c.createVocabForLesson);
 router.put('/vocabulary/:id',                          ac.updateVocab);
 router.post('/lessons/:lessonId/vocabulary/attach',    c.attachVocab);
 router.delete('/lessons/:lessonId/vocabulary/:vocabId', c.detachVocab);
 
 router.get('/kanji',                                   ac.listKanji);
-router.post('/kanji',                                  ac.createKanji);
+router.post('/kanji',                                  c.createKanjiForLesson);
 router.put('/kanji/:id',                               ac.updateKanji);
 router.post('/lessons/:lessonId/kanji/attach',         c.attachKanji);
 router.delete('/lessons/:lessonId/kanji/:kanjiId',     c.detachKanji);
 
 router.get('/grammar-points',                                 ac.listGrammarPoints);
-router.post('/grammar-points',                                ac.createGrammarPoint);
+router.post('/grammar-points',                                c.createGrammarForLesson);
 router.put('/grammar-points/:id',                             ac.updateGrammarPoint);
 router.post('/lessons/:lessonId/grammar-points/attach',       c.attachGrammar);
 router.delete('/lessons/:lessonId/grammar-points/:grammarId', c.detachGrammar);
@@ -83,19 +83,21 @@ router.post('/vocabulary/import',     ac.importVocab);
 router.post('/kanji/import',          ac.importKanji);
 router.post('/grammar-points/import', ac.importGrammarPoints);
 
-// My vocabulary
-router.get('/my-vocab',                c.listMyVocab);
-router.post('/my-vocab',               c.createMyVocab);
-router.put('/my-vocab/:id',            c.updateMyVocab);
-router.delete('/my-vocab/:id',         c.deleteMyVocab);
-router.post('/my-vocab/:id/submit',    c.submitMyVocab);
+// My vocabulary (shared pool, filtered by created_by)
+router.get('/my-vocab',                    c.listMyVocab);
+router.post('/my-vocab/import-file',       importFileUpload.single('file'), fic.previewVocabFile);
+router.post('/my-vocab/import',            c.importMyVocab);
+router.post('/my-vocab',                   c.createMyVocab);
+router.put('/my-vocab/:id',                c.updateMyVocab);
+router.delete('/my-vocab/:id',             c.deleteMyVocab);
 
-// My kanji
-router.get('/my-kanji',                c.listMyKanji);
-router.post('/my-kanji',               c.createMyKanji);
-router.put('/my-kanji/:id',            c.updateMyKanji);
-router.delete('/my-kanji/:id',         c.deleteMyKanji);
-router.post('/my-kanji/:id/submit',    c.submitMyKanji);
+// My kanji (shared pool, filtered by created_by)
+router.get('/my-kanji',                    c.listMyKanji);
+router.post('/my-kanji/import-file',       importFileUpload.single('file'), fic.previewKanjiFile);
+router.post('/my-kanji/import',            c.importMyKanji);
+router.post('/my-kanji',                   c.createMyKanji);
+router.put('/my-kanji/:id',                c.updateMyKanji);
+router.delete('/my-kanji/:id',             c.deleteMyKanji);
 
 // ── Private question bank ─────────────────────────────────────────────────────
 router.get('/question-bank/stats',          qb.questionBankStats);

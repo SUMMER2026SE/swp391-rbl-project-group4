@@ -194,10 +194,15 @@ export default function AdminLessonVocabulary() {
   // Picker "Thêm từ thư viện"
   const [picker, setPicker]       = useState(false);
   const [pickerSearch, setSearch] = useState('');
+  const [pickerLevel, setPickerLevel] = useState('');
   const [pickerList, setList]     = useState([]);
   const [pickerLoad, setPLoad]    = useState(false);
   const [selected, setSelected]   = useState({});   // { [id]: true }
   const [attaching, setAttaching] = useState(false);
+
+  // Filter bar cho danh sách trong bài
+  const [filterSearch, setFilterSearch] = useState('');
+  const [filterLevel, setFilterLevel]   = useState('');
 
   // ── Load data ───────────────────────────────────────────────────────────────
 
@@ -280,11 +285,12 @@ export default function AdminLessonVocabulary() {
 
   // ── Picker: thêm từ thư viện ──────────────────────────────────────────────────
 
-  const fetchPicker = async (term) => {
+  const fetchPicker = async (term, level = '') => {
     setPLoad(true);
     try {
       const params = new URLSearchParams({ limit: 50 });
       if (term?.trim()) params.set('search', term.trim());
+      if (level) params.set('level', level);
       const r = await api.get(`${apiBase}/vocabulary?${params}`);
       setList(r.data.data || []);
     } catch (e) {
@@ -297,8 +303,9 @@ export default function AdminLessonVocabulary() {
   const openPicker = () => {
     setSelected({});
     setSearch('');
+    setPickerLevel('');
     setPicker(true);
-    fetchPicker('');
+    fetchPicker('', '');
   };
 
   const togglePick = (id) =>
@@ -321,6 +328,16 @@ export default function AdminLessonVocabulary() {
   };
 
   const inLesson = new Set(vocab.map(v => v.id));
+
+  const displayed = vocab.filter(item => {
+    const matchLevel = !filterLevel || item.level === filterLevel;
+    const q = filterSearch.toLowerCase();
+    const matchSearch = !q ||
+      (item.kanji || '').toLowerCase().includes(q) ||
+      (item.reading || '').toLowerCase().includes(q) ||
+      (item.meaning_vi || '').toLowerCase().includes(q);
+    return matchLevel && matchSearch;
+  });
 
   // ── Back navigation ─────────────────────────────────────────────────────────
 
@@ -402,6 +419,29 @@ export default function AdminLessonVocabulary() {
         </div>
       )}
 
+      {/* Filter bar */}
+      {vocab.length > 0 && (
+        <div className="mb-5 flex flex-col sm:flex-row gap-3">
+          <div className="relative flex-1">
+            <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-muted text-xl">search</span>
+            <input
+              value={filterSearch}
+              onChange={e => setFilterSearch(e.target.value)}
+              placeholder="Tìm theo kanji, cách đọc hoặc nghĩa..."
+              className="w-full pl-11 pr-4 py-2.5 border border-outline rounded-xl text-sm outline-none focus:border-tsubaki-red transition-colors"
+            />
+          </div>
+          <select
+            value={filterLevel}
+            onChange={e => setFilterLevel(e.target.value)}
+            className="px-4 py-2.5 border border-outline rounded-xl text-sm outline-none focus:border-tsubaki-red transition-colors"
+          >
+            <option value="">Tất cả cấp độ</option>
+            {LEVELS.map(l => <option key={l} value={l}>{l}</option>)}
+          </select>
+        </div>
+      )}
+
       {/* Vocab grid */}
       {loading ? (
         <div className="flex items-center justify-center py-24">
@@ -417,9 +457,14 @@ export default function AdminLessonVocabulary() {
             Thêm từ vựng
           </Button>
         </div>
+      ) : displayed.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-12 text-on-muted text-center">
+          <span className="material-symbols-outlined text-5xl mb-2 opacity-20">search_off</span>
+          <p className="text-base font-medium">Không có từ phù hợp với bộ lọc</p>
+        </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
-          {vocab.map(item => (
+          {displayed.map(item => (
             <VocabCard
               key={item.id}
               item={item}
@@ -484,15 +529,25 @@ export default function AdminLessonVocabulary() {
         }
       >
         <div className="space-y-4">
-          <div className="relative">
-            <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-muted text-xl">search</span>
-            <input
-              value={pickerSearch}
-              onChange={e => setSearch(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && fetchPicker(pickerSearch)}
-              placeholder="Tìm theo kanji, cách đọc hoặc nghĩa... (Enter để tìm)"
-              className="w-full pl-11 pr-4 py-3 border border-outline rounded-xl text-sm outline-none focus:border-tsubaki-red transition-colors"
-            />
+          <div className="flex gap-3">
+            <div className="relative flex-1">
+              <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-muted text-xl">search</span>
+              <input
+                value={pickerSearch}
+                onChange={e => setSearch(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && fetchPicker(pickerSearch, pickerLevel)}
+                placeholder="Tìm theo kanji, cách đọc hoặc nghĩa... (Enter để tìm)"
+                className="w-full pl-11 pr-4 py-3 border border-outline rounded-xl text-sm outline-none focus:border-tsubaki-red transition-colors"
+              />
+            </div>
+            <select
+              value={pickerLevel}
+              onChange={e => { setPickerLevel(e.target.value); fetchPicker(pickerSearch, e.target.value); }}
+              className="px-4 py-3 border border-outline rounded-xl text-sm outline-none focus:border-tsubaki-red transition-colors"
+            >
+              <option value="">Tất cả cấp độ</option>
+              {LEVELS.map(l => <option key={l} value={l}>{l}</option>)}
+            </select>
           </div>
 
           {pickerLoad ? (

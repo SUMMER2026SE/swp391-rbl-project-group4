@@ -2,10 +2,14 @@
 
 const { supabaseAdmin } = require('../config/supabase');
 
-// Bảng nguồn tương ứng mỗi list_type — không có FK cứng ở DB vì item_id có thể trỏ
-// tới 1 trong 3 bảng này, validate ở đây thay vì ở tầng DB.
 const TABLE_BY_TYPE = { vocabulary: 'vocabulary', kanji: 'kanji', grammar: 'grammar_points' };
 const LIST_TYPES = Object.keys(TABLE_BY_TYPE);
+
+const toArr = (v) => {
+  if (Array.isArray(v)) return v;
+  if (!v) return [];
+  return v.split(/[,、]\s*/).map(s => s.trim()).filter(Boolean);
+};
 
 // GET /api/study-lists?type=&sort=newest|popular&search=&page=&limit=
 exports.list = async (req, res) => {
@@ -183,6 +187,113 @@ exports.addItem = async (req, res) => {
   } catch (err) {
     console.error('studyList.addItem:', err);
     res.status(500).json({ error: 'Không thể thêm mục.' });
+  }
+};
+
+// POST /api/study-lists/:id/import  body = [{...item fields}]
+// Dedup → tạo mới vào bank nếu chưa có → link tất cả vào study_list_items.
+exports.importItems = async (req, res) => {
+  try {
+    const { post, allowed } = await loadOwnedPost(req.params.id, req.user);
+    if (!post) return res.status(404).json({ error: 'Không tìm thấy bài đăng.' });
+    if (!allowed) return res.status(403).json({ error: 'Bạn không có quyền sửa bài đăng này.' });
+
+    const rows = req.body;
+    if (!Array.isArray(rows) || rows.length === 0)
+      return res.status(400).json({ error: 'Dữ liệu phải là mảng không rỗng.' });
+
+    const table = TABLE_BY_TYPE[post.list_type];
+    const existingIds = [];
+    let toInsert = [];
+
+    if (post.list_type === 'vocabulary') {
+      const ALLOWED = ['kanji', 'reading', 'meaning_vi', 'meaning_ja', 'level', 'type', 'topic', 'example_sentence'];
+      const cleaned = rows
+        .filter(r => r.reading && r.meaning_vi)
+        .map(r => Object.fromEntries(ALLOWED.filter(k => r[k] != null).map(k => [k, r[k]])));
+
+      const readings = [...new Set(cleaned.map(r => r.reading).filter(Boolean))];
+      const { data: existing } = await supabaseAdmin.from('vocabulary')
+        .select('id, reading, kanji').in('reading', readings);
+      const bankMap = {};
+      (existing || []).forEach(v => {
+        const key = `${v.kanji || ''}|${v.reading}`;
+        if (!bankMap[key]) bankMap[key] = v.id;
+      });
+      cleaned.forEach(item => {
+        const key = `${item.kanji || ''}|${item.reading}`;
+        if (bankMap[key]) existingIds.push(bankMap[key]);
+        else toInsert.push({ ...item, created_by: req.user.id, is_public: true });
+      });
+
+    } else if (post.list_type === 'kanji') {
+      const ALLOWED = ['character', 'reading_on', 'reading_kun', 'meaning_vi', 'han_viet', 'stroke_count', 'level'];
+      const cleaned = rows
+        .filter(r => r.character && r.meaning_vi)
+        .map(r => {
+          const item = Object.fromEntries(ALLOWED.filter(k => r[k] != null).map(k => [k, r[k]]));
+          if (item.reading_on)  item.reading_on  = toArr(item.reading_on);
+          if (item.reading_kun) item.reading_kun = toArr(item.reading_kun);
+          if (item.stroke_count) item.stroke_count = Number(item.stroke_count) || null;
+          return item;
+        });
+
+      const chars = [...new Set(cleaned.map(r => r.character).filter(Boolean))];
+      const { data: existing } = await supabaseAdmin.from('kanji')
+        .select('id, character').in('character', chars);
+      const bankMap = Object.fromEntries((existing || []).map(k => [k.character, k.id]));
+      cleaned.forEach(item => {
+        if (bankMap[item.character]) existingIds.push(bankMap[item.character]);
+        else toInsert.push({ ...item, created_by: req.user.id, is_public: true });
+      });
+
+    } else if (post.list_type === 'grammar') {
+      const ALLOWED = ['title', 'title_ja', 'meaning_vi', 'explanation', 'example_sentence', 'level'];
+      const cleaned = rows
+        .filter(r => r.title && r.meaning_vi)
+        .map(r => Object.fromEntries(ALLOWED.filter(k => r[k] != null).map(k => [k, r[k]])));
+
+      const titles = [...new Set(cleaned.map(r => r.title).filter(Boolean))];
+      const { data: existing } = await supabaseAdmin.from('grammar_points')
+        .select('id, title').in('title', titles);
+      const bankMap = Object.fromEntries((existing || []).map(g => [g.title, g.id]));
+      cleaned.forEach(item => {
+        if (bankMap[item.title]) existingIds.push(bankMap[item.title]);
+        else toInsert.push(item);
+      });
+    }
+
+    // Thêm mục mới vào bank
+    let newIds = [];
+    if (toInsert.length > 0) {
+      const { data: inserted, error: insertErr } = await supabaseAdmin.from(table).insert(toInsert).select('id');
+      if (insertErr) throw insertErr;
+      newIds = (inserted || []).map(r => r.id);
+    }
+
+    // Lấy sort_order hiện tại
+    const { count: currentCount } = await supabaseAdmin
+      .from('study_list_items').select('id', { count: 'exact', head: true }).eq('post_id', post.id);
+
+    // Link tất cả vào study_list_items (upsert để bỏ qua trùng)
+    const allIds = [...existingIds, ...newIds];
+    if (allIds.length > 0) {
+      const linkRows = allIds.map((item_id, i) => ({
+        post_id: post.id, item_id, sort_order: (currentCount || 0) + i,
+      }));
+      const { error: linkErr } = await supabaseAdmin
+        .from('study_list_items').upsert(linkRows, { onConflict: 'post_id,item_id' });
+      if (linkErr) throw linkErr;
+    }
+
+    res.json({
+      message: `Đã thêm ${newIds.length} mục mới vào ngân hàng, liên kết ${existingIds.length} mục đã có sẵn.`,
+      added: newIds.length,
+      linked: existingIds.length,
+    });
+  } catch (err) {
+    console.error('studyList.importItems:', err);
+    res.status(500).json({ error: err.message || 'Không thể nhập dữ liệu.' });
   }
 };
 

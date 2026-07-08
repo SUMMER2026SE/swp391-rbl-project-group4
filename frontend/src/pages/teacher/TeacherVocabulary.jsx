@@ -4,19 +4,12 @@ import Modal from '../../components/ui/Modal';
 import Button from '../../components/ui/Button';
 import Input from '../../components/ui/Input';
 import Alert from '../../components/ui/Alert';
+import ImportFileModal from '../../components/admin/ImportFileModal';
 import api from '../../lib/api';
 
 const LEVELS = ['N5','N4','N3','N2','N1'];
 const TYPES  = ['DANH TỪ','ĐỘNG TỪ','TÍNH TỪ','PHÓ TỪ','LIÊN TỪ'];
 const EMPTY  = { kanji:'', reading:'', meaning_vi:'', meaning_ja:'', level:'', type:'', example_sentence:'' };
-
-const STATUS_STYLE = {
-  draft:    'bg-surface-low text-on-muted',
-  pending:  'bg-amber-100 text-amber-700',
-  approved: 'bg-emerald-100 text-emerald-700',
-  rejected: 'bg-red-100 text-red-700',
-};
-const STATUS_LABEL = { draft:'Nháp', pending:'Chờ duyệt', approved:'Đã duyệt', rejected:'Bị từ chối' };
 
 const TYPE_COLORS = {
   'DANH TỪ':'bg-blue-100 text-blue-700','ĐỘNG TỪ':'bg-green-100 text-green-700',
@@ -121,8 +114,8 @@ function MyTab() {
   const [modal, setModal]     = useState(false);
   const [form, setForm]       = useState(EMPTY);
   const [editId, setEditId]   = useState(null);
-  const [saving, setSaving]   = useState(false);
-  const [submitting, setSubmitting] = useState(null);
+  const [saving, setSaving]     = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -156,20 +149,15 @@ function MyTab() {
     catch(e) { setAlert({ type:'error', msg:e.message }); }
   };
 
-  const handleSubmit = async (id) => {
-    setSubmitting(id);
-    try {
-      await api.post(`/teacher/my-vocab/${id}/submit`);
-      setAlert({ type:'success', msg:'Đã gửi yêu cầu duyệt lên Admin.' }); load();
-    } catch(e) { setAlert({ type:'error', msg:e.message }); }
-    finally { setSubmitting(null); }
-  };
-
   return (
     <div>
       {alert.msg && <Alert type={alert.type} onClose={() => setAlert({type:'',msg:''})} className="mb-4">{alert.msg}</Alert>}
 
-      <div className="flex justify-end mb-4">
+      <div className="flex justify-end gap-2 mb-4">
+        <Button variant="secondary" onClick={() => setImportOpen(true)}>
+          <span className="material-symbols-outlined text-base">upload_file</span>
+          Nhập file
+        </Button>
         <Button onClick={openCreate}><span className="material-symbols-outlined text-lg">add</span> Thêm từ vựng</Button>
       </div>
 
@@ -186,7 +174,7 @@ function MyTab() {
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="bg-surface-low border-b border-outline/40">
-                <tr>{['Kanji','Reading','Nghĩa VI','Level','Loại','Trạng thái',''].map(h =>
+                <tr>{['Kanji','Reading','Nghĩa VI','Level','Loại',''].map(h =>
                   <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-on-muted uppercase tracking-wide">{h}</th>)}</tr>
               </thead>
               <tbody>
@@ -198,31 +186,15 @@ function MyTab() {
                     <td className="px-4 py-2.5">{v.level ? <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${LEVEL_COLORS[v.level]}`}>{v.level}</span> : '—'}</td>
                     <td className="px-4 py-2.5">{v.type ? <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${TYPE_COLORS[v.type]||'bg-surface-low text-on-muted'}`}>{v.type}</span> : '—'}</td>
                     <td className="px-4 py-2.5">
-                      <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${STATUS_STYLE[v.status]}`}>{STATUS_LABEL[v.status]}</span>
-                      {v.status === 'rejected' && v.admin_note && (
-                        <p className="text-xs text-red-500 mt-0.5 max-w-[160px]" title={v.admin_note}>💬 {v.admin_note}</p>
-                      )}
-                    </td>
-                    <td className="px-4 py-2.5">
                       <div className="flex gap-1.5 justify-end">
-                        {(v.status === 'draft' || v.status === 'rejected') && (
-                          <>
-                            <button onClick={() => openEdit(v)} title="Sửa"
-                              className="p-1.5 rounded-lg text-on-muted hover:text-tsubaki-red hover:bg-tsubaki-red/10 transition-colors">
-                              <span className="material-symbols-outlined text-lg">edit</span>
-                            </button>
-                            <button onClick={() => handleSubmit(v.id)} disabled={submitting===v.id} title="Gửi duyệt"
-                              className="p-1.5 rounded-lg text-on-muted hover:text-emerald-600 hover:bg-emerald-50 transition-colors disabled:opacity-40">
-                              <span className="material-symbols-outlined text-lg">send</span>
-                            </button>
-                          </>
-                        )}
-                        {v.status !== 'approved' && (
-                          <button onClick={() => handleDelete(v.id)} title="Xóa"
-                            className="p-1.5 rounded-lg text-on-muted hover:text-red-500 hover:bg-red-50 transition-colors">
-                            <span className="material-symbols-outlined text-lg">delete</span>
-                          </button>
-                        )}
+                        <button onClick={() => openEdit(v)} title="Sửa"
+                          className="p-1.5 rounded-lg text-on-muted hover:text-tsubaki-red hover:bg-tsubaki-red/10 transition-colors">
+                          <span className="material-symbols-outlined text-lg">edit</span>
+                        </button>
+                        <button onClick={() => handleDelete(v.id)} title="Xóa"
+                          className="p-1.5 rounded-lg text-on-muted hover:text-red-500 hover:bg-red-50 transition-colors">
+                          <span className="material-symbols-outlined text-lg">delete</span>
+                        </button>
                       </div>
                     </td>
                   </tr>
@@ -263,6 +235,14 @@ function MyTab() {
           <Input label="Ví dụ" value={form.example_sentence} onChange={e => setForm({...form,example_sentence:e.target.value})} placeholder="Câu ví dụ..."/>
         </div>
       </Modal>
+
+      <ImportFileModal
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        type="vocab"
+        apiBase="/teacher"
+        onImported={async (msg) => { await load(); setAlert({ type:'success', msg }); }}
+      />
     </div>
   );
 }

@@ -4,18 +4,11 @@ import Modal from '../../components/ui/Modal';
 import Button from '../../components/ui/Button';
 import Input from '../../components/ui/Input';
 import Alert from '../../components/ui/Alert';
+import ImportFileModal from '../../components/admin/ImportFileModal';
 import api from '../../lib/api';
 
 const LEVELS = ['N5','N4','N3','N2','N1'];
 const EMPTY  = { character:'', reading_on:'', reading_kun:'', meaning_vi:'', stroke_count:'', level:'' };
-
-const STATUS_STYLE = {
-  draft:    'bg-surface-low text-on-muted',
-  pending:  'bg-amber-100 text-amber-700',
-  approved: 'bg-emerald-100 text-emerald-700',
-  rejected: 'bg-red-100 text-red-700',
-};
-const STATUS_LABEL = { draft:'Nháp', pending:'Chờ duyệt', approved:'Đã duyệt', rejected:'Bị từ chối' };
 
 const LEVEL_COLORS = {
   N5:'bg-emerald-100 text-emerald-700', N4:'bg-sky-100 text-sky-700',
@@ -115,8 +108,8 @@ function MyTab() {
   const [modal, setModal]     = useState(false);
   const [form, setForm]       = useState(EMPTY);
   const [editId, setEditId]   = useState(null);
-  const [saving, setSaving]   = useState(false);
-  const [submitting, setSubmitting] = useState(null);
+  const [saving, setSaving]         = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -154,20 +147,15 @@ function MyTab() {
     catch(e) { setAlert({ type:'error', msg:e.message }); }
   };
 
-  const handleSubmit = async (id) => {
-    setSubmitting(id);
-    try {
-      await api.post(`/teacher/my-kanji/${id}/submit`);
-      setAlert({ type:'success', msg:'Đã gửi yêu cầu duyệt lên Admin.' }); load();
-    } catch(e) { setAlert({ type:'error', msg:e.message }); }
-    finally { setSubmitting(null); }
-  };
-
   return (
     <div>
       {alert.msg && <Alert type={alert.type} onClose={() => setAlert({type:'',msg:''})} className="mb-4">{alert.msg}</Alert>}
 
-      <div className="flex justify-end mb-4">
+      <div className="flex justify-end gap-2 mb-4">
+        <Button variant="secondary" onClick={() => setImportOpen(true)}>
+          <span className="material-symbols-outlined text-base">upload_file</span>
+          Nhập file
+        </Button>
         <Button onClick={openCreate}><span className="material-symbols-outlined text-lg">add</span> Thêm kanji</Button>
       </div>
 
@@ -184,7 +172,7 @@ function MyTab() {
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="bg-surface-low border-b border-outline/40">
-                <tr>{['Chữ','Nghĩa VI','On-yomi','Kun-yomi','Level','Trạng thái',''].map(h =>
+                <tr>{['Chữ','Nghĩa VI','On-yomi','Kun-yomi','Level',''].map(h =>
                   <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-on-muted uppercase tracking-wide">{h}</th>)}</tr>
               </thead>
               <tbody>
@@ -196,31 +184,15 @@ function MyTab() {
                     <td className="px-4 py-2.5 text-xs text-on-muted">{joinArr(k.reading_kun)}</td>
                     <td className="px-4 py-2.5">{k.level ? <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${LEVEL_COLORS[k.level]}`}>{k.level}</span> : '—'}</td>
                     <td className="px-4 py-2.5">
-                      <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${STATUS_STYLE[k.status]}`}>{STATUS_LABEL[k.status]}</span>
-                      {k.status === 'rejected' && k.admin_note && (
-                        <p className="text-xs text-red-500 mt-0.5 max-w-[160px]" title={k.admin_note}>💬 {k.admin_note}</p>
-                      )}
-                    </td>
-                    <td className="px-4 py-2.5">
                       <div className="flex gap-1.5 justify-end">
-                        {(k.status === 'draft' || k.status === 'rejected') && (
-                          <>
-                            <button onClick={() => openEdit(k)} title="Sửa"
-                              className="p-1.5 rounded-lg text-on-muted hover:text-tsubaki-red hover:bg-tsubaki-red/10 transition-colors">
-                              <span className="material-symbols-outlined text-lg">edit</span>
-                            </button>
-                            <button onClick={() => handleSubmit(k.id)} disabled={submitting===k.id} title="Gửi duyệt"
-                              className="p-1.5 rounded-lg text-on-muted hover:text-emerald-600 hover:bg-emerald-50 transition-colors disabled:opacity-40">
-                              <span className="material-symbols-outlined text-lg">send</span>
-                            </button>
-                          </>
-                        )}
-                        {k.status !== 'approved' && (
-                          <button onClick={() => handleDelete(k.id)} title="Xóa"
-                            className="p-1.5 rounded-lg text-on-muted hover:text-red-500 hover:bg-red-50 transition-colors">
-                            <span className="material-symbols-outlined text-lg">delete</span>
-                          </button>
-                        )}
+                        <button onClick={() => openEdit(k)} title="Sửa"
+                          className="p-1.5 rounded-lg text-on-muted hover:text-tsubaki-red hover:bg-tsubaki-red/10 transition-colors">
+                          <span className="material-symbols-outlined text-lg">edit</span>
+                        </button>
+                        <button onClick={() => handleDelete(k.id)} title="Xóa"
+                          className="p-1.5 rounded-lg text-on-muted hover:text-red-500 hover:bg-red-50 transition-colors">
+                          <span className="material-symbols-outlined text-lg">delete</span>
+                        </button>
                       </div>
                     </td>
                   </tr>
@@ -254,6 +226,14 @@ function MyTab() {
           </div>
         </div>
       </Modal>
+
+      <ImportFileModal
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        type="kanji"
+        apiBase="/teacher"
+        onImported={async (msg) => { await load(); setAlert({ type:'success', msg }); }}
+      />
     </div>
   );
 }
