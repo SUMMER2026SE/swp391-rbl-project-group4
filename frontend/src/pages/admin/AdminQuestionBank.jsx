@@ -760,6 +760,7 @@ function PassageEditorSheet({ passageId, initialPassage, onClose, onSaved, setAl
     : [];
 
   return (
+    <>
     <div className="fixed inset-0 z-50 bg-white flex flex-col overflow-hidden">
       {/* Top bar */}
       <div className="h-14 flex items-center px-4 border-b border-outline/30 gap-3 bg-white shrink-0">
@@ -923,30 +924,32 @@ function PassageEditorSheet({ passageId, initialPassage, onClose, onSaved, setAl
         </div>
       </div>
 
-      {/* Question modal (z-[60] — on top of the sheet) */}
-      {qModal && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4" onClick={() => setQModal(false)}>
-          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
-          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden max-h-[90vh] flex flex-col"
-            onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between px-6 py-4 border-b border-outline/20">
-              <h3 className="font-bold">{qEditId ? 'Sửa câu hỏi' : 'Thêm câu hỏi'}</h3>
-              <button onClick={() => setQModal(false)}
-                className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-surface-low text-on-muted">
-                <span className="material-symbols-outlined text-lg">close</span>
-              </button>
-            </div>
-            <div className="overflow-y-auto p-6">
-              <QuestionForm form={qForm} setForm={setQForm} passages={passageForForm} listeningPassages={[]} />
-            </div>
-            <div className="flex justify-end gap-3 px-6 py-4 border-t border-outline/20">
-              <Button variant="secondary" onClick={() => setQModal(false)}>Hủy</Button>
-              <Button loading={qSaving} onClick={handleSaveQuestion}>{qEditId ? 'Cập nhật' : 'Thêm câu hỏi'}</Button>
-            </div>
+    </div>
+
+    {/* Question modal — sibling of sheet div so z-index works cleanly */}
+    {qModal && (
+      <div className="fixed inset-0 z-[60] flex items-center justify-center p-4" onClick={() => setQModal(false)}>
+        <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
+        <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden max-h-[90vh] flex flex-col"
+          onClick={e => e.stopPropagation()}>
+          <div className="flex items-center justify-between px-6 py-4 border-b border-outline/20">
+            <h3 className="font-bold">{qEditId ? 'Sửa câu hỏi' : 'Thêm câu hỏi'}</h3>
+            <button onClick={() => setQModal(false)}
+              className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-surface-low text-on-muted">
+              <span className="material-symbols-outlined text-lg">close</span>
+            </button>
+          </div>
+          <div className="overflow-y-auto p-6">
+            <QuestionForm form={qForm} setForm={setQForm} passages={passageForForm} listeningPassages={[]} />
+          </div>
+          <div className="flex justify-end gap-3 px-6 py-4 border-t border-outline/20">
+            <Button variant="secondary" onClick={() => setQModal(false)}>Hủy</Button>
+            <Button loading={qSaving} onClick={handleSaveQuestion}>{qEditId ? 'Cập nhật' : 'Thêm câu hỏi'}</Button>
           </div>
         </div>
-      )}
-    </div>
+      </div>
+    )}
+    </>
   );
 }
 
