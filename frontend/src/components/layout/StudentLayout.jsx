@@ -16,6 +16,7 @@ const STUDENT_LINKS = (t) => [
   { to: '/writing',        icon: 'edit_note',        label: 'Luyện viết' },
   { to: '/dictionary',     icon: 'auto_stories',     label: t('dictionary.title') },
   { to: '/flashcards',     icon: 'style',            label: 'Thẻ ghi nhớ' },
+  { to: '/reading',        icon: 'article',          label: 'Đọc hiểu JLPT' },
   { to: '/news',           icon: 'newspaper',        label: 'Đọc báo' },
   { to: '/classes',        icon: 'groups',           label: 'Lớp học' },
   { to: '/exams',          icon: 'quiz',             label: 'Đề thi' },
