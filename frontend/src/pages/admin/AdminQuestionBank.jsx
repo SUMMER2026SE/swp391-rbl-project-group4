@@ -689,21 +689,36 @@ function QuestionForm({ form, setForm, passages, listeningPassages }) {
   );
 }
 
-// ── Passage Tab ───────────────────────────────────────────────────────────────
-function PassagesTab({ passages, onRefresh, setAlert, apiBase = '/admin' }) {
-  const [passageModal, setPassageModal]   = useState(false);
-  const [editId, setEditId]               = useState(null);
-  const [form, setForm]                   = useState(EMPTY_PASSAGE);
-  const [saving, setSaving]               = useState(false);
-  const [uploading, setUploading]         = useState(false);
-  const [viewPassage, setViewPassage]     = useState(null);
-  const fileRef                           = useRef(null);
+// ── Passage Editor Sheet ─────────────────────────────────────────────────────
+function PassageEditorSheet({ passageId, initialPassage, onClose, onSaved, setAlert, apiBase = '/admin' }) {
+  const [form, setForm] = useState(
+    initialPassage
+      ? { title: initialPassage.title || '', content: initialPassage.content || '', image_url: initialPassage.image_url || '', level: initialPassage.level || '', topic: initialPassage.topic || '', source: initialPassage.source || '' }
+      : { ...EMPTY_PASSAGE }
+  );
+  const [saving, setSaving]       = useState(false);
+  const [currentId, setCurrentId] = useState(passageId || null);
+  const [uploading, setUploading] = useState(false);
+  const fileRef = useRef(null);
 
-  const openCreate = () => { setForm(EMPTY_PASSAGE); setEditId(null); setPassageModal(true); };
-  const openEdit   = (p) => {
-    setForm({ title: p.title || '', content: p.content || '', image_url: p.image_url || '', level: p.level || '', topic: p.topic || '', source: p.source || '' });
-    setEditId(p.id); setPassageModal(true);
-  };
+  const [questions, setQuestions] = useState([]);
+  const [qLoading, setQLoading]   = useState(false);
+  const [qModal, setQModal]       = useState(false);
+  const [qForm, setQForm]         = useState({ ...EMPTY_FORM });
+  const [qEditId, setQEditId]     = useState(null);
+  const [qSaving, setQSaving]     = useState(false);
+
+  const loadQuestions = useCallback(async (pid) => {
+    if (!pid) return;
+    setQLoading(true);
+    try {
+      const r = await api.get(`${apiBase}/question-bank?passage_id=${pid}&limit=100`);
+      setQuestions(r.data.questions || []);
+    } catch { setAlert({ type: 'error', msg: 'Không thể tải câu hỏi.' }); }
+    finally { setQLoading(false); }
+  }, [apiBase, setAlert]);
+
+  useEffect(() => { if (currentId) loadQuestions(currentId); }, [currentId, loadQuestions]);
 
   const handleImageSelect = async (file) => {
     if (!file) return;
@@ -714,28 +729,259 @@ function PassagesTab({ passages, onRefresh, setAlert, apiBase = '/admin' }) {
       const fd = new FormData(); fd.append('image', file);
       const r = await api.post(`${apiBase}/reading-passages/upload`, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
       setForm(prev => ({ ...prev, image_url: r.data.url }));
-    } catch (e) { setAlert({ type: 'error', msg: 'Không thể tải ảnh lên. Thử lại.' }); }
+    } catch { setAlert({ type: 'error', msg: 'Không thể tải ảnh lên.' }); }
     finally { setUploading(false); if (fileRef.current) fileRef.current.value = ''; }
   };
 
-  const handleDrop = (e) => {
-    e.preventDefault();
-    const file = e.dataTransfer.files[0];
-    if (file) handleImageSelect(file);
-  };
-
-  const handleSave = async () => {
+  const handleSavePassage = async () => {
     if (!form.content.trim() && !form.image_url) return setAlert({ type: 'error', msg: 'Bài đọc cần có nội dung text hoặc hình ảnh.' });
     setSaving(true);
     try {
       const payload = { title: form.title, content: form.content || null, image_url: form.image_url || null, level: form.level, topic: form.topic, source: form.source };
-      if (editId) await api.put(`${apiBase}/reading-passages/${editId}`, payload);
-      else        await api.post(`${apiBase}/reading-passages`, payload);
-      setAlert({ type: 'success', msg: editId ? 'Đã cập nhật bài đọc.' : 'Đã thêm bài đọc mới.' });
-      setPassageModal(false); onRefresh();
+      if (currentId) {
+        await api.put(`${apiBase}/reading-passages/${currentId}`, payload);
+      } else {
+        const r = await api.post(`${apiBase}/reading-passages`, payload);
+        setCurrentId(r.data.id);
+      }
+      setAlert({ type: 'success', msg: currentId ? 'Đã cập nhật bài đọc.' : 'Đã thêm bài đọc mới.' });
+      onSaved();
     } catch (e) { setAlert({ type: 'error', msg: e.message }); }
     finally { setSaving(false); }
   };
+
+  const openAddQuestion = () => {
+    setQForm({ ...EMPTY_FORM, passage_id: currentId || '' });
+    setQEditId(null); setQModal(true);
+  };
+
+  const openEditQuestion = (q) => {
+    setQForm({ ...formFromRow(q), passage_id: currentId || '' });
+    setQEditId(q.id); setQModal(true);
+  };
+
+  const handleSaveQuestion = async () => {
+    if (!qForm.question_text.trim()) return setAlert({ type: 'error', msg: 'Chưa nhập nội dung câu hỏi.' });
+    setQSaving(true);
+    try {
+      const payload = { ...buildPayload(qForm), passage_id: currentId };
+      if (qEditId) await api.put(`${apiBase}/question-bank/${qEditId}`, payload);
+      else         await api.post(`${apiBase}/question-bank`, payload);
+      setAlert({ type: 'success', msg: qEditId ? 'Đã cập nhật câu hỏi.' : 'Đã thêm câu hỏi.' });
+      setQModal(false);
+      loadQuestions(currentId);
+    } catch (e) { setAlert({ type: 'error', msg: e.message }); }
+    finally { setQSaving(false); }
+  };
+
+  const handleDeleteQuestion = async (q) => {
+    if (!confirm(`Xóa câu hỏi "${q.question_text?.slice(0, 40) || 'này'}"?`)) return;
+    try {
+      await api.delete(`${apiBase}/question-bank/${q.id}`);
+      setAlert({ type: 'success', msg: 'Đã xóa câu hỏi.' });
+      loadQuestions(currentId);
+    } catch (e) { setAlert({ type: 'error', msg: e.message }); }
+  };
+
+  const passageForForm = currentId
+    ? [{ id: currentId, title: form.title || '(Bài đọc hiện tại)', content: form.content, level: form.level, question_count: questions.length }]
+    : [];
+
+  return (
+    <div className="fixed inset-0 z-50 bg-white flex flex-col overflow-hidden">
+      {/* Top bar */}
+      <div className="h-14 flex items-center px-4 border-b border-outline/30 gap-3 bg-white shrink-0">
+        <button onClick={onClose}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg hover:bg-surface-low text-on-muted text-sm font-medium transition-colors">
+          <span className="material-symbols-outlined text-[18px]">arrow_back</span>Quay lại
+        </button>
+        <div className="flex-1 min-w-0">
+          <h2 className="font-bold text-sm truncate">{form.title || (currentId ? 'Bài đọc' : 'Bài đọc mới')}</h2>
+          {currentId && <p className="text-xs text-on-muted">{questions.length} câu hỏi</p>}
+        </div>
+        <button onClick={handleSavePassage} disabled={saving}
+          className="flex items-center gap-1.5 px-4 py-2 bg-tsubaki-red text-white rounded-xl text-sm font-semibold hover:opacity-90 disabled:opacity-50 transition-opacity">
+          {saving
+            ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+            : <span className="material-symbols-outlined text-[18px]">save</span>}
+          Lưu đoạn văn
+        </button>
+      </div>
+
+      {/* Body */}
+      <div className="flex-1 flex overflow-hidden">
+        {/* Left: passage content editor */}
+        <div className="w-2/5 border-r border-outline/30 overflow-y-auto p-5 space-y-4 shrink-0">
+          <p className="text-xs font-bold text-on-muted uppercase tracking-wide">Nội dung bài đọc</p>
+
+          <Input label="Tiêu đề (tùy chọn)" value={form.title}
+            onChange={e => setForm({ ...form, title: e.target.value })}
+            placeholder="Bài đọc số 1 — Cuộc sống Nhật Bản" />
+
+          <div>
+            <label className="block text-sm font-medium text-on-muted mb-2 flex items-center gap-1">
+              <span className="material-symbols-outlined text-[15px]">image</span>
+              Hình ảnh <span className="font-normal">(tùy chọn)</span>
+            </label>
+            {form.image_url ? (
+              <div className="relative rounded-xl overflow-hidden border border-outline bg-surface-low">
+                <img src={form.image_url} alt="preview" className="w-full max-h-40 object-contain" />
+                <div className="absolute top-2 right-2 flex gap-1">
+                  <button type="button" onClick={() => fileRef.current?.click()}
+                    className="px-2.5 py-1 bg-white/90 backdrop-blur-sm rounded-lg text-xs font-semibold border border-outline/40 shadow-sm">Đổi ảnh</button>
+                  <button type="button" onClick={() => setForm({ ...form, image_url: '' })}
+                    className="p-1.5 bg-white/90 backdrop-blur-sm rounded-lg text-tsubaki-red border border-outline/40 shadow-sm">
+                    <span className="material-symbols-outlined text-[16px]">close</span>
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div
+                onDrop={e => { e.preventDefault(); handleImageSelect(e.dataTransfer.files[0]); }}
+                onDragOver={e => e.preventDefault()}
+                onClick={() => !uploading && fileRef.current?.click()}
+                className={`border-2 border-dashed rounded-xl p-5 text-center cursor-pointer transition-colors
+                  ${uploading ? 'border-tsubaki-red/50 bg-tsubaki-red/5' : 'border-outline hover:border-tsubaki-red hover:bg-surface-low'}`}>
+                {uploading
+                  ? <div className="flex flex-col items-center gap-1.5"><div className="w-6 h-6 border-2 border-tsubaki-red border-t-transparent rounded-full animate-spin" /><p className="text-xs text-tsubaki-red font-semibold">Đang tải...</p></div>
+                  : <><span className="material-symbols-outlined text-3xl text-on-muted/40 block mb-1">add_photo_alternate</span><p className="text-xs font-semibold text-charcoal">Nhấn hoặc kéo thả ảnh</p><p className="text-xs text-on-muted">JPG, PNG — tối đa 5MB</p></>}
+              </div>
+            )}
+            <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={e => handleImageSelect(e.target.files[0])} />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-on-muted mb-1 flex items-center gap-1">
+              <span className="material-symbols-outlined text-[15px]">subject</span>
+              Nội dung text <span className="font-normal">(tùy chọn nếu đã có hình)</span>
+            </label>
+            <textarea value={form.content} onChange={e => setForm({ ...form, content: e.target.value })}
+              rows={10} placeholder="Nhập nội dung bài đọc tiếng Nhật..."
+              className="w-full px-4 py-3 bg-white border border-outline rounded-xl text-sm outline-none focus:border-tsubaki-red resize-y transition-colors leading-loose" />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-sm font-medium text-on-muted mb-1">Cấp độ JLPT</label>
+              <select value={form.level} onChange={e => setForm({ ...form, level: e.target.value })}
+                className="w-full px-3 py-2.5 bg-white border border-outline rounded-xl text-sm outline-none focus:border-tsubaki-red">
+                <option value="">-- Không có --</option>
+                {LEVELS.map(l => <option key={l} value={l}>{l}</option>)}
+              </select>
+            </div>
+            <Input label="Chủ đề" value={form.topic}
+              onChange={e => setForm({ ...form, topic: e.target.value })} placeholder="Ẩm thực, Du lịch..." />
+          </div>
+          <Input label="Nguồn (tùy chọn)" value={form.source}
+            onChange={e => setForm({ ...form, source: e.target.value })} placeholder="JLPT N3 2023, Minna no Nihongo..." />
+        </div>
+
+        {/* Right: questions panel */}
+        <div className="flex-1 overflow-y-auto p-5">
+          <div className="flex items-center justify-between mb-4">
+            <p className="font-bold text-sm">Câu hỏi ({questions.length})</p>
+            <button onClick={openAddQuestion} disabled={!currentId}
+              title={!currentId ? 'Lưu bài đọc trước để thêm câu hỏi' : ''}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-tsubaki-red text-white rounded-xl text-xs font-semibold hover:opacity-90 disabled:opacity-40 transition-opacity">
+              <span className="material-symbols-outlined text-[16px]">add</span>Thêm câu hỏi
+            </button>
+          </div>
+
+          {!currentId && (
+            <div className="rounded-xl bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800 mb-4">
+              Lưu bài đọc trước, sau đó bạn có thể thêm câu hỏi tại đây.
+            </div>
+          )}
+
+          {qLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <div className="w-8 h-8 border-2 border-tsubaki-red border-t-transparent rounded-full animate-spin" />
+            </div>
+          ) : questions.length === 0 ? (
+            <div className="text-center py-16">
+              <span className="material-symbols-outlined text-4xl text-on-muted/20 block mb-2">help</span>
+              <p className="text-sm text-on-muted">Chưa có câu hỏi nào.</p>
+              {currentId && (
+                <button onClick={openAddQuestion} className="mt-2 text-sm font-semibold text-tsubaki-red hover:underline">
+                  + Thêm câu hỏi đầu tiên
+                </button>
+              )}
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {questions.map((q, qi) => {
+                const qt = TYPE_MAP[q.question_type];
+                return (
+                  <div key={q.id} className="glass-card rounded-xl p-4 group hover:shadow-sm transition-shadow">
+                    <div className="flex items-start gap-3">
+                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold shrink-0 mt-0.5 ${qt?.color || 'bg-surface text-on-muted'}`}>
+                        <span className="material-symbols-outlined text-[13px]">{qt?.icon}</span>{qt?.label || q.question_type}
+                      </span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-charcoal line-clamp-2">
+                          <span className="text-tsubaki-red font-bold mr-1">{qi + 1}.</span>{q.question_text}
+                        </p>
+                        {Array.isArray(q.options) && q.options.length > 0 && (
+                          <div className="mt-1.5 space-y-0.5">
+                            {q.options.slice(0, 3).map((o, oi) => (
+                              <p key={oi} className="text-xs text-on-muted truncate">
+                                {String.fromCharCode(65 + oi)}. {typeof o === 'string' ? o : o.option_text || o.left || ''}
+                              </p>
+                            ))}
+                            {q.options.length > 3 && <p className="text-xs text-on-muted/60">+{q.options.length - 3} đáp án khác</p>}
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                        <button onClick={() => openEditQuestion(q)}
+                          className="p-1.5 rounded-lg text-on-muted hover:bg-surface-low hover:text-charcoal">
+                          <span className="material-symbols-outlined text-[16px]">edit</span>
+                        </button>
+                        <button onClick={() => handleDeleteQuestion(q)}
+                          className="p-1.5 rounded-lg text-on-muted hover:bg-red-50 hover:text-tsubaki-red">
+                          <span className="material-symbols-outlined text-[16px]">delete</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Question modal (z-[60] — on top of the sheet) */}
+      {qModal && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4" onClick={() => setQModal(false)}>
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
+          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden max-h-[90vh] flex flex-col"
+            onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-6 py-4 border-b border-outline/20">
+              <h3 className="font-bold">{qEditId ? 'Sửa câu hỏi' : 'Thêm câu hỏi'}</h3>
+              <button onClick={() => setQModal(false)}
+                className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-surface-low text-on-muted">
+                <span className="material-symbols-outlined text-lg">close</span>
+              </button>
+            </div>
+            <div className="overflow-y-auto p-6">
+              <QuestionForm form={qForm} setForm={setQForm} passages={passageForForm} listeningPassages={[]} />
+            </div>
+            <div className="flex justify-end gap-3 px-6 py-4 border-t border-outline/20">
+              <Button variant="secondary" onClick={() => setQModal(false)}>Hủy</Button>
+              <Button loading={qSaving} onClick={handleSaveQuestion}>{qEditId ? 'Cập nhật' : 'Thêm câu hỏi'}</Button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Passage Tab ───────────────────────────────────────────────────────────────
+function PassagesTab({ passages, onRefresh, setAlert, apiBase = '/admin' }) {
+  const [editorPassage, setEditorPassage] = useState(null); // null = list; { passage: obj|null } = editor
+  const [viewPassage, setViewPassage]     = useState(null);
 
   const handleDelete = async (p) => {
     if (!confirm(`Xóa bài đọc "${p.title || 'này'}"? Các câu hỏi liên kết sẽ bị hủy liên kết.`)) return;
@@ -743,11 +989,24 @@ function PassagesTab({ passages, onRefresh, setAlert, apiBase = '/admin' }) {
     catch (e) { setAlert({ type: 'error', msg: e.message }); }
   };
 
+  if (editorPassage !== null) {
+    return (
+      <PassageEditorSheet
+        passageId={editorPassage.passage?.id || null}
+        initialPassage={editorPassage.passage || null}
+        onClose={() => { setEditorPassage(null); onRefresh(); }}
+        onSaved={onRefresh}
+        setAlert={setAlert}
+        apiBase={apiBase}
+      />
+    );
+  }
+
   return (
     <>
       <div className="flex justify-between items-center mb-4">
         <p className="text-sm text-on-muted">{passages.length} bài đọc</p>
-        <Button onClick={openCreate}>
+        <Button onClick={() => setEditorPassage({ passage: null })}>
           <span className="material-symbols-outlined text-lg">add</span>Thêm bài đọc
         </Button>
       </div>
@@ -762,7 +1021,6 @@ function PassagesTab({ passages, onRefresh, setAlert, apiBase = '/admin' }) {
         <div className="grid gap-4">
           {passages.map(p => (
             <div key={p.id} className="glass-card rounded-2xl overflow-hidden group hover:shadow-md transition-shadow">
-              {/* Thumbnail strip if image exists */}
               {p.image_url && (
                 <div className="relative h-32 bg-surface-low overflow-hidden">
                   <img src={p.image_url} alt={p.title || 'bài đọc'} className="w-full h-full object-cover" />
@@ -796,13 +1054,16 @@ function PassagesTab({ passages, onRefresh, setAlert, apiBase = '/admin' }) {
                       : !p.image_url && <p className="text-sm text-on-muted italic">Không có nội dung</p>}
                   </div>
                   <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-                    <button onClick={() => setViewPassage(p)} title="Xem nội dung" className="p-2 rounded-lg text-on-muted hover:bg-surface-low hover:text-charcoal transition-colors">
+                    <button onClick={() => setViewPassage(p)} title="Xem nội dung"
+                      className="p-2 rounded-lg text-on-muted hover:bg-surface-low hover:text-charcoal transition-colors">
                       <span className="material-symbols-outlined text-[18px]">visibility</span>
                     </button>
-                    <button onClick={() => openEdit(p)} title="Sửa" className="p-2 rounded-lg text-on-muted hover:bg-surface-low hover:text-charcoal transition-colors">
+                    <button onClick={() => setEditorPassage({ passage: p })} title="Sửa"
+                      className="p-2 rounded-lg text-on-muted hover:bg-surface-low hover:text-charcoal transition-colors">
                       <span className="material-symbols-outlined text-[18px]">edit</span>
                     </button>
-                    <button onClick={() => handleDelete(p)} title="Xóa" className="p-2 rounded-lg text-on-muted hover:bg-red-50 hover:text-tsubaki-red transition-colors">
+                    <button onClick={() => handleDelete(p)} title="Xóa"
+                      className="p-2 rounded-lg text-on-muted hover:bg-red-50 hover:text-tsubaki-red transition-colors">
                       <span className="material-symbols-outlined text-[18px]">delete</span>
                     </button>
                   </div>
@@ -817,7 +1078,8 @@ function PassagesTab({ passages, onRefresh, setAlert, apiBase = '/admin' }) {
       {viewPassage && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setViewPassage(null)}>
           <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
-          <div className="relative bg-white rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
+          <div className="relative bg-white rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden max-h-[90vh] flex flex-col"
+            onClick={e => e.stopPropagation()}>
             <div className="h-1.5 bg-gradient-to-r from-amber-400 to-orange-400" />
             <div className="flex items-center justify-between px-6 py-4 border-b border-outline/20">
               <div className="flex items-center gap-3">
@@ -831,7 +1093,8 @@ function PassagesTab({ passages, onRefresh, setAlert, apiBase = '/admin' }) {
                   </div>
                 </div>
               </div>
-              <button onClick={() => setViewPassage(null)} className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-surface-low text-on-muted">
+              <button onClick={() => setViewPassage(null)}
+                className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-surface-low text-on-muted">
                 <span className="material-symbols-outlined text-lg">close</span>
               </button>
             </div>
@@ -850,82 +1113,6 @@ function PassagesTab({ passages, onRefresh, setAlert, apiBase = '/admin' }) {
           </div>
         </div>
       )}
-
-      {/* Create / Edit modal */}
-      <Modal open={passageModal} onClose={() => setPassageModal(false)}
-        title={editId ? 'Sửa bài đọc' : 'Thêm bài đọc mới'}
-        footer={<><Button variant="secondary" onClick={() => setPassageModal(false)}>Hủy</Button><Button loading={saving} onClick={handleSave}>Lưu</Button></>}>
-        <div className="space-y-4">
-          <Input label="Tiêu đề (tùy chọn)" value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} placeholder="Bài đọc số 1 — Cuộc sống Nhật Bản" />
-
-          {/* Image upload */}
-          <div>
-            <label className="block text-sm font-medium text-on-muted mb-2 flex items-center gap-1">
-              <span className="material-symbols-outlined text-[15px]">image</span>
-              Hình ảnh <span className="font-normal">(tùy chọn)</span>
-            </label>
-            {form.image_url ? (
-              <div className="relative rounded-xl overflow-hidden border border-outline bg-surface-low">
-                <img src={form.image_url} alt="preview" className="w-full max-h-52 object-contain" />
-                <div className="absolute top-2 right-2 flex gap-1">
-                  <button type="button" onClick={() => fileRef.current?.click()}
-                    className="px-3 py-1.5 bg-white/90 backdrop-blur-sm rounded-lg text-xs font-semibold text-charcoal hover:bg-white border border-outline/40 shadow-sm transition-colors">
-                    <span className="material-symbols-outlined text-[14px] mr-1">swap_horiz</span>Đổi ảnh
-                  </button>
-                  <button type="button" onClick={() => setForm({ ...form, image_url: '' })}
-                    className="p-1.5 bg-white/90 backdrop-blur-sm rounded-lg text-tsubaki-red hover:bg-white border border-outline/40 shadow-sm transition-colors">
-                    <span className="material-symbols-outlined text-[16px]">close</span>
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <div
-                onDrop={handleDrop} onDragOver={e => e.preventDefault()}
-                onClick={() => !uploading && fileRef.current?.click()}
-                className={`border-2 border-dashed rounded-xl p-8 text-center transition-colors cursor-pointer
-                  ${uploading ? 'border-tsubaki-red/50 bg-tsubaki-red/5' : 'border-outline hover:border-tsubaki-red hover:bg-surface-low'}`}>
-                {uploading ? (
-                  <div className="flex flex-col items-center gap-2">
-                    <div className="w-8 h-8 border-2 border-tsubaki-red border-t-transparent rounded-full animate-spin" />
-                    <p className="text-sm text-tsubaki-red font-semibold">Đang tải lên...</p>
-                  </div>
-                ) : (
-                  <>
-                    <span className="material-symbols-outlined text-4xl text-on-muted/40 block mb-2">add_photo_alternate</span>
-                    <p className="text-sm font-semibold text-charcoal">Nhấn hoặc kéo thả ảnh vào đây</p>
-                    <p className="text-xs text-on-muted mt-1">JPG, PNG, WebP, GIF — tối đa 5MB</p>
-                  </>
-                )}
-              </div>
-            )}
-            <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={e => handleImageSelect(e.target.files[0])} />
-          </div>
-
-          {/* Text content */}
-          <div>
-            <label className="block text-sm font-medium text-on-muted mb-1 flex items-center gap-1">
-              <span className="material-symbols-outlined text-[15px]">subject</span>
-              Nội dung text <span className="font-normal">(tùy chọn nếu đã có hình)</span>
-            </label>
-            <textarea value={form.content} onChange={e => setForm({ ...form, content: e.target.value })}
-              rows={8} placeholder="Nhập nội dung bài đọc tiếng Nhật..."
-              className="w-full px-4 py-3 bg-white border border-outline rounded-xl text-sm outline-none focus:border-tsubaki-red resize-y transition-colors leading-loose" />
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-sm font-medium text-on-muted mb-1">Cấp độ JLPT</label>
-              <select value={form.level} onChange={e => setForm({ ...form, level: e.target.value })}
-                className="w-full px-3 py-2.5 bg-white border border-outline rounded-xl text-sm outline-none focus:border-tsubaki-red transition-colors">
-                <option value="">-- Không có --</option>
-                {LEVELS.map(l => <option key={l} value={l}>{l}</option>)}
-              </select>
-            </div>
-            <Input label="Chủ đề" value={form.topic} onChange={e => setForm({ ...form, topic: e.target.value })} placeholder="Ẩm thực, Du lịch..." />
-          </div>
-          <Input label="Nguồn (tùy chọn)" value={form.source} onChange={e => setForm({ ...form, source: e.target.value })} placeholder="JLPT N3 2023, Minna no Nihongo..." />
-        </div>
-      </Modal>
     </>
   );
 }
