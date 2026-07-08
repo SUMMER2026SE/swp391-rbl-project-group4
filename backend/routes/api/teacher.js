@@ -48,6 +48,11 @@ router.put('/kanji/:id',                               ac.updateKanji);
 router.post('/lessons/:lessonId/kanji/attach',         c.attachKanji);
 router.delete('/lessons/:lessonId/kanji/:kanjiId',     c.detachKanji);
 
+// Ngữ pháp (từ điển ngữ pháp chuẩn) — giáo viên thêm/sửa trực tiếp, không cần admin duyệt
+router.get('/grammar-points',      ac.listGrammarPoints);
+router.post('/grammar-points',     ac.createGrammarPoint);
+router.put('/grammar-points/:id',  ac.updateGrammarPoint);
+
 // My vocabulary
 router.get('/my-vocab',                c.listMyVocab);
 router.post('/my-vocab',               c.createMyVocab);

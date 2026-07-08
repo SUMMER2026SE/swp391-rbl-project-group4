@@ -613,7 +613,7 @@ exports.createGrammarPoint = async (req, res) => {
   if (!title || !meaning_vi) return res.status(400).json({ error: 'Thiếu thông tin bắt buộc.' });
   try {
     const { data, error } = await supabaseAdmin.from('grammar_points')
-      .insert({ title, title_ja, meaning_vi, explanation, example_sentence, level })
+      .insert({ title, title_ja, meaning_vi, explanation, example_sentence, level: level || null })
       .select().single();
     if (error) throw error;
     res.status(201).json(data);
@@ -623,6 +623,7 @@ exports.createGrammarPoint = async (req, res) => {
 exports.updateGrammarPoint = async (req, res) => {
   const allowed = ['title','title_ja','meaning_vi','explanation','example_sentence','level'];
   const updates = Object.fromEntries(Object.entries(req.body).filter(([k]) => allowed.includes(k)));
+  if (updates.level === '') updates.level = null;
   try {
     const { data, error } = await supabaseAdmin.from('grammar_points').update(updates).eq('id', req.params.id).select().single();
     if (error) throw error;

@@ -16,6 +16,9 @@ const allowedOrigins = [
 app.use(cors({
   origin: (origin, cb) => {
     if (!origin || allowedOrigins.includes(origin)) return cb(null, true);
+    // Vite tự đổi qua port khác (5174, 5175...) nếu 5173 đang bận — chấp nhận
+    // mọi localhost khi không phải production để tránh phải sửa tay mỗi lần.
+    if (process.env.NODE_ENV !== 'production' && /^http:\/\/localhost:\d+$/.test(origin)) return cb(null, true);
     cb(new Error('Not allowed by CORS'));
   },
   credentials: true,

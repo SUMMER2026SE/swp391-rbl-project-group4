@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
 import StudentLayout from '../../components/layout/StudentLayout';
+import StudyListPreview from '../../components/shared/StudyListPreview';
 import Alert from '../../components/ui/Alert';
 import FuriganaText from '../../components/ui/FuriganaText';
 import { useLang } from '../../contexts/LangContext';
@@ -15,12 +15,6 @@ const LEVEL_COLORS = {
 };
 
 const LEVELS = ['N5', 'N4', 'N3', 'N2', 'N1'];
-
-const TOPICS = [
-  'Chào hỏi', 'Gia đình', 'Đồ ăn & thức uống', 'Thời gian & ngày tháng',
-  'Màu sắc', 'Cơ thể', 'Động vật', 'Trường học', 'Địa điểm',
-  'Thời tiết & thiên nhiên', 'Giao thông', 'Hành động', 'Tính từ mô tả',
-];
 
 const TOPIC_ICONS = {
   'Chào hỏi': 'waving_hand',
@@ -70,20 +64,18 @@ export default function Vocabulary() {
   const [error, setError]     = useState('');
   const [search, setSearch]   = useState('');
   const [level, setLevel]     = useState('');
-  const [topic, setTopic]     = useState('');
   const [page, setPage]       = useState(1);
   const [selected, setSelected] = useState(null);
   const [furigana, setFurigana] = useState(false);
   const LIMIT = 20;
 
-  const fetchVocab = useCallback(async (p = 1, l = '', s = '', tp = '') => {
+  const fetchVocab = useCallback(async (p = 1, l = '', s = '') => {
     setLoading(true);
     setSelected(null);
     try {
       const params = new URLSearchParams({ page: p, limit: LIMIT });
-      if (s)  params.set('search', s);
-      if (l)  params.set('level', l);
-      if (tp) params.set('topic', tp);
+      if (s) params.set('search', s);
+      if (l) params.set('level', l);
       const r = await api.get(`/vocabulary?${params}`);
       setItems(r.data.data || []);
       setTotal(r.data.total || 0);
@@ -94,21 +86,16 @@ export default function Vocabulary() {
     }
   }, []);
 
-  useEffect(() => { fetchVocab(page, level, search, topic); }, [page, level, topic]);
+  useEffect(() => { fetchVocab(page, level, search); }, [page, level]);
 
   const handleSearch = (e) => {
     e.preventDefault();
     setPage(1);
-    fetchVocab(1, level, search, topic);
+    fetchVocab(1, level, search);
   };
 
   const handleLevelChange = (l) => {
     setLevel(l);
-    setPage(1);
-  };
-
-  const handleTopicChange = (tp) => {
-    setTopic(tp);
     setPage(1);
   };
 
@@ -125,10 +112,6 @@ export default function Vocabulary() {
           )}
         </div>
         <div className="flex gap-2 items-center">
-          <Link to="/study-lists/vocabulary"
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-outline text-charcoal text-sm font-semibold hover:border-tsubaki-red transition-all">
-            <span className="material-symbols-outlined text-base">library_books</span> Bài đăng
-          </Link>
           <button
             type="button"
             onClick={() => setFurigana(v => !v)}
@@ -151,6 +134,8 @@ export default function Vocabulary() {
         </div>
       </div>
 
+      <StudyListPreview type="vocabulary" />
+
       {/* Level filter */}
       <div className="flex flex-wrap gap-2 mb-3">
         <button
@@ -167,26 +152,6 @@ export default function Vocabulary() {
         ))}
       </div>
 
-      {/* Topic filter */}
-      <div className="flex gap-2 mb-6 overflow-x-auto pb-1 scrollbar-thin">
-        <button
-          onClick={() => handleTopicChange('')}
-          className={`flex-shrink-0 px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${!topic ? 'bg-charcoal text-white' : 'bg-white border border-outline text-on-muted hover:border-charcoal'}`}
-        >
-          Tất cả chủ đề
-        </button>
-        {TOPICS.map(tp => (
-          <button
-            key={tp}
-            onClick={() => handleTopicChange(tp)}
-            className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${topic === tp ? 'bg-charcoal text-white' : 'bg-white border border-outline text-on-muted hover:border-charcoal'}`}
-          >
-            <span className="material-symbols-outlined text-[14px]">{TOPIC_ICONS[tp]}</span>
-            {tp}
-          </button>
-        ))}
-      </div>
-
       {/* Content */}
       {loading ? (
         <VocabSkeleton />
@@ -194,20 +159,18 @@ export default function Vocabulary() {
         <div className="flex flex-col items-center justify-center py-24 text-center">
           <span className="material-symbols-outlined text-6xl text-on-muted/20 mb-4">translate</span>
           <h3 className="font-display font-bold text-lg text-charcoal mb-1">
-            {search || level || topic ? 'Không tìm thấy từ vựng' : 'Chưa có từ vựng nào'}
+            {search || level ? 'Không tìm thấy từ vựng' : 'Chưa có từ vựng nào'}
           </h3>
           <p className="text-sm text-on-muted max-w-xs">
             {search
               ? `Không có kết quả cho "${search}". Thử từ khóa khác.`
-              : topic
-              ? `Chưa có từ vựng trong chủ đề "${topic}".`
               : level
               ? `Chưa có từ vựng cấp độ ${level}.`
               : 'Nội dung từ vựng đang được biên soạn, hãy quay lại sau.'}
           </p>
-          {(search || level || topic) && (
+          {(search || level) && (
             <button
-              onClick={() => { setSearch(''); setLevel(''); setTopic(''); setPage(1); fetchVocab(1, '', '', ''); }}
+              onClick={() => { setSearch(''); setLevel(''); setPage(1); fetchVocab(1, '', ''); }}
               className="mt-4 text-sm text-tsubaki-red font-semibold hover:underline"
             >
               Xóa bộ lọc
@@ -231,7 +194,7 @@ export default function Vocabulary() {
                       {v.type}
                     </span>
                   )}
-                  {v.topic && !topic && (
+                  {v.topic && (
                     <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-slate-100 text-slate-600">
                       {v.topic}
                     </span>

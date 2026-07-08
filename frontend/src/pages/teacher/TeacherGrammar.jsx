@@ -7,14 +7,7 @@ import Alert from '../../components/ui/Alert';
 import api from '../../lib/api';
 
 const LEVELS = ['N5','N4','N3','N2','N1'];
-const TYPES  = ['DANH TỪ','ĐỘNG TỪ','TÍNH TỪ','PHÓ TỪ','LIÊN TỪ'];
-const EMPTY  = { kanji:'', reading:'', meaning_vi:'', meaning_ja:'', level:'', type:'', example_sentence:'' };
-
-const TYPE_COLORS = {
-  'DANH TỪ':'bg-blue-100 text-blue-700','ĐỘNG TỪ':'bg-green-100 text-green-700',
-  'TÍNH TỪ':'bg-amber-100 text-amber-700','PHÓ TỪ':'bg-purple-100 text-purple-700',
-  'LIÊN TỪ':'bg-rose-100 text-rose-700',
-};
+const EMPTY  = { title:'', title_ja:'', meaning_vi:'', explanation:'', example_sentence:'', level:'' };
 
 const LEVEL_COLORS = {
   N5:'bg-emerald-100 text-emerald-700', N4:'bg-sky-100 text-sky-700',
@@ -22,7 +15,7 @@ const LEVEL_COLORS = {
   N1:'bg-red-100 text-red-700',
 };
 
-export default function TeacherVocabulary() {
+export default function TeacherGrammar() {
   const [items, setItems]     = useState([]);
   const [total, setTotal]     = useState(0);
   const [loading, setLoading] = useState(true);
@@ -43,7 +36,7 @@ export default function TeacherVocabulary() {
       const params = new URLSearchParams({ page: p, limit: LIMIT });
       if (s) params.set('search', s);
       if (l) params.set('level', l);
-      const r = await api.get(`/teacher/vocabulary?${params}`);
+      const r = await api.get(`/teacher/grammar-points?${params}`);
       setItems(r.data.data || []); setTotal(r.data.total || 0);
     } catch (e) { setAlert({ type:'error', msg:e.message }); }
     finally { setLoading(false); }
@@ -53,33 +46,35 @@ export default function TeacherVocabulary() {
 
   const openCreate = () => { setForm(EMPTY); setEditId(null); setModal(true); };
   const openEdit = (row) => {
-    setForm({ kanji:row.kanji||'', reading:row.reading||'', meaning_vi:row.meaning_vi||'',
-      meaning_ja:row.meaning_ja||'', level:row.level||'', type:row.type||'', example_sentence:row.example_sentence||'' });
+    setForm({
+      title: row.title||'', title_ja: row.title_ja||'', meaning_vi: row.meaning_vi||'',
+      explanation: row.explanation||'', example_sentence: row.example_sentence||'', level: row.level||'',
+    });
     setEditId(row.id); setModal(true);
   };
 
   const handleSave = async () => {
-    if (!form.reading || !form.meaning_vi) return setAlert({ type:'error', msg:'Reading và nghĩa là bắt buộc.' });
+    if (!form.title.trim() || !form.meaning_vi.trim()) return setAlert({ type:'error', msg:'Mẫu ngữ pháp và nghĩa là bắt buộc.' });
     setSaving(true);
     try {
-      if (editId) await api.put(`/teacher/vocabulary/${editId}`, form);
-      else        await api.post('/teacher/vocabulary', form);
-      setAlert({ type:'success', msg:'Đã lưu — hiện ngay trong kho từ vựng chung.' });
+      if (editId) await api.put(`/teacher/grammar-points/${editId}`, form);
+      else        await api.post('/teacher/grammar-points', form);
+      setAlert({ type:'success', msg:'Đã lưu — hiện ngay trong kho ngữ pháp chung.' });
       setModal(false); load(page, level, search);
     } catch(e) { setAlert({ type:'error', msg:e.message }); }
     finally { setSaving(false); }
   };
 
   return (
-    <TeacherLayout title="Từ vựng">
+    <TeacherLayout title="Ngữ pháp">
       {alert.msg && <Alert type={alert.type} onClose={() => setAlert({type:'',msg:''})} className="mb-4">{alert.msg}</Alert>}
 
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
         <div>
-          <h1 className="font-display text-2xl font-bold">Từ vựng</h1>
-          <p className="text-sm text-on-muted mt-0.5">Thêm từ vựng mới sẽ vào kho chung ngay, không cần admin duyệt.</p>
+          <h1 className="font-display text-2xl font-bold">Ngữ pháp</h1>
+          <p className="text-sm text-on-muted mt-0.5">Thêm mẫu ngữ pháp mới sẽ vào kho chung ngay, không cần admin duyệt.</p>
         </div>
-        <Button onClick={openCreate}><span className="material-symbols-outlined text-lg">add</span> Thêm từ vựng</Button>
+        <Button onClick={openCreate}><span className="material-symbols-outlined text-lg">add</span> Thêm mẫu ngữ pháp</Button>
       </div>
 
       <div className="flex flex-wrap gap-2 mb-4 items-center justify-between">
@@ -102,23 +97,22 @@ export default function TeacherVocabulary() {
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-surface-low border-b border-outline/40">
-              <tr>{['Kanji','Reading','Nghĩa VI','Level','Loại',''].map(h =>
+              <tr>{['Mẫu ngữ pháp','Nghĩa','Level','Ví dụ',''].map(h =>
                 <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-on-muted uppercase tracking-wide">{h}</th>)}</tr>
             </thead>
             <tbody>
               {loading ? Array.from({length:8}).map((_,i) => (
                 <tr key={i} className="border-t border-outline/40 animate-pulse">
-                  {[40,60,80,40,56,40].map((w,j) => <td key={j} className="px-4 py-3"><div className="h-3 bg-surface-low rounded" style={{width:w}}/></td>)}
+                  {[80,100,40,120,40].map((w,j) => <td key={j} className="px-4 py-3"><div className="h-3 bg-surface-low rounded" style={{width:w}}/></td>)}
                 </tr>
-              )) : items.map((v,i) => (
-                <tr key={v.id} className={`border-t border-outline/40 hover:bg-tsubaki-red/5 transition-colors ${i%2===1?'bg-surface-low/30':''}`}>
-                  <td className="px-4 py-2.5 text-xl font-bold text-tsubaki-red">{v.kanji||'—'}</td>
-                  <td className="px-4 py-2.5 font-medium">{v.reading}</td>
-                  <td className="px-4 py-2.5">{v.meaning_vi}</td>
-                  <td className="px-4 py-2.5">{v.level ? <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${LEVEL_COLORS[v.level]}`}>{v.level}</span> : '—'}</td>
-                  <td className="px-4 py-2.5">{v.type ? <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${TYPE_COLORS[v.type]||'bg-surface-low text-on-muted'}`}>{v.type}</span> : '—'}</td>
+              )) : items.map((g,i) => (
+                <tr key={g.id} className={`border-t border-outline/40 hover:bg-tsubaki-red/5 transition-colors ${i%2===1?'bg-surface-low/30':''}`}>
+                  <td className="px-4 py-2.5 font-bold text-tsubaki-red">{g.title}</td>
+                  <td className="px-4 py-2.5">{g.meaning_vi}</td>
+                  <td className="px-4 py-2.5">{g.level ? <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${LEVEL_COLORS[g.level]}`}>{g.level}</span> : '—'}</td>
+                  <td className="px-4 py-2.5 text-xs text-on-muted italic max-w-[200px] truncate">{g.example_sentence || '—'}</td>
                   <td className="px-4 py-2.5">
-                    <button onClick={() => openEdit(v)} title="Sửa"
+                    <button onClick={() => openEdit(g)} title="Sửa"
                       className="p-1.5 rounded-lg text-on-muted hover:text-tsubaki-red hover:bg-tsubaki-red/10 transition-colors">
                       <span className="material-symbols-outlined text-lg">edit</span>
                     </button>
@@ -126,7 +120,7 @@ export default function TeacherVocabulary() {
                 </tr>
               ))}
               {!loading && items.length === 0 && (
-                <tr><td colSpan={6} className="px-4 py-12 text-center text-on-muted">Không có dữ liệu</td></tr>
+                <tr><td colSpan={5} className="px-4 py-12 text-center text-on-muted">Không có dữ liệu</td></tr>
               )}
             </tbody>
           </table>
@@ -141,34 +135,27 @@ export default function TeacherVocabulary() {
         </div>
       )}
 
-      <Modal open={modal} onClose={() => setModal(false)} title={editId ? 'Sửa từ vựng' : 'Thêm từ vựng'}
+      <Modal open={modal} onClose={() => setModal(false)} title={editId ? 'Sửa mẫu ngữ pháp' : 'Thêm mẫu ngữ pháp'}
         footer={<><Button variant="secondary" onClick={() => setModal(false)}>Huỷ</Button><Button loading={saving} onClick={handleSave}>Lưu</Button></>}>
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-3">
-            <Input label="Kanji" value={form.kanji} onChange={e => setForm({...form,kanji:e.target.value})} placeholder="漢字"/>
-            <Input label="Reading *" value={form.reading} onChange={e => setForm({...form,reading:e.target.value})} placeholder="かなよみ"/>
+            <Input label="Mẫu ngữ pháp *" value={form.title} onChange={e => setForm({...form,title:e.target.value})} placeholder="～ば"/>
+            <Input label="Dạng tiếng Nhật" value={form.title_ja} onChange={e => setForm({...form,title_ja:e.target.value})}/>
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <Input label="Nghĩa (VI) *" value={form.meaning_vi} onChange={e => setForm({...form,meaning_vi:e.target.value})}/>
-            <Input label="Nghĩa (JA)" value={form.meaning_ja} onChange={e => setForm({...form,meaning_ja:e.target.value})}/>
+          <Input label="Nghĩa (VI) *" value={form.meaning_vi} onChange={e => setForm({...form,meaning_vi:e.target.value})}/>
+          <div>
+            <label className="block text-sm font-medium text-on-muted mb-1">Giải thích</label>
+            <textarea value={form.explanation} onChange={e => setForm({...form,explanation:e.target.value})}
+              className="w-full h-24 px-4 py-3 border border-outline rounded-xl text-sm outline-none focus:border-tsubaki-red resize-y"/>
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-sm font-medium text-on-muted mb-1">Level</label>
-              <select value={form.level} onChange={e => setForm({...form,level:e.target.value})}
-                className="w-full px-4 py-3 bg-white border border-outline rounded-xl text-sm outline-none focus:border-tsubaki-red">
-                <option value="">--</option>{LEVELS.map(l=><option key={l} value={l}>{l}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-on-muted mb-1">Loại từ</label>
-              <select value={form.type} onChange={e => setForm({...form,type:e.target.value})}
-                className="w-full px-4 py-3 bg-white border border-outline rounded-xl text-sm outline-none focus:border-tsubaki-red">
-                <option value="">--</option>{TYPES.map(tp=><option key={tp} value={tp}>{tp}</option>)}
-              </select>
-            </div>
+          <Input label="Câu ví dụ" value={form.example_sentence} onChange={e => setForm({...form,example_sentence:e.target.value})}/>
+          <div>
+            <label className="block text-sm font-medium text-on-muted mb-1">Level</label>
+            <select value={form.level} onChange={e => setForm({...form,level:e.target.value})}
+              className="w-full px-4 py-3 bg-white border border-outline rounded-xl text-sm outline-none focus:border-tsubaki-red">
+              <option value="">--</option>{LEVELS.map(l=><option key={l} value={l}>{l}</option>)}
+            </select>
           </div>
-          <Input label="Ví dụ" value={form.example_sentence} onChange={e => setForm({...form,example_sentence:e.target.value})} placeholder="Câu ví dụ..."/>
         </div>
       </Modal>
     </TeacherLayout>

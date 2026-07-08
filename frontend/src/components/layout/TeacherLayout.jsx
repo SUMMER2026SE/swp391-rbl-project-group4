@@ -6,6 +6,7 @@ const TEACHER_LINKS = [
   { to: '/teacher/courses',       icon: 'menu_book',     label: 'Khóa học' },
   { to: '/teacher/vocab',         icon: 'translate',     label: 'Từ vựng' },
   { to: '/teacher/kanji',         icon: 'font_download', label: 'Kanji' },
+  { to: '/teacher/grammar',       icon: 'spellcheck',    label: 'Ngữ pháp' },
   { to: '/teacher/study-lists',   icon: 'library_books', label: 'Bài đăng danh sách' },
   { to: '/teacher/dictionary',    icon: 'auto_stories',  label: 'Từ điển' },
   { to: '/teacher/quizzes',       icon: 'quiz',          label: 'Bài kiểm tra' },
