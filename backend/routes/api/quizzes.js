@@ -6,6 +6,7 @@ const c = require('../../controllers/quizController');
 
 router.use(requireAuth);
 router.get('/',               c.list);
+router.get('/history',        c.history);
 router.get('/:id',            c.getOne);
 router.post('/:id/attempt',   c.submitAttempt);
 router.post('/:id/fullscreen-violation', c.fullscreenViolation);

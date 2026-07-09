@@ -3,6 +3,7 @@
 const { supabaseAdmin } = require('../config/supabase');
 const { checkCourseContentAccess } = require('../services/courseAccess');
 const { chatCompletion } = require('../config/ai');
+const { computePassed } = require('../services/passThreshold');
 
 // Bảng quiz đã chuyển sang schema exam_module (question_bank/users vẫn ở public)
 const examDb = supabaseAdmin.schema('exam_module');
@@ -151,7 +152,7 @@ exports.submitAttempt = async (req, res) => {
 
   try {
     const { data: quiz } = await examDb.from('quizzes')
-      .select('mode,strict_fullscreen').eq('id', req.params.id).single();
+      .select('mode,strict_fullscreen,passing_type,passing_value').eq('id', req.params.id).single();
 
     // Strict fullscreen: đang bị khóa thì không cho nộp bài
     if (quiz?.strict_fullscreen) {
@@ -197,12 +198,14 @@ exports.submitAttempt = async (req, res) => {
     });
 
     const isProctored = quiz?.mode === 'proctored';
+    const passed = computePassed(quiz?.passing_type, quiz?.passing_value, score, questions.length);
     const { data: attempt, error } = await examDb.from('quiz_attempts').insert({
       quiz_id: req.params.id,
       user_id: userId,
       score,
       total_questions: questions.length,
       answers,
+      passed,
       mode: quiz?.mode || 'normal',
       violation_count: isProctored ? (Number(violation_count) || 0) : 0,
       proctor_events:  isProctored && Array.isArray(proctor_events) ? proctor_events : null,
@@ -211,7 +214,7 @@ exports.submitAttempt = async (req, res) => {
     }).select().single();
 
     if (error) throw error;
-    res.json({ score, total: questions.length, attempt_id: attempt.id, ai_feedback: aiFeedback });
+    res.json({ score, total: questions.length, attempt_id: attempt.id, passed, ai_feedback: aiFeedback });
   } catch (err) {
     console.error('Submit attempt error:', err);
     res.status(500).json({ error: 'Không thể lưu kết quả.' });
@@ -302,5 +305,27 @@ exports.getResults = async (req, res) => {
     res.json(data || []);
   } catch (err) {
     res.status(500).json({ error: 'Không thể tải kết quả.' });
+  }
+};
+
+// GET /api/quizzes/history — lịch sử làm quiz của học sinh (mọi quiz), kèm nhãn đạt/không đạt đã lưu
+exports.history = async (req, res) => {
+  try {
+    const { data: attempts, error } = await examDb.from('quiz_attempts')
+      .select('id,quiz_id,score,total_questions,passed,completed_at')
+      .eq('user_id', req.user.id)
+      .order('completed_at', { ascending: false });
+    if (error) throw error;
+
+    const quizIds = [...new Set((attempts || []).map(a => a.quiz_id))];
+    let titles = {};
+    if (quizIds.length) {
+      const { data: quizzes } = await examDb.from('quizzes').select('id,title').in('id', quizIds);
+      titles = Object.fromEntries((quizzes || []).map(q => [q.id, q.title]));
+    }
+    res.json((attempts || []).map(a => ({ ...a, quiz_title: titles[a.quiz_id] || null })));
+  } catch (err) {
+    console.error('Quiz history error:', err);
+    res.status(500).json({ error: 'Không thể tải lịch sử bài thi.' });
   }
 };

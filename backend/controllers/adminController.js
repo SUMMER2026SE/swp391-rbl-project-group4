@@ -1,6 +1,7 @@
 'use strict';
 
 const { supabaseAdmin } = require('../config/supabase');
+const { validateThreshold } = require('../services/passThreshold');
 
 // Bảng quiz đã chuyển sang schema exam_module (question_bank/users vẫn ở public)
 const examDb = supabaseAdmin.schema('exam_module');
@@ -1474,7 +1475,8 @@ exports.createQuiz = async (req, res) => {
     const { data, error } = await examDb.from('quizzes')
       .insert({ title, title_ja, description, course_id, lesson_id, type: type || 'multiple_choice', time_limit,
                 mode: mode === 'proctored' ? 'proctored' : 'normal',
-                strict_fullscreen: strict_fullscreen === true })
+                // "Giám sát" luôn kéo theo toàn màn hình nghiêm ngặt (webcam đã bỏ)
+                strict_fullscreen: mode === 'proctored' ? true : strict_fullscreen === true })
       .select().single();
     if (error) throw error;
     res.status(201).json(data);
@@ -1482,9 +1484,22 @@ exports.createQuiz = async (req, res) => {
 };
 
 exports.updateQuiz = async (req, res) => {
-  const allowed = ['title','title_ja','description','course_id','lesson_id','type','time_limit','is_published','mode','strict_fullscreen'];
+  const allowed = ['title','title_ja','description','course_id','lesson_id','type','time_limit','is_published','mode','strict_fullscreen','passing_type','passing_value'];
   const updates = Object.fromEntries(Object.entries(req.body).filter(([k]) => allowed.includes(k)));
+  if (updates.mode === 'proctored') updates.strict_fullscreen = true;
   try {
+    if ('passing_type' in updates || 'passing_value' in updates) {
+      let total = 0;
+      if (updates.passing_type === 'count') {
+        const { count } = await examDb.from('quiz_questions')
+          .select('id', { count: 'exact', head: true }).eq('quiz_id', req.params.id);
+        total = count || 0;
+      }
+      const v = validateThreshold(updates.passing_type, updates.passing_value, total);
+      if (v.error) return res.status(400).json({ error: v.error });
+      updates.passing_type  = v.type;
+      updates.passing_value = v.value;
+    }
     const { data, error } = await examDb.from('quizzes').update(updates).eq('id', req.params.id).select().single();
     if (error) throw error;
     res.json(data);

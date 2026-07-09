@@ -5,6 +5,7 @@ import Modal from '../../components/ui/Modal';
 import Button from '../../components/ui/Button';
 import Input from '../../components/ui/Input';
 import Alert from '../../components/ui/Alert';
+import PassThresholdField from '../../components/admin/PassThresholdField';
 import api from '../../lib/api';
 
 const TYPE_LABELS = {
@@ -568,6 +569,10 @@ export default function ExamEditor() {
     const [loading, setLoading] = useState(true);
     const [error, setError]     = useState('');
     const [tab, setTab]         = useState('questions');
+    const [passType, setPassType]     = useState('');
+    const [passVal, setPassVal]       = useState('');
+    const [passSaving, setPassSaving] = useState(false);
+    const [passMsg, setPassMsg]       = useState(null); // { type, msg }
 
     const load = async () => {
         try {
@@ -583,19 +588,37 @@ export default function ExamEditor() {
 
     useEffect(() => { load(); }, [id]);
 
-    const changeMode = async (mode) => {
-        if (!exam || exam.mode === mode) return;
-        setExam(e => ({ ...e, mode }));
-        try { await api.put(`/exams/teacher/${id}`, { mode }); }
-        catch { setExam(e => ({ ...e, mode: mode === 'proctored' ? 'normal' : 'proctored' })); }
+    // Đồng bộ điểm đạt khi tải/đổi đề thi
+    useEffect(() => {
+        if (exam) { setPassType(exam.passing_type || ''); setPassVal(exam.passing_value ?? ''); setPassMsg(null); }
+    }, [exam?.id]);
+
+    const savePassing = async () => {
+        if (passType) {
+            const v = Number(passVal);
+            if (!Number.isFinite(v) || v <= 0) return setPassMsg({ type: 'error', msg: 'Giá trị điểm đạt phải là số dương.' });
+            if (passType === 'percent' && v > 100) return setPassMsg({ type: 'error', msg: 'Ngưỡng phần trăm không được vượt quá 100%.' });
+        }
+        setPassSaving(true); setPassMsg(null);
+        try {
+            const r = await api.put(`/exams/teacher/${id}`, {
+                passing_type: passType || null,
+                passing_value: passType ? Number(passVal) : null,
+            });
+            setExam(e => ({ ...e, ...r.data }));
+            setPassMsg({ type: 'success', msg: 'Đã lưu điểm đạt.' });
+        } catch (e) { setPassMsg({ type: 'error', msg: e.message || 'Không thể lưu điểm đạt.' }); }
+        finally { setPassSaving(false); }
     };
 
-    const toggleStrictFullscreen = async () => {
-        if (!exam) return;
-        const next = !exam.strict_fullscreen;
-        setExam(e => ({ ...e, strict_fullscreen: next }));
-        try { await api.put(`/exams/teacher/${id}`, { strict_fullscreen: next }); }
-        catch { setExam(e => ({ ...e, strict_fullscreen: !next })); }
+    const changeMode = async (mode) => {
+        if (!exam || exam.mode === mode) return;
+        // "Giám sát" luôn kéo theo toàn màn hình nghiêm ngặt (webcam đã bỏ); "Thường" thì tắt
+        const patch = { mode, strict_fullscreen: mode === 'proctored' };
+        const prev = { mode: exam.mode, strict_fullscreen: exam.strict_fullscreen };
+        setExam(e => ({ ...e, ...patch }));
+        try { await api.put(`/exams/teacher/${id}`, patch); }
+        catch { setExam(e => ({ ...e, ...prev })); }
     };
 
     if (loading) return <TeacherLayout title="Đề thi"><div className="flex justify-center py-16"><span className="material-symbols-outlined animate-spin text-tsubaki-red text-4xl">progress_activity</span></div></TeacherLayout>;
@@ -610,7 +633,7 @@ export default function ExamEditor() {
             {exam.description && <p className="text-sm text-on-muted mb-3">{exam.description}</p>}
 
             {/* Chế độ thi: thường / giám sát */}
-            <div className="flex items-center gap-2 mb-2">
+            <div className="flex items-center gap-2 mb-5">
                 <span className="text-sm text-on-muted">Hình thức:</span>
                 {[['normal','Thường','edit_note'],['proctored','Giám sát','verified_user']].map(([v, l, ic]) => (
                     <button key={v} onClick={() => changeMode(v)}
@@ -619,10 +642,18 @@ export default function ExamEditor() {
                     </button>
                 ))}
             </div>
-            <label className="flex items-start gap-2 cursor-pointer mb-5">
-                <input type="checkbox" checked={!!exam.strict_fullscreen} onChange={toggleStrictFullscreen} className="w-4 h-4 accent-tsubaki-red mt-0.5" />
-                <span className="text-sm text-on-muted">Bật chế độ toàn màn hình nghiêm ngặt (khóa bài nếu thoát fullscreen quá 5 lần, cấm thi 20 phút)</span>
-            </label>
+            {/* Điểm đạt của đề thi */}
+            <div className="mb-5 p-4 rounded-xl border border-outline/40 bg-surface-low/30">
+                <PassThresholdField
+                    type={passType}
+                    value={passVal}
+                    onChange={(type, value) => { setPassType(type); setPassVal(value); }}
+                />
+                {passMsg && <p className={`text-xs mt-2 ${passMsg.type === 'error' ? 'text-error' : 'text-emerald-600'}`}>{passMsg.msg}</p>}
+                <div className="mt-3">
+                    <Button onClick={savePassing} loading={passSaving} className="text-sm">Lưu điểm đạt</Button>
+                </div>
+            </div>
 
             <div className="flex gap-2 mb-5 border-b border-outline/30">
                 {TABS.map(t => (
