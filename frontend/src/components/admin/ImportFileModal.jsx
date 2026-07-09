@@ -135,7 +135,8 @@ const flattenArrays = (item) =>
 
 // lessonId / studyListId là tuỳ chọn.
 // Không có cả hai → bank mode (nhập vào ngân hàng cá nhân).
-export default function ImportFileModal({ open, onClose, type, lessonId, studyListId, apiBase = '', onImported }) {
+// previewUrl / importUrl: ghi đè endpoint tùy ý (dùng cho admin bank import)
+export default function ImportFileModal({ open, onClose, type, lessonId, studyListId, apiBase = '', previewUrl: previewUrlProp, importUrl: importUrlProp, onImported }) {
   const cfg           = TYPE_CONFIG[type];
   const bankMode      = !lessonId && !studyListId && !!cfg.bankSlug;
   const studyListMode = !!studyListId;
@@ -176,11 +177,11 @@ export default function ImportFileModal({ open, onClose, type, lessonId, studyLi
   // ── Core parse/upload ──────────────────────────────────────────────────────
   const processFile = async (file) => {
     setError(''); setItems(null); setParsing(true);
-    const previewUrl = studyListMode
+    const previewUrl = previewUrlProp || (studyListMode
       ? `/study-lists/${studyListId}/${cfg.slug}/import-file`
       : bankMode
         ? `${apiBase}/${cfg.bankSlug}/import-file`
-        : `${apiBase}/lessons/${lessonId}/${cfg.slug}/import-file`;
+        : `${apiBase}/lessons/${lessonId}/${cfg.slug}/import-file`);
     try {
       const fd = new FormData();
       fd.append('file', file);
@@ -226,11 +227,11 @@ export default function ImportFileModal({ open, onClose, type, lessonId, studyLi
 
   const handleImport = async () => {
     setImporting(true); setError('');
-    const importUrl = studyListMode
+    const importUrl = importUrlProp || (studyListMode
       ? `/study-lists/${studyListId}/import`
       : bankMode
         ? `${apiBase}/${cfg.bankSlug}/import`
-        : `${apiBase}/${cfg.slug}/import`;
+        : `${apiBase}/${cfg.slug}/import`);
     try {
       const payload = items.map(({ _notes, _changed, ...rest }) =>
         bankMode || studyListMode ? rest : { ...rest, lesson_id: lessonId }

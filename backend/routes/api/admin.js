@@ -179,6 +179,11 @@ router.post('/lessons/:lessonId/vocabulary/import-file',     importFileUpload.si
 router.post('/lessons/:lessonId/kanji/import-file',          importFileUpload.single('file'), fic.previewKanjiFile);
 router.post('/lessons/:lessonId/grammar-points/import-file', importFileUpload.single('file'), fic.previewGrammarFile);
 
+// Import file trực tiếp vào ngân hàng chung (không cần lessonId)
+router.post('/vocabulary/import-file',     importFileUpload.single('file'), fic.previewVocabFile);
+router.post('/kanji/import-file',          importFileUpload.single('file'), fic.previewKanjiFile);
+router.post('/grammar-points/import-file', importFileUpload.single('file'), fic.previewGrammarFile);
+
 // Content submissions
 router.get('/submissions',                    c.listSubmissions);
 router.post('/submissions/vocab/:id/review',  c.reviewVocab);
