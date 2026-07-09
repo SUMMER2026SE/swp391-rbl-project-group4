@@ -190,4 +190,108 @@ Trả về ĐÚNG mảng JSON ${count} phần tử. KHÔNG thêm text nào khác
   return { questions: enriched, usage: result.usage };
 }
 
-module.exports = { generateQuestions, JLPT_PROFILES, DIFFICULTY_GUIDE };
+/**
+ * Sinh nháp câu hỏi cho MỘT mondai của đề thi thử JLPT (mock test).
+ * Chỉ trả nháp để admin duyệt/sửa — KHÔNG ghi DB.
+ * Throws Error với `.httpStatus` khi AI/parse lỗi.
+ * @returns {Promise<{ questions: object[], skipped: number, passage_text: string|null, usage: object }>}
+ */
+async function generateMondaiQuestions({ level, mondaiType, count = 5, passageText = '', topic = '' }) {
+  // require tại chỗ để tránh vòng require nếu sau này jlptMock cần module này
+  const { MONDAI_TYPES } = require('./jlptMock');
+  const meta = MONDAI_TYPES[mondaiType];
+  if (!meta) { const e = new Error('Loại mondai không hợp lệ.'); e.httpStatus = 400; throw e; }
+
+  const jlpt = JLPT_PROFILES[level] || null;
+  const optCount = meta.options_count || 4;
+  const isListening = meta.category === 'listening';
+  const needsPassage = ['text_grammar', 'reading_short', 'reading_mid', 'reading_long',
+    'integrated_reading', 'thematic_reading', 'info_retrieval'].includes(mondaiType);
+
+  const jlptBlock = jlpt
+    ? `\n═══ YÊU CẦU JLPT ${level} ═══
+• Kanji được phép dùng: ${jlpt.kanji}
+• Từ vựng: ${jlpt.vocab}
+• Ngữ pháp: ${jlpt.grammar}
+• Gợi ý distractor: ${jlpt.distractor_tip}
+⚠️  TUYỆT ĐỐI KHÔNG dùng kanji hoặc từ vựng ngoài phạm vi JLPT ${level}.`
+    : '';
+
+  const passageRule = needsPassage
+    ? (passageText
+      ? `\nBài đọc đã có sẵn (bên dưới) — TẤT CẢ câu hỏi phải dựa trên bài đọc này, KHÔNG sinh passage mới:\n${passageText.slice(0, 4000)}`
+      : `\nMondai này cần bài đọc: hãy sinh MỘT đoạn văn duy nhất đúng độ dài/độ khó của dạng bài và cấp ${level}, đặt vào trường "passage_text"; mọi câu hỏi đều dựa trên đoạn văn đó.`)
+    : '';
+
+  const listeningRule = isListening
+    ? `\nĐây là câu hỏi NGHE: với mỗi câu, sinh thêm trường "audio_transcript" là script hội thoại/độc thoại tiếng Nhật hoàn chỉnh (kèm câu hỏi đọc trong audio) để admin thu âm.${meta.no_question_text ? ' Dạng bài này KHÔNG in câu hỏi trên giấy — "question_text" để null.' : ''}`
+    : '';
+
+  const SYSTEM = `Bạn là chuyên gia biên soạn đề thi JLPT chính thức. Bạn nắm rõ format từng 大問 (mondai) của đề thi thật.
+
+BẮT BUỘC: Chỉ trả về MỘT object JSON hợp lệ, KHÔNG có văn bản nào khác.
+${jlptBlock}
+
+═══ DẠNG BÀI: 問題「${meta.ja}」 ═══
+• Mô tả dạng bài: ${meta.ai_hint}
+• Chỉ dẫn chuẩn in trên đề: ${meta.instruction}
+• Số lựa chọn: ĐÚNG ${optCount} lựa chọn mỗi câu.${passageRule}${listeningRule}
+
+═══ SCHEMA JSON ═══
+{"passage_text": ${needsPassage && !passageText ? '"đoạn văn dùng chung"' : 'null'}, "questions": [{"question_text": "..." hoặc null, "options": [${optCount} chuỗi], "correct_index": số 0-${optCount - 1}, "explanation": "giải thích tiếng Việt ngắn gọn vì sao đáp án đúng"${isListening ? ', "audio_transcript": "script tiếng Nhật"' : ''}}]}`;
+
+  const userMsg = `Tạo ${count} câu hỏi dạng 「${meta.ja}」 cấp độ JLPT ${level}.${topic ? `\nChủ đề: ${topic}` : ''}
+Trả về ĐÚNG object JSON theo schema, "questions" có ${count} phần tử.`;
+
+  const result = await chatCompletion(
+    [{ role: 'system', content: SYSTEM }, { role: 'user', content: userMsg }],
+    { max_tokens: 4096, temperature: 0.45 }
+  );
+
+  const raw = result.choices?.[0]?.message?.content || '';
+  const cleaned = raw.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
+  const match = cleaned.match(/\{[\s\S]*\}/);
+  if (!match) {
+    const e = new Error('AI không trả về JSON hợp lệ.');
+    e.httpStatus = 502; e.raw = raw.slice(0, 500);
+    throw e;
+  }
+
+  let parsed;
+  try { parsed = JSON.parse(match[0]); }
+  catch {
+    const e = new Error('Không thể parse JSON từ AI.');
+    e.httpStatus = 502; e.raw = raw.slice(0, 300);
+    throw e;
+  }
+
+  const rawQuestions = Array.isArray(parsed.questions) ? parsed.questions : [];
+  const questions = [];
+  let skipped = 0;
+  for (const q of rawQuestions) {
+    const options = Array.isArray(q.options) ? q.options.map(o => String(o).trim()).filter(Boolean) : [];
+    const ci = Number(q.correct_index);
+    if (options.length !== optCount || !Number.isInteger(ci) || ci < 0 || ci >= options.length) { skipped++; continue; }
+    questions.push({
+      question_text:    q.question_text ? String(q.question_text).trim() : null,
+      options,
+      correct_index:    ci,
+      explanation:      q.explanation || null,
+      audio_transcript: isListening ? (q.audio_transcript || null) : undefined,
+    });
+  }
+  if (!questions.length) {
+    const e = new Error('AI không sinh được câu hỏi hợp lệ nào, hãy thử lại.');
+    e.httpStatus = 502;
+    throw e;
+  }
+
+  return {
+    questions,
+    skipped,
+    passage_text: (needsPassage && !passageText && parsed.passage_text) ? String(parsed.passage_text) : null,
+    usage: result.usage,
+  };
+}
+
+module.exports = { generateQuestions, generateMondaiQuestions, JLPT_PROFILES, DIFFICULTY_GUIDE };
