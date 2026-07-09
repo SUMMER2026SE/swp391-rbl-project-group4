@@ -14,6 +14,7 @@ const TYPES = [
   ['kanji', 'font_download', 'Kanji'],
   ['grammar', 'spellcheck', 'Ngữ pháp'],
 ];
+const LEVELS = ['N5', 'N4', 'N3', 'N2', 'N1'];
 const SEARCH_ENDPOINT = { vocabulary: '/vocabulary', kanji: '/kanji', grammar: '/grammar-points' };
 const ITEM_LABEL = (type, item) => type === 'kanji' ? item.character : type === 'grammar' ? item.title : (item.kanji || item.reading);
 const ITEM_SUB   = (type, item) => type === 'grammar' ? item.meaning_vi : item.meaning_vi;
@@ -135,7 +136,8 @@ export default function TeacherStudyLists() {
   const [alert, setAlert]     = useState({ type: '', msg: '' });
 
   const [modal, setModal]   = useState(false);
-  const [form, setForm]     = useState({ title: '', description: '' });
+  const [form, setForm]     = useState({ title: '', description: '', level: '' });
+  const [editId, setEditId] = useState(null);
   const [saving, setSaving] = useState(false);
 
   const [pickerPost, setPickerPost] = useState(null);
@@ -151,16 +153,24 @@ export default function TeacherStudyLists() {
 
   useEffect(() => { load(); }, [load]);
 
-  const openCreate = () => { setForm({ title: '', description: '' }); setModal(true); };
+  const openCreate = () => { setForm({ title: '', description: '', level: '' }); setEditId(null); setModal(true); };
+  const openEdit = (post) => { setForm({ title: post.title, description: post.description || '', level: post.level || '' }); setEditId(post.id); setModal(true); };
 
-  const handleCreate = async () => {
+  const handleSave = async () => {
     if (!form.title.trim()) return setAlert({ type: 'error', msg: 'Tiêu đề là bắt buộc.' });
+    if (!form.level) return setAlert({ type: 'error', msg: 'Vui lòng chọn cấp độ.' });
     setSaving(true);
     try {
-      const r = await api.post('/study-lists', { list_type: type, title: form.title, description: form.description });
-      setModal(false);
-      await load();
-      setPickerPost(r.data);
+      if (editId) {
+        await api.put(`/study-lists/${editId}`, { title: form.title, description: form.description, level: form.level });
+        setModal(false);
+        await load();
+      } else {
+        const r = await api.post('/study-lists', { list_type: type, title: form.title, description: form.description, level: form.level });
+        setModal(false);
+        await load();
+        setPickerPost(r.data);
+      }
     } catch (e) { setAlert({ type: 'error', msg: e.message }); }
     finally { setSaving(false); }
   };
@@ -203,17 +213,22 @@ export default function TeacherStudyLists() {
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="bg-surface-low border-b border-outline/40">
-                <tr>{['Tiêu đề', 'Số mục', 'Lượt xem', ''].map(h =>
+                <tr>{['Tiêu đề', 'Cấp độ', 'Số mục', 'Lượt xem', ''].map(h =>
                   <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-on-muted uppercase tracking-wide">{h}</th>)}</tr>
               </thead>
               <tbody>
                 {items.map((post, i) => (
                   <tr key={post.id} className={`border-t border-outline/40 ${i % 2 === 1 ? 'bg-surface-low/30' : ''}`}>
                     <td className="px-4 py-2.5 font-medium">{post.title}</td>
+                    <td className="px-4 py-2.5">{post.level || '—'}</td>
                     <td className="px-4 py-2.5">{post.item_count}</td>
                     <td className="px-4 py-2.5">{post.view_count}</td>
                     <td className="px-4 py-2.5">
                       <div className="flex gap-1.5 justify-end">
+                        <button onClick={() => openEdit(post)} title="Sửa"
+                          className="p-1.5 rounded-lg text-on-muted hover:text-tsubaki-red hover:bg-tsubaki-red/10 transition-colors">
+                          <span className="material-symbols-outlined text-lg">edit</span>
+                        </button>
                         <button onClick={() => setPickerPost(post)} title="Quản lý mục"
                           className="p-1.5 rounded-lg text-on-muted hover:text-tsubaki-red hover:bg-tsubaki-red/10 transition-colors">
                           <span className="material-symbols-outlined text-lg">list</span>
@@ -232,11 +247,19 @@ export default function TeacherStudyLists() {
         </div>
       )}
 
-      <Modal open={modal} onClose={() => setModal(false)} title="Tạo bài đăng"
-        footer={<><Button variant="secondary" onClick={() => setModal(false)}>Huỷ</Button><Button loading={saving} onClick={handleCreate}>Tạo</Button></>}>
+      <Modal open={modal} onClose={() => setModal(false)} title={editId ? 'Sửa bài đăng' : 'Tạo bài đăng'}
+        footer={<><Button variant="secondary" onClick={() => setModal(false)}>Huỷ</Button><Button loading={saving} onClick={handleSave}>{editId ? 'Lưu' : 'Tạo'}</Button></>}>
         <div className="space-y-4">
           <Input label="Tiêu đề *" value={form.title} onChange={e => setForm({ ...form, title: e.target.value })}
             placeholder='vd "Kanji thường gặp trong đề JLPT N4"' />
+          <div>
+            <label className="block text-sm font-medium text-on-muted mb-1">Cấp độ *</label>
+            <select value={form.level} onChange={e => setForm({ ...form, level: e.target.value })}
+              className="w-full px-4 py-3 bg-white border border-outline rounded-xl text-sm outline-none focus:border-tsubaki-red">
+              <option value="">-- Chọn cấp độ --</option>
+              {LEVELS.map(l => <option key={l} value={l}>{l}</option>)}
+            </select>
+          </div>
           <Input label="Mô tả" value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} />
         </div>
       </Modal>
