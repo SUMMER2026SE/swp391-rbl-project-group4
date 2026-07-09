@@ -2,6 +2,7 @@
 
 const { supabaseAdmin } = require('../config/supabase');
 const { checkCourseContentAccess } = require('../services/courseAccess');
+const { describeThreshold } = require('../services/passThreshold');
 
 // Bảng quiz nằm ở exam_module; tiến độ (lesson_progress) + units nằm ở content_module
 const examDb = supabaseAdmin.schema('exam_module');
@@ -98,6 +99,19 @@ exports.complete = async (req, res) => {
   const id = req.params.id;
   const studentId = req.user.id;
   try {
+    // Nếu Mục gắn với 1 quiz có cấu hình ngưỡng đạt → bắt buộc đã đạt (bất kỳ lần làm nào) mới cho hoàn thành.
+    const { data: quiz } = await examDb.from('quizzes')
+      .select('id,passing_type,passing_value').eq('lesson_id', id).limit(1).maybeSingle();
+    if (quiz?.passing_type) {
+      const { data: passedAttempt } = await examDb.from('quiz_attempts')
+        .select('id').eq('quiz_id', quiz.id).eq('user_id', studentId).eq('passed', true)
+        .limit(1).maybeSingle();
+      if (!passedAttempt)
+        return res.status(403).json({
+          error: `Bạn cần ${describeThreshold(quiz.passing_type, quiz.passing_value)} trong bài kiểm tra để hoàn thành mục này.`,
+        });
+    }
+
     const { data: existing } = await contentDb.from('lesson_progress')
       .select('id').eq('lesson_id', id).eq('student_id', studentId).maybeSingle();
     if (existing) {

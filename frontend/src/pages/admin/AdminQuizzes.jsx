@@ -8,6 +8,7 @@ import Input from '../../components/ui/Input';
 import Alert from '../../components/ui/Alert';
 import QuestionTypeForm from '../../components/admin/QuestionTypeForm';
 import ProctoredAttemptsModal from '../../components/admin/ProctoredAttemptsModal';
+import PassThresholdField from '../../components/admin/PassThresholdField';
 import { useLang } from '../../contexts/LangContext';
 import api from '../../lib/api';
 import {
@@ -15,7 +16,7 @@ import {
   QUESTION_TYPES, TYPE_MAP, LEVEL_COLORS, DIFF_COLORS,
 } from '../../utils/questionFormHelpers';
 
-const EMPTY_QUIZ = { title: '', title_ja: '', description: '', type: 'mixed', time_limit: '', is_published: false, mode: 'normal', strict_fullscreen: false };
+const EMPTY_QUIZ = { title: '', title_ja: '', description: '', type: 'mixed', time_limit: '', is_published: false, mode: 'normal', strict_fullscreen: false, passing_type: '', passing_value: '' };
 
 // ── Type badge ────────────────────────────────────────────────────────────────
 function TypeBadge({ type }) {
@@ -240,15 +241,28 @@ export default function AdminQuizzes() {
   const openEdit   = (row) => {
     setForm({ title: row.title||'', title_ja: row.title_ja||'', description: row.description||'',
               type: row.type||'mixed', time_limit: row.time_limit||'', is_published: row.is_published||false,
-              mode: row.mode||'normal', strict_fullscreen: row.strict_fullscreen||false });
+              mode: row.mode||'normal', strict_fullscreen: row.strict_fullscreen||false,
+              passing_type: row.passing_type||'', passing_value: row.passing_value ?? '' });
     setEditQuizId(row.id); setQuizModal(true);
   };
 
   const saveQuiz = async () => {
     if (!form.title) return setAlert({ type: 'error', msg: 'Tiêu đề là bắt buộc.' });
+    if (form.passing_type) {
+      const val = Number(form.passing_value);
+      if (!Number.isFinite(val) || val <= 0)
+        return setAlert({ type: 'error', msg: 'Giá trị điểm đạt phải là số dương.' });
+      if (form.passing_type === 'percent' && val > 100)
+        return setAlert({ type: 'error', msg: 'Ngưỡng phần trăm không được vượt quá 100%.' });
+    }
     setSaving(true);
     try {
-      const payload = { ...form, time_limit: form.time_limit ? Number(form.time_limit) : null };
+      const payload = {
+        ...form,
+        time_limit: form.time_limit ? Number(form.time_limit) : null,
+        passing_type: form.passing_type || null,
+        passing_value: form.passing_type ? Number(form.passing_value) : null,
+      };
       if (editQuizId) await api.put(`/admin/quizzes/${editQuizId}`, payload);
       else            await api.post('/admin/quizzes', payload);
       setAlert({ type: 'success', msg: 'Đã lưu.' }); setQuizModal(false); fetchQuizzes();
@@ -490,10 +504,10 @@ export default function AdminQuizzes() {
             <div className="grid grid-cols-2 gap-2">
               {[
                 { val: 'normal',    icon: 'edit_note',     label: 'Thường',   desc: 'Làm bài bình thường' },
-                { val: 'proctored', icon: 'verified_user', label: 'Giám sát', desc: 'Toàn màn hình + webcam' },
+                { val: 'proctored', icon: 'verified_user', label: 'Giám sát', desc: 'Toàn màn hình nghiêm ngặt' },
               ].map(m => (
                 <button key={m.val} type="button"
-                  onClick={() => setForm(f => ({ ...f, mode: m.val }))}
+                  onClick={() => setForm(f => ({ ...f, mode: m.val, strict_fullscreen: m.val === 'proctored' }))}
                   className={`text-left p-3 rounded-xl border-2 transition-all ${form.mode === m.val ? 'border-tsubaki-red bg-tsubaki-red/5' : 'border-outline hover:border-tsubaki-red/40'}`}>
                   <span className={`material-symbols-outlined text-lg ${form.mode === m.val ? 'text-tsubaki-red' : 'text-on-muted'}`}>{m.icon}</span>
                   <p className="text-sm font-semibold mt-0.5">{m.label}</p>
@@ -502,10 +516,11 @@ export default function AdminQuizzes() {
               ))}
             </div>
           </div>
-          <label className="flex items-start gap-2 cursor-pointer">
-            <input type="checkbox" checked={form.strict_fullscreen} onChange={e => setForm({ ...form, strict_fullscreen: e.target.checked })} className="w-4 h-4 accent-tsubaki-red mt-0.5" />
-            <span className="text-sm font-medium">Bật chế độ toàn màn hình nghiêm ngặt (khóa bài nếu thoát fullscreen quá 5 lần, cấm thi 20 phút)</span>
-          </label>
+          <PassThresholdField
+            type={form.passing_type}
+            value={form.passing_value}
+            onChange={(type, value) => setForm(f => ({ ...f, passing_type: type, passing_value: value }))}
+          />
           <label className="flex items-center gap-2 cursor-pointer">
             <input type="checkbox" checked={form.is_published} onChange={e => setForm({ ...form, is_published: e.target.checked })} className="w-4 h-4 accent-tsubaki-red" />
             <span className="text-sm font-medium">{t('admin.published')}</span>

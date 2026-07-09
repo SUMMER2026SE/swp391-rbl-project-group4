@@ -3,14 +3,20 @@ import { Link } from 'react-router-dom';
 import StudentLayout from '../../components/layout/StudentLayout';
 import api from '../../lib/api';
 
-function ScoreBadge({ score, total }) {
+// Nhãn kết quả: quiz có cấu hình ngưỡng → Đạt/Chưa đạt; chưa cấu hình → chỉ hiện điểm.
+function ScoreBadge({ attempt }) {
+  const { score, total_questions: total, passed } = attempt;
   const pct = total > 0 ? Math.round((score / total) * 100) : 0;
-  const color =
-    pct >= 80 ? 'bg-emerald-100 text-emerald-700' :
-    pct >= 60 ? 'bg-amber-100 text-amber-700' :
-                'bg-red-100 text-red-600';
+  if (passed === true || passed === false) {
+    const color = passed ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-600';
+    return (
+      <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${color}`}>
+        {passed ? 'Đạt' : 'Chưa đạt'} · {score}/{total} ({pct}%)
+      </span>
+    );
+  }
   return (
-    <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${color}`}>
+    <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-surface-low text-on-muted">
       {score}/{total} ({pct}%)
     </span>
   );
@@ -20,6 +26,7 @@ function AttemptRow({ attempt }) {
   const date = attempt.completed_at
     ? new Date(attempt.completed_at).toLocaleString('vi-VN')
     : '—';
+  const noThreshold = attempt.passed !== true && attempt.passed !== false;
   return (
     <div className="flex items-center justify-between gap-3 p-4 rounded-xl bg-surface-low/40 hover:bg-surface-low transition-colors">
       <div className="flex items-center gap-3 min-w-0">
@@ -28,10 +35,12 @@ function AttemptRow({ attempt }) {
         </div>
         <div className="min-w-0">
           <p className="font-semibold text-sm truncate">{attempt.quiz_title || 'Bài kiểm tra'}</p>
-          <p className="text-xs text-on-muted mt-0.5">{date}</p>
+          <p className="text-xs text-on-muted mt-0.5">
+            {date}{noThreshold ? ' • Chưa cấu hình ngưỡng' : ''}
+          </p>
         </div>
       </div>
-      <ScoreBadge score={attempt.score} total={attempt.total_questions} />
+      <ScoreBadge attempt={attempt} />
     </div>
   );
 }
@@ -49,17 +58,17 @@ export default function ExamHistory() {
       .finally(() => setLoading(false));
   }, []);
 
+  // Bộ lọc đạt/chưa đạt dựa trên nhãn passed đã lưu; attempt chưa cấu hình ngưỡng chỉ xuất hiện ở "Tất cả".
   const filtered = attempts.filter(a => {
     if (filter === 'all') return true;
-    const pct = a.total_questions > 0 ? (a.score / a.total_questions) * 100 : 0;
-    return filter === 'pass' ? pct >= 60 : pct < 60;
+    return filter === 'pass' ? a.passed === true : a.passed === false;
   });
 
   const totalExams = attempts.length;
   const avgScore   = attempts.length > 0
     ? Math.round(attempts.reduce((s, a) => s + (a.total_questions > 0 ? (a.score / a.total_questions) * 100 : 0), 0) / attempts.length)
     : 0;
-  const passed = attempts.filter(a => a.total_questions > 0 && (a.score / a.total_questions) >= 0.6).length;
+  const passed = attempts.filter(a => a.passed === true).length;
 
   return (
     <StudentLayout title="Lịch sử bài thi">

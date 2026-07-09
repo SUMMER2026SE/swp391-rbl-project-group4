@@ -54,6 +54,7 @@ export default function LessonView() {
   const [lesson, setLesson]   = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState('');
+  const [finishError, setFinishError] = useState(''); // lỗi khi bấm Hoàn thành (vd: chưa đạt ngưỡng quiz)
   const [paywall, setPaywall] = useState(null); // body 403 ENROLLMENT_REQUIRED { course_id }
   const [furigana, setFurigana] = useState(false);
   const [working, setWorking] = useState(false);
@@ -139,12 +140,14 @@ export default function LessonView() {
   // Đánh dấu hoàn thành rồi đi tiếp (hoặc về khóa học nếu là mục cuối).
   const finishAndContinue = async () => {
     setWorking(true);
+    setFinishError('');
     try {
       await api.post(`/lessons/${id}/complete`);
       if (nav.nextId) navigate(`/lessons/${nav.nextId}`);
       else navigate(`/courses/${lesson.course_id}`);
     } catch (e) {
-      setError(e.message);
+      // Vd: quiz có ngưỡng đạt mà học sinh chưa đạt → hiển thị ngay tại chỗ, giữ nguyên trang để làm lại bài.
+      setFinishError(e.message);
     } finally {
       setWorking(false);
     }
@@ -504,6 +507,18 @@ export default function LessonView() {
                 Làm bài <span className="material-symbols-outlined text-lg">arrow_forward</span>
               </Link>
             </div>
+          </div>
+        )}
+
+        {/* Chưa đạt ngưỡng quiz → chặn hoàn thành, hiển thị ngay tại đây */}
+        {finishError && (
+          <div className="mt-6">
+            <Alert type="error" onClose={() => setFinishError('')}>
+              {finishError}
+              {lesson.quiz && (
+                <Link to={`/quizzes/${lesson.quiz.id}`} className="ml-1 font-semibold underline">Làm lại bài kiểm tra</Link>
+              )}
+            </Alert>
           </div>
         )}
 

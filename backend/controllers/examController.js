@@ -3,6 +3,7 @@
 const { supabaseAdmin } = require('../config/supabase');
 const { chatCompletion } = require('../config/ai');
 const { isCorrect } = require('./quizController');
+const { computePassed, validateThreshold } = require('../services/passThreshold');
 
 // Sau khi DB tách schema: quiz ở exam_module, exam_assignments ở classroom_module.
 // (classes / class_enrollments / users / teacher_question_bank vẫn ở public)
@@ -60,7 +61,8 @@ exports.createExam = async (req, res) => {
                 title, title_ja: title_ja || null, description: description || null,
                 time_limit: time_limit || null, type: 'multiple_choice',
                 mode: mode === 'proctored' ? 'proctored' : 'normal',
-                strict_fullscreen: strict_fullscreen === true,
+                // "Giám sát" luôn kéo theo toàn màn hình nghiêm ngặt (webcam đã bỏ)
+                strict_fullscreen: mode === 'proctored' ? true : strict_fullscreen === true,
                 is_exam: true, is_published: true, teacher_id: req.user.id,
             })
             .select().single();
@@ -90,8 +92,21 @@ exports.updateExam = async (req, res) => {
     try {
         const exam = await getOwnedExam(req.params.id, req.user.id);
         if (!exam) return res.status(403).json({ error: 'Không có quyền với đề thi này.' });
-        const allowed = ['title', 'title_ja', 'description', 'time_limit', 'mode', 'strict_fullscreen'];
+        const allowed = ['title', 'title_ja', 'description', 'time_limit', 'mode', 'strict_fullscreen', 'passing_type', 'passing_value'];
         const updates = Object.fromEntries(Object.entries(req.body).filter(([k]) => allowed.includes(k)));
+        if (updates.mode === 'proctored') updates.strict_fullscreen = true;
+        if ('passing_type' in updates || 'passing_value' in updates) {
+            let total = 0;
+            if (updates.passing_type === 'count') {
+                const { count } = await examDb.from('quiz_questions')
+                    .select('id', { count: 'exact', head: true }).eq('quiz_id', req.params.id);
+                total = count || 0;
+            }
+            const v = validateThreshold(updates.passing_type, updates.passing_value, total);
+            if (v.error) return res.status(400).json({ error: v.error });
+            updates.passing_type  = v.type;
+            updates.passing_value = v.value;
+        }
         const { data, error } = await examDb.from('quizzes').update(updates).eq('id', req.params.id).select().single();
         if (error) throw error;
         res.json(data);
@@ -395,9 +410,12 @@ exports.gradeAttempt = async (req, res) => {
         if (manual_score === undefined || manual_score === null || manual_score < 0 || manual_score > attempt.total_questions)
             return res.status(400).json({ error: `Điểm phải từ 0 đến ${attempt.total_questions}.` });
 
+        // Điểm cuối = manual_score → tính lại nhãn đạt/không đạt nếu đề có cấu hình ngưỡng.
+        const passed = computePassed(exam.passing_type, exam.passing_value, manual_score, attempt.total_questions);
+
         const { data, error } = await examDb.from('quiz_attempts')
             .update({
-                manual_score, feedback: feedback || null,
+                manual_score, feedback: feedback || null, passed,
                 status: 'graded', graded_by: req.user.id, graded_at: new Date().toISOString(),
             })
             .eq('id', req.params.id).select().single();
@@ -573,7 +591,8 @@ exports.submitExamAttempt = async (req, res) => {
             return res.status(403).json({ error: 'Bạn đã hết số lần làm bài cho phép.' });
 
         // Đề thi ở chế độ giám sát?
-        const { data: exam } = await examDb.from('quizzes').select('mode').eq('id', assignment.exam_id).single();
+        const { data: exam } = await examDb.from('quizzes')
+            .select('mode,passing_type,passing_value').eq('id', assignment.exam_id).single();
         const isProctored = exam?.mode === 'proctored';
 
         const { data: questions } = await examDb.from('quiz_questions')
@@ -588,9 +607,14 @@ exports.submitExamAttempt = async (req, res) => {
             if (isCorrect(q, answers?.[q.id])) score++;
         });
 
+        // Câu tự luận cần chấm tay/AI → hoãn tính passed cho tới khi chấm xong (gradeAttempt).
+        const passed = hasShortAnswer
+            ? null
+            : computePassed(exam?.passing_type, exam?.passing_value, score, questions.length);
+
         const { data: attempt, error: insErr } = await examDb.from('quiz_attempts').insert({
             quiz_id: assignment.exam_id, user_id: req.user.id,
-            score, total_questions: questions.length, answers: answers || {},
+            score, total_questions: questions.length, answers: answers || {}, passed,
             assignment_id: assignment.id, attempt_number: (count || 0) + 1,
             status: hasShortAnswer ? 'pending_review' : 'graded',
             mode: exam?.mode || 'normal',
