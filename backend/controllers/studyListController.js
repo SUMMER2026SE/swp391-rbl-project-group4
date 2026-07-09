@@ -6,10 +6,11 @@ const { supabaseAdmin } = require('../config/supabase');
 // tới 1 trong 3 bảng này, validate ở đây thay vì ở tầng DB.
 const TABLE_BY_TYPE = { vocabulary: 'vocabulary', kanji: 'kanji', grammar: 'grammar_points' };
 const LIST_TYPES = Object.keys(TABLE_BY_TYPE);
+const LEVELS = ['N5', 'N4', 'N3', 'N2', 'N1'];
 
-// GET /api/study-lists?type=&sort=newest|popular&search=&page=&limit=
+// GET /api/study-lists?type=&level=&sort=newest|popular&search=&page=&limit=
 exports.list = async (req, res) => {
-  const { type, sort = 'newest', search, mine } = req.query;
+  const { type, level, sort = 'newest', search, mine } = req.query;
   if (!LIST_TYPES.includes(type)) return res.status(400).json({ error: 'type phải là vocabulary, kanji hoặc grammar.' });
 
   const p   = Math.max(1, Number(req.query.page) || 1);
@@ -20,6 +21,8 @@ exports.list = async (req, res) => {
     let query = supabaseAdmin.from('study_list_posts')
       .select('*', { count: 'exact' })
       .eq('list_type', type);
+
+    if (level) query = query.eq('level', level);
 
     // mine=true — chỉ giáo viên/admin xem bài đăng của chính mình (trang quản lý)
     if (mine === 'true' && req.user) query = query.eq('created_by', req.user.id);
@@ -96,16 +99,17 @@ exports.getOne = async (req, res) => {
   }
 };
 
-// POST /api/study-lists  { list_type, title, description }
+// POST /api/study-lists  { list_type, title, description, level }
 exports.create = async (req, res) => {
-  const { list_type, title, description } = req.body;
+  const { list_type, title, description, level } = req.body;
   if (!LIST_TYPES.includes(list_type)) return res.status(400).json({ error: 'list_type phải là vocabulary, kanji hoặc grammar.' });
   if (!title?.trim()) return res.status(400).json({ error: 'Tiêu đề là bắt buộc.' });
+  if (!LEVELS.includes(level)) return res.status(400).json({ error: 'level phải là N5, N4, N3, N2 hoặc N1.' });
 
   const creator_type = req.user.user_metadata?.role === 'admin' ? 'admin' : 'teacher';
   try {
     const { data, error } = await supabaseAdmin.from('study_list_posts')
-      .insert({ list_type, title: title.trim(), description: description || null, creator_type, created_by: req.user.id })
+      .insert({ list_type, title: title.trim(), description: description || null, level, creator_type, created_by: req.user.id })
       .select().single();
     if (error) throw error;
     res.status(201).json(data);
@@ -129,7 +133,10 @@ exports.update = async (req, res) => {
     if (!post) return res.status(404).json({ error: 'Không tìm thấy.' });
     if (!allowed) return res.status(403).json({ error: 'Bạn không có quyền sửa bài đăng này.' });
 
-    const allowedFields = ['title', 'description'];
+    if (req.body.level !== undefined && !LEVELS.includes(req.body.level))
+      return res.status(400).json({ error: 'level phải là N5, N4, N3, N2 hoặc N1.' });
+
+    const allowedFields = ['title', 'description', 'level'];
     const updates = Object.fromEntries(Object.entries(req.body).filter(([k]) => allowedFields.includes(k)));
     updates.updated_at = new Date().toISOString();
 

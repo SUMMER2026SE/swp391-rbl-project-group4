@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
 import StudentLayout from '../../components/layout/StudentLayout';
+import StudyListPreview from '../../components/shared/StudyListPreview';
 import Alert from '../../components/ui/Alert';
 import api from '../../lib/api';
 import { renderMarkdown } from '../../lib/renderPreview';
@@ -82,10 +82,6 @@ export default function Grammar() {
           )}
         </div>
         <div className="flex gap-2 items-center">
-          <Link to="/study-lists/grammar"
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-outline text-charcoal text-sm font-semibold hover:border-tsubaki-red transition-all">
-            <span className="material-symbols-outlined text-base">library_books</span> Bài đăng
-          </Link>
           <form onSubmit={handleSearch} className="flex gap-2">
             <input
               value={search}
@@ -99,6 +95,8 @@ export default function Grammar() {
           </form>
         </div>
       </div>
+
+      <StudyListPreview type="grammar" />
 
       {/* Level filter */}
       <div className="flex flex-wrap gap-2 mb-6">

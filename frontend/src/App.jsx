@@ -42,8 +42,8 @@ import FlashcardStudy        from './pages/student/FlashcardStudy';
 import FlashcardLearn        from './pages/student/FlashcardLearn';
 import FlashcardTest         from './pages/student/FlashcardTest';
 import FlashcardFolderDetail from './pages/student/FlashcardFolderDetail';
-import StudyListBrowse from './pages/student/StudyListBrowse';
 import StudyListDetail from './pages/student/StudyListDetail';
+import StudyListItemDetail from './pages/student/StudyListItemDetail';
 // Teacher pages
 import TeacherDashboard  from './pages/teacher/TeacherDashboard';
 import TeacherCourses    from './pages/teacher/TeacherCourses';
@@ -51,6 +51,7 @@ import TeacherCourseContent from './pages/teacher/TeacherCourseContent';
 import UnitEditPage      from './pages/shared/UnitEditPage';
 import TeacherVocabulary from './pages/teacher/TeacherVocabulary';
 import TeacherKanji      from './pages/teacher/TeacherKanji';
+import TeacherGrammar    from './pages/teacher/TeacherGrammar';
 import TeacherClasses    from './pages/teacher/TeacherClasses';
 import TeacherDictionary from './pages/teacher/TeacherDictionary';
 import TeacherQuestionBank from './pages/teacher/TeacherQuestionBank';
@@ -120,8 +121,8 @@ export default function App() {
             <Route path="/grammar"    element={<StudentRoute><Grammar /></StudentRoute>} />
             <Route path="/kanji"      element={<StudentRoute><Kanji /></StudentRoute>} />
             <Route path="/kanji/writing" element={<StudentRoute><KanjiWriting /></StudentRoute>} />
-            <Route path="/study-lists/:type"     element={<StudentRoute><StudyListBrowse /></StudentRoute>} />
             <Route path="/study-lists/:type/:id" element={<StudentRoute><StudyListDetail /></StudentRoute>} />
+            <Route path="/study-lists/:type/:id/:itemId" element={<StudentRoute><StudyListItemDetail /></StudentRoute>} />
             <Route path="/writing"    element={<StudentRoute><Writing /></StudentRoute>} />
             <Route path="/listening"       element={<StudentRoute><Listening /></StudentRoute>} />
             <Route path="/placement-test" element={<StudentRoute><PlacementTest /></StudentRoute>} />
@@ -160,6 +161,7 @@ export default function App() {
             <Route path="/teacher/lessons/:lessonId/kanji"      element={<TeacherRoute><AdminLessonKanji /></TeacherRoute>} />
             <Route path="/teacher/vocab" element={<TeacherRoute><TeacherVocabulary /></TeacherRoute>} />
             <Route path="/teacher/kanji"    element={<TeacherRoute><TeacherKanji /></TeacherRoute>} />
+            <Route path="/teacher/grammar"  element={<TeacherRoute><TeacherGrammar /></TeacherRoute>} />
             <Route path="/teacher/study-lists" element={<TeacherRoute><TeacherStudyLists /></TeacherRoute>} />
             <Route path="/teacher/classes"  element={<TeacherRoute><TeacherClasses /></TeacherRoute>} />
             <Route path="/teacher/dictionary" element={<TeacherRoute><TeacherDictionary /></TeacherRoute>} />
