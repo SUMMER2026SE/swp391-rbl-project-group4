@@ -3,29 +3,33 @@ import { Link, useNavigate } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import { useAuth } from '../../contexts/AuthContext';
 import { useLang } from '../../contexts/LangContext';
+import { useSubscription } from '../../hooks/useSubscription';
 
 const STUDENT_LINKS = (t) => [
-  { to: '/dashboard',  icon: 'dashboard',     label: t('dashboard.title') },
-  { to: '/courses',    icon: 'menu_book',      label: t('courses.title') },
-  { to: '/vocabulary', icon: 'translate',      label: t('vocab.title') },
-  { to: '/grammar',   icon: 'spellcheck',     label: 'Ngữ pháp' },
-  { to: '/kanji',      icon: 'font_download',  label: 'Kanji' },
-  { to: '/listening',  icon: 'headphones',     label: 'Luyện nghe' },
-  { to: '/writing',    icon: 'edit_note',      label: 'Luyện viết' },
-  { to: '/dictionary', icon: 'auto_stories',   label: t('dictionary.title') },
-  { to: '/flashcards', icon: 'style',          label: 'Thẻ ghi nhớ' },
-  { to: '/news',       icon: 'newspaper',      label: 'Đọc báo' },
-  { to: '/classes',    icon: 'groups',         label: 'Lớp học' },
-  { to: '/exams',      icon: 'quiz',           label: 'Đề thi' },
-  { to: '/chat',       icon: 'smart_toy',      label: 'Trợ lý AI' },
-  { to: '/profile',    icon: 'person',         label: t('profile.title') },
+  { to: '/dashboard',      icon: 'dashboard',       label: t('dashboard.title') },
+  { to: '/courses',        icon: 'menu_book',        label: t('courses.title') },
+  { to: '/vocabulary',     icon: 'translate',        label: t('vocab.title') },
+  { to: '/grammar',        icon: 'spellcheck',       label: 'Ngữ pháp' },
+  { to: '/kanji',          icon: 'font_download',    label: 'Kanji' },
+  { to: '/listening',      icon: 'headphones',       label: 'Luyện nghe' },
+  { to: '/placement-test', icon: 'assignment_ind',   label: 'Kiểm tra NL' },
+  { to: '/writing',        icon: 'edit_note',        label: 'Luyện viết' },
+  { to: '/dictionary',     icon: 'auto_stories',     label: t('dictionary.title') },
+  { to: '/flashcards',     icon: 'style',            label: 'Thẻ ghi nhớ' },
+  { to: '/news',           icon: 'newspaper',        label: 'Đọc báo' },
+  { to: '/classes',        icon: 'groups',           label: 'Lớp học' },
+  { to: '/exams',          icon: 'quiz',             label: 'Đề thi' },
+  { to: '/chat',           icon: 'smart_toy',        label: 'Trợ lý AI' },
+  { to: '/profile',        icon: 'person',           label: t('profile.title') },
 ];
 
 export default function StudentLayout({ children, title }) {
   const { user, logout } = useAuth();
-  const { t, lang, switchLang } = useLang();
+  const { t } = useLang();
   const navigate = useNavigate();
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const { data: subData, loading: subLoading } = useSubscription();
+  const isPremium = subData?.tier === 'premium';
 
   const handleLogout = async () => {
     await logout();
@@ -46,15 +50,24 @@ export default function StudentLayout({ children, title }) {
           </div>
 
           <div className="flex items-center gap-3">
-            {/* Lang toggle */}
-            <div className="flex gap-1">
-              {['vi','ja'].map(l => (
-                <button key={l} onClick={() => switchLang(l)}
-                  className={`text-xs px-2 py-1 rounded-lg font-semibold transition-colors ${lang === l ? 'bg-tsubaki-red text-white' : 'text-on-muted hover:bg-surface-low'}`}>
-                  {l === 'vi' ? 'VI' : 'JP'}
+            {/* Subscription chip */}
+            {!subLoading && (
+              isPremium ? (
+                <button
+                  onClick={() => navigate('/subscription')}
+                  className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-400 hover:bg-amber-500 text-white text-xs font-bold transition-colors shadow-sm shadow-amber-200">
+                  <span className="material-symbols-outlined text-sm">workspace_premium</span>
+                  Premium
                 </button>
-              ))}
-            </div>
+              ) : (
+                <button
+                  onClick={() => navigate('/subscription')}
+                  className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border-2 border-amber-400 text-amber-600 hover:bg-amber-50 text-xs font-bold transition-colors">
+                  <span className="material-symbols-outlined text-sm">bolt</span>
+                  Nâng cấp
+                </button>
+              )
+            )}
 
             {/* Avatar dropdown */}
             <div className="relative">

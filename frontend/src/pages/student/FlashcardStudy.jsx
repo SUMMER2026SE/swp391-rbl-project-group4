@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import StudentLayout from '../../components/layout/StudentLayout';
 import Alert from '../../components/ui/Alert';
@@ -7,6 +7,9 @@ import FlashcardModeTabs from '../../components/flashcards/FlashcardModeTabs';
 import api from '../../lib/api';
 
 const FRONT_KEY = 'flashcard.frontSide';
+const TRACK_KEY = 'flashcard.trackProgress';
+const posKeyOf = (setId) => `flashcard.pos.${setId}`;
+const END_MARK  = '__end__'; // đã xem đến cuối lượt → lần vào sau bắt đầu lượt mới
 const shuffle = (arr) => {
   const a = arr.slice();
   for (let i = a.length - 1; i > 0; i--) {
@@ -30,7 +33,8 @@ export default function FlashcardStudy() {
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState('');
 
-  const [trackProgress, setTrackProgress] = useState(false);
+  const [trackProgress, setTrackProgress] = useState(() => localStorage.getItem(TRACK_KEY) === '1');
+  const skipSaveRef = useRef(false); // chặn effect lưu vị trí ghi đè key ngay sau khi resume (StrictMode chạy load 2 lần)
   const [frontSide, setFrontSide] = useState(() => localStorage.getItem(FRONT_KEY) || 'term');
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [noAnim, setNoAnim] = useState(false);
@@ -47,7 +51,7 @@ export default function FlashcardStudy() {
     (async () => {
       const [setRes, progRes] = await Promise.allSettled([
         api.get(`/flashcards/sets/${id}`),
-        api.get(`/flashcards/sets/${id}/progress`),
+        api.get(`/flashcards/sets/${id}/progress?mode=cards`),
       ]);
       const prog = progRes.status === 'fulfilled'
         ? (progRes.value.data.data || progRes.value.data || {})
@@ -57,7 +61,30 @@ export default function FlashcardStudy() {
         const data = setRes.value.data.data || setRes.value.data;
         const cards = data.cards || data.flashcards || [];
         setSet(data);
-        setDeck(cards); // nạp toàn bộ thẻ → bộ đếm luôn 1/N … N/N
+        const saved = localStorage.getItem(posKeyOf(id));
+        skipSaveRef.current = true; // deck/pos sắp đổi do resume, KHÔNG phải do người dùng → đừng ghi đè key
+        if (saved === END_MARK) {
+          // Lượt trước đã xem đến cuối → lượt mới chỉ gồm thẻ CHƯA thuộc (thuộc hết → toàn bộ), từ thẻ 1
+          const learning = cards.filter(c => prog[c.id] !== 'mastered');
+          setDeck(learning.length ? learning : cards);
+          setPos(0);
+        } else {
+          // Đang xem dở → khôi phục NGUYÊN lượt trước đó: đúng bộ thẻ của lượt (kể cả đã lọc/trộn) + đúng vị trí
+          let roundDeck = cards;
+          let curId = saved;
+          if (saved && saved.startsWith('{')) {
+            try {
+              const r = JSON.parse(saved);
+              const byId = new Map(cards.map(c => [String(c.id), c]));
+              const restored = (r.ids || []).map(x => byId.get(String(x))).filter(Boolean);
+              if (restored.length) roundDeck = restored;
+              curId = r.cur;
+            } catch { /* key hỏng → rơi về toàn bộ thẻ */ }
+          }
+          setDeck(roundDeck);
+          const idx = roundDeck.findIndex(c => String(c.id) === String(curId));
+          setPos(idx >= 0 ? idx : 0);
+        }
       } else {
         setError(setRes.reason?.message || 'Không thể tải học phần.');
       }
@@ -66,6 +93,18 @@ export default function FlashcardStudy() {
   }, [id]);
 
   useEffect(() => { localStorage.setItem(FRONT_KEY, frontSide); }, [frontSide]);
+  useEffect(() => { localStorage.setItem(TRACK_KEY, trackProgress ? '1' : '0'); }, [trackProgress]);
+  // Lưu TRẠNG THÁI LƯỢT đang học: bộ thẻ của lượt + thẻ đang đứng (kể cả đứng ở thẻ cuối);
+  // chỉ khi HOÀN THÀNH lượt (đã đi qua hết thẻ) → đánh dấu END để lần sau bắt đầu lượt mới
+  useEffect(() => {
+    const card = deck[pos];
+    if (!card) return;
+    if (skipSaveRef.current) { skipSaveRef.current = false; return; } // lần đổi deck/pos do resume → bỏ qua
+    localStorage.setItem(
+      posKeyOf(id),
+      done ? END_MARK : JSON.stringify({ ids: deck.map(c => c.id), cur: card.id })
+    );
+  }, [deck, pos, id, done]);
 
   const totalCards = set?.cards?.length ?? set?.flashcards?.length ?? deck.length;
   const masteredCount = useMemo(
@@ -93,7 +132,7 @@ export default function FlashcardStudy() {
     else setPos(pos + 1);
 
     try {
-      await api.put(`/flashcards/sets/${id}/progress`, { card_id: card.id, status });
+      await api.put(`/flashcards/sets/${id}/progress`, { card_id: card.id, status, mode: 'cards' });
     } catch (e) {
       setError(e.message);
     }
@@ -117,9 +156,9 @@ export default function FlashcardStudy() {
 
     try {
       if (last.prevStatus === undefined) {
-        await api.delete(`/flashcards/sets/${id}/progress/${last.cardId}`);
+        await api.delete(`/flashcards/sets/${id}/progress/${last.cardId}?mode=cards`);
       } else {
-        await api.put(`/flashcards/sets/${id}/progress`, { card_id: last.cardId, status: last.prevStatus });
+        await api.put(`/flashcards/sets/${id}/progress`, { card_id: last.cardId, status: last.prevStatus, mode: 'cards' });
       }
     } catch (e) {
       setError(e.message);
@@ -146,7 +185,7 @@ export default function FlashcardStudy() {
     setDone(false);
     setHistory([]);
     try {
-      await api.delete(`/flashcards/sets/${id}/progress`);
+      await api.delete(`/flashcards/sets/${id}/progress?mode=cards`);
     } catch (e) {
       setError(e.message);
     }
@@ -208,20 +247,16 @@ export default function FlashcardStudy() {
 
   return (
     <StudentLayout title="Thẻ ghi nhớ">
-      {/* ── Quay lại ────────────────────────────────────────────── */}
-      <Link to="/flashcards" className="inline-flex items-center gap-1 text-sm text-on-muted hover:text-tsubaki-red transition-colors mb-4">
-        <span className="material-symbols-outlined text-lg">arrow_back</span>
-        Trở về
-      </Link>
-
-      <FlashcardModeTabs setId={id} active="cards" />
-
-      {/* ── Header ──────────────────────────────────────────────── */}
-      <div className="flex items-end justify-between gap-4 mb-6">
-        <div className="min-w-0">
-          <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-on-muted mb-1">Chế độ thẻ ghi nhớ</p>
-          <h1 className="font-display text-xl sm:text-2xl font-bold text-on-surface truncate">{set?.title}</h1>
-        </div>
+      {/* ── Header: nút back + tên học phần + vòng tiến độ ──────── */}
+      <div className="flex items-center gap-3 mb-4">
+        <Link
+          to="/flashcards"
+          title="Trở về"
+          className="w-9 h-9 flex items-center justify-center rounded-lg hover:bg-surface-low text-on-muted hover:text-charcoal transition-colors shrink-0"
+        >
+          <span className="material-symbols-outlined">arrow_back</span>
+        </Link>
+        <h1 className="font-display text-xl sm:text-2xl font-bold text-on-surface truncate flex-1">{set?.title}</h1>
         <div className="flex items-center gap-3 shrink-0">
           <div className="text-right hidden sm:block">
             <p className="text-sm font-bold text-tsubaki-red leading-tight">Đã thuộc</p>
@@ -231,12 +266,15 @@ export default function FlashcardStudy() {
         </div>
       </div>
 
+      <FlashcardModeTabs setId={id} active="cards" />
+
       {error && <div className="mb-6"><Alert type="error" onClose={() => setError('')}>{error}</Alert></div>}
 
       {/* ── Toolbar ─────────────────────────────────────────────── */}
       <div className="flex items-center justify-between gap-3 mb-6">
         <button
           onClick={() => setTrackProgress(t => !t)}
+          aria-pressed={trackProgress}
           className="inline-flex items-center gap-2 text-sm font-semibold transition-colors"
         >
           <span className={`relative w-10 h-6 rounded-full transition-colors ${trackProgress ? 'bg-tsubaki-red' : 'bg-outline'}`}>
@@ -256,6 +294,9 @@ export default function FlashcardStudy() {
           <div className="relative">
             <button
               onClick={() => setSettingsOpen(o => !o)}
+              aria-haspopup="menu"
+              aria-expanded={settingsOpen}
+              aria-label="Cài đặt"
               className="w-9 h-9 flex items-center justify-center rounded-xl text-on-muted hover:text-tsubaki-red hover:bg-surface-low transition-colors"
             >
               <span className="material-symbols-outlined">settings</span>
@@ -296,15 +337,15 @@ export default function FlashcardStudy() {
       {/* ── Thẻ / kết quả ───────────────────────────────────────── */}
       {done ? (
         <div className="flex flex-col items-center justify-center py-16 text-center glass-card rounded-2xl px-6">
-          <span className="material-symbols-outlined text-6xl text-tsubaki-red/30 mb-3">celebration</span>
+          <span className="material-symbols-outlined text-6xl text-tsubaki-red/30 mb-3 animate-bounce">celebration</span>
           <p className="font-display text-lg font-bold text-on-surface mb-1">Hoàn thành lượt học!</p>
           <div className="flex items-center gap-8 my-5">
             <div className="text-center">
-              <p className="text-3xl font-bold text-green-600">{roundMastered}</p>
+              <p className="text-3xl font-bold text-success">{roundMastered}</p>
               <p className="text-xs text-on-muted">Đã thuộc</p>
             </div>
             <div className="text-center">
-              <p className="text-3xl font-bold text-amber-600">{roundLearning}</p>
+              <p className="text-3xl font-bold text-warning">{roundLearning}</p>
               <p className="text-xs text-on-muted">Chưa thuộc</p>
             </div>
           </div>
@@ -348,15 +389,19 @@ export default function FlashcardStudy() {
             {progress[current.id] && (
               <span className={`absolute top-4 right-4 z-20 text-xs font-bold px-2.5 py-1 rounded-full ${
                 progress[current.id] === 'mastered'
-                  ? 'bg-green-100 text-green-700'
-                  : 'bg-amber-100 text-amber-700'
+                  ? 'bg-success-bg text-green-700'
+                  : 'bg-warning-bg text-amber-700'
               }`}>
                 {progress[current.id] === 'mastered' ? 'Đã thuộc' : 'Chưa thuộc'}
               </span>
             )}
             <div
+              role="button"
+              tabIndex={0}
+              aria-label="Lật thẻ (Space hoặc Enter)"
               onClick={() => setFlipped(f => !f)}
-              className={`fc-flip h-72 sm:h-96 cursor-pointer select-none ${flipped ? 'is-flipped' : ''} ${noAnim ? 'no-anim' : ''}`}
+              onKeyDown={e => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); setFlipped(f => !f); } }}
+              className={`fc-flip h-72 sm:h-96 cursor-pointer select-none focus-visible:outline-none ${flipped ? 'is-flipped' : ''} ${noAnim ? 'no-anim' : ''}`}
             >
               <div className="fc-flip-inner">
                 {/* Mặt trước */}
@@ -391,35 +436,33 @@ export default function FlashcardStudy() {
 
           {/* Điều hướng — khi theo dõi tiến độ: X (chưa thuộc) / ✓ (đã thuộc) + Hoàn tác */}
           {trackProgress ? (
-            <>
-              <div className="flex items-center justify-center gap-8 mt-6">
-                <button
-                  onClick={() => answer('learning')}
-                  title="Chưa thuộc"
-                  className="w-14 h-14 flex items-center justify-center rounded-full border-2 border-error/40 text-error hover:bg-error hover:text-white transition-colors"
-                >
-                  <span className="material-symbols-outlined text-2xl">close</span>
-                </button>
+            <div className="flex items-center justify-center gap-8 mt-6">
+              <button
+                onClick={() => answer('learning')}
+                title="Chưa thuộc"
+                className="w-14 h-14 flex items-center justify-center rounded-full border-2 border-error/40 text-error hover:bg-error hover:text-white transition-colors"
+              >
+                <span className="material-symbols-outlined text-2xl">close</span>
+              </button>
+              <div className="flex flex-col items-center gap-1">
                 <span className="text-sm font-medium text-on-muted tabular-nums">{pos + 1}/{deck.length}</span>
-                <button
-                  onClick={() => answer('mastered')}
-                  title="Đã thuộc"
-                  className="w-14 h-14 flex items-center justify-center rounded-full border-2 border-green-500/40 text-green-600 hover:bg-green-500 hover:text-white transition-colors"
-                >
-                  <span className="material-symbols-outlined text-2xl">check</span>
-                </button>
-              </div>
-              <div className="flex justify-center mt-4">
                 <button
                   onClick={handleUndo}
                   disabled={!history.length}
-                  className="inline-flex items-center gap-1.5 text-sm font-medium text-on-muted hover:text-tsubaki-red disabled:opacity-30 disabled:hover:text-on-muted px-3 py-2 rounded-xl hover:bg-surface-low transition-colors"
+                  className="inline-flex items-center gap-1 text-xs font-medium text-on-muted hover:text-tsubaki-red disabled:opacity-30 disabled:hover:text-on-muted transition-colors"
                 >
-                  <span className="material-symbols-outlined text-lg">undo</span>
+                  <span className="material-symbols-outlined text-base">undo</span>
                   Hoàn tác
                 </button>
               </div>
-            </>
+              <button
+                onClick={() => answer('mastered')}
+                title="Đã thuộc"
+                className="w-14 h-14 flex items-center justify-center rounded-full border-2 border-green-500/40 text-success hover:bg-green-500 hover:text-white transition-colors"
+              >
+                <span className="material-symbols-outlined text-2xl">check</span>
+              </button>
+            </div>
           ) : (
             <div className="flex items-center justify-center gap-8 mt-6">
               <button
@@ -440,7 +483,13 @@ export default function FlashcardStudy() {
             </div>
           )}
         </>
-      ) : null}
+      ) : (
+        <div className="flex flex-col items-center justify-center py-24 text-center">
+          <span className="material-symbols-outlined text-6xl text-on-muted/20 mb-4">style</span>
+          <p className="font-semibold text-on-surface mb-1">Học phần chưa có thẻ nào</p>
+          <p className="text-sm text-on-muted">Thêm thẻ để bắt đầu học.</p>
+        </div>
+      )}
 
       {/* ── Danh sách toàn bộ thẻ, phân theo trạng thái ─────────── */}
       {allCards.length > 0 && (
@@ -448,13 +497,13 @@ export default function FlashcardStudy() {
           <CardGroup
             title="Đang học"
             icon="hourglass_top"
-            color="text-amber-600"
+            color="text-warning"
             cards={learningCards}
           />
           <CardGroup
             title="Đã thuộc"
             icon="check_circle"
-            color="text-green-600"
+            color="text-success"
             cards={masteredCards}
           />
         </div>

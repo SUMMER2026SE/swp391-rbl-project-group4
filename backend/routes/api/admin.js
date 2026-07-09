@@ -23,6 +23,16 @@ const audioUpload = multer({
   },
 });
 
+// Video bài học — 50MB: trần upload mỗi file của Supabase gói free, đồng bộ với bucket lesson-videos.
+const videoUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 50 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const ok = ['video/mp4', 'video/webm'].includes(file.mimetype);
+    ok ? cb(null, true) : cb(new Error('Chỉ chấp nhận file video MP4/WebM.'));
+  },
+});
+
 router.use(requireAuth, requireAdmin);
 
 // ── System status ─────────────────────────────────────────────────────────────
@@ -122,6 +132,7 @@ router.post('/lessons',              c.createLesson);
 router.put('/lessons/:id',           c.updateLesson);
 router.delete('/lessons/:id',        c.deleteLesson);
 router.patch('/lessons/reorder',     c.reorderLessons);
+router.post('/lessons/upload-video', videoUpload.single('video'), c.uploadLessonVideo);
 
 // Vocabulary
 router.get('/vocabulary',         c.listVocab);
@@ -144,11 +155,29 @@ router.post('/grammar-points',        c.createGrammarPoint);
 router.put('/grammar-points/:id',     c.updateGrammarPoint);
 router.delete('/grammar-points/:id',  c.deleteGrammarPoint);
 
-// Gắn/gỡ từ vựng & kanji có sẵn vào Mục (bảng nối nhiều–nhiều)
+// Gắn/gỡ từ vựng & kanji & ngữ pháp có sẵn vào Mục (bảng nối nhiều–nhiều)
 router.post('/lessons/:lessonId/vocabulary/attach',     c.attachVocab);
 router.delete('/lessons/:lessonId/vocabulary/:vocabId', c.detachVocab);
 router.post('/lessons/:lessonId/kanji/attach',          c.attachKanji);
 router.delete('/lessons/:lessonId/kanji/:kanjiId',      c.detachKanji);
+router.post('/lessons/:lessonId/grammar-points/attach',       c.attachGrammar);
+router.delete('/lessons/:lessonId/grammar-points/:grammarId', c.detachGrammar);
+
+// Bulk import vào Mục qua file (Word/Excel/CSV/JSON) — chỉ parse + preview, chưa ghi DB.
+// Xác nhận nhập dùng lại /vocabulary/import, /kanji/import, /grammar-points/import
+// với lesson_id trên từng dòng.
+const fic = require('../../controllers/importFileController');
+const importFileUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const ok = /\.(json|csv|xlsx|xls|docx)$/i.test(file.originalname);
+    ok ? cb(null, true) : cb(new Error('Chỉ chấp nhận file .json, .csv, .xlsx, .xls, .docx.'));
+  },
+});
+router.post('/lessons/:lessonId/vocabulary/import-file',     importFileUpload.single('file'), fic.previewVocabFile);
+router.post('/lessons/:lessonId/kanji/import-file',          importFileUpload.single('file'), fic.previewKanjiFile);
+router.post('/lessons/:lessonId/grammar-points/import-file', importFileUpload.single('file'), fic.previewGrammarFile);
 
 // Content submissions
 router.get('/submissions',                    c.listSubmissions);
@@ -212,5 +241,34 @@ router.get('/news/:id',                news.adminGetOne);
 router.post('/news',                   news.create);
 router.put('/news/:id',                news.update);
 router.delete('/news/:id',             news.remove);
+
+// Subscription / payments (admin)
+const sc = require('../../controllers/subscriptionController');
+router.get('/subscriptions/users',        sc.adminGetUsersWithSubscription);
+router.get('/subscriptions',              sc.adminGetSubscriptions);
+router.post('/subscriptions/grant',       sc.adminGrantSubscription);
+router.delete('/subscriptions/:userId',   sc.adminCancelSubscription);
+router.get('/payments',                   sc.adminGetPayments);
+router.post('/payments/reconcile', async (req, res) => {
+  const { reconcilePendingOrders } = require('../../services/paymentMatchingService');
+  try {
+    const result = await reconcilePendingOrders();
+    res.json({ ok: true, ...result });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Placement Test — Question Bank
+const pc = require('../../controllers/placementController');
+router.get('/placement/stats',                pc.adminGetStats);
+router.get('/placement/config',               pc.adminGetConfig);
+router.put('/placement/config',               pc.adminUpdateConfig);
+router.get('/placement/questions',            pc.adminListQuestions);
+router.get('/placement/questions/:id',        pc.adminGetQuestion);
+router.post('/placement/questions',           pc.adminCreateQuestion);
+router.put('/placement/questions/:id',        pc.adminUpdateQuestion);
+router.patch('/placement/questions/:id/toggle', pc.adminToggleQuestion);
+router.delete('/placement/questions/:id',     pc.adminDeleteQuestion);
 
 module.exports = router;

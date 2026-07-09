@@ -19,20 +19,19 @@ export default function FlashcardLearn() {
   const [error, setError]     = useState('');
 
   // ── State phiên học ──
-  const [queue, setQueue]               = useState([]); // thẻ chưa kết thúc trong lượt, theo thứ tự
   const [sessionList, setSessionList]   = useState([]); // toàn bộ thẻ của lượt (cố định)
-  const [stage, setStage]               = useState({}); // cardId -> 'mc' | 'write'
+  const [pending, setPending]           = useState([]); // thẻ MỚI chưa đưa vào batch nào
+  const [work, setWork]                 = useState([]); // câu hỏi của batch hiện tại (động — nối thêm khi lặp)
+  const [batchCards, setBatchCards]     = useState([]); // các thẻ của batch hiện tại (cho summary)
   const [mcAtt, setMcAtt]               = useState({}); // cardId -> số lần đã hỏi trắc nghiệm
   const [wrAtt, setWrAtt]               = useState({}); // cardId -> số lần đã hỏi tự luận
   const [doneCount, setDoneCount]       = useState(0);  // số thẻ đã thuộc trong lượt (chỉ tăng)
   const [masteredIds, setMasteredIds]   = useState([]); // id thẻ đã thuộc trong lượt
-  const [answeredTotal, setAnsweredTotal] = useState(0);// tổng số câu đã trả lời
-  const [questions, setQuestions] = useState([]); // câu hỏi của đợt hiện tại
   const [pos, setPos]             = useState(0);
-  const [results, setResults]     = useState([]); // kết quả đợt: [{card, type, correct, userAnswer, correctAnswer}]
+  const [results, setResults]     = useState([]); // log câu trả lời của batch: [{card, type, correct}]
   const [roundOver, setRoundOver] = useState(false);
   const [sessionOver, setSessionOver] = useState(false);
-  const [roundNum, setRoundNum]   = useState(0);  // số thứ tự đợt hiện tại
+  const [roundNum, setRoundNum]   = useState(0);  // số thứ tự đợt (batch) hiện tại
 
   // Trả lời câu hiện tại
   const [selected, setSelected]   = useState(null);   // lựa chọn MC
@@ -46,7 +45,7 @@ export default function FlashcardLearn() {
       setLoading(true);
       const [setRes, progRes] = await Promise.allSettled([
         api.get(`/flashcards/sets/${id}`),
-        api.get(`/flashcards/sets/${id}/progress`),
+        api.get(`/flashcards/sets/${id}/progress?mode=learn`),
       ]);
       const prog = progRes.status === 'fulfilled'
         ? (progRes.value.data.data || progRes.value.data || {})
@@ -57,7 +56,8 @@ export default function FlashcardLearn() {
         setSet(data);
         setAllCards(cards);
         setProgress(prog);
-        startSession(cards);
+        // Vào lại = học tiếp: chỉ học thẻ CHƯA thuộc (bỏ qua thẻ đã thuộc); distractors lấy từ toàn bộ thẻ
+        startSession(cards.filter(c => prog[c.id] !== 'mastered'), cards);
       } else {
         setError(setRes.reason?.message || 'Không thể tải học phần.');
       }
@@ -66,28 +66,28 @@ export default function FlashcardLearn() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
-  // ── Dựng 1 câu hỏi cho thẻ theo stage hiện tại ──
-  // Trắc nghiệm: hướng ngẫu nhiên (cả 2 chiều). Tự luận: LUÔN định nghĩa → gõ từ (tiếng Nhật).
-  const buildQuestion = (card, stageMap, cards) => {
-    const st = stageMap[card.id] || 'mc';
-    if (st === 'mc') {
+  // ── Dựng 1 câu hỏi cho thẻ theo dạng mong muốn ──
+  // 'mc' → trắc nghiệm hướng ngẫu nhiên (cả 2 chiều); nếu set quá nhỏ (options<2) rơi về tự luận.
+  // 'write' → tự luận: LUÔN định nghĩa → gõ từ (tiếng Nhật).
+  const buildQuestion = (card, wantStage, cards) => {
+    if (wantStage === 'mc') {
       const promptSide = Math.random() < 0.5 ? 'term' : 'definition';
       const answerSide = promptSide === 'term' ? 'definition' : 'term';
       const options = buildMcOptions(cards, card, answerSide, 3);
       if (options.length >= 2) {
         return { card, type: 'mc', options, promptSide, answerSide, correctAnswer: card[answerSide] };
       }
-      // set quá nhỏ để làm trắc nghiệm → rơi về tự luận
     }
-    // Tự luận: hỏi định nghĩa, gõ từ vựng
     return { card, type: 'write', options: null, promptSide: 'definition', answerSide: 'term', correctAnswer: card.term };
   };
 
-  // ── Bắt đầu 1 đợt (round): lấy BATCH thẻ ĐẦU queue (tuần tự, không random) ──
-  const startRound = (currentQueue, stageMap, cards) => {
-    if (!currentQueue.length) { setSessionOver(true); setQuestions([]); return; }
-    const batch = currentQueue.slice(0, Math.min(BATCH, currentQueue.length));
-    setQuestions(batch.map(c => buildQuestion(c, stageMap, cards)));
+  // ── Bắt đầu 1 đợt (batch): lấy BATCH thẻ MỚI đầu pending, mỗi thẻ 1 câu trắc nghiệm ──
+  const startBatch = (pendingList, distractorPool = allCards) => {
+    const group = pendingList.slice(0, Math.min(BATCH, pendingList.length));
+    if (!group.length) { setSessionOver(true); setWork([]); setBatchCards([]); return; }
+    setWork(group.map(c => buildQuestion(c, 'mc', distractorPool)));
+    setBatchCards(group);
+    setPending(pendingList.slice(BATCH));
     setPos(0);
     setResults([]);
     setRoundOver(false);
@@ -98,22 +98,19 @@ export default function FlashcardLearn() {
   };
 
   // ── Khởi tạo/khởi động lại một lượt học (học toàn bộ cardList) ──
-  // distractorPool: tập thẻ dùng để sinh đáp án nhiễu (mặc định = cardList; nên là toàn bộ thẻ).
+  // distractorPool: tập thẻ dùng để sinh đáp án nhiễu (nên là toàn bộ thẻ).
   const startSession = (cardList, distractorPool = cardList) => {
-    setStage({});
     setMcAtt({});
     setWrAtt({});
-    setQueue(cardList);
     setSessionList(cardList);
     setDoneCount(0);
     setMasteredIds([]);
-    setAnsweredTotal(0);
     setSessionOver(false);
     setRoundNum(0);
-    startRound(cardList, {}, distractorPool);
+    startBatch(cardList, distractorPool);
   };
 
-  const q = questions[pos];
+  const q = work[pos];
 
   // ── Ghi nhận câu trả lời ──
   const record = (userAnswer, correct) => {
@@ -134,79 +131,73 @@ export default function FlashcardLearn() {
     record(input, normalize(input) === normalize(q.correctAnswer));
   };
 
-  // ── Sang câu kế / kết đợt ──
-  const proceed = () => {
+  // ── Sang câu kế: quyết định LẶP NGAY trong batch + đánh dấu thuộc khi tự luận đúng ──
+  // mc: đúng HOẶC sai 2 lần → nối câu tự luận vào cuối batch; sai lần 1 → nối lại câu trắc nghiệm.
+  // write: đúng → thuộc; sai lần 1 → nối lại câu tự luận; sai lần 2 → dừng thẻ (chưa thuộc).
+  const proceed = async () => {
+    if (!q) return;
+    const cur = q;
+    const cid = cur.card.id;
+    const correct = answered?.correct;
+
+    const newMc = { ...mcAtt };
+    const newWr = { ...wrAtt };
+    let pushed = null;
+    let mastered = false;
+
+    if (cur.type === 'mc') {
+      newMc[cid] = (newMc[cid] || 0) + 1;
+      pushed = buildQuestion(cur.card, (correct || newMc[cid] >= 2) ? 'write' : 'mc', allCards);
+    } else { // write
+      if (correct) mastered = true;
+      else {
+        newWr[cid] = (newWr[cid] || 0) + 1;
+        if (newWr[cid] < 2) pushed = buildQuestion(cur.card, 'write', allCards);
+      }
+    }
+
+    setMcAtt(newMc);
+    setWrAtt(newWr);
+    const newWork = pushed ? [...work, pushed] : work;
+    if (pushed) setWork(newWork);
+
     setSelected(null);
     setInput('');
     setAnswered(null);
-    if (pos + 1 >= questions.length) finishRound();
+
+    if (pos + 1 >= newWork.length) setRoundOver(true); // hết batch → tổng kết
     else setPos(pos + 1);
-  };
 
-  // ── Xử lý cuối đợt: vòng đời thẻ có giới hạn ──
-  // mc: đúng HOẶC sai 2 lần → lên tự luận; sai lần 1 → còn trắc nghiệm.
-  // write: đúng → thuộc (bỏ khỏi queue); sai lần 1 → hỏi lại tự luận; sai lần 2 → bỏ (chưa thuộc).
-  const finishRound = async () => {
-    const newStage = { ...stage };
-    const newMc = { ...mcAtt };
-    const newWr = { ...wrAtt };
-    const mastered = [];   // thẻ vừa thuộc trong đợt
-    const finished = new Set(); // thẻ kết thúc (thuộc hoặc hết lượt) → rời queue
-
-    results.forEach(res => {
-      const cid = res.card.id;
-      if (res.type === 'mc') {
-        newMc[cid] = (newMc[cid] || 0) + 1;
-        if (res.correct || newMc[cid] >= 2) newStage[cid] = 'write'; // lên tự luận
-        else newStage[cid] = 'mc';                                    // sai lần 1 → còn trắc nghiệm
-      } else { // write
-        if (res.correct) { mastered.push(res.card); finished.add(cid); }
-        else {
-          newWr[cid] = (newWr[cid] || 0) + 1;
-          if (newWr[cid] >= 2) finished.add(cid);                     // sai 2 lần → bỏ (chưa thuộc)
-          else newStage[cid] = 'write';                               // sai lần 1 → hỏi lại tự luận
-        }
-      }
-    });
-
-    // Dựng lại queue: thẻ chưa hỏi ở đợt này giữ nguyên thứ tự, thẻ vừa hỏi (chưa kết thúc) dồn về cuối
-    const roundIds = new Set(results.map(r => r.card.id));
-    const rest = queue.filter(c => !roundIds.has(c.id));
-    const stillActive = results.map(r => r.card).filter(c => !finished.has(c.id));
-    const newQueue = [...rest, ...stillActive];
-
-    setStage(newStage);
-    setMcAtt(newMc);
-    setWrAtt(newWr);
-    setQueue(newQueue);
-    setAnsweredTotal(t => t + results.length);
-    setRoundOver(true);
-
-    if (mastered.length) {
-      setDoneCount(d => d + mastered.length);
-      setMasteredIds(ids => [...ids, ...mastered.map(c => c.id)]);
-      setProgress(p => {
-        const next = { ...p };
-        mastered.forEach(c => { next[c.id] = 'mastered'; });
-        return next;
-      });
+    if (mastered) {
+      setDoneCount(d => d + 1);
+      setMasteredIds(ids => [...ids, cid]);
+      setProgress(p => ({ ...p, [cid]: 'mastered' }));
       try {
-        await Promise.all(mastered.map(c =>
-          api.put(`/flashcards/sets/${id}/progress`, { card_id: c.id, status: 'mastered' })
-        ));
+        await api.put(`/flashcards/sets/${id}/progress`, { card_id: cid, status: 'mastered', mode: 'learn' });
       } catch (e) {
         setError(e.message);
       }
     }
   };
 
-  // ── Tiếp tục đợt kế (hết queue → hoàn thành lượt) ──
+  // ── Tiếp tục sang batch thẻ MỚI (hết pending → hoàn thành lượt) ──
   const continueNext = () => {
-    if (!queue.length) { setSessionOver(true); return; }
-    startRound(queue, stage, allCards);
+    if (!pending.length) { setSessionOver(true); return; }
+    startBatch(pending, allCards);
   };
 
-  // ── Phím tắt: Enter xác nhận/sang câu; 1–4 chọn đáp án trắc nghiệm ──
+  // ── Học lại từ đầu: XOÁ tiến độ chế độ Học trên DB (về 0) rồi học lại toàn bộ thẻ ──
+  const restartAll = async () => {
+    setProgress({});
+    try {
+      await api.delete(`/flashcards/sets/${id}/progress?mode=learn`);
+    } catch (e) {
+      setError(e.message);
+    }
+    startSession(allCards, allCards);
+  };
+
+  // ── Phím tắt: Enter/→ xác nhận, sang câu; 1–4 chọn đáp án trắc nghiệm ──
   useEffect(() => {
     const onKey = (e) => {
       if (composingRef.current) return;
@@ -216,6 +207,7 @@ export default function FlashcardLearn() {
         else if (q?.type === 'write' && tag !== 'TEXTAREA') { e.preventDefault(); submitWrite(); }
         return;
       }
+      if (e.key === 'ArrowRight' && answered) { e.preventDefault(); proceed(); return; }
       if (!answered && q?.type === 'mc' && tag !== 'INPUT' && tag !== 'TEXTAREA') {
         const idx = ['1', '2', '3', '4'].indexOf(e.key);
         if (idx >= 0 && idx < q.options.length) { e.preventDefault(); submitMc(q.options[idx]); }
@@ -224,7 +216,7 @@ export default function FlashcardLearn() {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [answered, q, input, pos, questions]);
+  }, [answered, q, input, pos, work, mcAtt, wrAtt]);
 
   if (loading) {
     return (
@@ -239,60 +231,58 @@ export default function FlashcardLearn() {
   const total = allCards.length;
   const sessionCards = sessionList.length;
   const masteredNow = allCards.filter(c => progress[c.id] === 'mastered').length; // theo DB
-  const estTotal = sessionCards * 2;
-  const estRounds = Math.ceil(estTotal / BATCH);
+  const pct = total ? Math.round((masteredNow / total) * 100) : 0; // % tiến độ tổng học phần
   const answerSide = q?.answerSide;
   const promptText = q ? q.card[q.promptSide] : '';
   const showSpeaker = q && q.promptSide === 'term'; // mặt hỏi là tiếng Nhật
 
   return (
     <StudentLayout title="Thẻ ghi nhớ">
-      <Link to="/flashcards" className="inline-flex items-center gap-1 text-sm text-on-muted hover:text-tsubaki-red transition-colors mb-4">
-        <span className="material-symbols-outlined text-lg">arrow_back</span>
-        Trở về
-      </Link>
+      {/* ── Header: nút back + tên học phần ─────────────────────── */}
+      <div className="flex items-center gap-3 mb-4">
+        <Link
+          to="/flashcards"
+          title="Trở về"
+          className="w-9 h-9 flex items-center justify-center rounded-lg hover:bg-surface-low text-on-muted hover:text-charcoal transition-colors shrink-0"
+        >
+          <span className="material-symbols-outlined">arrow_back</span>
+        </Link>
+        <h1 className="font-display text-xl sm:text-2xl font-bold text-on-surface truncate flex-1">{set?.title}</h1>
+      </div>
 
       <FlashcardModeTabs setId={id} active="learn" />
 
-      {/* ── Header ──────────────────────────────────────────────── */}
-      <div className="flex items-end justify-between gap-4 mb-4">
-        <div className="min-w-0">
-          <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-on-muted mb-1">Chế độ học</p>
-          <h1 className="font-display text-xl sm:text-2xl font-bold text-on-surface truncate">{set?.title}</h1>
+      {/* ── Khối tiến độ: tổng học phần + vị trí câu trong đợt ──── */}
+      <div className="glass-card rounded-2xl p-4 mb-6">
+        <div className="flex items-center justify-between text-[11px] font-bold uppercase tracking-[0.14em] text-on-muted mb-1.5">
+          <span>Tiến độ học phần · đã thuộc {masteredNow}/{total} thẻ</span>
+          <span className="text-tsubaki-red text-sm">{pct}%</span>
         </div>
-        <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-tsubaki-red bg-tsubaki-red/10 px-3 py-1.5 rounded-full shrink-0">
-          <span className="material-symbols-outlined text-lg fill">check_circle</span>
-          Đã thuộc {masteredNow}/{total}
-        </span>
-      </div>
+        <div className="w-full bg-surface-low rounded-full h-2.5">
+          <div className="bg-tsubaki-red h-2.5 rounded-full transition-all"
+            style={{ width: `${pct}%` }} />
+        </div>
 
-      {/* Tiến độ lượt học (tiến-thẳng) + đợt hiện tại */}
-      {!roundOver && !sessionOver && questions.length > 0 && (
-        <div className="mb-6">
-          <div className="flex items-center justify-between text-[11px] font-bold uppercase tracking-[0.14em] text-on-muted mb-1.5">
-            <span>Lượt học · ~{estTotal} câu · ~{estRounds} đợt</span>
-            <span className="text-tsubaki-red">Đã thuộc {doneCount}/{sessionCards} thẻ</span>
+        {/* Vị trí câu trong đợt hiện tại */}
+        {!roundOver && !sessionOver && work.length > 0 && (
+          <div className="mt-3 pt-3 border-t border-outline/20">
+            <p className="text-[11px] text-on-muted mb-2">
+              Đợt {roundNum} · Câu {Math.min(pos + 1, work.length)}/{work.length}
+              <span className="ml-1">({q?.type === 'mc' ? 'trắc nghiệm' : 'tự luận'})</span>
+            </p>
+            <div className="flex gap-0.5">
+              {work.map((_, i) => (
+                <div
+                  key={i}
+                  className={`h-2 flex-1 min-w-[4px] rounded-full transition-colors ${
+                    i < pos ? 'bg-tsubaki-red' : i === pos ? 'bg-tsubaki-red/40' : 'bg-surface-low'
+                  }`}
+                />
+              ))}
+            </div>
           </div>
-          <div className="w-full bg-surface-low rounded-full h-2 mb-4">
-            <div className="bg-tsubaki-red h-2 rounded-full transition-all"
-              style={{ width: `${sessionCards ? (doneCount / sessionCards) * 100 : 0}%` }} />
-          </div>
-          <p className="text-[11px] text-on-muted mb-2">
-            Đợt {roundNum} · Câu {Math.min(pos + 1, questions.length)}/{questions.length}
-            <span className="ml-1">({q?.type === 'mc' ? 'trắc nghiệm' : 'tự luận'})</span>
-          </p>
-          <div className="flex gap-1">
-            {questions.map((_, i) => (
-              <div
-                key={i}
-                className={`h-1.5 flex-1 rounded-full transition-colors ${
-                  i < results.length ? 'bg-tsubaki-red' : i === pos ? 'bg-tsubaki-red/40' : 'bg-surface-low'
-                }`}
-              />
-            ))}
-          </div>
-        </div>
-      )}
+        )}
+      </div>
 
       {error && <div className="mb-6"><Alert type="error" onClose={() => setError('')}>{error}</Alert></div>}
 
@@ -301,13 +291,17 @@ export default function FlashcardLearn() {
         const notMastered = sessionList.filter(c => !masteredIds.includes(c.id));
         return (
           <div className="flex flex-col items-center justify-center py-16 text-center glass-card rounded-2xl px-6">
-            <span className="material-symbols-outlined text-6xl text-tsubaki-red/30 mb-3">military_tech</span>
+            <span className="material-symbols-outlined text-6xl text-tsubaki-red/30 mb-3 animate-bounce">military_tech</span>
             <p className="font-display text-lg font-bold text-on-surface mb-1">
-              {notMastered.length === 0 ? 'Tuyệt vời! Bạn đã thuộc hết lượt này.' : 'Hoàn thành lượt học!'}
+              {sessionCards === 0
+                ? 'Bạn đã thuộc tất cả thẻ của học phần này!'
+                : notMastered.length === 0 ? 'Tuyệt vời! Bạn đã thuộc hết lượt này.' : 'Hoàn thành lượt học!'}
             </p>
             <p className="text-sm text-on-muted mb-6">
-              Đã thuộc {doneCount}/{sessionCards} thẻ trong lượt này.
-              {notMastered.length > 0 && ` Còn ${notMastered.length} thẻ chưa thuộc.`}
+              {sessionCards === 0
+                ? 'Không còn thẻ nào để học. Bạn có thể học lại từ đầu.'
+                : <>Đã thuộc {doneCount}/{sessionCards} thẻ trong lượt này.
+                    {notMastered.length > 0 && ` Còn ${notMastered.length} thẻ chưa thuộc.`}</>}
             </p>
             <div className="flex flex-col sm:flex-row gap-3">
               {notMastered.length > 0 && (
@@ -320,7 +314,7 @@ export default function FlashcardLearn() {
                 </button>
               )}
               <button
-                onClick={() => startSession(allCards)}
+                onClick={restartAll}
                 className="inline-flex items-center justify-center gap-2 text-sm font-semibold text-tsubaki-red border border-tsubaki-red/30 rounded-xl px-6 py-3 hover:bg-tsubaki-red/5 transition-colors"
               >
                 <span className="material-symbols-outlined text-lg">replay</span>
@@ -337,8 +331,8 @@ export default function FlashcardLearn() {
           </div>
         );
       })() : roundOver ? (
-        <RoundSummary results={results} doneCount={doneCount} sessionCards={sessionCards}
-          remaining={queue.length} onContinue={continueNext} />
+        <RoundSummary batchCards={batchCards} masteredIds={masteredIds} results={results}
+          remaining={pending.length} onContinue={continueNext} />
       ) : q ? (
         <div className="max-w-2xl mx-auto">
           {/* Câu hỏi */}
@@ -363,7 +357,7 @@ export default function FlashcardLearn() {
                   let badge = 'bg-surface-low text-on-muted';
                   if (answered) {
                     if (isCorrect) { cls = 'border-green-500 bg-green-50 text-green-800'; badge = 'bg-green-500 text-white'; }
-                    else if (isPicked) { cls = 'border-error bg-error-bg/40 text-error'; badge = 'bg-error text-white'; }
+                    else if (isPicked) { cls = 'border-error bg-error-bg/40 text-error animate-shake'; badge = 'bg-error text-white'; }
                     else cls = 'border-outline opacity-60';
                   }
                   return (
@@ -377,7 +371,7 @@ export default function FlashcardLearn() {
                         {'ABCD'[i]}
                       </span>
                       <span className="flex-1">{opt}</span>
-                      {answered && isCorrect && <span className="material-symbols-outlined text-green-600 text-lg">check</span>}
+                      {answered && isCorrect && <span className="material-symbols-outlined text-success text-lg">check</span>}
                       {answered && isPicked && !isCorrect && <span className="material-symbols-outlined text-error text-lg">close</span>}
                     </button>
                   );
@@ -430,6 +424,7 @@ export default function FlashcardLearn() {
                 Tiếp tục
                 <span className="material-symbols-outlined text-lg">arrow_forward</span>
               </button>
+              <p className="hidden sm:block text-center text-xs text-on-muted mt-2">Mẹo: nhấn Enter hoặc phím → để tiếp tục</p>
             </div>
           )}
         </div>
@@ -440,30 +435,24 @@ export default function FlashcardLearn() {
   );
 }
 
-// ── Màn tổng kết cuối đợt ──
-function RoundSummary({ results, doneCount, sessionCards, remaining, onContinue }) {
+// ── Màn tổng kết cuối đợt (batch): 2 nhóm Đã thuộc / Chưa thuộc ──
+function RoundSummary({ batchCards, masteredIds, results, remaining, onContinue }) {
   const correct = results.filter(r => r.correct).length;
+  const mastered = batchCards.filter(c => masteredIds.includes(c.id));
+  const notMastered = batchCards.filter(c => !masteredIds.includes(c.id));
   return (
     <div className="max-w-2xl mx-auto">
       <div className="glass-card rounded-2xl p-6 text-center mb-6">
         <span className="material-symbols-outlined text-5xl text-tsubaki-red/30 mb-2">flag</span>
         <p className="font-display text-lg font-bold text-on-surface mb-1">Hết đợt!</p>
         <p className="text-sm text-on-muted">
-          Đúng {correct}/{results.length} câu · Đã thuộc {doneCount}/{sessionCards} thẻ
+          Đúng {correct}/{results.length} câu · Thuộc {mastered.length}/{batchCards.length} thẻ trong đợt
         </p>
       </div>
 
-      <div className="glass-card rounded-2xl divide-y divide-outline/20 mb-6">
-        {results.map((r, i) => (
-          <div key={i} className="flex items-start gap-3 px-5 py-3">
-            <span className={`material-symbols-outlined text-lg shrink-0 ${r.correct ? 'text-green-600' : 'text-error'}`}>
-              {r.correct ? 'check_circle' : 'cancel'}
-            </span>
-            <span className="text-sm font-semibold text-on-surface flex-1 break-words">{r.card.term}</span>
-            <span className="w-px self-stretch bg-outline/30 shrink-0" />
-            <span className="text-sm text-on-surface-variant flex-1 break-words">{r.card.definition}</span>
-          </div>
-        ))}
+      <div className="space-y-6 mb-6">
+        <SummaryGroup title="Từ vựng đã thuộc" icon="check_circle" color="text-success" cards={mastered} />
+        <SummaryGroup title="Từ vựng chưa thuộc" icon="hourglass_top" color="text-warning" cards={notMastered} />
       </div>
 
       <div className="flex flex-col sm:flex-row gap-3">
@@ -483,6 +472,29 @@ function RoundSummary({ results, doneCount, sessionCards, remaining, onContinue 
             Lưu &amp; thoát
           </Link>
         )}
+      </div>
+    </div>
+  );
+}
+
+// ── Nhóm thẻ trong tổng kết (Đã thuộc / Chưa thuộc) ──
+function SummaryGroup({ title, icon, color, cards }) {
+  if (!cards.length) return null;
+  return (
+    <div>
+      <div className="flex items-center gap-2 mb-3">
+        <span className={`material-symbols-outlined ${color}`}>{icon}</span>
+        <h2 className="font-display text-base font-bold text-on-surface">{title}</h2>
+        <span className="text-sm text-on-muted">({cards.length})</span>
+      </div>
+      <div className="glass-card rounded-2xl divide-y divide-outline/20">
+        {cards.map(c => (
+          <div key={c.id} className="flex items-start gap-4 px-5 py-3">
+            <span className="text-sm font-semibold text-on-surface flex-1 break-words whitespace-pre-wrap">{c.term}</span>
+            <span className="w-px self-stretch bg-outline/30 shrink-0" />
+            <span className="text-sm text-on-surface-variant flex-1 break-words whitespace-pre-wrap">{c.definition}</span>
+          </div>
+        ))}
       </div>
     </div>
   );

@@ -434,3 +434,23 @@ DO $$ BEGIN
       WITH CHECK (EXISTS (SELECT 1 FROM flashcard_module.flashcard_folders f WHERE f.id = folder_id AND f.owner_id = auth.uid()));
   END IF;
 END $$;
+
+-- ─── Flashcard: tách tiến độ theo chế độ học ─────────────────────────────────
+-- 'cards' = Thẻ ghi nhớ (lật thẻ) | 'learn' = chế độ Học. Dữ liệu cũ mặc định 'learn'.
+ALTER TABLE flashcard_module.flashcard_progress
+  ADD COLUMN IF NOT EXISTS mode text NOT NULL DEFAULT 'learn';
+
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint
+                 WHERE conname = 'flashcard_progress_mode_check') THEN
+    ALTER TABLE flashcard_module.flashcard_progress
+      ADD CONSTRAINT flashcard_progress_mode_check CHECK (mode IN ('cards','learn'));
+  END IF;
+
+  -- PK cũ (student_id, card_id) → PK mới (student_id, card_id, mode)
+  IF EXISTS (SELECT 1 FROM pg_constraint c
+             WHERE c.conname = 'flashcard_progress_pkey' AND array_length(c.conkey, 1) = 2) THEN
+    ALTER TABLE flashcard_module.flashcard_progress DROP CONSTRAINT flashcard_progress_pkey;
+    ALTER TABLE flashcard_module.flashcard_progress ADD PRIMARY KEY (student_id, card_id, mode);
+  END IF;
+END $$;

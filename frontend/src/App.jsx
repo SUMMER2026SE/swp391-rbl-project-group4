@@ -24,7 +24,11 @@ import Grammar      from './pages/student/Grammar';
 import Kanji        from './pages/student/Kanji';
 import KanjiWriting from './pages/student/KanjiWriting';
 import Writing      from './pages/student/Writing';
-import Listening    from './pages/student/Listening';
+import Listening            from './pages/student/Listening';
+import PlacementTest        from './pages/student/PlacementTest';
+import Pricing              from './pages/student/Pricing';
+import SubscriptionStatus   from './pages/student/SubscriptionStatus';
+import BillingHistory       from './pages/student/BillingHistory';
 import Classes      from './pages/student/Classes';
 import Quiz         from './pages/student/Quiz';
 import Dictionary   from './pages/student/Dictionary';
@@ -66,7 +70,10 @@ import AdminClasses      from './pages/admin/AdminClasses';
 import AdminSystemStatus  from './pages/admin/AdminSystemStatus';
 import AdminQuestionBank       from './pages/admin/AdminQuestionBank';
 import AdminNews               from './pages/admin/AdminNews';
-import AdminListening          from './pages/admin/AdminListening';
+import AdminListening               from './pages/admin/AdminListening';
+import AdminPlacementQuestions      from './pages/admin/AdminPlacementQuestions';
+import AdminSubscriptions           from './pages/admin/AdminSubscriptions';
+import AdminPayments                from './pages/admin/AdminPayments';
 import ManageCourseContent     from './pages/admin/ManageCourseContent';
 import AdminLessonVocabulary   from './pages/admin/AdminLessonVocabulary';
 import AdminGrammar            from './pages/admin/AdminGrammar';
@@ -117,7 +124,11 @@ export default function App() {
             <Route path="/study-lists/:type/:id" element={<StudentRoute><StudyListDetail /></StudentRoute>} />
             <Route path="/study-lists/:type/:id/:itemId" element={<StudentRoute><StudyListItemDetail /></StudentRoute>} />
             <Route path="/writing"    element={<StudentRoute><Writing /></StudentRoute>} />
-            <Route path="/listening"  element={<StudentRoute><Listening /></StudentRoute>} />
+            <Route path="/listening"       element={<StudentRoute><Listening /></StudentRoute>} />
+            <Route path="/placement-test" element={<StudentRoute><PlacementTest /></StudentRoute>} />
+            <Route path="/pricing"        element={<StudentRoute><Pricing /></StudentRoute>} />
+            <Route path="/subscription"   element={<StudentRoute><SubscriptionStatus /></StudentRoute>} />
+            <Route path="/billing"        element={<StudentRoute><BillingHistory /></StudentRoute>} />
             <Route path="/classes"    element={<StudentRoute><Classes /></StudentRoute>} />
             <Route path="/quizzes/:id" element={<StudentRoute><Quiz /></StudentRoute>} />
             <Route path="/dictionary" element={<StudentRoute><Dictionary /></StudentRoute>} />
@@ -171,7 +182,10 @@ export default function App() {
             <Route path="/admin/system"     element={<AdminRoute><AdminSystemStatus /></AdminRoute>} />
             <Route path="/admin/questions"  element={<AdminRoute><AdminQuestionBank /></AdminRoute>} />
             <Route path="/admin/news"       element={<AdminRoute><AdminNews /></AdminRoute>} />
-            <Route path="/admin/listening"  element={<AdminRoute><AdminListening /></AdminRoute>} />
+            <Route path="/admin/listening"         element={<AdminRoute><AdminListening /></AdminRoute>} />
+            <Route path="/admin/placement"       element={<AdminRoute><AdminPlacementQuestions /></AdminRoute>} />
+            <Route path="/admin/subscriptions"   element={<AdminRoute><AdminSubscriptions /></AdminRoute>} />
+            <Route path="/admin/payments"        element={<AdminRoute><AdminPayments /></AdminRoute>} />
             <Route path="/admin/courses/:courseId/edit"         element={<AdminRoute><ManageCourseContent /></AdminRoute>} />
             <Route path="/admin/courses/:courseId/units/:unitId/edit" element={<AdminRoute><UnitEditPage /></AdminRoute>} />
             <Route path="/admin/lessons/:lessonId/vocabulary"  element={<AdminRoute><AdminLessonVocabulary /></AdminRoute>} />

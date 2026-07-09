@@ -14,6 +14,16 @@ const upload = multer({
     file.mimetype.startsWith('image/') ? cb(null, true) : cb(new Error('Chỉ chấp nhận file hình ảnh.')),
 });
 
+// Video bài học — 50MB: trần upload mỗi file của Supabase gói free, đồng bộ với bucket lesson-videos.
+const videoUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 50 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const ok = ['video/mp4', 'video/webm'].includes(file.mimetype);
+    ok ? cb(null, true) : cb(new Error('Chỉ chấp nhận file video MP4/WebM.'));
+  },
+});
+
 router.use(requireAuth, requireTeacher);
 
 router.get('/stats',            c.getStats);
@@ -33,6 +43,7 @@ router.post('/lessons',        c.createLesson);
 router.patch('/lessons/reorder', c.reorderLessons);
 router.put('/lessons/:id',     c.updateLesson);
 router.delete('/lessons/:id',  c.deleteLesson);
+router.post('/lessons/upload-video', videoUpload.single('video'), ac.uploadLessonVideo);
 
 // Trình soạn Từ vựng / Kanji của Mục — list/create/update dùng kho chung (admin handler),
 // attach/detach kiểm tra sở hữu khóa (teacher handler).
@@ -49,9 +60,29 @@ router.post('/lessons/:lessonId/kanji/attach',         c.attachKanji);
 router.delete('/lessons/:lessonId/kanji/:kanjiId',     c.detachKanji);
 
 // Ngữ pháp (từ điển ngữ pháp chuẩn) — giáo viên thêm/sửa trực tiếp, không cần admin duyệt
-router.get('/grammar-points',      ac.listGrammarPoints);
-router.post('/grammar-points',     ac.createGrammarPoint);
-router.put('/grammar-points/:id',  ac.updateGrammarPoint);
+router.get('/grammar-points',                                 ac.listGrammarPoints);
+router.post('/grammar-points',                                ac.createGrammarPoint);
+router.put('/grammar-points/:id',                             ac.updateGrammarPoint);
+router.post('/lessons/:lessonId/grammar-points/attach',       c.attachGrammar);
+router.delete('/lessons/:lessonId/grammar-points/:grammarId', c.detachGrammar);
+
+// Bulk import vào Mục qua file — preview (parse + AI fallback, chưa ghi DB),
+// xác nhận nhập qua các endpoint import bên dưới với lesson_id trên từng dòng.
+const fic = require('../../controllers/importFileController');
+const importFileUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const ok = /\.(json|csv|xlsx|xls|docx)$/i.test(file.originalname);
+    ok ? cb(null, true) : cb(new Error('Chỉ chấp nhận file .json, .csv, .xlsx, .xls, .docx.'));
+  },
+});
+router.post('/lessons/:lessonId/vocabulary/import-file',     importFileUpload.single('file'), fic.previewVocabFile);
+router.post('/lessons/:lessonId/kanji/import-file',          importFileUpload.single('file'), fic.previewKanjiFile);
+router.post('/lessons/:lessonId/grammar-points/import-file', importFileUpload.single('file'), fic.previewGrammarFile);
+router.post('/vocabulary/import',     ac.importVocab);
+router.post('/kanji/import',          ac.importKanji);
+router.post('/grammar-points/import', ac.importGrammarPoints);
 
 // My vocabulary
 router.get('/my-vocab',                c.listMyVocab);

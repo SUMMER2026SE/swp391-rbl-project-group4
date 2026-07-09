@@ -16,7 +16,7 @@ export default function Profile() {
   // Mỗi role thấy layout riêng của mình khi vào hồ sơ
   const Layout = isAdmin() ? AdminLayout : isTeacher() ? TeacherLayout : StudentLayout;
   const isStudent = !isAdmin() && !isTeacher();
-  const { t, lang, switchLang } = useLang();
+  const { t } = useLang();
   const fileInputRef = useRef(null);
 
   const [profileData, setProfileData] = useState({});
@@ -156,18 +156,6 @@ export default function Profile() {
           </div>
           )}
 
-          {/* Language switcher */}
-          <div className="glass-card rounded-2xl p-5">
-            <p className="text-sm font-medium text-on-muted mb-3">{t('profile.display_lang')}</p>
-            <div className="flex gap-2">
-              {[['vi','Tiếng Việt'],['ja','日本語']].map(([l, label]) => (
-                <button key={l} onClick={() => switchLang(l)}
-                  className={`flex-1 py-2 rounded-xl border text-sm font-semibold transition-colors ${lang === l ? 'border-tsubaki-red text-tsubaki-red' : 'border-outline text-on-muted hover:bg-surface-low'}`}>
-                  {label}
-                </button>
-              ))}
-            </div>
-          </div>
         </div>
 
         {/* Right: forms */}
