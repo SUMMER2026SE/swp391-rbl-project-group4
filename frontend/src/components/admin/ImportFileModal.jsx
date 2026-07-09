@@ -70,6 +70,21 @@ Cấu trúc mỗi mẫu:
 
 Yêu cầu: Tạo 10 mẫu ngữ pháp N5 cơ bản.`;
 
+const GUIDE_SAMPLE_ROWS = {
+  vocab: [
+    { kanji: '食べる', reading: 'たべる', meaning_vi: 'ăn', level: 'N5', example_sentence: '毎日ご飯を食べます。' },
+    { kanji: '水', reading: 'みず', meaning_vi: 'nước', level: 'N5', example_sentence: '水を飲む。' },
+  ],
+  kanji: [
+    { character: '山', reading_on: 'サン', reading_kun: 'やま', meaning_vi: 'núi', han_viet: 'Sơn', level: 'N5' },
+    { character: '川', reading_on: 'セン', reading_kun: 'かわ', meaning_vi: 'sông', han_viet: 'Xuyên', level: 'N5' },
+  ],
+  grammar: [
+    { title: '〜は〜です', meaning_vi: '... là ...', explanation: 'Khẳng định danh tính hoặc trạng thái.', level: 'N5' },
+    { title: '〜てから', meaning_vi: 'sau khi...', explanation: 'Hành động trước hoàn thành rồi mới làm sau.', level: 'N5' },
+  ],
+};
+
 const TYPE_CONFIG = {
   vocab: {
     slug: 'vocabulary',
@@ -120,7 +135,8 @@ const flattenArrays = (item) =>
 
 // lessonId / studyListId là tuỳ chọn.
 // Không có cả hai → bank mode (nhập vào ngân hàng cá nhân).
-export default function ImportFileModal({ open, onClose, type, lessonId, studyListId, apiBase = '', onImported }) {
+// previewUrl / importUrl: ghi đè endpoint tùy ý (dùng cho admin bank import)
+export default function ImportFileModal({ open, onClose, type, lessonId, studyListId, apiBase = '', previewUrl: previewUrlProp, importUrl: importUrlProp, onImported }) {
   const cfg           = TYPE_CONFIG[type];
   const bankMode      = !lessonId && !studyListId && !!cfg.bankSlug;
   const studyListMode = !!studyListId;
@@ -137,7 +153,7 @@ export default function ImportFileModal({ open, onClose, type, lessonId, studyLi
 
   // Template panel
   const [showTemplate, setShowTemplate] = useState(false);
-  const [templateTab, setTemplateTab]   = useState('json');
+  const [templateTab, setTemplateTab]   = useState('guide');
   const [copied, setCopied]             = useState('');
 
   // Input mode toggle
@@ -161,11 +177,11 @@ export default function ImportFileModal({ open, onClose, type, lessonId, studyLi
   // ── Core parse/upload ──────────────────────────────────────────────────────
   const processFile = async (file) => {
     setError(''); setItems(null); setParsing(true);
-    const previewUrl = studyListMode
+    const previewUrl = previewUrlProp || (studyListMode
       ? `/study-lists/${studyListId}/${cfg.slug}/import-file`
       : bankMode
         ? `${apiBase}/${cfg.bankSlug}/import-file`
-        : `${apiBase}/lessons/${lessonId}/${cfg.slug}/import-file`;
+        : `${apiBase}/lessons/${lessonId}/${cfg.slug}/import-file`);
     try {
       const fd = new FormData();
       fd.append('file', file);
@@ -211,11 +227,11 @@ export default function ImportFileModal({ open, onClose, type, lessonId, studyLi
 
   const handleImport = async () => {
     setImporting(true); setError('');
-    const importUrl = studyListMode
+    const importUrl = importUrlProp || (studyListMode
       ? `/study-lists/${studyListId}/import`
       : bankMode
         ? `${apiBase}/${cfg.bankSlug}/import`
-        : `${apiBase}/${cfg.slug}/import`;
+        : `${apiBase}/${cfg.slug}/import`);
     try {
       const payload = items.map(({ _notes, _changed, ...rest }) =>
         bankMode || studyListMode ? rest : { ...rest, lesson_id: lessonId }
@@ -283,6 +299,7 @@ export default function ImportFileModal({ open, onClose, type, lessonId, studyLi
               {/* Tab bar */}
               <div className="flex border-b border-outline bg-white">
                 {[
+                  { key: 'guide',  icon: 'menu_book',   label: 'Hướng dẫn' },
                   { key: 'json',   icon: 'data_object', label: 'Mẫu JSON' },
                   { key: 'prompt', icon: 'smart_toy',   label: 'Prompt AI' },
                 ].map(tab => (
@@ -303,6 +320,103 @@ export default function ImportFileModal({ open, onClose, type, lessonId, studyLi
 
               {/* Tab content */}
               <div className="bg-white p-3">
+                {templateTab === 'guide' && (
+                  <div className="space-y-4 text-xs">
+                    {/* Các bước */}
+                    <div className="grid grid-cols-3 gap-2">
+                      {[
+                        { icon: 'table', step: '1', title: 'Tạo bảng', desc: 'Excel: dòng đầu là tên cột, các dòng sau là dữ liệu.\nWord: chèn bảng (Insert → Table), hàng đầu là tên cột.' },
+                        { icon: 'tune', step: '2', title: 'Điền dữ liệu', desc: 'Điền từng dòng theo các cột bên dưới. Cột có dấu * là bắt buộc, còn lại có thể bỏ trống.' },
+                        { icon: 'upload_file', step: '3', title: 'Tải lên', desc: 'Lưu file (.xlsx, .xls, .docx, .csv) rồi kéo thả hoặc chọn file bên dưới.' },
+                      ].map(s => (
+                        <div key={s.step} className="flex gap-2.5 p-2.5 bg-surface-low rounded-xl">
+                          <div className="flex-shrink-0 w-6 h-6 rounded-full bg-tsubaki-red text-white flex items-center justify-center text-xs font-bold">{s.step}</div>
+                          <div>
+                            <p className="font-semibold text-on-surface mb-0.5">{s.title}</p>
+                            <p className="text-on-muted whitespace-pre-line leading-relaxed">{s.desc}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Danh sách cột */}
+                    <div>
+                      <p className="font-semibold text-on-surface mb-1.5">Các cột cho <span className="text-tsubaki-red">{cfg.label}</span>:</p>
+                      <div className="rounded-xl border border-outline overflow-hidden">
+                        <table className="w-full">
+                          <thead className="bg-surface-low">
+                            <tr>
+                              <th className="text-left px-3 py-1.5 font-semibold text-on-muted">Tên cột</th>
+                              <th className="text-left px-3 py-1.5 font-semibold text-on-muted">Bắt buộc?</th>
+                              <th className="text-left px-3 py-1.5 font-semibold text-on-muted">Ghi chú</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {cfg.columns.map((col, i) => (
+                              <tr key={col.key} className={`border-t border-outline/40 ${i % 2 === 1 ? 'bg-surface-low/30' : ''}`}>
+                                <td className="px-3 py-1.5 font-mono font-semibold text-tsubaki-red">{col.key}</td>
+                                <td className="px-3 py-1.5">
+                                  {col.required
+                                    ? <span className="inline-flex items-center gap-0.5 text-emerald-600 font-semibold"><span className="material-symbols-outlined text-sm">check_circle</span> Có</span>
+                                    : <span className="text-on-muted">Không</span>}
+                                </td>
+                                <td className="px-3 py-1.5 text-on-muted">
+                                  {col.select ? `Chọn một trong: ${col.select.join(', ')}` : col.key === 'type' ? 'DANH TỪ / ĐỘNG TỪ / TÍNH TỪ / PHÓ TỪ / LIÊN TỪ' : col.key === 'reading_on' || col.key === 'reading_kun' ? 'Nhiều âm cách nhau bằng dấu phẩy' : ''}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+
+                    {/* Ví dụ trực quan */}
+                    <div>
+                      <p className="font-semibold text-on-surface mb-1.5">Ví dụ trông như thế này trong Excel / Word:</p>
+                      <div className="rounded-xl border border-outline overflow-x-auto">
+                        <table className="text-xs">
+                          <thead className="bg-amber-50">
+                            <tr>
+                              {cfg.columns.map(col => (
+                                <th key={col.key} className="px-3 py-1.5 text-left font-semibold border-b border-outline whitespace-nowrap">
+                                  {col.key}{col.required ? ' *' : ''}
+                                </th>
+                              ))}
+                              <th className="px-3 py-1.5 text-left font-semibold border-b border-outline text-on-muted/60 whitespace-nowrap">stt (bỏ qua)</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {GUIDE_SAMPLE_ROWS[type]?.map((row, i) => (
+                              <tr key={i} className={i % 2 === 1 ? 'bg-surface-low/30' : ''}>
+                                {cfg.columns.map(col => (
+                                  <td key={col.key} className="px-3 py-1.5 border-t border-outline/40 whitespace-nowrap">{row[col.key] ?? ''}</td>
+                                ))}
+                                <td className="px-3 py-1.5 border-t border-outline/40 text-on-muted/60">{i + 1}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+
+                    {/* Ghi chú nhanh */}
+                    <div className="flex flex-col gap-1 text-on-muted">
+                      {[
+                        'Thứ tự cột không quan trọng — hệ thống nhận diện theo tên.',
+                        'Cột thừa (như STT, ghi chú...) sẽ bị bỏ qua, không gây lỗi.',
+                        'Tên cột linh hoạt: "Nghĩa Tiếng Việt", "nghia viet", "meaning" đều được nhận.',
+                        'File lộn xộn hoặc thiếu cột → AI sẽ tự động trích xuất (có thể mất 10–30 giây).',
+                        'Tối đa 500 dòng và 5 MB mỗi lần nhập.',
+                      ].map((note, i) => (
+                        <p key={i} className="flex items-start gap-1.5">
+                          <span className="material-symbols-outlined text-sm text-tsubaki-red mt-px flex-shrink-0">info</span>
+                          {note}
+                        </p>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 {templateTab === 'json' && (
                   <div>
                     <p className="text-xs text-on-muted mb-2">
@@ -439,12 +553,12 @@ export default function ImportFileModal({ open, onClose, type, lessonId, studyLi
         {items && (
           <div className="space-y-3">
             <div className={`flex items-center gap-2 px-4 py-3 rounded-xl text-sm font-semibold ${
-              source === 'ai'
-                ? 'bg-violet-50 border border-violet-200 text-violet-700'
-                : 'bg-emerald-50 border border-emerald-200 text-emerald-700'
+              source === 'ai'    ? 'bg-violet-50 border border-violet-200 text-violet-700' :
+              source === 'mixed' ? 'bg-amber-50 border border-amber-200 text-amber-700' :
+                                   'bg-emerald-50 border border-emerald-200 text-emerald-700'
             }`}>
               <span className="material-symbols-outlined text-lg">
-                {source === 'ai' ? 'auto_fix_high' : 'check_circle'}
+                {source === 'ai' ? 'auto_fix_high' : source === 'mixed' ? 'layers' : 'check_circle'}
               </span>
               {summary}
             </div>

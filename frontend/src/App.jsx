@@ -36,6 +36,12 @@ import NewsList     from './pages/student/NewsList';
 import NewsReader   from './pages/student/NewsReader';
 import Exams        from './pages/student/Exams';
 import TakeExam     from './pages/student/TakeExam';
+import MockExamList    from './pages/student/MockExamList';
+import MockExamDetail  from './pages/student/MockExamDetail';
+import MockExamRoom    from './pages/student/MockExamRoom';
+import MockExamResult  from './pages/student/MockExamResult';
+import MockExamReview  from './pages/student/MockExamReview';
+import MockExamHistory from './pages/student/MockExamHistory';
 import Flashcards            from './pages/student/Flashcards';
 import FlashcardSetForm      from './pages/student/FlashcardSetForm';
 import FlashcardStudy        from './pages/student/FlashcardStudy';
@@ -69,6 +75,8 @@ import AdminSubmissions  from './pages/admin/AdminSubmissions';
 import AdminClasses      from './pages/admin/AdminClasses';
 import AdminSystemStatus  from './pages/admin/AdminSystemStatus';
 import AdminQuestionBank       from './pages/admin/AdminQuestionBank';
+import AdminMockExams          from './pages/admin/AdminMockExams';
+import AdminMockExamEditor     from './pages/admin/AdminMockExamEditor';
 import AdminNews               from './pages/admin/AdminNews';
 import AdminListening               from './pages/admin/AdminListening';
 import AdminPlacementQuestions      from './pages/admin/AdminPlacementQuestions';
@@ -136,6 +144,12 @@ export default function App() {
             <Route path="/news/:id"   element={<StudentRoute><NewsReader /></StudentRoute>} />
             <Route path="/exams"      element={<StudentRoute><Exams /></StudentRoute>} />
             <Route path="/exams/:assignmentId" element={<StudentRoute><TakeExam /></StudentRoute>} />
+            <Route path="/mock-exams"          element={<StudentRoute><MockExamList /></StudentRoute>} />
+            <Route path="/mock-exams/history"  element={<StudentRoute><MockExamHistory /></StudentRoute>} />
+            <Route path="/mock-exams/:id"      element={<StudentRoute><MockExamDetail /></StudentRoute>} />
+            <Route path="/mock-exams/attempt/:attemptId"        element={<StudentRoute><MockExamRoom /></StudentRoute>} />
+            <Route path="/mock-exams/attempt/:attemptId/result" element={<StudentRoute><MockExamResult /></StudentRoute>} />
+            <Route path="/mock-exams/attempt/:attemptId/review" element={<StudentRoute><MockExamReview /></StudentRoute>} />
             <Route path="/flashcards"             element={<StudentRoute><Flashcards /></StudentRoute>} />
             <Route path="/flashcards/new"         element={<StudentRoute><FlashcardSetForm /></StudentRoute>} />
             <Route path="/flashcards/folders/:id" element={<StudentRoute><FlashcardFolderDetail /></StudentRoute>} />
@@ -181,6 +195,8 @@ export default function App() {
             <Route path="/admin/classes"     element={<AdminRoute><AdminClasses /></AdminRoute>} />
             <Route path="/admin/system"     element={<AdminRoute><AdminSystemStatus /></AdminRoute>} />
             <Route path="/admin/questions"  element={<AdminRoute><AdminQuestionBank /></AdminRoute>} />
+            <Route path="/admin/mock-exams"     element={<AdminRoute><AdminMockExams /></AdminRoute>} />
+            <Route path="/admin/mock-exams/:id" element={<AdminRoute><AdminMockExamEditor /></AdminRoute>} />
             <Route path="/admin/news"       element={<AdminRoute><AdminNews /></AdminRoute>} />
             <Route path="/admin/listening"         element={<AdminRoute><AdminListening /></AdminRoute>} />
             <Route path="/admin/placement"       element={<AdminRoute><AdminPlacementQuestions /></AdminRoute>} />

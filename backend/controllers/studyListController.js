@@ -109,7 +109,7 @@ exports.create = async (req, res) => {
   const creator_type = req.user.user_metadata?.role === 'admin' ? 'admin' : 'teacher';
   try {
     const { data, error } = await supabaseAdmin.from('study_list_posts')
-      .insert({ list_type, title: title.trim(), description: description || null, creator_type, created_by: req.user.id })
+      .insert({ list_type, title: title.trim(), description: description || null, level: req.body.level || null, creator_type, created_by: req.user.id })
       .select().single();
     if (error) throw error;
     res.status(201).json(data);
@@ -133,7 +133,7 @@ exports.update = async (req, res) => {
     if (!post) return res.status(404).json({ error: 'Không tìm thấy.' });
     if (!allowed) return res.status(403).json({ error: 'Bạn không có quyền sửa bài đăng này.' });
 
-    const allowedFields = ['title', 'description'];
+    const allowedFields = ['title', 'description', 'level'];
     const updates = Object.fromEntries(Object.entries(req.body).filter(([k]) => allowedFields.includes(k)));
     updates.updated_at = new Date().toISOString();
 

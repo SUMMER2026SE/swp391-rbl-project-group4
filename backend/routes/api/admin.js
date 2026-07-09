@@ -179,6 +179,11 @@ router.post('/lessons/:lessonId/vocabulary/import-file',     importFileUpload.si
 router.post('/lessons/:lessonId/kanji/import-file',          importFileUpload.single('file'), fic.previewKanjiFile);
 router.post('/lessons/:lessonId/grammar-points/import-file', importFileUpload.single('file'), fic.previewGrammarFile);
 
+// Import file trực tiếp vào ngân hàng chung (không cần lessonId)
+router.post('/vocabulary/import-file',     importFileUpload.single('file'), fic.previewVocabFile);
+router.post('/kanji/import-file',          importFileUpload.single('file'), fic.previewKanjiFile);
+router.post('/grammar-points/import-file', importFileUpload.single('file'), fic.previewGrammarFile);
+
 // Content submissions
 router.get('/submissions',                    c.listSubmissions);
 router.post('/submissions/vocab/:id/review',  c.reviewVocab);
@@ -258,6 +263,41 @@ router.post('/payments/reconcile', async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
+// JLPT Mock Exams (thi thử JLPT — chỉ admin quản lý, teacher không có quyền)
+const mock = require('../../controllers/adminMockExamController');
+// Audio đề thi thử — 50MB: trần upload mỗi file của Supabase gói free
+const mockAudioUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 50 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const ok = ['audio/mpeg','audio/mp4','audio/wav','audio/ogg','audio/webm','audio/aac','audio/x-m4a'].includes(file.mimetype);
+    ok ? cb(null, true) : cb(new Error('Chỉ chấp nhận file âm thanh.'));
+  },
+});
+router.post('/mock-exams/upload-audio',   mockAudioUpload.single('audio'), mock.uploadAudio);
+router.post('/mock-exams/upload-image',   upload.single('image'), mock.uploadImage);
+router.get('/mock-exams',                 mock.listExams);
+router.post('/mock-exams',                mock.createExam);
+router.get('/mock-exams/:id',             mock.getExam);
+router.put('/mock-exams/:id',             mock.updateExam);
+router.patch('/mock-exams/:id/publish',   mock.publishExam);
+router.delete('/mock-exams/:id',          mock.deleteExam);
+router.get('/mock-exams/:id/attempts',    mock.listExamAttempts);
+router.post('/mock-exams/:examId/sections',        mock.createSection);
+router.patch('/mock-sections/reorder',             mock.reorderSections);
+router.put('/mock-sections/:id',                   mock.updateSection);
+router.delete('/mock-sections/:id',                mock.deleteSection);
+router.post('/mock-sections/:sectionId/groups',    mock.createGroup);
+router.patch('/mock-groups/reorder',               mock.reorderGroups);
+router.put('/mock-groups/:id',                     mock.updateGroup);
+router.delete('/mock-groups/:id',                  mock.deleteGroup);
+router.post('/mock-groups/:groupId/questions',           mock.createQuestions);
+router.post('/mock-groups/:groupId/import-from-bank',    mock.importFromBank);
+router.post('/mock-groups/:groupId/ai-generate',         mock.aiGenerateDrafts);
+router.patch('/mock-questions/reorder',            mock.reorderQuestions);
+router.put('/mock-questions/:id',                  mock.updateQuestion);
+router.delete('/mock-questions/:id',               mock.deleteQuestion);
 
 // Placement Test — Question Bank
 const pc = require('../../controllers/placementController');
