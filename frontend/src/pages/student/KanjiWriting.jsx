@@ -7,7 +7,6 @@ import { downloadWorksheetPDF, SERIF } from '../../lib/kanjiWorksheet';
 import WorksheetPreview from '../../components/kanji/WorksheetPreview';
 
 const LEVELS = ['N5','N4','N3','N2','N1'];
-const KANJI_RE = /[一-龯㐀-䶿]/g;
 
 // ─── Canvas vẽ tay ───────────────────────────────────────────────────────────
 const KanjiCanvas = forwardRef(function KanjiCanvas({ char, showGuide, brush, onCount }, ref) {
@@ -87,10 +86,10 @@ export default function KanjiWriting() {
   const [tab, setTab]     = useState('draw');   // 'draw' | 'sheet'
   const [list, setList]   = useState([]);
   const [idx, setIdx]     = useState(0);
-  const [typed, setTyped] = useState('');
-  const [level, setLevel] = useState('N5');
-  const [browse, setBrowse]     = useState([]);
+  const [level, setLevel]           = useState('N5');
+  const [browse, setBrowse]         = useState([]);
   const [loadingBrowse, setLoadingBrowse] = useState(false);
+  const [search, setSearch]         = useState('');
   // draw options
   const [showGuide, setShowGuide] = useState(true);
   const [brush, setBrush]   = useState(14);
@@ -106,18 +105,22 @@ export default function KanjiWriting() {
 
   const has = (c) => list.some(k => k.char === c);
   const addKanji = (k) => { if (!has(k.char)) setList(l => [...l, k]); };
-  const addTyped = () => {
-    const chars = [...new Set((typed.match(KANJI_RE)||[]))].filter(c => !has(c));
-    if (chars.length) setList(l => [...l, ...chars.map(c => ({ char:c, reading_on:[], reading_kun:[], meaning_vi:'', han_viet:'' }))]);
-    setTyped('');
-  };
   const removeAt = (i) => { setList(l => l.filter((_,j)=>j!==i)); setIdx(p => i<=p&&p>0?p-1:p); };
 
-  const loadBrowse = async () => {
+  useEffect(() => {
     setLoadingBrowse(true);
-    try { const r = await api.get(`/kanji?level=${level}&limit=80`); setBrowse(r.data?.data||[]); }
-    catch { setBrowse([]); } finally { setLoadingBrowse(false); }
-  };
+    api.get(`/kanji?level=${level}&limit=200`)
+      .then(r => setBrowse(r.data?.data || []))
+      .catch(() => setBrowse([]))
+      .finally(() => setLoadingBrowse(false));
+  }, [level]);
+
+  const filteredBrowse = search.trim()
+    ? browse.filter(k =>
+        k.meaning_vi?.toLowerCase().includes(search.toLowerCase()) ||
+        k.character.includes(search)
+      )
+    : browse;
 
   const handleCount = useCallback((c) => { setStrokeCount(c); setResult(null); setScoreErr(''); }, []);
 
@@ -156,30 +159,35 @@ export default function KanjiWriting() {
 
         {/* Kanji selector — dùng chung 2 tab */}
         <div className="glass-card rounded-2xl p-4 mb-4 space-y-3">
-          <div className="flex flex-col sm:flex-row gap-2">
-            <div className="flex gap-2 flex-1">
-              <input value={typed} onChange={e=>setTyped(e.target.value)} onKeyDown={e=>e.key==='Enter'&&addTyped()}
-                placeholder="Gõ kanji, VD: 水火木" className="flex-1 min-w-0 px-3 py-2 border border-outline rounded-xl text-lg outline-none focus:border-tsubaki-red" />
-              <Button onClick={addTyped} disabled={!typed.trim()}>Thêm</Button>
-            </div>
-            <div className="flex gap-2">
-              <select value={level} onChange={e=>setLevel(e.target.value)} className="px-3 py-2 border border-outline rounded-xl text-sm outline-none focus:border-tsubaki-red">
+          <div className="space-y-2">
+            <div className="flex flex-col sm:flex-row gap-2">
+              <select value={level} onChange={e=>{ setLevel(e.target.value); setSearch(''); }}
+                className="px-3 py-2 border border-outline rounded-xl text-sm outline-none focus:border-tsubaki-red">
                 {LEVELS.map(l=><option key={l}>{l}</option>)}
               </select>
-              <Button variant="secondary" onClick={loadBrowse} loading={loadingBrowse}>Thư viện</Button>
+              <input value={search} onChange={e=>setSearch(e.target.value)}
+                placeholder="Tìm theo nghĩa hoặc chữ kanji..."
+                className="flex-1 px-3 py-2 border border-outline rounded-xl text-sm outline-none focus:border-tsubaki-red" />
             </div>
+            {loadingBrowse ? (
+              <p className="text-xs text-on-muted py-2 animate-pulse">Đang tải...</p>
+            ) : filteredBrowse.length === 0 ? (
+              <p className="text-xs text-on-muted py-2">Không tìm thấy kanji phù hợp.</p>
+            ) : (
+              <div className="flex flex-wrap gap-1.5 max-h-48 overflow-y-auto">
+                {filteredBrowse.map(k=>(
+                  <button key={k.id}
+                    onClick={()=>addKanji({char:k.character,reading_on:k.reading_on,reading_kun:k.reading_kun,meaning_vi:k.meaning_vi,han_viet:k.han_viet||''})}
+                    disabled={has(k.character)}
+                    title={`${k.meaning_vi || ''}${k.reading_on?.length ? ' • ' + k.reading_on.join('、') : ''}`}
+                    className={`w-9 h-9 rounded-lg border text-lg flex items-center justify-center transition-colors ${has(k.character)?'border-emerald-300 bg-emerald-50 text-emerald-600':'border-outline hover:border-tsubaki-red hover:bg-tsubaki-red/5'}`}>
+                    {k.character}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
-          {browse.length > 0 && (
-            <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto pt-1 border-t border-outline/40">
-              {browse.map(k=>(
-                <button key={k.id} onClick={()=>addKanji({char:k.character,reading_on:k.reading_on,reading_kun:k.reading_kun,meaning_vi:k.meaning_vi,han_viet:k.han_viet||''})}
-                  disabled={has(k.character)}
-                  className={`w-9 h-9 rounded-lg border text-lg flex items-center justify-center transition-colors ${has(k.character)?'border-emerald-300 bg-emerald-50 text-emerald-600':'border-outline hover:border-tsubaki-red hover:bg-tsubaki-red/5'}`}>
-                  {k.character}
-                </button>
-              ))}
-            </div>
-          )}
+
           {list.length > 0 && (
             <div className="flex flex-wrap gap-1.5 pt-1 border-t border-outline/40">
               {list.map((k,i)=>(
