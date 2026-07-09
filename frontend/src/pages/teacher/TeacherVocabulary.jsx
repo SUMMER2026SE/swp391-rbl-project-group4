@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import TeacherLayout from '../../components/layout/TeacherLayout';
 import Modal from '../../components/ui/Modal';
 import Button from '../../components/ui/Button';
 import Input from '../../components/ui/Input';
 import Alert from '../../components/ui/Alert';
+import ImportFileModal from '../../components/admin/ImportFileModal';
 import api from '../../lib/api';
 
 const LEVELS = ['N5','N4','N3','N2','N1'];
@@ -22,20 +23,15 @@ const LEVEL_COLORS = {
   N1:'bg-red-100 text-red-700',
 };
 
-export default function TeacherVocabulary() {
+// ── System tab ────────────────────────────────────────────────────────────────
+function SystemTab() {
   const [items, setItems]     = useState([]);
   const [total, setTotal]     = useState(0);
   const [loading, setLoading] = useState(true);
-  const [alert, setAlert]     = useState({ type:'', msg:'' });
   const [search, setSearch]   = useState('');
   const [level, setLevel]     = useState('');
   const [page, setPage]       = useState(1);
   const LIMIT = 30;
-
-  const [modal, setModal]     = useState(false);
-  const [form, setForm]       = useState(EMPTY);
-  const [editId, setEditId]   = useState(null);
-  const [saving, setSaving]   = useState(false);
 
   const load = useCallback(async (p, l, s) => {
     setLoading(true);
@@ -43,45 +39,15 @@ export default function TeacherVocabulary() {
       const params = new URLSearchParams({ page: p, limit: LIMIT });
       if (s) params.set('search', s);
       if (l) params.set('level', l);
-      const r = await api.get(`/teacher/vocabulary?${params}`);
+      const r = await api.get(`/vocabulary?${params}`);
       setItems(r.data.data || []); setTotal(r.data.total || 0);
-    } catch (e) { setAlert({ type:'error', msg:e.message }); }
-    finally { setLoading(false); }
+    } finally { setLoading(false); }
   }, []);
 
   useEffect(() => { load(page, level, search); }, [page, level]);
 
-  const openCreate = () => { setForm(EMPTY); setEditId(null); setModal(true); };
-  const openEdit = (row) => {
-    setForm({ kanji:row.kanji||'', reading:row.reading||'', meaning_vi:row.meaning_vi||'',
-      meaning_ja:row.meaning_ja||'', level:row.level||'', type:row.type||'', example_sentence:row.example_sentence||'' });
-    setEditId(row.id); setModal(true);
-  };
-
-  const handleSave = async () => {
-    if (!form.reading || !form.meaning_vi) return setAlert({ type:'error', msg:'Reading và nghĩa là bắt buộc.' });
-    setSaving(true);
-    try {
-      if (editId) await api.put(`/teacher/vocabulary/${editId}`, form);
-      else        await api.post('/teacher/vocabulary', form);
-      setAlert({ type:'success', msg:'Đã lưu — hiện ngay trong kho từ vựng chung.' });
-      setModal(false); load(page, level, search);
-    } catch(e) { setAlert({ type:'error', msg:e.message }); }
-    finally { setSaving(false); }
-  };
-
   return (
-    <TeacherLayout title="Từ vựng">
-      {alert.msg && <Alert type={alert.type} onClose={() => setAlert({type:'',msg:''})} className="mb-4">{alert.msg}</Alert>}
-
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
-        <div>
-          <h1 className="font-display text-2xl font-bold">Từ vựng</h1>
-          <p className="text-sm text-on-muted mt-0.5">Thêm từ vựng mới sẽ vào kho chung ngay, không cần admin duyệt.</p>
-        </div>
-        <Button onClick={openCreate}><span className="material-symbols-outlined text-lg">add</span> Thêm từ vựng</Button>
-      </div>
-
+    <div>
       <div className="flex flex-wrap gap-2 mb-4 items-center justify-between">
         <div className="flex gap-2 flex-wrap">
           <button onClick={() => { setLevel(''); setPage(1); }}
@@ -102,31 +68,27 @@ export default function TeacherVocabulary() {
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-surface-low border-b border-outline/40">
-              <tr>{['Kanji','Reading','Nghĩa VI','Level','Loại',''].map(h =>
+              <tr>{['Kanji','Reading','Nghĩa VI','Nghĩa JA','Level','Loại','Ví dụ'].map(h =>
                 <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-on-muted uppercase tracking-wide">{h}</th>)}</tr>
             </thead>
             <tbody>
               {loading ? Array.from({length:8}).map((_,i) => (
                 <tr key={i} className="border-t border-outline/40 animate-pulse">
-                  {[40,60,80,40,56,40].map((w,j) => <td key={j} className="px-4 py-3"><div className="h-3 bg-surface-low rounded" style={{width:w}}/></td>)}
+                  {[40,60,80,60,40,56,100].map((w,j) => <td key={j} className="px-4 py-3"><div className="h-3 bg-surface-low rounded" style={{width:w}}/></td>)}
                 </tr>
               )) : items.map((v,i) => (
                 <tr key={v.id} className={`border-t border-outline/40 hover:bg-tsubaki-red/5 transition-colors ${i%2===1?'bg-surface-low/30':''}`}>
                   <td className="px-4 py-2.5 text-xl font-bold text-tsubaki-red">{v.kanji||'—'}</td>
                   <td className="px-4 py-2.5 font-medium">{v.reading}</td>
                   <td className="px-4 py-2.5">{v.meaning_vi}</td>
+                  <td className="px-4 py-2.5 text-xs text-on-muted">{v.meaning_ja||'—'}</td>
                   <td className="px-4 py-2.5">{v.level ? <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${LEVEL_COLORS[v.level]}`}>{v.level}</span> : '—'}</td>
                   <td className="px-4 py-2.5">{v.type ? <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${TYPE_COLORS[v.type]||'bg-surface-low text-on-muted'}`}>{v.type}</span> : '—'}</td>
-                  <td className="px-4 py-2.5">
-                    <button onClick={() => openEdit(v)} title="Sửa"
-                      className="p-1.5 rounded-lg text-on-muted hover:text-tsubaki-red hover:bg-tsubaki-red/10 transition-colors">
-                      <span className="material-symbols-outlined text-lg">edit</span>
-                    </button>
-                  </td>
+                  <td className="px-4 py-2.5 text-xs text-on-muted italic max-w-[180px] truncate">{v.example_sentence||'—'}</td>
                 </tr>
               ))}
               {!loading && items.length === 0 && (
-                <tr><td colSpan={6} className="px-4 py-12 text-center text-on-muted">Không có dữ liệu</td></tr>
+                <tr><td colSpan={7} className="px-4 py-12 text-center text-on-muted">Không có dữ liệu</td></tr>
               )}
             </tbody>
           </table>
@@ -138,6 +100,108 @@ export default function TeacherVocabulary() {
           <button disabled={page===1} onClick={() => setPage(p=>p-1)} className="px-4 py-2 rounded-xl border border-outline text-sm disabled:opacity-40">← Trước</button>
           <span className="px-4 py-2 text-sm text-on-muted">{page}/{Math.ceil(total/LIMIT)}</span>
           <button disabled={page*LIMIT>=total} onClick={() => setPage(p=>p+1)} className="px-4 py-2 rounded-xl border border-outline text-sm disabled:opacity-40">Tiếp →</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── My tab ────────────────────────────────────────────────────────────────────
+function MyTab() {
+  const [items, setItems]     = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [alert, setAlert]     = useState({ type:'', msg:'' });
+  const [modal, setModal]     = useState(false);
+  const [form, setForm]       = useState(EMPTY);
+  const [editId, setEditId]   = useState(null);
+  const [saving, setSaving]     = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
+
+  const load = async () => {
+    setLoading(true);
+    try { const r = await api.get('/teacher/my-vocab'); setItems(r.data.data || []); }
+    catch (e) { setAlert({ type:'error', msg:e.message }); }
+    finally { setLoading(false); }
+  };
+  useEffect(() => { load(); }, []);
+
+  const openCreate = () => { setForm(EMPTY); setEditId(null); setModal(true); };
+  const openEdit = (row) => {
+    setForm({ kanji:row.kanji||'', reading:row.reading||'', meaning_vi:row.meaning_vi||'',
+      meaning_ja:row.meaning_ja||'', level:row.level||'', type:row.type||'', example_sentence:row.example_sentence||'' });
+    setEditId(row.id); setModal(true);
+  };
+
+  const handleSave = async () => {
+    if (!form.reading||!form.meaning_vi) return setAlert({ type:'error', msg:'Reading và nghĩa là bắt buộc.' });
+    setSaving(true);
+    try {
+      if (editId) await api.put(`/teacher/my-vocab/${editId}`, form);
+      else        await api.post('/teacher/my-vocab', form);
+      setAlert({ type:'success', msg:'Đã lưu.' }); setModal(false); load();
+    } catch(e) { setAlert({ type:'error', msg:e.message }); }
+    finally { setSaving(false); }
+  };
+
+  const handleDelete = async (id) => {
+    if (!confirm('Xóa từ vựng này?')) return;
+    try { await api.delete(`/teacher/my-vocab/${id}`); load(); }
+    catch(e) { setAlert({ type:'error', msg:e.message }); }
+  };
+
+  return (
+    <div>
+      {alert.msg && <Alert type={alert.type} onClose={() => setAlert({type:'',msg:''})} className="mb-4">{alert.msg}</Alert>}
+
+      <div className="flex justify-end gap-2 mb-4">
+        <Button variant="secondary" onClick={() => setImportOpen(true)}>
+          <span className="material-symbols-outlined text-base">upload_file</span>
+          Nhập file
+        </Button>
+        <Button onClick={openCreate}><span className="material-symbols-outlined text-lg">add</span> Thêm từ vựng</Button>
+      </div>
+
+      {loading ? (
+        <div className="glass-card rounded-2xl p-8 text-center text-on-muted animate-pulse">Đang tải...</div>
+      ) : items.length === 0 ? (
+        <div className="glass-card rounded-2xl p-12 text-center">
+          <span className="material-symbols-outlined text-5xl text-on-muted/20 block mb-3">translate</span>
+          <p className="text-on-muted">Bạn chưa tạo từ vựng nào.</p>
+          <button onClick={openCreate} className="mt-3 text-sm text-tsubaki-red font-semibold hover:underline">Tạo ngay</button>
+        </div>
+      ) : (
+        <div className="glass-card rounded-2xl overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-surface-low border-b border-outline/40">
+                <tr>{['Kanji','Reading','Nghĩa VI','Level','Loại',''].map(h =>
+                  <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-on-muted uppercase tracking-wide">{h}</th>)}</tr>
+              </thead>
+              <tbody>
+                {items.map((v,i) => (
+                  <tr key={v.id} className={`border-t border-outline/40 hover:bg-surface-low/50 transition-colors ${i%2===1?'bg-surface-low/30':''}`}>
+                    <td className="px-4 py-2.5 text-xl font-bold text-tsubaki-red">{v.kanji||'—'}</td>
+                    <td className="px-4 py-2.5 font-medium">{v.reading}</td>
+                    <td className="px-4 py-2.5">{v.meaning_vi}</td>
+                    <td className="px-4 py-2.5">{v.level ? <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${LEVEL_COLORS[v.level]}`}>{v.level}</span> : '—'}</td>
+                    <td className="px-4 py-2.5">{v.type ? <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${TYPE_COLORS[v.type]||'bg-surface-low text-on-muted'}`}>{v.type}</span> : '—'}</td>
+                    <td className="px-4 py-2.5">
+                      <div className="flex gap-1.5 justify-end">
+                        <button onClick={() => openEdit(v)} title="Sửa"
+                          className="p-1.5 rounded-lg text-on-muted hover:text-tsubaki-red hover:bg-tsubaki-red/10 transition-colors">
+                          <span className="material-symbols-outlined text-lg">edit</span>
+                        </button>
+                        <button onClick={() => handleDelete(v.id)} title="Xóa"
+                          className="p-1.5 rounded-lg text-on-muted hover:text-red-500 hover:bg-red-50 transition-colors">
+                          <span className="material-symbols-outlined text-lg">delete</span>
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 
@@ -171,6 +235,35 @@ export default function TeacherVocabulary() {
           <Input label="Ví dụ" value={form.example_sentence} onChange={e => setForm({...form,example_sentence:e.target.value})} placeholder="Câu ví dụ..."/>
         </div>
       </Modal>
+
+      <ImportFileModal
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        type="vocab"
+        apiBase="/teacher"
+        onImported={async (msg) => { await load(); setAlert({ type:'success', msg }); }}
+      />
+    </div>
+  );
+}
+
+// ── Page ──────────────────────────────────────────────────────────────────────
+export default function TeacherVocabulary() {
+  const [tab, setTab] = useState('system');
+  return (
+    <TeacherLayout title="Từ vựng">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+        <h1 className="font-display text-2xl font-bold">Từ vựng</h1>
+        <div className="flex rounded-xl border border-outline overflow-hidden text-sm font-medium">
+          {[['system','dataset','Hệ thống'],['mine','person','Của tôi']].map(([key,icon,label]) => (
+            <button key={key} onClick={() => setTab(key)}
+              className={`flex items-center gap-2 px-5 py-2.5 transition-colors ${tab===key ? 'bg-tsubaki-red text-white' : 'bg-surface-low text-on-muted hover:bg-surface'}`}>
+              <span className="material-symbols-outlined text-lg">{icon}</span>{label}
+            </button>
+          ))}
+        </div>
+      </div>
+      {tab === 'system' ? <SystemTab /> : <MyTab />}
     </TeacherLayout>
   );
 }

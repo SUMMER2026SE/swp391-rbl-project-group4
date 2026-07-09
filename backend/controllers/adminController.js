@@ -457,18 +457,46 @@ exports.importVocab = async (req, res) => {
   }
 
   try {
-    const { data, error } = await supabaseAdmin.from('vocabulary').insert(cleaned).select('id');
-    if (error) throw error;
-    // Dòng có lesson_id (import từ trình soạn Mục) → gắn vào bài qua bảng nối.
-    const links = data
-      .map((d, i) => cleaned[i].lesson_id ? { lesson_id: cleaned[i].lesson_id, vocabulary_id: d.id } : null)
-      .filter(Boolean);
-    if (links.length > 0) {
+    // Dedup: tìm từ đã có trong ngân hàng theo (kanji + reading), tránh trùng lặp.
+    const readings = [...new Set(cleaned.map(i => i.reading).filter(Boolean))];
+    const { data: existing } = await supabaseAdmin.from('vocabulary')
+      .select('id, reading, kanji').in('reading', readings);
+    const bankMap = {};
+    (existing || []).forEach(v => {
+      const key = `${v.kanji || ''}|${v.reading}`;
+      if (!bankMap[key]) bankMap[key] = v.id;
+    });
+
+    const toInsert = [];
+    const linkPairs = [];
+    cleaned.forEach(item => {
+      const key = `${item.kanji || ''}|${item.reading}`;
+      if (bankMap[key]) {
+        if (item.lesson_id) linkPairs.push({ vocabulary_id: bankMap[key], lesson_id: item.lesson_id });
+      } else {
+        toInsert.push(item);
+      }
+    });
+
+    let newCount = 0;
+    if (toInsert.length > 0) {
+      const { data, error } = await supabaseAdmin.from('vocabulary').insert(toInsert).select('id');
+      if (error) throw error;
+      newCount = data.length;
+      data.forEach((d, i) => {
+        if (toInsert[i].lesson_id) linkPairs.push({ vocabulary_id: d.id, lesson_id: toInsert[i].lesson_id });
+      });
+    }
+    if (linkPairs.length > 0) {
       const { error: linkErr } = await contentDb.from('lesson_vocabulary')
-        .upsert(links, { onConflict: 'lesson_id,vocabulary_id' });
+        .upsert(linkPairs, { onConflict: 'lesson_id,vocabulary_id' });
       if (linkErr) throw linkErr;
     }
-    res.status(201).json({ imported: data.length, message: `Đã nhập ${data.length} từ vựng thành công.` });
+    const linkedCount = cleaned.length - newCount;
+    const msg = linkedCount > 0
+      ? `Đã thêm ${newCount} từ mới vào ngân hàng, liên kết ${linkedCount} từ đã có sẵn.`
+      : `Đã nhập ${newCount} từ vựng thành công.`;
+    res.status(201).json({ imported: newCount, linked: linkedCount, message: msg });
   } catch (err) {
     console.error('Import vocab error:', err);
     res.status(500).json({ error: 'Không thể nhập từ vựng vào cơ sở dữ liệu.' });
@@ -477,7 +505,7 @@ exports.importVocab = async (req, res) => {
 
 // ── Vocabulary CRUD ──────────────────────────────────────────────────────────
 exports.listVocab = async (req, res) => {
-  const { lesson_id, search, page = 1, limit = 100 } = req.query;
+  const { lesson_id, level, search, page = 1, limit = 100 } = req.query;
   const offset = (Number(page) - 1) * Number(limit);
   try {
     // Từ vựng trong một Mục được lấy qua bảng nối lesson_vocabulary (nhiều–nhiều).
@@ -495,6 +523,7 @@ exports.listVocab = async (req, res) => {
     let q = supabaseAdmin.from('vocabulary').select('*', { count: 'exact' })
       .order('created_at', { ascending: true })
       .range(offset, offset + Number(limit) - 1);
+    if (level)  q = q.eq('level', level);
     if (search) q = q.or(`kanji.ilike.%${search}%,reading.ilike.%${search}%,meaning_vi.ilike.%${search}%`);
     const { data, error, count } = await q;
     if (error) throw error;
@@ -507,16 +536,17 @@ exports.createVocab = async (req, res) => {
   if (!reading || !meaning_vi) return res.status(400).json({ error: 'Thiếu thông tin bắt buộc.' });
   try {
     const { data, error } = await supabaseAdmin.from('vocabulary')
-      .insert({ kanji, reading, meaning_vi, meaning_ja, level, lesson_id, type, topic, example_sentence })
+      .insert({ kanji, reading, meaning_vi, meaning_ja, level, lesson_id, type, topic, example_sentence, created_by: req.user?.id || null })
       .select().single();
     if (error) throw error;
     // Gắn từ mới vào Mục qua bảng nối để hiển thị trong bài.
     if (lesson_id) {
-      await contentDb.from('lesson_vocabulary')
+      const { error: linkErr } = await contentDb.from('lesson_vocabulary')
         .upsert({ lesson_id, vocabulary_id: data.id }, { onConflict: 'lesson_id,vocabulary_id' });
+      if (linkErr) throw linkErr;
     }
     res.status(201).json(data);
-  } catch (err) { res.status(500).json({ error: 'Không thể tạo.' }); }
+  } catch (err) { res.status(500).json({ error: err.message || 'Không thể tạo từ vựng.' }); }
 };
 
 // Gắn nhiều từ vựng có sẵn vào một Mục (chọn từ list tổng).
@@ -596,18 +626,44 @@ exports.importGrammarPoints = async (req, res) => {
   }
 
   try {
-    const { data, error } = await supabaseAdmin.from('grammar_points').insert(cleaned).select('id');
-    if (error) throw error;
-    // Dòng có lesson_id (import từ trình soạn Mục) → gắn vào bài qua bảng nối.
-    const links = data
-      .map((d, i) => lessonIds[i] ? { lesson_id: lessonIds[i], grammar_point_id: d.id } : null)
-      .filter(Boolean);
-    if (links.length > 0) {
+    // Dedup: tìm ngữ pháp đã có trong ngân hàng theo title.
+    const titles = [...new Set(cleaned.map(i => i.title).filter(Boolean))];
+    const { data: existing } = await supabaseAdmin.from('grammar_points')
+      .select('id, title').in('title', titles);
+    const bankMap = Object.fromEntries((existing || []).map(g => [g.title, g.id]));
+
+    const toInsert = [];
+    const toInsertLessonIds = [];
+    const linkPairs = [];
+    cleaned.forEach((item, idx) => {
+      const lid = lessonIds[idx];
+      if (bankMap[item.title]) {
+        if (lid) linkPairs.push({ grammar_point_id: bankMap[item.title], lesson_id: lid });
+      } else {
+        toInsert.push(item);
+        toInsertLessonIds.push(lid);
+      }
+    });
+
+    let newCount = 0;
+    if (toInsert.length > 0) {
+      const { data, error } = await supabaseAdmin.from('grammar_points').insert(toInsert).select('id');
+      if (error) throw error;
+      newCount = data.length;
+      data.forEach((d, i) => {
+        if (toInsertLessonIds[i]) linkPairs.push({ grammar_point_id: d.id, lesson_id: toInsertLessonIds[i] });
+      });
+    }
+    if (linkPairs.length > 0) {
       const { error: linkErr } = await contentDb.from('lesson_grammar_points')
-        .upsert(links, { onConflict: 'lesson_id,grammar_point_id' });
+        .upsert(linkPairs, { onConflict: 'lesson_id,grammar_point_id' });
       if (linkErr) throw linkErr;
     }
-    res.status(201).json({ imported: data.length, message: `Đã nhập ${data.length} mẫu ngữ pháp thành công.` });
+    const linkedCount = cleaned.length - newCount;
+    const msg = linkedCount > 0
+      ? `Đã thêm ${newCount} mẫu mới vào ngân hàng, liên kết ${linkedCount} mẫu đã có sẵn.`
+      : `Đã nhập ${newCount} mẫu ngữ pháp thành công.`;
+    res.status(201).json({ imported: newCount, linked: linkedCount, message: msg });
   } catch (err) {
     console.error('Import grammar points error:', err);
     res.status(500).json({ error: 'Không thể nhập ngữ pháp vào cơ sở dữ liệu.' });
@@ -651,11 +707,12 @@ exports.createGrammarPoint = async (req, res) => {
     if (error) throw error;
     // Gắn điểm ngữ pháp mới vào Mục qua bảng nối để hiển thị trong bài.
     if (lesson_id) {
-      await contentDb.from('lesson_grammar_points')
+      const { error: linkErr } = await contentDb.from('lesson_grammar_points')
         .upsert({ lesson_id, grammar_point_id: data.id }, { onConflict: 'lesson_id,grammar_point_id' });
+      if (linkErr) throw linkErr;
     }
     res.status(201).json(data);
-  } catch (err) { res.status(500).json({ error: 'Không thể tạo.' }); }
+  } catch (err) { res.status(500).json({ error: err.message || 'Không thể tạo ngữ pháp.' }); }
 };
 
 // Gắn nhiều điểm ngữ pháp có sẵn vào một Mục (chọn từ list tổng).
@@ -746,22 +803,41 @@ exports.importKanji = async (req, res) => {
   }
 
   try {
-    // INSTEAD OF trigger trên view tự upsert theo character (view không nhận ON CONFLICT)
-    const { data, error } = await supabaseAdmin
-      .from('kanji')
-      .insert(cleaned)
-      .select('id');
-    if (error) throw error;
-    // Dòng có lesson_id (import từ trình soạn Mục) → gắn vào bài qua bảng nối.
-    const links = data
-      .map((d, i) => cleaned[i].lesson_id ? { lesson_id: cleaned[i].lesson_id, kanji_id: d.id } : null)
-      .filter(Boolean);
-    if (links.length > 0) {
+    // Dedup: tìm kanji đã có trong ngân hàng theo character.
+    const characters = [...new Set(cleaned.map(i => i.character).filter(Boolean))];
+    const { data: existing } = await supabaseAdmin.from('kanji')
+      .select('id, character').in('character', characters);
+    const bankMap = Object.fromEntries((existing || []).map(k => [k.character, k.id]));
+
+    const toInsert = [];
+    const linkPairs = [];
+    cleaned.forEach(item => {
+      if (bankMap[item.character]) {
+        if (item.lesson_id) linkPairs.push({ kanji_id: bankMap[item.character], lesson_id: item.lesson_id });
+      } else {
+        toInsert.push(item);
+      }
+    });
+
+    let newCount = 0;
+    if (toInsert.length > 0) {
+      const { data, error } = await supabaseAdmin.from('kanji').insert(toInsert).select('id');
+      if (error) throw error;
+      newCount = data.length;
+      data.forEach((d, i) => {
+        if (toInsert[i].lesson_id) linkPairs.push({ kanji_id: d.id, lesson_id: toInsert[i].lesson_id });
+      });
+    }
+    if (linkPairs.length > 0) {
       const { error: linkErr } = await contentDb.from('lesson_kanji')
-        .upsert(links, { onConflict: 'lesson_id,kanji_id' });
+        .upsert(linkPairs, { onConflict: 'lesson_id,kanji_id' });
       if (linkErr) throw linkErr;
     }
-    res.status(201).json({ imported: data.length, message: `Đã nhập ${data.length} kanji thành công.` });
+    const linkedCount = cleaned.length - newCount;
+    const msg = linkedCount > 0
+      ? `Đã thêm ${newCount} kanji mới vào ngân hàng, liên kết ${linkedCount} kanji đã có sẵn.`
+      : `Đã nhập ${newCount} kanji thành công.`;
+    res.status(201).json({ imported: newCount, linked: linkedCount, message: msg });
   } catch (err) {
     console.error('Import kanji error:', err);
     res.status(500).json({ error: 'Không thể nhập kanji vào cơ sở dữ liệu.' });
@@ -806,11 +882,12 @@ exports.createKanji = async (req, res) => {
     if (error) throw error;
     // Gắn kanji mới vào Mục qua bảng nối để hiển thị trong bài.
     if (lesson_id) {
-      await contentDb.from('lesson_kanji')
+      const { error: linkErr } = await contentDb.from('lesson_kanji')
         .upsert({ lesson_id, kanji_id: data.id }, { onConflict: 'lesson_id,kanji_id' });
+      if (linkErr) throw linkErr;
     }
     res.status(201).json(data);
-  } catch (err) { res.status(500).json({ error: err.message || 'Không thể tạo.' }); }
+  } catch (err) { res.status(500).json({ error: err.message || 'Không thể tạo kanji.' }); }
 };
 
 // Gắn nhiều kanji có sẵn vào một Mục (chọn từ list tổng).
