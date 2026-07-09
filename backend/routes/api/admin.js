@@ -155,13 +155,11 @@ router.post('/grammar-points',        c.createGrammarPoint);
 router.put('/grammar-points/:id',     c.updateGrammarPoint);
 router.delete('/grammar-points/:id',  c.deleteGrammarPoint);
 
-// Gắn/gỡ từ vựng & kanji & ngữ pháp có sẵn vào Mục (bảng nối nhiều–nhiều)
+// Gắn/gỡ từ vựng & kanji có sẵn vào Mục (bảng nối nhiều–nhiều)
 router.post('/lessons/:lessonId/vocabulary/attach',     c.attachVocab);
 router.delete('/lessons/:lessonId/vocabulary/:vocabId', c.detachVocab);
 router.post('/lessons/:lessonId/kanji/attach',          c.attachKanji);
 router.delete('/lessons/:lessonId/kanji/:kanjiId',      c.detachKanji);
-router.post('/lessons/:lessonId/grammar-points/attach',       c.attachGrammar);
-router.delete('/lessons/:lessonId/grammar-points/:grammarId', c.detachGrammar);
 
 // Bulk import vào Mục qua file (Word/Excel/CSV/JSON) — chỉ parse + preview, chưa ghi DB.
 // Xác nhận nhập dùng lại /vocabulary/import, /kanji/import, /grammar-points/import
@@ -175,14 +173,19 @@ const importFileUpload = multer({
     ok ? cb(null, true) : cb(new Error('Chỉ chấp nhận file .json, .csv, .xlsx, .xls, .docx.'));
   },
 });
-router.post('/lessons/:lessonId/vocabulary/import-file',     importFileUpload.single('file'), fic.previewVocabFile);
-router.post('/lessons/:lessonId/kanji/import-file',          importFileUpload.single('file'), fic.previewKanjiFile);
-router.post('/lessons/:lessonId/grammar-points/import-file', importFileUpload.single('file'), fic.previewGrammarFile);
+router.post('/lessons/:lessonId/vocabulary/import-file', importFileUpload.single('file'), fic.previewVocabFile);
+router.post('/lessons/:lessonId/kanji/import-file',      importFileUpload.single('file'), fic.previewKanjiFile);
 
 // Import file trực tiếp vào ngân hàng chung (không cần lessonId)
 router.post('/vocabulary/import-file',     importFileUpload.single('file'), fic.previewVocabFile);
 router.post('/kanji/import-file',          importFileUpload.single('file'), fic.previewKanjiFile);
 router.post('/grammar-points/import-file', importFileUpload.single('file'), fic.previewGrammarFile);
+
+// Study lists — admin quản lý bài đăng của giáo viên
+const sl = require('../../controllers/studyListController');
+router.get('/study-lists',     c.adminListStudyLists);
+router.put('/study-lists/:id', sl.update);
+router.delete('/study-lists/:id', sl.remove);
 
 // Content submissions
 router.get('/submissions',                    c.listSubmissions);
