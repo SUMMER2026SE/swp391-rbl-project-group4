@@ -4,7 +4,10 @@ import Modal from '../../components/ui/Modal';
 import Button from '../../components/ui/Button';
 import Input from '../../components/ui/Input';
 import Alert from '../../components/ui/Alert';
+import ImportFileModal from '../../components/admin/ImportFileModal';
 import api from '../../lib/api';
+
+const TYPE_TO_IMPORT = { vocabulary: 'vocab', kanji: 'kanji', grammar: 'grammar' };
 
 const TYPES = [
   ['vocabulary', 'translate', 'Từ vựng'],
@@ -17,10 +20,11 @@ const ITEM_LABEL = (type, item) => type === 'kanji' ? item.character : type === 
 const ITEM_SUB   = (type, item) => type === 'grammar' ? item.meaning_vi : item.meaning_vi;
 
 function ItemPickerModal({ open, onClose, post, listType, onChanged }) {
-  const [detail, setDetail]   = useState(null);
-  const [search, setSearch]   = useState('');
-  const [results, setResults] = useState([]);
-  const [alert, setAlert]     = useState('');
+  const [detail, setDetail]     = useState(null);
+  const [search, setSearch]     = useState('');
+  const [results, setResults]   = useState([]);
+  const [alert, setAlert]       = useState('');
+  const [importOpen, setImportOpen] = useState(false);
 
   const loadDetail = useCallback(async () => {
     if (!post) return;
@@ -56,9 +60,17 @@ function ItemPickerModal({ open, onClose, post, listType, onChanged }) {
   const currentIds = new Set((detail?.items || []).map(i => i.id));
 
   return (
+    <>
     <Modal open={open} onClose={onClose} title={`Quản lý mục — ${post?.title || ''}`} size="lg">
       <div className="space-y-4">
         {alert && <Alert type="error" onClose={() => setAlert('')}>{alert}</Alert>}
+
+        <div className="flex justify-end">
+          <Button variant="secondary" size="sm" onClick={() => setImportOpen(true)}>
+            <span className="material-symbols-outlined text-base">upload_file</span>
+            Nhập file / JSON
+          </Button>
+        </div>
 
         <form onSubmit={runSearch} className="flex gap-2">
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Tìm để thêm vào danh sách..."
@@ -100,6 +112,20 @@ function ItemPickerModal({ open, onClose, post, listType, onChanged }) {
         </div>
       </div>
     </Modal>
+
+    <ImportFileModal
+      open={importOpen}
+      onClose={() => setImportOpen(false)}
+      type={TYPE_TO_IMPORT[listType]}
+      studyListId={post?.id}
+      onImported={async (msg) => {
+        await loadDetail();
+        onChanged();
+        setImportOpen(false);
+        setAlert('');
+      }}
+    />
+    </>
   );
 }
 

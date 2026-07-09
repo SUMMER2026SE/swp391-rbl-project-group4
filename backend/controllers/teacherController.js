@@ -8,16 +8,19 @@ const examDb = supabaseAdmin.schema('exam_module');
 const contentDb = supabaseAdmin.schema('content_module');
 
 // ── My Vocabulary ─────────────────────────────────────────────────────────────
+// Giáo viên thêm từ vựng thẳng vào bảng chung vocabulary, lọc theo created_by.
 exports.listMyVocab = async (req, res) => {
-  const { page = 1, limit = 50 } = req.query;
+  const { page = 1, limit = 50, search, level } = req.query;
   const offset = (Number(page) - 1) * Number(limit);
   try {
-    const { data, error, count } = await supabaseAdmin
-      .from('teacher_vocabulary')
+    let q = supabaseAdmin.from('vocabulary')
       .select('*', { count: 'exact' })
-      .eq('teacher_id', req.user.id)
+      .eq('created_by', req.user.id)
       .order('created_at', { ascending: false })
       .range(offset, offset + Number(limit) - 1);
+    if (level)  q = q.eq('level', level);
+    if (search) q = q.or(`kanji.ilike.%${search}%,reading.ilike.%${search}%,meaning_vi.ilike.%${search}%`);
+    const { data, error, count } = await q;
     if (error) throw error;
     res.json({ data: data || [], total: count || 0 });
   } catch (err) { res.status(500).json({ error: 'Không thể tải dữ liệu.' }); }
@@ -27,63 +30,50 @@ exports.createMyVocab = async (req, res) => {
   const { kanji, reading, meaning_vi, meaning_ja, level, type, example_sentence } = req.body;
   if (!reading || !meaning_vi) return res.status(400).json({ error: 'Reading và nghĩa là bắt buộc.' });
   try {
-    const { data, error } = await supabaseAdmin.from('teacher_vocabulary')
-      .insert({ teacher_id: req.user.id, kanji, reading, meaning_vi, meaning_ja, level, type, example_sentence })
+    const { data, error } = await supabaseAdmin.from('vocabulary')
+      .insert({ kanji, reading, meaning_vi, meaning_ja, level, type, example_sentence, created_by: req.user.id, is_public: true })
       .select().single();
     if (error) throw error;
     res.status(201).json(data);
-  } catch (err) { res.status(500).json({ error: 'Không thể tạo.' }); }
+  } catch (err) { res.status(500).json({ error: err.message || 'Không thể tạo.' }); }
 };
 
 exports.updateMyVocab = async (req, res) => {
   try {
-    const { data: row } = await supabaseAdmin.from('teacher_vocabulary').select('teacher_id,status').eq('id', req.params.id).single();
-    if (!row || row.teacher_id !== req.user.id) return res.status(403).json({ error: 'Không có quyền.' });
-    if (row.status === 'pending') return res.status(400).json({ error: 'Không thể sửa khi đang chờ duyệt.' });
+    const { data: row } = await supabaseAdmin.from('vocabulary').select('created_by').eq('id', req.params.id).single();
+    if (!row || row.created_by !== req.user.id) return res.status(403).json({ error: 'Không có quyền.' });
     const allowed = ['kanji','reading','meaning_vi','meaning_ja','level','type','example_sentence'];
     const updates = Object.fromEntries(Object.entries(req.body).filter(([k]) => allowed.includes(k)));
-    updates.updated_at = new Date().toISOString();
-    updates.status = 'draft';
-    const { data, error } = await supabaseAdmin.from('teacher_vocabulary').update(updates).eq('id', req.params.id).select().single();
+    const { data, error } = await supabaseAdmin.from('vocabulary').update(updates).eq('id', req.params.id).select().single();
     if (error) throw error;
     res.json(data);
-  } catch (err) { res.status(500).json({ error: 'Không thể cập nhật.' }); }
+  } catch (err) { res.status(500).json({ error: err.message || 'Không thể cập nhật.' }); }
 };
 
 exports.deleteMyVocab = async (req, res) => {
   try {
-    const { data: row } = await supabaseAdmin.from('teacher_vocabulary').select('teacher_id').eq('id', req.params.id).single();
-    if (!row || row.teacher_id !== req.user.id) return res.status(403).json({ error: 'Không có quyền.' });
-    await supabaseAdmin.from('teacher_vocabulary').delete().eq('id', req.params.id);
-    res.json({ message: 'Đã xóa.' });
-  } catch (err) { res.status(500).json({ error: 'Không thể xóa.' }); }
-};
-
-exports.submitMyVocab = async (req, res) => {
-  try {
-    const { data: row } = await supabaseAdmin.from('teacher_vocabulary').select('teacher_id,status').eq('id', req.params.id).single();
-    if (!row || row.teacher_id !== req.user.id) return res.status(403).json({ error: 'Không có quyền.' });
-    if (row.status === 'pending') return res.status(400).json({ error: 'Đã gửi yêu cầu rồi.' });
-    if (row.status === 'approved') return res.status(400).json({ error: 'Đã được duyệt.' });
-    const { data, error } = await supabaseAdmin.from('teacher_vocabulary')
-      .update({ status: 'pending', admin_note: null, updated_at: new Date().toISOString() })
-      .eq('id', req.params.id).select().single();
+    const { data: row } = await supabaseAdmin.from('vocabulary').select('created_by').eq('id', req.params.id).single();
+    if (!row || row.created_by !== req.user.id) return res.status(403).json({ error: 'Không có quyền.' });
+    const { error } = await supabaseAdmin.from('vocabulary').delete().eq('id', req.params.id);
     if (error) throw error;
-    res.json(data);
-  } catch (err) { res.status(500).json({ error: 'Không thể gửi yêu cầu.' }); }
+    res.json({ message: 'Đã xóa.' });
+  } catch (err) { res.status(500).json({ error: err.message || 'Không thể xóa.' }); }
 };
 
 // ── My Kanji ──────────────────────────────────────────────────────────────────
+// Giáo viên thêm kanji thẳng vào bảng chung kanji, lọc theo created_by.
 exports.listMyKanji = async (req, res) => {
-  const { page = 1, limit = 50 } = req.query;
+  const { page = 1, limit = 50, search, level } = req.query;
   const offset = (Number(page) - 1) * Number(limit);
   try {
-    const { data, error, count } = await supabaseAdmin
-      .from('teacher_kanji')
+    let q = supabaseAdmin.from('kanji')
       .select('*', { count: 'exact' })
-      .eq('teacher_id', req.user.id)
+      .eq('created_by', req.user.id)
       .order('created_at', { ascending: false })
       .range(offset, offset + Number(limit) - 1);
+    if (level)  q = q.eq('level', level);
+    if (search) q = q.or(`character.ilike.%${search}%,meaning_vi.ilike.%${search}%,han_viet.ilike.%${search}%`);
+    const { data, error, count } = await q;
     if (error) throw error;
     res.json({ data: data || [], total: count || 0 });
   } catch (err) { res.status(500).json({ error: 'Không thể tải dữ liệu.' }); }
@@ -94,55 +84,124 @@ exports.createMyKanji = async (req, res) => {
   if (!character || !meaning_vi) return res.status(400).json({ error: 'Kanji và nghĩa là bắt buộc.' });
   const toArr = (v) => Array.isArray(v) ? v : (typeof v === 'string' ? v.split(',').map(s => s.trim()).filter(Boolean) : []);
   try {
-    const { data, error } = await supabaseAdmin.from('teacher_kanji')
-      .insert({ teacher_id: req.user.id, character, reading_on: toArr(reading_on), reading_kun: toArr(reading_kun), meaning_vi, stroke_count: stroke_count ? Number(stroke_count) : null, level })
+    const { data, error } = await supabaseAdmin.from('kanji')
+      .insert({ character, reading_on: toArr(reading_on), reading_kun: toArr(reading_kun), meaning_vi, stroke_count: stroke_count ? Number(stroke_count) : null, level, created_by: req.user.id, is_public: true })
       .select().single();
     if (error) throw error;
     res.status(201).json(data);
-  } catch (err) { res.status(500).json({ error: 'Không thể tạo.' }); }
+  } catch (err) { res.status(500).json({ error: err.message || 'Không thể tạo.' }); }
 };
 
 exports.updateMyKanji = async (req, res) => {
   const toArr = (v) => Array.isArray(v) ? v : (typeof v === 'string' ? v.split(',').map(s => s.trim()).filter(Boolean) : []);
   try {
-    const { data: row } = await supabaseAdmin.from('teacher_kanji').select('teacher_id,status').eq('id', req.params.id).single();
-    if (!row || row.teacher_id !== req.user.id) return res.status(403).json({ error: 'Không có quyền.' });
-    if (row.status === 'pending') return res.status(400).json({ error: 'Không thể sửa khi đang chờ duyệt.' });
+    const { data: row } = await supabaseAdmin.from('kanji').select('created_by').eq('id', req.params.id).single();
+    if (!row || row.created_by !== req.user.id) return res.status(403).json({ error: 'Không có quyền.' });
     const { character, reading_on, reading_kun, meaning_vi, stroke_count, level } = req.body;
-    const updates = { updated_at: new Date().toISOString(), status: 'draft' };
-    if (character   !== undefined) updates.character    = character;
-    if (meaning_vi  !== undefined) updates.meaning_vi   = meaning_vi;
-    if (reading_on  !== undefined) updates.reading_on   = toArr(reading_on);
-    if (reading_kun !== undefined) updates.reading_kun  = toArr(reading_kun);
+    const updates = {};
+    if (character    !== undefined) updates.character    = character;
+    if (meaning_vi   !== undefined) updates.meaning_vi   = meaning_vi;
+    if (reading_on   !== undefined) updates.reading_on   = toArr(reading_on);
+    if (reading_kun  !== undefined) updates.reading_kun  = toArr(reading_kun);
     if (stroke_count !== undefined) updates.stroke_count = stroke_count ? Number(stroke_count) : null;
-    if (level       !== undefined) updates.level        = level;
-    const { data, error } = await supabaseAdmin.from('teacher_kanji').update(updates).eq('id', req.params.id).select().single();
+    if (level        !== undefined) updates.level        = level;
+    const { data, error } = await supabaseAdmin.from('kanji').update(updates).eq('id', req.params.id).select().single();
     if (error) throw error;
     res.json(data);
-  } catch (err) { res.status(500).json({ error: 'Không thể cập nhật.' }); }
+  } catch (err) { res.status(500).json({ error: err.message || 'Không thể cập nhật.' }); }
 };
 
 exports.deleteMyKanji = async (req, res) => {
   try {
-    const { data: row } = await supabaseAdmin.from('teacher_kanji').select('teacher_id').eq('id', req.params.id).single();
-    if (!row || row.teacher_id !== req.user.id) return res.status(403).json({ error: 'Không có quyền.' });
-    await supabaseAdmin.from('teacher_kanji').delete().eq('id', req.params.id);
+    const { data: row } = await supabaseAdmin.from('kanji').select('created_by').eq('id', req.params.id).single();
+    if (!row || row.created_by !== req.user.id) return res.status(403).json({ error: 'Không có quyền.' });
+    const { error } = await supabaseAdmin.from('kanji').delete().eq('id', req.params.id);
+    if (error) throw error;
     res.json({ message: 'Đã xóa.' });
-  } catch (err) { res.status(500).json({ error: 'Không thể xóa.' }); }
+  } catch (err) { res.status(500).json({ error: err.message || 'Không thể xóa.' }); }
 };
 
-exports.submitMyKanji = async (req, res) => {
+// Bulk import từ file (JSON/Excel/CSV) vào ngân hàng chung, gắn created_by = giáo viên.
+exports.importMyVocab = async (req, res) => {
+  const rows = req.body;
+  if (!Array.isArray(rows) || rows.length === 0)
+    return res.status(400).json({ error: 'Dữ liệu phải là một mảng JSON không rỗng.' });
+  if (rows.length > 500)
+    return res.status(400).json({ error: 'Tối đa 500 từ mỗi lần nhập.' });
+
+  const ALLOWED = ['kanji','reading','meaning_vi','meaning_ja','level','type','topic','example_sentence'];
+  const LEVELS  = new Set(['N5','N4','N3','N2','N1']);
+  const errors  = [];
+  const cleaned = [];
+
+  rows.forEach((row, i) => {
+    const n = i + 1;
+    if (!row.reading)    errors.push(`Dòng ${n}: thiếu trường "reading".`);
+    if (!row.meaning_vi) errors.push(`Dòng ${n}: thiếu trường "meaning_vi".`);
+    if (row.level && !LEVELS.has(row.level))
+      errors.push(`Dòng ${n}: level "${row.level}" không hợp lệ (N5/N4/N3/N2/N1).`);
+    const item = { created_by: req.user.id, is_public: true };
+    ALLOWED.forEach(k => { if (row[k] !== undefined) item[k] = row[k] || null; });
+    cleaned.push(item);
+  });
+
+  if (errors.length > 0) {
+    const preview = errors.slice(0, 5).join('\n• ');
+    const suffix  = errors.length > 5 ? `\n... và ${errors.length - 5} lỗi khác.` : '';
+    return res.status(400).json({ error: `Có ${errors.length} lỗi:\n• ${preview}${suffix}` });
+  }
   try {
-    const { data: row } = await supabaseAdmin.from('teacher_kanji').select('teacher_id,status').eq('id', req.params.id).single();
-    if (!row || row.teacher_id !== req.user.id) return res.status(403).json({ error: 'Không có quyền.' });
-    if (row.status === 'pending') return res.status(400).json({ error: 'Đã gửi yêu cầu rồi.' });
-    if (row.status === 'approved') return res.status(400).json({ error: 'Đã được duyệt.' });
-    const { data, error } = await supabaseAdmin.from('teacher_kanji')
-      .update({ status: 'pending', admin_note: null, updated_at: new Date().toISOString() })
-      .eq('id', req.params.id).select().single();
+    const { error } = await supabaseAdmin.from('vocabulary').insert(cleaned);
     if (error) throw error;
-    res.json(data);
-  } catch (err) { res.status(500).json({ error: 'Không thể gửi yêu cầu.' }); }
+    res.json({ message: `Đã nhập ${cleaned.length} từ vựng vào thư viện.`, count: cleaned.length });
+  } catch (err) { res.status(500).json({ error: err.message || 'Không thể nhập dữ liệu.' }); }
+};
+
+exports.importMyKanji = async (req, res) => {
+  const rows = req.body;
+  if (!Array.isArray(rows) || rows.length === 0)
+    return res.status(400).json({ error: 'Dữ liệu phải là một mảng JSON không rỗng.' });
+  if (rows.length > 500)
+    return res.status(400).json({ error: 'Tối đa 500 kanji mỗi lần nhập.' });
+
+  const LEVELS = new Set(['N5','N4','N3','N2','N1']);
+  const toArr  = (v) => {
+    if (Array.isArray(v)) return v.map(String).filter(Boolean);
+    if (typeof v === 'string') return v.split(',').map(s => s.trim()).filter(Boolean);
+    return [];
+  };
+  const errors  = [];
+  const cleaned = [];
+
+  rows.forEach((row, i) => {
+    const n = i + 1;
+    if (!row.character)  errors.push(`Dòng ${n}: thiếu trường "character".`);
+    if (!row.meaning_vi) errors.push(`Dòng ${n}: thiếu trường "meaning_vi".`);
+    if (row.level && !LEVELS.has(row.level))
+      errors.push(`Dòng ${n}: level "${row.level}" không hợp lệ (N5/N4/N3/N2/N1).`);
+    cleaned.push({
+      character:    row.character,
+      reading_on:   toArr(row.reading_on),
+      reading_kun:  toArr(row.reading_kun),
+      meaning_vi:   row.meaning_vi,
+      stroke_count: row.stroke_count ? Number(row.stroke_count) : null,
+      level:        row.level || null,
+      han_viet:     row.han_viet || null,
+      created_by:   req.user.id,
+      is_public:    true,
+    });
+  });
+
+  if (errors.length > 0) {
+    const preview = errors.slice(0, 5).join('\n• ');
+    const suffix  = errors.length > 5 ? `\n... và ${errors.length - 5} lỗi khác.` : '';
+    return res.status(400).json({ error: `Có ${errors.length} lỗi:\n• ${preview}${suffix}` });
+  }
+  try {
+    const { error } = await supabaseAdmin.from('kanji').insert(cleaned);
+    if (error) throw error;
+    res.json({ message: `Đã nhập ${cleaned.length} kanji vào thư viện.`, count: cleaned.length });
+  } catch (err) { res.status(500).json({ error: err.message || 'Không thể nhập dữ liệu.' }); }
 };
 
 // GET /api/teacher/stats
@@ -493,4 +552,27 @@ exports.detachGrammar = async (req, res) => {
     if (error) throw error;
     res.json({ message: 'Đã gỡ khỏi bài.' });
   } catch (err) { res.status(500).json({ error: 'Không thể gỡ ngữ pháp.' }); }
+};
+
+// ── Teacher-specific create with lesson ownership check ───────────────────────
+// Khi giáo viên thêm thủ công vào bài, kiểm tra sở hữu bài trước khi tạo.
+exports.createVocabForLesson = async (req, res) => {
+  const { lesson_id } = req.body;
+  if (lesson_id && !(await ownsLesson(lesson_id, req.user.id)))
+    return res.status(403).json({ error: 'Bạn không có quyền thêm vào bài này.' });
+  return require('./adminController').createVocab(req, res);
+};
+
+exports.createKanjiForLesson = async (req, res) => {
+  const { lesson_id } = req.body;
+  if (lesson_id && !(await ownsLesson(lesson_id, req.user.id)))
+    return res.status(403).json({ error: 'Bạn không có quyền thêm vào bài này.' });
+  return require('./adminController').createKanji(req, res);
+};
+
+exports.createGrammarForLesson = async (req, res) => {
+  const { lesson_id } = req.body;
+  if (lesson_id && !(await ownsLesson(lesson_id, req.user.id)))
+    return res.status(403).json({ error: 'Bạn không có quyền thêm vào bài này.' });
+  return require('./adminController').createGrammarPoint(req, res);
 };

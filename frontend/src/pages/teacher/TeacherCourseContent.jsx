@@ -5,6 +5,7 @@ import Modal from '../../components/ui/Modal';
 import Button from '../../components/ui/Button';
 import Input from '../../components/ui/Input';
 import Alert from '../../components/ui/Alert';
+import ImportFileModal from '../../components/admin/ImportFileModal';
 import api from '../../lib/api';
 
 const LESSON_TYPES = [
@@ -19,6 +20,10 @@ const typeMeta = (t) => LESSON_TYPES.find(x => x.value === t) || LESSON_TYPES[1]
 
 // Loại có trình soạn chuyên sâu cho giáo viên (quiz hiện chưa có → dùng /teacher/quizzes).
 const DEEP_TYPES = new Set(['video', 'reading', 'vocabulary', 'kanji', 'grammar']);
+// Loại có nội dung có thể nhập file ngay sau khi tạo.
+const IMPORT_TYPES = new Set(['vocabulary', 'kanji', 'grammar']);
+// Map lesson_type → ImportFileModal type prop
+const IMPORT_TYPE_MAP = { vocabulary: 'vocab', kanji: 'kanji', grammar: 'grammar' };
 
 const EMPTY_UNIT = { title: '', title_ja: '' };
 const EMPTY_ITEM = { title: '', title_ja: '', lesson_type: 'reading', duration_minutes: '', question_count: '' };
@@ -43,6 +48,16 @@ export default function TeacherCourseContent() {
   const [editingItem, setEditingItem] = useState(null);
   const [targetUnit, setTargetUnit]   = useState(null);
   const [savingItem, setSavingItem]   = useState(false);
+
+  // Post-create import flow: { id, type, title } when waiting for user choice
+  const [pendingLesson, setPendingLesson] = useState(null);
+  const [showImport, setShowImport]       = useState(false);
+
+  const goToEditor = (lesson) => {
+    setPendingLesson(null);
+    setShowImport(false);
+    navigate(`/teacher/lessons/${lesson.id}/${lesson.type}`);
+  };
 
   const showAlert = (type, msg) => { setAlert({ type, msg }); setTimeout(() => setAlert({ type: '', msg: '' }), 4000); };
 
@@ -124,9 +139,14 @@ export default function TeacherCourseContent() {
       } else {
         const r = await api.post('/teacher/lessons', { ...payload, course_id: courseId, unit_id: targetUnit?.id, order_index: (targetUnit?.lessons || []).length });
         setItemModal(false);
-        // Tạo xong → mở thẳng trình soạn chuyên sâu (nếu loại đó có).
-        if (DEEP_TYPES.has(payload.lesson_type)) navigate(`/teacher/lessons/${r.data.id}/${payload.lesson_type}`);
-        else await loadCourse();
+        if (IMPORT_TYPES.has(payload.lesson_type)) {
+          // Offer file import before going to the deep editor
+          setPendingLesson({ id: r.data.id, type: payload.lesson_type, title: payload.title });
+        } else if (DEEP_TYPES.has(payload.lesson_type)) {
+          navigate(`/teacher/lessons/${r.data.id}/${payload.lesson_type}`);
+        } else {
+          await loadCourse();
+        }
       }
     } catch (e) { showAlert('error', e.message); } finally { setSavingItem(false); }
   };
@@ -272,10 +292,59 @@ export default function TeacherCourseContent() {
             <Input label="Thời lượng (phút)" type="number" min="0" value={itemForm.duration_minutes} onChange={e => setItemForm(f => ({ ...f, duration_minutes: e.target.value }))} placeholder="0" />
           )}
           {!editingItem && !isQuiz && (
-            <p className="text-xs text-on-muted">Sau khi tạo, bạn sẽ được chuyển tới trình soạn nội dung chi tiết cho mục này.</p>
+            <p className="text-xs text-on-muted">
+              {IMPORT_TYPES.has(itemForm.lesson_type)
+                ? 'Sau khi tạo, bạn có thể nhập nội dung từ file/JSON hoặc soạn thủ công.'
+                : 'Sau khi tạo, bạn sẽ được chuyển tới trình soạn nội dung chi tiết cho mục này.'}
+            </p>
           )}
         </div>
       </Modal>
+      {/* Post-create choice: import or manual */}
+      {pendingLesson && !showImport && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 p-6">
+            <div className="flex items-center gap-3 mb-1">
+              <span className={`w-10 h-10 rounded-xl flex items-center justify-center ${typeMeta(pendingLesson.type).badge}`}>
+                <span className="material-symbols-outlined text-xl">{typeMeta(pendingLesson.type).icon}</span>
+              </span>
+              <div>
+                <p className="text-xs text-on-muted font-medium uppercase tracking-wide">{typeMeta(pendingLesson.type).label}</p>
+                <h2 className="font-semibold text-on-surface text-base">{pendingLesson.title}</h2>
+              </div>
+            </div>
+            <p className="text-sm text-on-muted mt-3 mb-5">Bạn muốn thêm nội dung cho mục này bằng cách nào?</p>
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                onClick={() => setShowImport(true)}
+                className="flex flex-col items-center gap-2 p-4 rounded-xl border-2 border-sumire-purple/30 hover:border-sumire-purple hover:bg-sumire-purple/5 transition-all text-left">
+                <span className="material-symbols-outlined text-3xl text-sumire-purple">upload_file</span>
+                <span className="font-semibold text-sm text-sumire-purple">Nhập file / JSON</span>
+                <span className="text-xs text-on-muted text-center">Tải lên file hoặc dán JSON, AI hỗ trợ tạo nội dung</span>
+              </button>
+              <button
+                onClick={() => goToEditor(pendingLesson)}
+                className="flex flex-col items-center gap-2 p-4 rounded-xl border-2 border-outline/30 hover:border-sumire-purple/40 hover:bg-surface-low transition-all text-left">
+                <span className="material-symbols-outlined text-3xl text-on-muted">edit_note</span>
+                <span className="font-semibold text-sm text-on-surface">Soạn thủ công</span>
+                <span className="text-xs text-on-muted text-center">Thêm từng mục một trong trình soạn chi tiết</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Import modal (post-create) */}
+      {pendingLesson && showImport && (
+        <ImportFileModal
+          open={true}
+          onClose={() => goToEditor(pendingLesson)}
+          type={IMPORT_TYPE_MAP[pendingLesson.type]}
+          lessonId={pendingLesson.id}
+          apiBase="/teacher"
+          onImported={() => goToEditor(pendingLesson)}
+        />
+      )}
     </TeacherLayout>
   );
 }
