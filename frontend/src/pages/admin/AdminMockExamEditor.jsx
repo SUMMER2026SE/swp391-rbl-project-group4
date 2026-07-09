@@ -368,7 +368,7 @@ function AiGenerateModal({ group, onClose, onAdded }) {
       {error && <Alert type="error" onClose={() => setError('')}>{error}</Alert>}
       {!drafts ? (
         <div className="space-y-4">
-          <Alert type="info">AI sinh câu theo đúng dạng <b>{mondaiJa(group.mondai_type)}</b> ({mondaiVi(group.mondai_type)}) cấp {group._section ? '' : ''}. Với đọc hiểu dài và phần nghe, nên kiểm tra kỹ hoặc soạn tay.</Alert>
+          <Alert type="info">AI sinh câu theo đúng dạng <b>{mondaiJa(group.mondai_type)}</b> ({mondaiVi(group.mondai_type)}). Với đọc hiểu dài và phần nghe, nên kiểm tra kỹ hoặc soạn tay.</Alert>
           <div className="flex items-center gap-3">
             <label className="text-sm text-on-muted">Số câu:</label>
             <input type="number" min="1" max="15" value={count} onChange={e => setCount(+e.target.value)}
