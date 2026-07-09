@@ -225,6 +225,39 @@ async function adminGetPayments(req, res) {
   const limit  = Math.min(100, parseInt(req.query.limit || '20', 10));
   const status = req.query.status || null;
 
+  // type=course → order mua khóa học (content_module); mặc định → order premium subscription
+  if (req.query.type === 'course') {
+    let cQuery = supabaseAdmin
+      .schema('content_module')
+      .from('course_payment_orders')
+      .select(`
+        id, student_id, order_code, payment_code, amount, currency,
+        status, paid_at, created_at,
+        course:courses(title)
+      `, { count: 'exact' })
+      .order('created_at', { ascending: false })
+      .range((page - 1) * limit, page * limit - 1);
+
+    if (status) cQuery = cQuery.eq('status', status);
+
+    try {
+      const { data, count, error } = await cQuery;
+      if (error) return res.status(500).json({ error: error.message });
+
+      // Bổ sung tên/email học viên (users nằm ngoài content_module, không join được)
+      const studentIds = [...new Set((data || []).map(o => o.student_id))];
+      const { data: users } = studentIds.length
+        ? await supabaseAdmin.from('users').select('id, full_name, email').in('id', studentIds)
+        : { data: [] };
+      const userMap = Object.fromEntries((users || []).map(u => [u.id, u]));
+
+      const orders = (data || []).map(o => ({ ...o, student: userMap[o.student_id] || null }));
+      return res.json({ orders, total: count || 0, page, limit });
+    } catch (err) {
+      return res.status(500).json({ error: err.message });
+    }
+  }
+
   let query = supabaseAdmin
     .from('payment_orders')
     .select(`

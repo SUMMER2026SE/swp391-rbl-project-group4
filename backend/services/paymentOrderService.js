@@ -124,4 +124,4 @@ async function getUserPendingOrder(userId, planId) {
   return data;
 }
 
-module.exports = { createOrder, getOrder, cancelOrder, expireOldOrders, getUserPendingOrder };
+module.exports = { createOrder, getOrder, cancelOrder, expireOldOrders, getUserPendingOrder, buildQrUrl };

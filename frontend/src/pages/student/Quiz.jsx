@@ -300,6 +300,29 @@ export default function Quiz() {
             <h1 className="font-display text-3xl font-bold mb-2">Kết quả</h1>
             <p className="text-6xl font-bold text-tsubaki-red mb-2">{score}<span className="text-2xl text-on-muted">/{total}</span></p>
             <p className="text-on-muted mb-6">{pctScore}% — {pctScore >= 80 ? 'Xuất sắc!' : pctScore >= 60 ? 'Khá tốt!' : 'Cần ôn luyện thêm.'}</p>
+
+            {result.ai_feedback && Object.keys(result.ai_feedback).length > 0 && (
+              <div className="text-left space-y-3 mb-6">
+                {questions.filter(qq => result.ai_feedback[qq.id]).map(qq => {
+                  const fb = result.ai_feedback[qq.id];
+                  return (
+                    <div key={qq.id} className="rounded-xl border border-outline bg-surface-low/50 p-4">
+                      <FuriganaText text={qq.question} textClassName="text-sm font-medium" block />
+                      <p className="text-sm text-on-muted mt-1">
+                        Câu trả lời của bạn: <span className="font-medium text-charcoal">{answers[qq.id]}</span>
+                      </p>
+                      {fb.comment && (
+                        <p className={`text-xs mt-1.5 flex items-start gap-1 ${fb.correct ? 'text-green-600' : 'text-tsubaki-red'}`}>
+                          <span className="material-symbols-outlined text-sm shrink-0">{fb.correct ? 'check_circle' : 'cancel'}</span>
+                          <span>{fb.comment}</span>
+                        </p>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
             <div className="flex gap-3 justify-center">
               <Button onClick={() => { setResult(null); setAnswers({}); setCurrent(0); }}>Làm lại</Button>
               <Button variant="secondary" onClick={() => navigate(-1)}>Quay lại</Button>
