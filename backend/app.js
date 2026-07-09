@@ -44,6 +44,7 @@ app.use('/api/admin',      require('./routes/api/admin'));
 app.use('/api/teacher',    require('./routes/api/teacher'));
 app.use('/api/classes',    require('./routes/api/classes'));
 app.use('/api/exams',      require('./routes/api/exams'));
+app.use('/api/mock-exams', require('./routes/api/mockExams'));
 app.use('/api/news',       require('./routes/api/news'));
 app.use('/api/flashcards', require('./routes/api/flashcards'));
 app.use('/api/ai',         require('./routes/api/ai'));
