@@ -9,3 +9,4 @@ frontend/dist/
 backend/scripts/dictionary-import/data/
 Claude.md/
 .idea/
+FETCH_HEAD
