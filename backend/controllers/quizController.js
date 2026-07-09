@@ -1,6 +1,8 @@
 'use strict';
 
 const { supabaseAdmin } = require('../config/supabase');
+const { checkCourseContentAccess } = require('../services/courseAccess');
+const { chatCompletion } = require('../config/ai');
 
 // Bảng quiz đã chuyển sang schema exam_module (question_bank/users vẫn ở public)
 const examDb = supabaseAdmin.schema('exam_module');
@@ -46,6 +48,10 @@ exports.getOne = async (req, res) => {
     const { data: quiz, error } = await examDb
       .from('quizzes').select('*').eq('id', req.params.id).single();
     if (error || !quiz) return res.status(404).json({ error: 'Không tìm thấy quiz.' });
+
+    // Paywall: quiz thuộc khóa có phí → phải enroll mới trả câu hỏi
+    const denied = await checkCourseContentAccess(quiz.course_id, req.user);
+    if (denied) return res.status(403).json(denied);
 
     // Strict fullscreen: đang bị khóa thì không trả câu hỏi
     if (quiz.strict_fullscreen) {
@@ -95,6 +101,48 @@ function isCorrect(q, ans) {
 }
 exports.isCorrect = isCorrect;
 
+// So khớp chính xác cho short_answer: trim + không phân biệt hoa/thường
+// (để tiết kiệm gọi AI khi đáp án khớp hoàn toàn).
+function shortAnswerExactMatch(q, ans) {
+  return typeof ans === 'string' && typeof q.correct_answer === 'string'
+    && ans.trim().toLowerCase() === q.correct_answer.trim().toLowerCase();
+}
+
+// Chấm short_answer bằng AI khi không khớp chuỗi chính xác: đánh giá câu trả lời
+// có ĐÚNG VỀ NGHĨA so với đáp án mẫu không. Lỗi/parse thất bại → coi là SAI (an toàn).
+async function gradeShortAnswerAI(q, ans) {
+  const prompt =
+`Bạn là giáo viên chấm câu trả lời ngắn của học viên tiếng Nhật.
+
+CÂU HỎI: 「${q.question || ''}」
+ĐÁP ÁN MẪU: 「${q.correct_answer || ''}」
+CÂU TRẢ LỜI CỦA HỌC VIÊN: 「${ans.trim()}」
+
+Hãy đánh giá xem câu trả lời của học viên có ĐÚNG VỀ NGHĨA so với đáp án mẫu hay không.
+Chấp nhận khác biệt nhỏ về chính tả, dấu câu, cách diễn đạt nếu vẫn đúng nghĩa.
+
+Trả về JSON THUẦN (không markdown):
+{ "correct": true/false, "comment": "<nhận xét ngắn 1 câu tiếng Việt>" }`;
+
+  try {
+    const r = await chatCompletion(
+      [{ role: 'user', content: prompt }],
+      { model: process.env.FPT_AI_MODEL || 'gemma-4-31B-it', temperature: 0, max_tokens: 300 }
+    );
+    const txt = r.choices?.[0]?.message?.content || '';
+    const m = txt.match(/\{[\s\S]*\}/);
+    const parsed = JSON.parse(m ? m[0] : txt);
+    return {
+      correct: parsed.correct === true,
+      ai_used: true,
+      comment: typeof parsed.comment === 'string' ? parsed.comment.slice(0, 500) : '',
+    };
+  } catch (e) {
+    console.error('AI short_answer grade error:', e.message);
+    return { correct: false, ai_used: false, comment: '' };
+  }
+}
+
 // POST /api/quizzes/:id/attempt
 exports.submitAttempt = async (req, res) => {
   const userId    = req.user.id;
@@ -118,13 +166,34 @@ exports.submitAttempt = async (req, res) => {
 
     const { data: questions } = await examDb
       .from('quiz_questions')
-      .select('id,question_type,options,correct_answer,correct_answer_data')
+      .select('id,question,question_type,options,correct_answer,correct_answer_data')
       .eq('quiz_id', req.params.id);
     if (!questions) return res.status(404).json({ error: 'Không tìm thấy quiz.' });
 
     let score = 0;
+    const aiFeedback = {};   // question_id -> { correct, ai_used, comment }
+    const aiTasks   = [];    // short_answer chưa khớp chính xác → cần AI
+
     questions.forEach(q => {
-      if (isCorrect(q, answers[q.id])) score++;
+      const ans = answers[q.id];
+      if ((q.question_type || 'single_choice') === 'short_answer') {
+        // Ưu tiên so khớp chính xác để tiết kiệm gọi AI
+        if (shortAnswerExactMatch(q, ans)) {
+          score++;
+        } else if (typeof ans === 'string' && ans.trim() !== '') {
+          aiTasks.push(q);   // để AI chấm theo nghĩa
+        }
+        // Câu bỏ trống → tính sai, không gọi AI
+      } else if (isCorrect(q, ans)) {
+        score++;
+      }
+    });
+
+    // Gọi AI song song cho tất cả short_answer cần chấm theo nghĩa
+    const aiResults = await Promise.all(aiTasks.map(q => gradeShortAnswerAI(q, answers[q.id])));
+    aiTasks.forEach((q, i) => {
+      aiFeedback[q.id] = aiResults[i];
+      if (aiResults[i].correct) score++;
     });
 
     const isProctored = quiz?.mode === 'proctored';
@@ -138,10 +207,11 @@ exports.submitAttempt = async (req, res) => {
       violation_count: isProctored ? (Number(violation_count) || 0) : 0,
       proctor_events:  isProctored && Array.isArray(proctor_events) ? proctor_events : null,
       snapshots:       isProctored && Array.isArray(snapshots) ? snapshots : null,
+      ai_feedback:     Object.keys(aiFeedback).length ? aiFeedback : null,
     }).select().single();
 
     if (error) throw error;
-    res.json({ score, total: questions.length, attempt_id: attempt.id });
+    res.json({ score, total: questions.length, attempt_id: attempt.id, ai_feedback: aiFeedback });
   } catch (err) {
     console.error('Submit attempt error:', err);
     res.status(500).json({ error: 'Không thể lưu kết quả.' });

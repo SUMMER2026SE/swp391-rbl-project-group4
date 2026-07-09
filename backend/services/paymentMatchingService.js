@@ -3,6 +3,9 @@
 const { supabaseAdmin }       = require('../config/supabase');
 const { activateSubscription } = require('./subscriptionService');
 const { normalizeTransaction }  = require('./sepayClient');
+const { COURSE_PREFIX, completeCoursePayment } = require('./coursePaymentService');
+
+const contentDb = supabaseAdmin.schema('content_module');
 
 /**
  * Idempotent transaction processor.
@@ -33,7 +36,7 @@ async function processTransaction(rawPayload) {
         },
         { onConflict: 'provider,external_transaction_id', ignoreDuplicates: false }
       )
-      .select('id, matched_order_id')
+      .select('id, matched_order_id, matched_course_order_id')
       .single();
 
     if (error) {
@@ -44,18 +47,23 @@ async function processTransaction(rawPayload) {
   }
 
   // Already matched in a previous call
-  if (txRecord.matched_order_id) return 'already_matched';
+  if (txRecord.matched_order_id || txRecord.matched_course_order_id) return 'already_matched';
 
   // 2. Find a matching pending order
   if (!tx.content || tx.amountIn <= 0) return 'no_match';
 
-  // Extract potential payment code from content (PREFIX + 8 hex chars)
+  // Extract potential payment code from content (PREFIX + 8 hex chars).
+  // Hai loại prefix: PREM → premium subscription, COURSE → mua khóa học.
   const PREFIX   = process.env.TRANSFER_CONTENT_PREFIX || 'PREM';
-  const codeRegex = new RegExp(`(${PREFIX}[A-F0-9]{8})`, 'i');
+  const codeRegex = new RegExp(`((?:${PREFIX}|${COURSE_PREFIX})[A-F0-9]{8})`, 'i');
   const match     = tx.content.match(codeRegex);
   if (!match) return 'no_match';
 
   const paymentCode = match[1].toUpperCase();
+
+  if (paymentCode.startsWith(COURSE_PREFIX)) {
+    return matchCourseOrder(paymentCode, tx, txRecord, rawPayload);
+  }
 
   const { data: order, error: oErr } = await supabaseAdmin
     .from('payment_orders')
@@ -109,20 +117,82 @@ async function processTransaction(rawPayload) {
 }
 
 /**
+ * Luồng mua khóa học (payment_code prefix COURSE) — mirror luồng subscription ở trên:
+ * khớp order pending → set paid (optimistic lock) → link transaction → ghi payments
+ * 'completed' để trigger tự tạo enrollment.
+ */
+async function matchCourseOrder(paymentCode, tx, txRecord, rawPayload) {
+  const { data: order, error: oErr } = await contentDb
+    .from('course_payment_orders')
+    .select('id, student_id, course_id, amount, status, expires_at')
+    .eq('payment_code', paymentCode)
+    .eq('status', 'pending')
+    .gt('expires_at', new Date().toISOString())
+    .maybeSingle();
+
+  if (oErr || !order) return 'no_match';
+
+  // Verify amount exactly matches
+  if (Number(order.amount) !== Number(tx.amountIn)) return 'no_match';
+
+  const now = new Date().toISOString();
+  const { data: updated, error: uErr } = await contentDb
+    .from('course_payment_orders')
+    .update({
+      status:                   'paid',
+      paid_at:                  now,
+      matched_transaction_id:   tx.externalId,
+      matched_reference_number: tx.referenceNumber,
+      matched_transaction_time: tx.transactionDate,
+      raw_match_payload:        rawPayload,
+      updated_at:               now,
+    })
+    .eq('id', order.id)
+    .eq('status', 'pending')   // optimistic lock — only update if still pending
+    .select('id')
+    .maybeSingle();
+
+  if (uErr || !updated) return 'no_match'; // race condition, another handler won
+
+  await supabaseAdmin
+    .from('payment_transactions')
+    .update({ matched_course_order_id: order.id })
+    .eq('id', txRecord.id);
+
+  try {
+    await completeCoursePayment(order, tx.externalId);
+  } catch (err) {
+    console.error('[paymentMatching] completeCoursePayment error', err.message);
+    // Order is marked paid but enrollment failed — log for manual review
+  }
+
+  console.log(`[paymentMatching] matched course order ${order.id} ← tx ${tx.externalId}`);
+  return 'matched';
+}
+
+/**
  * Poll SePay for recent transactions and try to match pending orders.
  * Called by the reconcile job and periodically by the polling scheduler.
  */
 async function reconcilePendingOrders() {
   const { listTransactions } = require('./sepayClient');
 
-  // Only run if there are pending orders
-  const { count } = await supabaseAdmin
-    .from('payment_orders')
-    .select('*', { count: 'exact', head: true })
-    .eq('status', 'pending')
-    .gt('expires_at', new Date().toISOString());
+  // Only run if there are pending orders (subscription hoặc mua khóa học)
+  const nowIso = new Date().toISOString();
+  const [{ count: subCount }, { count: courseCount }] = await Promise.all([
+    supabaseAdmin
+      .from('payment_orders')
+      .select('*', { count: 'exact', head: true })
+      .eq('status', 'pending')
+      .gt('expires_at', nowIso),
+    contentDb
+      .from('course_payment_orders')
+      .select('*', { count: 'exact', head: true })
+      .eq('status', 'pending')
+      .gt('expires_at', nowIso),
+  ]);
 
-  if (!count) return { checked: 0, matched: 0 };
+  if (!subCount && !courseCount) return { checked: 0, matched: 0 };
 
   let transactions;
   try {

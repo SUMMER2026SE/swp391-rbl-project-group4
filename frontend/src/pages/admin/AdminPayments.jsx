@@ -23,6 +23,7 @@ export default function AdminPayments() {
   const [total,   setTotal]   = useState(0);
   const [page,    setPage]    = useState(1);
   const [status,  setStatus]  = useState('');
+  const [type,    setType]    = useState('subscription'); // 'subscription' | 'course'
   const [loading, setLoading] = useState(true);
   const [reconciling, setReconciling] = useState(false);
   const [reconcileMsg, setReconcileMsg] = useState('');
@@ -30,12 +31,12 @@ export default function AdminPayments() {
 
   const load = useCallback(() => {
     setLoading(true);
-    const q = new URLSearchParams({ page, limit: LIMIT, ...(status ? { status } : {}) });
+    const q = new URLSearchParams({ page, limit: LIMIT, type, ...(status ? { status } : {}) });
     api.get(`/admin/payments?${q}`)
       .then(r => { setOrders(r.data.orders || []); setTotal(r.data.total || 0); })
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, [page, status]);
+  }, [page, status, type]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -73,6 +74,16 @@ export default function AdminPayments() {
           </div>
         </div>
 
+        {/* Loại giao dịch: premium subscription / mua khóa học */}
+        <div className="flex gap-2">
+          {[['subscription', 'Premium'], ['course', 'Khóa học']].map(([t, label]) => (
+            <button key={t} onClick={() => { setType(t); setPage(1); }}
+              className={`px-4 py-2 rounded-xl text-sm font-bold border transition-colors ${type === t ? 'bg-sumire-purple text-white border-sumire-purple' : 'border-outline hover:bg-surface-low'}`}>
+              {label}
+            </button>
+          ))}
+        </div>
+
         {/* Filters */}
         <div className="flex gap-2 flex-wrap">
           {['', 'paid', 'pending', 'expired', 'cancelled'].map(s => (
@@ -96,7 +107,8 @@ export default function AdminPayments() {
                   <tr className="border-b border-outline/20 text-left text-xs text-on-muted">
                     <th className="px-4 py-3 font-semibold">Mã đơn</th>
                     <th className="px-4 py-3 font-semibold">Mã CK</th>
-                    <th className="px-4 py-3 font-semibold">Gói</th>
+                    <th className="px-4 py-3 font-semibold">{type === 'course' ? 'Khóa học' : 'Gói'}</th>
+                    {type === 'course' && <th className="px-4 py-3 font-semibold">Học viên</th>}
                     <th className="px-4 py-3 font-semibold text-right">Số tiền</th>
                     <th className="px-4 py-3 font-semibold">Trạng thái</th>
                     <th className="px-4 py-3 font-semibold">Ngày thanh toán</th>
@@ -105,12 +117,15 @@ export default function AdminPayments() {
                 </thead>
                 <tbody>
                   {orders.length === 0
-                    ? <tr><td colSpan={7} className="text-center text-on-muted py-10">Không có dữ liệu.</td></tr>
+                    ? <tr><td colSpan={type === 'course' ? 8 : 7} className="text-center text-on-muted py-10">Không có dữ liệu.</td></tr>
                     : orders.map(o => (
                       <tr key={o.id} className="border-b border-outline/10 hover:bg-surface-low/50">
                         <td className="px-4 py-3 font-mono text-xs">{o.order_code}</td>
                         <td className="px-4 py-3 font-mono text-xs font-bold text-amber-700">{o.payment_code}</td>
-                        <td className="px-4 py-3">{o.plan?.name || '—'}</td>
+                        <td className="px-4 py-3">{type === 'course' ? (o.course?.title || '—') : (o.plan?.name || '—')}</td>
+                        {type === 'course' && (
+                          <td className="px-4 py-3">{o.student?.full_name || o.student?.email || '—'}</td>
+                        )}
                         <td className="px-4 py-3 text-right tabular-nums font-semibold">
                           {Number(o.amount).toLocaleString('vi-VN')}₫
                         </td>

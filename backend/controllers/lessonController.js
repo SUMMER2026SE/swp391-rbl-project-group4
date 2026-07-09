@@ -1,6 +1,7 @@
 'use strict';
 
 const { supabaseAdmin } = require('../config/supabase');
+const { checkCourseContentAccess } = require('../services/courseAccess');
 
 // Bảng quiz nằm ở exam_module; tiến độ (lesson_progress) + units nằm ở content_module
 const examDb = supabaseAdmin.schema('exam_module');
@@ -27,6 +28,10 @@ exports.getOne = async (req, res) => {
     const { data: lesson, error } = await supabaseAdmin
       .from('lessons').select('*').eq('id', id).single();
     if (error || !lesson) return res.status(404).json({ error: 'Không tìm thấy mục học.' });
+
+    // Paywall: khóa có phí → phải enroll (tự tạo sau thanh toán) mới xem được nội dung
+    const denied = await checkCourseContentAccess(lesson.course_id, req.user);
+    if (denied) return res.status(403).json(denied);
 
     // Từ vựng & kanji & ngữ pháp của Mục lấy qua bảng nối (nhiều–nhiều)
     const [{ data: vocabLinks }, { data: kanjiLinks }, { data: grammarLinks }] = await Promise.all([
