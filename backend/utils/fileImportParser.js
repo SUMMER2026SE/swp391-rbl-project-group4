@@ -83,11 +83,13 @@ function rowsFromCsv(buffer) {
   });
 }
 
-function rowsFromXlsx(buffer) {
+// Trả về mảng { name, rows } cho từng sheet có dữ liệu
+function sheetsFromXlsx(buffer) {
   const wb = XLSX.read(buffer, { type: 'buffer' });
-  const sheet = wb.Sheets[wb.SheetNames[0]];
-  if (!sheet) return [];
-  return XLSX.utils.sheet_to_json(sheet, { defval: '', raw: false });
+  return wb.SheetNames.map(name => ({
+    name,
+    rows: XLSX.utils.sheet_to_json(wb.Sheets[name], { defval: '', raw: false }),
+  }));
 }
 
 function decodeHtmlText(html) {
@@ -196,17 +198,93 @@ async function aiNormalize(type, rawText) {
   }
 }
 
+// ── Xử lý 1 tập rows (1 sheet hoặc toàn bộ file đơn) ────────────────────────
+// Trả về { items, source, sheetWarnings } hoặc null nếu sheet rỗng/không hợp lệ
+async function parseRows(rows, spec, sheetLabel) {
+  if (!rows || rows.length === 0) return null;
+
+  const sheetWarnings = [];
+  const headers = [...new Set(rows.flatMap(r => Object.keys(r)))];
+  const mapping = buildHeaderMapping(headers, spec);
+  const mappedFields = Object.values(mapping);
+  const missingRequiredCols = spec.required.filter(f => !mappedFields.includes(f));
+
+  if (missingRequiredCols.length === 0) {
+    const items = rowsToItems(rows, mapping);
+    const missingCount = items.filter(it => spec.required.some(f => !it[f])).length;
+    if (items.length > 0 && missingCount / items.length <= AI_MISSING_RATIO) {
+      const unmapped = headers.filter(h => !(h in mapping));
+      if (unmapped.length)
+        sheetWarnings.push(`${sheetLabel}: bỏ qua cột không nhận diện được: ${unmapped.join(', ')}.`);
+      if (missingCount > 0)
+        sheetWarnings.push(`${sheetLabel}: ${missingCount} dòng thiếu trường bắt buộc (${spec.required.join(', ')}).`);
+      return { items, source: 'direct', sheetWarnings };
+    }
+    sheetWarnings.push(`${sheetLabel}: hơn ${Math.round(AI_MISSING_RATIO * 100)}% dòng thiếu trường bắt buộc — đã nhờ AI chuẩn hóa.`);
+  } else {
+    sheetWarnings.push(`${sheetLabel}: không nhận diện được cột bắt buộc (${missingRequiredCols.join(', ')}) — đã nhờ AI chuẩn hóa.`);
+  }
+
+  const rawText = JSON.stringify(rows, null, 1);
+  const items = await aiNormalize(spec._type, rawText);
+  if (!Array.isArray(items) || items.length === 0) return null;
+  return { items, source: 'ai', sheetWarnings };
+}
+
 // ── Entry point ───────────────────────────────────────────────────────────────
-// → { items, source: 'direct' | 'ai', warnings: string[] }
+// → { items, source: 'direct' | 'ai' | 'mixed', warnings: string[] }
 
 async function parseImportFile({ buffer, filename, type }) {
-  const spec = FIELD_SPECS[type];
-  if (!spec) throw httpError(400, 'Loại import không hợp lệ.');
+  const spec = { ...FIELD_SPECS[type], _type: type };
+  if (!FIELD_SPECS[type]) throw httpError(400, 'Loại import không hợp lệ.');
 
   const ext = (filename.match(/\.([^.]+)$/)?.[1] || '').toLowerCase();
   const warnings = [];
-  let rows = null;      // mảng row object theo header
-  let rawText = null;   // fallback cho AI khi không có cấu trúc bảng
+
+  // ── xlsx/xls: xử lý từng sheet ───────────────────────────────────────────
+  if (ext === 'xlsx' || ext === 'xls') {
+    let sheets;
+    try {
+      sheets = sheetsFromXlsx(buffer);
+    } catch {
+      throw httpError(400, 'Không thể đọc file — file có thể bị hỏng hoặc sai định dạng.');
+    }
+
+    if (sheets.length === 0) throw httpError(400, 'File không có sheet nào.');
+
+    const allItems = [];
+    const sources = new Set();
+    const skipped = [];
+
+    for (const { name, rows } of sheets) {
+      if (!rows || rows.length === 0) { skipped.push(name); continue; }
+      if (allItems.length + rows.length > MAX_ROWS) {
+        warnings.push(`Sheet "${name}" bị bỏ qua vì tổng dữ liệu đã đạt giới hạn ${MAX_ROWS} dòng.`);
+        continue;
+      }
+
+      const label = sheets.length > 1 ? `Sheet "${name}"` : 'File';
+      const result = await parseRows(rows, spec, label);
+      if (!result) { skipped.push(name); continue; }
+
+      allItems.push(...result.items);
+      sources.add(result.source);
+      warnings.push(...result.sheetWarnings);
+    }
+
+    if (skipped.length > 0)
+      warnings.push(`Bỏ qua ${skipped.length} sheet không có dữ liệu hợp lệ: ${skipped.map(s => `"${s}"`).join(', ')}.`);
+
+    if (allItems.length === 0)
+      throw httpError(400, 'Không trích xuất được mục nào từ file.');
+
+    const source = sources.size > 1 ? 'mixed' : [...sources][0];
+    return { items: allItems, source, warnings };
+  }
+
+  // ── Các định dạng khác (csv, json, docx) — 1 "sheet" duy nhất ───────────
+  let rows = null;
+  let rawText = null;
 
   try {
     if (ext === 'json') {
@@ -216,12 +294,10 @@ async function parseImportFile({ buffer, filename, type }) {
         if (!Array.isArray(parsed)) throw new Error('not-array');
         rows = parsed;
       } catch {
-        rawText = text; // JSON hỏng format → AI sửa
+        rawText = text;
       }
     } else if (ext === 'csv') {
       rows = rowsFromCsv(buffer);
-    } else if (ext === 'xlsx' || ext === 'xls') {
-      rows = rowsFromXlsx(buffer);
     } else if (ext === 'docx') {
       ({ rows, rawText } = await rowsFromDocx(buffer));
     } else {
@@ -237,34 +313,19 @@ async function parseImportFile({ buffer, filename, type }) {
   if (rows && rows.length > MAX_ROWS)
     throw httpError(400, `Tối đa ${MAX_ROWS} dòng mỗi lần nhập (file có ${rows.length} dòng).`);
 
-  // ── Thử map trực tiếp ────────────────────────────────────────────────────────
   if (rows) {
-    const headers = [...new Set(rows.flatMap(r => Object.keys(r)))];
-    const mapping = buildHeaderMapping(headers, spec);
-    const mappedFields = Object.values(mapping);
-    const missingRequiredCols = spec.required.filter(f => !mappedFields.includes(f));
-
-    if (missingRequiredCols.length === 0) {
-      const items = rowsToItems(rows, mapping);
-      const missingCount = items.filter(it => spec.required.some(f => !it[f])).length;
-      if (items.length > 0 && missingCount / items.length <= AI_MISSING_RATIO) {
-        const unmapped = headers.filter(h => !(h in mapping));
-        if (unmapped.length)
-          warnings.push(`Bỏ qua cột không nhận diện được: ${unmapped.join(', ')}.`);
-        if (missingCount > 0)
-          warnings.push(`${missingCount} dòng thiếu trường bắt buộc (${spec.required.join(', ')}) — hãy sửa hoặc xóa trước khi nhập.`);
-        return { items, source: 'direct', warnings };
-      }
-      warnings.push(`Hơn ${Math.round(AI_MISSING_RATIO * 100)}% dòng thiếu trường bắt buộc — đã nhờ AI chuẩn hóa.`);
-    } else {
-      warnings.push(`Không nhận diện được cột bắt buộc: ${missingRequiredCols.join(', ')} — đã nhờ AI chuẩn hóa.`);
+    const result = await parseRows(rows, spec, 'File');
+    if (result) {
+      warnings.push(...result.sheetWarnings);
+      return { items: result.items, source: result.source, warnings };
     }
+    warnings.push('File không có cấu trúc bảng rõ ràng — đã nhờ AI trích xuất nội dung.');
     rawText = JSON.stringify(rows, null, 1);
   } else {
     warnings.push('File không có cấu trúc bảng rõ ràng — đã nhờ AI trích xuất nội dung.');
   }
 
-  // ── AI fallback ──────────────────────────────────────────────────────────────
+  // AI fallback
   const items = await aiNormalize(type, rawText);
   if (!Array.isArray(items) || items.length === 0)
     throw httpError(400, 'AI không trích xuất được mục nào từ file.');
