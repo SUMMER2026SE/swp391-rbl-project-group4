@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { SERIF } from '../../lib/kanjiWorksheet';
 
 // Nội dung bộ luyện viết — render DOM `#ws-print` để html2canvas chụp khi tải PDF.
@@ -40,7 +40,7 @@ function Glyph({ char, size, color = '#1a1a1a' }) {
 // ─── Ô luyện viết (CSS-only, dùng trong worksheet) ───────────────────────────
 function PracticeBox({ char, opacity = 0, size = 68 }) {
   return (
-    <div style={{ position:'relative', width:size, height:size, border:'1px solid #bbb', flexShrink:0, background:'#fff' }}>
+    <div style={{ position:'relative', width:'100%', aspectRatio:'1', border:'1px solid #bbb', background:'#fff' }}>
       {/* đường gióng chữ thập */}
       <div style={{ position:'absolute', left:'50%', top:0, bottom:0, width:1,
         background:'repeating-linear-gradient(to bottom,#d0d0d0 0,#d0d0d0 3px,transparent 3px,transparent 7px)' }} />
@@ -56,12 +56,31 @@ function PracticeBox({ char, opacity = 0, size = 68 }) {
 }
 
 // ─── Một khối kanji trong worksheet ──────────────────────────────────────────
+const GAP = 2, ROW_PAD = 6, PRACTICE_ROWS = 2;
+
 function WorksheetEntry({ k, boxSize, guideCount }) {
   const REF = boxSize * 1.6;
   const FADE = [0.22, 0.13, 0.07].slice(0, guideCount);
-  const empty = Math.max(0, 10 - guideCount);
+
+  // Số cột = số ô cỡ `boxSize` vừa khít bề rộng khung — điền cho đầy, không chừa chỗ trống.
+  const rowRef = useRef(null);
+  const [cols, setCols] = useState(10);
+  useEffect(() => {
+    const el = rowRef.current;
+    if (!el) return;
+    const measure = () => {
+      const avail = el.clientWidth - ROW_PAD * 2;
+      setCols(Math.max(1, Math.floor((avail + GAP) / (boxSize + GAP))));
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [boxSize]);
+
+  const empty = Math.max(0, cols * PRACTICE_ROWS - guideCount);
   return (
-    <div style={{ marginBottom:20, pageBreakInside:'avoid', border:'1px solid #ccc', borderRadius:6, overflow:'hidden' }}>
+    <div data-worksheet-entry style={{ marginBottom:20, pageBreakInside:'avoid', border:'1px solid #ccc', borderRadius:6, overflow:'hidden' }}>
       {/* hàng thông tin */}
       <div style={{ display:'flex', alignItems:'stretch', borderBottom:'1px solid #e0e0e0' }}>
         {/* ô mẫu lớn */}
@@ -83,7 +102,7 @@ function WorksheetEntry({ k, boxSize, guideCount }) {
         </div>
       </div>
       {/* hàng ô luyện viết */}
-      <div style={{ display:'flex', flexWrap:'wrap', gap:2, padding:6, background:'#fff' }}>
+      <div ref={rowRef} style={{ display:'grid', gridTemplateColumns:`repeat(${cols}, 1fr)`, gap:GAP, padding:ROW_PAD, background:'#fff' }}>
         {FADE.map((op, i) => <PracticeBox key={i} char={k.char} opacity={op} size={boxSize} />)}
         {Array.from({ length: empty }, (_, i) => <PracticeBox key={i+guideCount} size={boxSize} />)}
       </div>
