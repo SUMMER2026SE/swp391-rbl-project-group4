@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import StudentLayout from '../../components/layout/StudentLayout';
 import Alert from '../../components/ui/Alert';
@@ -46,6 +46,148 @@ const unitStatus = (lessons, resumeId) => {
 
 const REVIEW_PAGE_SIZE = 5;
 
+// Modal thanh toán SePay cho khóa có phí — mirror CheckoutModal của premium
+// (SubscriptionStatus.jsx): tạo order → hiện QR → polling trạng thái → paid thì vào học.
+function CoursePaymentModal({ courseId, onClose, onSuccess }) {
+  const [order, setOrder]       = useState(null);
+  const [loading, setLoading]   = useState(true);
+  const [error, setError]       = useState(null);
+  const [status, setStatus]     = useState('pending'); // pending | paid | expired
+  const [timeLeft, setTimeLeft] = useState(0);
+  const pollRef = useRef(null);
+
+  // Create/fetch order
+  useEffect(() => {
+    api.post(`/courses/${courseId}/checkout`)
+      .then(r => {
+        const o = r.data.order;
+        setOrder(o);
+        setStatus(o.status);
+        const diff = Math.max(0, new Date(o.expires_at).getTime() - Date.now());
+        setTimeLeft(Math.floor(diff / 1000));
+      })
+      .catch(err => setError(err.message))
+      .finally(() => setLoading(false));
+  }, [courseId]);
+
+  // Poll for payment confirmation
+  useEffect(() => {
+    if (!order || status !== 'pending') return;
+
+    pollRef.current = setInterval(async () => {
+      try {
+        const r = await api.get(`/courses/payment-orders/${order.id}`);
+        const s = r.data.order?.status;
+        if (s && s !== 'pending') {
+          clearInterval(pollRef.current);
+          setStatus(s);
+          if (s === 'paid') setTimeout(onSuccess, 1500);
+        }
+      } catch (_) {}
+    }, 5000);
+
+    return () => clearInterval(pollRef.current);
+  }, [order, status, onSuccess]);
+
+  // Countdown timer
+  useEffect(() => {
+    if (timeLeft <= 0 || status !== 'pending') return;
+    const t = setInterval(() => setTimeLeft(p => {
+      if (p <= 1) { clearInterval(t); setStatus('expired'); return 0; }
+      return p - 1;
+    }), 1000);
+    return () => clearInterval(t);
+  }, [timeLeft, status]);
+
+  const fmtTime = s => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
+
+  const handleCancel = async () => {
+    if (order && status === 'pending') {
+      try { await api.post(`/courses/payment-orders/${order.id}/cancel`); } catch (_) {}
+    }
+    onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div className="bg-white rounded-3xl shadow-2xl max-w-md w-full p-8 relative">
+        <button onClick={handleCancel} className="absolute top-4 right-4 text-on-muted hover:text-on-surface material-symbols-outlined">close</button>
+
+        {loading && (
+          <div className="text-center py-12">
+            <div className="w-10 h-10 border-4 border-amber-400 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+            <p className="text-on-muted">Đang tạo lệnh thanh toán...</p>
+          </div>
+        )}
+
+        {error && (
+          <div className="text-center py-8">
+            <span className="material-symbols-outlined text-4xl text-red-400 mb-3 block">error</span>
+            <p className="text-on-muted">{error}</p>
+          </div>
+        )}
+
+        {order && status === 'pending' && (
+          <>
+            <div className="text-center mb-6">
+              <h3 className="font-display text-xl font-bold mb-1">Thanh toán khóa học</h3>
+              <p className="text-on-muted text-sm">Quét mã QR hoặc chuyển khoản theo thông tin bên dưới</p>
+            </div>
+
+            {/* QR code */}
+            <div className="flex justify-center mb-5">
+              <img src={order.qr_url} alt="QR Thanh toán"
+                className="w-52 h-52 border-4 border-amber-300 rounded-2xl object-contain bg-white"
+                onError={(e) => { e.target.style.display = 'none'; }}
+              />
+            </div>
+
+            {/* Transfer info */}
+            <div className="bg-amber-50 rounded-xl p-4 space-y-2 text-sm mb-4">
+              <div className="flex justify-between">
+                <span className="text-on-muted">Số tiền</span>
+                <span className="font-bold text-amber-700">{Number(order.amount).toLocaleString('vi-VN')}₫</span>
+              </div>
+              <div className="flex justify-between items-center gap-2">
+                <span className="text-on-muted">Nội dung CK</span>
+                <span className="font-mono font-bold bg-amber-100 px-2 py-0.5 rounded text-amber-800 select-all">{order.payment_code}</span>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 text-sm text-on-muted justify-center mb-4">
+              <div className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+              <span>Đang chờ xác nhận thanh toán...</span>
+            </div>
+
+            <div className="text-center">
+              <p className="text-xs text-on-muted">
+                Hết hạn sau <span className="font-mono font-bold text-red-500">{fmtTime(timeLeft)}</span>
+              </p>
+            </div>
+          </>
+        )}
+
+        {status === 'paid' && (
+          <div className="text-center py-8">
+            <span className="material-symbols-outlined text-6xl text-emerald-500 mb-4 block">check_circle</span>
+            <h3 className="font-display text-2xl font-bold mb-2">Thanh toán thành công!</h3>
+            <p className="text-on-muted">Bạn đã sở hữu khóa học. Chúc bạn học tốt!</p>
+          </div>
+        )}
+
+        {status === 'expired' && (
+          <div className="text-center py-8">
+            <span className="material-symbols-outlined text-5xl text-on-muted mb-4 block">schedule</span>
+            <h3 className="font-display text-xl font-bold mb-2">Lệnh thanh toán đã hết hạn</h3>
+            <p className="text-on-muted text-sm mb-6">Vui lòng tạo lại lệnh thanh toán mới.</p>
+            <button onClick={onClose} className="px-6 py-2 bg-amber-400 text-white rounded-xl font-semibold">Đóng</button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function ItemRow({ item, isCurrent }) {
   const meta = TYPE_META[item.lesson_type] || TYPE_META.reading;
   return (
@@ -86,7 +228,8 @@ export default function CourseDetail() {
   const [enrolled, setEnrolled] = useState(false);
   const [alert, setAlert]     = useState({ type: '', msg: '' });
 
-  const [enrollModal, setEnrollModal] = useState(null); // 'free' | 'paid' | null
+  const [enrollModal, setEnrollModal] = useState(false); // modal xác nhận khóa miễn phí
+  const [showPayment, setShowPayment] = useState(false); // modal QR SePay khóa có phí
   const [enrolling, setEnrolling]     = useState(false);
   const [expanded, setExpanded]       = useState(() => new Set());
 
@@ -153,14 +296,14 @@ export default function CourseDetail() {
     return next;
   });
 
-  const handleEnrollClick = () => setEnrollModal(course.is_free ? 'free' : 'paid');
+  const handleEnrollClick = () => course.is_free ? setEnrollModal(true) : setShowPayment(true);
 
   const confirmEnroll = async () => {
     setEnrolling(true);
     try {
       await enrollCourse(id);
       setEnrolled(true);
-      setEnrollModal(null);
+      setEnrollModal(false);
       showAlert('success', 'Đăng ký thành công! Chúc bạn học tốt.');
       if (resumeItem) navigate(`/lessons/${resumeItem.id}`);
     } catch (e) {
@@ -168,6 +311,14 @@ export default function CourseDetail() {
     } finally {
       setEnrolling(false);
     }
+  };
+
+  // Thanh toán khớp → enrollment đã được tạo tự động phía server, vào học luôn.
+  const handlePaymentSuccess = () => {
+    setShowPayment(false);
+    setEnrolled(true);
+    showAlert('success', 'Thanh toán thành công! Chúc bạn học tốt.');
+    if (resumeItem) navigate(`/lessons/${resumeItem.id}`);
   };
 
   const startEdit = () => {
@@ -539,12 +690,12 @@ export default function CourseDetail() {
 
       {/* ── Enroll modals ──────────────────────────────────────────── */}
       <Modal
-        open={enrollModal === 'free'}
-        onClose={() => setEnrollModal(null)}
+        open={enrollModal}
+        onClose={() => setEnrollModal(false)}
         title="Đăng ký khóa học"
         footer={
           <>
-            <Button variant="secondary" onClick={() => setEnrollModal(null)}>Hủy</Button>
+            <Button variant="secondary" onClick={() => setEnrollModal(false)}>Hủy</Button>
             <Button loading={enrolling} onClick={confirmEnroll}>Đăng ký ngay</Button>
           </>
         }
@@ -554,25 +705,13 @@ export default function CourseDetail() {
         </p>
       </Modal>
 
-      <Modal
-        open={enrollModal === 'paid'}
-        onClose={() => setEnrollModal(null)}
-        title="Đăng ký khóa học có phí"
-        footer={
-          <>
-            <Button variant="secondary" onClick={() => setEnrollModal(null)}>Hủy</Button>
-            <Button loading={enrolling} onClick={confirmEnroll}>Đăng ký (miễn phí tạm thời)</Button>
-          </>
-        }
-      >
-        <div className="flex items-start gap-3">
-          <span className="material-symbols-outlined text-sumire-purple text-2xl shrink-0">payments</span>
-          <p className="text-sm text-on-surface-variant">
-            Khóa học <strong>"{course.title}"</strong> có giá <strong>{formatVnd(course.price)}</strong>. Cổng thanh toán
-            đang được hoàn thiện — tạm thời bạn có thể <strong>đăng ký miễn phí</strong> để trải nghiệm luồng học.
-          </p>
-        </div>
-      </Modal>
+      {showPayment && (
+        <CoursePaymentModal
+          courseId={id}
+          onClose={() => setShowPayment(false)}
+          onSuccess={handlePaymentSuccess}
+        />
+      )}
     </StudentLayout>
   );
 }

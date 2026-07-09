@@ -13,16 +13,22 @@ exports.enroll = async (req, res) => {
   const studentId = req.user.id;
   try {
     const { data: course, error: cErr } = await contentDb.from('courses')
-      .select('id,is_free').eq('id', courseId).single();
+      .select('id,is_free,price').eq('id', courseId).single();
     if (cErr || !course) return res.status(404).json({ error: 'Không tìm thấy khóa học.' });
 
     const { data: existing } = await contentDb.from('course_enrollments')
       .select('id').eq('course_id', courseId).eq('student_id', studentId).maybeSingle();
     if (existing) return res.status(409).json({ error: 'Bạn đã đăng ký khóa học này.' });
 
-    // TODO(payment): tạm thời cho đăng ký khóa có phí mà không cần payment 'completed'
-    // (chưa có cổng thanh toán) để học viên trải nghiệm luồng vào học. Khi tích hợp
-    // VNPay/Momo, khôi phục lại kiểm tra: nếu !course.is_free và chưa có payment completed → 402.
+    // Khóa có phí: enrollment được trigger tự tạo sau khi thanh toán SePay khớp —
+    // endpoint này chỉ là đường dự phòng, yêu cầu đã có payment 'completed'.
+    if (!course.is_free && Number(course.price) > 0) {
+      const { data: paid } = await contentDb.from('payments')
+        .select('id').eq('course_id', courseId).eq('student_id', studentId)
+        .eq('payment_status', 'completed').limit(1).maybeSingle();
+      if (!paid)
+        return res.status(402).json({ error: 'Khóa học có phí — vui lòng thanh toán để đăng ký.' });
+    }
 
     const { data, error } = await contentDb.from('course_enrollments')
       .insert({ course_id: courseId, student_id: studentId }).select().single();

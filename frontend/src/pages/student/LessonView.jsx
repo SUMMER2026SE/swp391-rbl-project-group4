@@ -54,6 +54,7 @@ export default function LessonView() {
   const [lesson, setLesson]   = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState('');
+  const [paywall, setPaywall] = useState(null); // body 403 ENROLLMENT_REQUIRED { course_id }
   const [furigana, setFurigana] = useState(false);
   const [working, setWorking] = useState(false);
   const [downloadingPdf, setDownloadingPdf] = useState(false);
@@ -76,9 +77,13 @@ export default function LessonView() {
     setSelecting(false);
     setSelected({});
     setNotice(null);
+    setPaywall(null);
     api.get(`/lessons/${id}`)
       .then(r => setLesson(r.data))
-      .catch(e => setError(e.message))
+      .catch(e => {
+        if (e.status === 403 && e.data?.code === 'ENROLLMENT_REQUIRED') setPaywall(e.data);
+        else setError(e.message);
+      })
       .finally(() => setLoading(false));
   }, [id]);
 
@@ -86,6 +91,22 @@ export default function LessonView() {
     <StudentLayout title="...">
       <div className="flex justify-center py-16">
         <span className="material-symbols-outlined animate-spin text-tsubaki-red text-4xl">progress_activity</span>
+      </div>
+    </StudentLayout>
+  );
+
+  if (paywall) return (
+    <StudentLayout title="Khóa học có phí">
+      <div className="max-w-md mx-auto text-center py-16">
+        <span className="material-symbols-outlined text-5xl text-amber-400 mb-4 block">lock</span>
+        <h2 className="font-display text-xl font-bold text-on-surface mb-2">Nội dung dành cho học viên đã mua khóa học</h2>
+        <p className="text-sm text-on-muted mb-6">Bạn cần mua khóa học này để xem nội dung bài học.</p>
+        <Link to={`/courses/${paywall.course_id}`}>
+          <Button>
+            <span className="material-symbols-outlined text-lg">shopping_cart</span>
+            Mua khóa học
+          </Button>
+        </Link>
       </div>
     </StudentLayout>
   );
