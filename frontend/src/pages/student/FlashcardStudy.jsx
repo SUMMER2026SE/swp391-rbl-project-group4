@@ -9,6 +9,21 @@ import api from '../../lib/api';
 const FRONT_KEY = 'flashcard.frontSide';
 const TRACK_KEY = 'flashcard.trackProgress';
 const posKeyOf = (setId) => `flashcard.pos.${setId}`;
+
+// Cỡ chữ tự co theo độ dài + căn lề (dài/nhiều dòng → căn trái cho dễ đọc)
+const cardTextClass = (text) => {
+  const s = text || '';
+  const len = s.length;
+  const multiline = s.includes('\n');
+  let size;
+  if (len <= 20)       size = 'text-3xl sm:text-5xl';
+  else if (len <= 50)  size = 'text-2xl sm:text-4xl';
+  else if (len <= 120) size = 'text-xl sm:text-2xl';
+  else if (len <= 250) size = 'text-lg sm:text-xl';
+  else                 size = 'text-base sm:text-lg';
+  const align = (multiline || len > 60) ? 'text-left w-full' : 'text-center';
+  return `${size} ${align}`;
+};
 const END_MARK  = '__end__'; // đã xem đến cuối lượt → lần vào sau bắt đầu lượt mới
 const shuffle = (arr) => {
   const a = arr.slice();
@@ -406,13 +421,17 @@ export default function FlashcardStudy() {
               <div className="fc-flip-inner">
                 {/* Mặt trước */}
                 <div className="fc-face">
-                  <div className="glass-card rounded-3xl w-full h-full flex flex-col items-center justify-center p-8 text-center border-2 border-transparent hover:border-tsubaki-red/60 transition-colors">
-                    <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-on-muted mb-4">
+                  <div className="glass-card rounded-3xl w-full h-full flex flex-col p-6 sm:p-8 pb-10 text-center border-2 border-transparent hover:border-tsubaki-red/60 transition-colors overflow-hidden">
+                    <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-on-muted mb-3 shrink-0">
                       {frontSide === 'term' ? 'Từ vựng' : 'Định nghĩa'}
                     </p>
-                    <p className="font-display text-3xl sm:text-5xl font-bold text-on-surface leading-tight break-words">
-                      {frontContent(current)}
-                    </p>
+                    <div className="flex-1 min-h-0 w-full overflow-y-auto">
+                      <div className="min-h-full flex items-center justify-center">
+                        <p className={`font-display font-bold text-on-surface leading-tight break-words whitespace-pre-wrap ${cardTextClass(frontContent(current))}`}>
+                          {frontContent(current)}
+                        </p>
+                      </div>
+                    </div>
                     <span className="absolute bottom-4 inset-x-0 text-xs text-on-muted flex items-center justify-center gap-1">
                       <span className="material-symbols-outlined text-sm">touch_app</span>
                       Chạm để lật
@@ -421,13 +440,17 @@ export default function FlashcardStudy() {
                 </div>
                 {/* Mặt sau */}
                 <div className="fc-face fc-back">
-                  <div className="glass-card rounded-3xl w-full h-full flex flex-col items-center justify-center p-8 text-center border-2 border-tsubaki-red/30">
-                    <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-tsubaki-red/70 mb-4">
+                  <div className="glass-card rounded-3xl w-full h-full flex flex-col p-6 sm:p-8 text-center border-2 border-tsubaki-red/30 overflow-hidden">
+                    <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-tsubaki-red/70 mb-3 shrink-0">
                       {frontSide === 'term' ? 'Định nghĩa' : 'Từ vựng'}
                     </p>
-                    <p className="font-display text-3xl sm:text-5xl font-bold text-on-surface leading-tight break-words">
-                      {backContent(current)}
-                    </p>
+                    <div className="flex-1 min-h-0 w-full overflow-y-auto">
+                      <div className="min-h-full flex items-center justify-center">
+                        <p className={`font-display font-bold text-on-surface leading-tight break-words whitespace-pre-wrap ${cardTextClass(backContent(current))}`}>
+                          {backContent(current)}
+                        </p>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>

@@ -189,6 +189,7 @@ async function getAllQuotas(userId) {
     'kanji_chars_per_file',
     'listening_practice_monthly',
     'ai_chat_daily',
+    'flashcard_ai_suggest_daily',
   ];
 
   const quotas = await Promise.all(featureCodes.map(async code => {

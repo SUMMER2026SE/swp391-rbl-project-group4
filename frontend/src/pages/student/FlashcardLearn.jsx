@@ -5,7 +5,7 @@ import Alert from '../../components/ui/Alert';
 import SpeakButton from '../../components/dictionary/SpeakButton';
 import FlashcardModeTabs from '../../components/flashcards/FlashcardModeTabs';
 import api from '../../lib/api';
-import { normalize, buildMcOptions } from '../../lib/flashcardQuiz';
+import { normalize, buildMcOptions, promptTextClass } from '../../lib/flashcardQuiz';
 
 const BATCH = 6;
 
@@ -336,14 +336,16 @@ export default function FlashcardLearn() {
       ) : q ? (
         <div className="max-w-2xl mx-auto">
           {/* Câu hỏi */}
-          <div className="glass-card rounded-3xl p-8 mb-5 relative">
+          <div className="glass-card rounded-3xl p-6 sm:p-8 mb-5 relative">
             {showSpeaker && <SpeakButton text={q.card.term} className="absolute top-4 left-4" />}
             <p className="text-xs font-semibold uppercase tracking-wide text-on-muted text-center mb-4">
               {q.type === 'mc' ? 'Chọn đáp án đúng' : 'Gõ từ vựng (tiếng Nhật)'}
             </p>
-            <p className="font-display text-2xl sm:text-4xl font-bold text-on-surface text-center leading-tight break-words">
-              {promptText}
-            </p>
+            <div className="max-h-[40vh] overflow-y-auto">
+              <p className={`font-display font-bold text-on-surface leading-tight break-words whitespace-pre-wrap ${promptTextClass(promptText)}`}>
+                {promptText}
+              </p>
+            </div>
           </div>
 
           {/* Trả lời: trắc nghiệm */}
@@ -370,7 +372,7 @@ export default function FlashcardLearn() {
                       <span className={`shrink-0 w-6 h-6 rounded-md flex items-center justify-center text-xs font-bold transition-colors ${badge}`}>
                         {'ABCD'[i]}
                       </span>
-                      <span className="flex-1">{opt}</span>
+                      <span className="flex-1 whitespace-pre-wrap">{opt}</span>
                       {answered && isCorrect && <span className="material-symbols-outlined text-success text-lg">check</span>}
                       {answered && isPicked && !isCorrect && <span className="material-symbols-outlined text-error text-lg">close</span>}
                     </button>
@@ -409,12 +411,12 @@ export default function FlashcardLearn() {
           {/* Phản hồi */}
           {answered && (
             <div className="mt-5">
-              <div className={`flex items-center gap-2 px-4 py-3 rounded-2xl text-sm font-semibold ${
+              <div className={`flex items-start gap-2 px-4 py-3 rounded-2xl text-sm font-semibold ${
                 answered.correct ? 'bg-green-50 text-green-700' : 'bg-error-bg/40 text-error'
               }`}>
-                <span className="material-symbols-outlined">{answered.correct ? 'check_circle' : 'cancel'}</span>
+                <span className="material-symbols-outlined shrink-0">{answered.correct ? 'check_circle' : 'cancel'}</span>
                 {answered.correct ? 'Chính xác!' : (
-                  <span>Đáp án đúng: <span className="font-bold">{answered.correctAnswer}</span></span>
+                  <span>Đáp án đúng: <span className="font-bold whitespace-pre-wrap">{answered.correctAnswer}</span></span>
                 )}
               </div>
               <button

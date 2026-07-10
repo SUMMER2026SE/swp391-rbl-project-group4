@@ -454,3 +454,13 @@ DO $$ BEGIN
     ALTER TABLE flashcard_module.flashcard_progress ADD PRIMARY KEY (student_id, card_id, mode);
   END IF;
 END $$;
+
+-- ─── Quota: entitlement cho AI gợi ý định nghĩa flashcard ────────────────────
+-- Feature daily: free = 10 lượt/ngày, premium = không giới hạn (-1). Idempotent.
+INSERT INTO public.feature_entitlements (tier, feature_code, limit_value, period_type)
+SELECT v.tier, 'flashcard_ai_suggest_daily', v.lim, 'daily'
+FROM (VALUES ('free', 10), ('premium', -1)) AS v(tier, lim)
+WHERE NOT EXISTS (
+  SELECT 1 FROM public.feature_entitlements e
+  WHERE e.tier = v.tier AND e.feature_code = 'flashcard_ai_suggest_daily'
+);

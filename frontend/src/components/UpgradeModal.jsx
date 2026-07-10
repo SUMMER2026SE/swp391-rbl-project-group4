@@ -6,6 +6,7 @@ const FEATURE_NAMES = {
   listening_practice_monthly: 'Luyện nghe',
   kanji_file_monthly:         'Luyện viết kanji',
   kanji_chars_per_file:       'Ký tự kanji',
+  flashcard_ai_suggest_daily: 'AI gợi ý định nghĩa',
 };
 
 /**
