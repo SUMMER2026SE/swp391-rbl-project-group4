@@ -6,7 +6,7 @@ import Modal from '../../components/ui/Modal';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
 import FlashcardModeTabs from '../../components/flashcards/FlashcardModeTabs';
 import api from '../../lib/api';
-import { shuffle, normalize, buildMcOptions } from '../../lib/flashcardQuiz';
+import { shuffle, normalize, buildMcOptions, promptTextClass } from '../../lib/flashcardQuiz';
 
 // Loại câu hỏi: chọn 1 trong 3 (Cả hai = xen kẽ trắc nghiệm/tự luận)
 const Q_TYPES = [
@@ -461,7 +461,9 @@ function QuestionCard({ index, q, value, onChange }) {
         </p>
       </div>
 
-      <p className="font-display text-2xl font-bold text-on-surface mb-4 break-words">{q.prompt}</p>
+      <div className="max-h-[40vh] overflow-y-auto mb-4">
+        <p className={`font-display font-bold text-on-surface leading-tight break-words whitespace-pre-wrap ${promptTextClass(q.prompt)}`}>{q.prompt}</p>
+      </div>
       {q.type === 'mc' ? (
         <div className="grid sm:grid-cols-2 gap-3">
           {q.options.map((opt, i) => (
@@ -479,7 +481,7 @@ function QuestionCard({ index, q, value, onChange }) {
               }`}>
                 {'ABCD'[i]}
               </span>
-              <span className="flex-1">{opt}</span>
+              <span className="flex-1 whitespace-pre-wrap">{opt}</span>
             </button>
           ))}
         </div>
@@ -534,15 +536,15 @@ function ResultCard({ index, q, value, correct }) {
         </span>
         <div className="min-w-0 flex-1">
           <p className="text-xs text-on-muted mb-1">Câu {index + 1}</p>
-          <p className="text-sm font-semibold text-on-surface break-words mb-2">{prompt}</p>
+          <p className="text-sm font-semibold text-on-surface break-words whitespace-pre-wrap mb-2">{prompt}</p>
           <p className="text-sm break-words">
             <span className="text-on-muted">Bạn trả lời: </span>
-            <span className={correct ? 'text-green-700 font-medium' : 'text-error font-medium'}>{userText}</span>
+            <span className={`whitespace-pre-wrap ${correct ? 'text-green-700 font-medium' : 'text-error font-medium'}`}>{userText}</span>
           </p>
           {!correct && (
             <p className="text-sm break-words">
               <span className="text-on-muted">Đáp án đúng: </span>
-              <span className="text-green-700 font-medium">{correctText}</span>
+              <span className="text-green-700 font-medium whitespace-pre-wrap">{correctText}</span>
             </p>
           )}
         </div>

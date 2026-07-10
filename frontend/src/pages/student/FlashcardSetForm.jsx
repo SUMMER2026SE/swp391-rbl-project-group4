@@ -4,8 +4,10 @@ import StudentLayout from '../../components/layout/StudentLayout';
 import Alert from '../../components/ui/Alert';
 import Button from '../../components/ui/Button';
 import Modal from '../../components/ui/Modal';
+import UpgradeModal from '../../components/UpgradeModal';
 import api from '../../lib/api';
 import { getDraft, saveDraft, removeDraft, newDraftId } from '../../lib/flashcardDrafts';
+import { formatAiDefinition } from '../../lib/flashcardAi';
 
 const emptyCard = () => ({ term: '', definition: '' });
 
@@ -29,6 +31,10 @@ export default function FlashcardSetForm() {
   const [loading, setLoading]         = useState(isEdit);
   const [saving, setSaving]           = useState(false);
   const [error, setError]             = useState('');
+
+  // AI gợi ý định nghĩa (theo từng thẻ)
+  const [aiLoadingIds, setAiLoadingIds] = useState(() => new Set()); // index các thẻ đang gợi ý
+  const [quotaError, setQuotaError]     = useState(null);
 
   // Modal nhập nhanh
   const [bulkOpen, setBulkOpen]   = useState(false);
@@ -99,6 +105,37 @@ export default function FlashcardSetForm() {
     });
     setBulkText('');
     setBulkOpen(false);
+  };
+
+  // ── AI gợi ý định nghĩa cho một thẻ ──
+  const handleAiSuggestCard = async (index) => {
+    const term = cards[index]?.term.trim();
+    if (!term) return;
+    setError('');
+    setAiLoadingIds(s => new Set(s).add(index));
+    try {
+      const r = await api.post('/ai/flashcard-define', { terms: [term] });
+      const def = formatAiDefinition((r.data.items || [])[0]);
+      if (def) {
+        // Chỉ điền nếu thẻ vẫn đúng từ đó và định nghĩa còn trống (không ghi đè)
+        setCards(cs => cs.map((c, i) =>
+          i === index && c.term.trim() === term && !c.definition.trim()
+            ? { ...c, definition: def }
+            : c
+        ));
+        requestAnimationFrame(() => {
+          document.querySelectorAll('[data-fc-def]').forEach(autoGrow);
+        });
+      }
+    } catch (e) {
+      if (e.status === 403 && e.data?.error === 'quota_exceeded') {
+        setQuotaError(e.data);
+      } else {
+        setError(e.message);
+      }
+    } finally {
+      setAiLoadingIds(s => { const n = new Set(s); n.delete(index); return n; });
+    }
   };
 
   // ── Submit ──
@@ -186,14 +223,6 @@ export default function FlashcardSetForm() {
           Nhập nhanh
         </Button>
         <span className="text-xs text-on-muted">Dán dữ liệu từ Excel / Word</span>
-        <button
-          disabled
-          title="Tính năng đang phát triển"
-          className="ml-auto inline-flex items-center gap-1.5 text-sm font-semibold text-sumire-purple/60 px-4 py-2 rounded-xl border border-sumire-purple/20 bg-sumire-purple/5 cursor-not-allowed"
-        >
-          <span className="material-symbols-outlined text-lg">auto_awesome</span>
-          AI Gợi ý
-        </button>
       </div>
 
       {/* ── Danh sách thẻ ───────────────────────────────────────── */}
@@ -229,9 +258,24 @@ export default function FlashcardSetForm() {
                   />
                 </div>
                 <div>
-                  <label className="block text-[11px] font-bold uppercase tracking-wide text-on-muted mb-1">Định nghĩa</label>
+                  <div className="flex items-center justify-between gap-2 mb-1">
+                    <label className="text-[11px] font-bold uppercase tracking-wide text-on-muted">Định nghĩa</label>
+                    <button
+                      type="button"
+                      onClick={() => handleAiSuggestCard(i)}
+                      disabled={!card.term.trim() || aiLoadingIds.has(i)}
+                      title={card.term.trim() ? 'AI gợi ý định nghĩa cho từ này' : 'Nhập từ vựng trước'}
+                      className="inline-flex items-center gap-1 text-[11px] font-bold text-sumire-purple hover:text-sumire-purple/70 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      <span className={`material-symbols-outlined text-sm ${aiLoadingIds.has(i) ? 'animate-spin' : ''}`}>
+                        {aiLoadingIds.has(i) ? 'progress_activity' : 'auto_awesome'}
+                      </span>
+                      {aiLoadingIds.has(i) ? 'Đang gợi ý' : 'AI gợi ý'}
+                    </button>
+                  </div>
                   <textarea
                     ref={autoGrow}
+                    data-fc-def
                     value={card.definition}
                     rows={1}
                     onChange={e => updateCard(i, 'definition', e.target.value)}
@@ -321,6 +365,8 @@ export default function FlashcardSetForm() {
           </div>
         )}
       </Modal>
+
+      <UpgradeModal quota={quotaError} onClose={() => setQuotaError(null)} />
     </StudentLayout>
   );
 }

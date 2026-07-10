@@ -36,3 +36,19 @@ export const buildMcOptions = (allCards, correctCard, side, n = 3) => {
   const options = [correctCard[side], ...pickDistractors(allCards, correctCard, side, n)];
   return shuffle(options);
 };
+
+// ── Cỡ chữ tự co theo độ dài + căn lề cho nội dung PROMPT lớn (thẻ/câu hỏi) ──
+// Định nghĩa dài (nhiều nghĩa + ví dụ) không còn dồn to & tràn: font nhỏ dần, dài/nhiều dòng → căn trái.
+export const promptTextClass = (text) => {
+  const s = text || '';
+  const len = s.length;
+  const multiline = s.includes('\n');
+  let size;
+  if (len <= 20)       size = 'text-2xl sm:text-4xl';
+  else if (len <= 50)  size = 'text-xl sm:text-3xl';
+  else if (len <= 120) size = 'text-lg sm:text-2xl';
+  else if (len <= 250) size = 'text-base sm:text-lg';
+  else                 size = 'text-sm sm:text-base';
+  const align = (multiline || len > 60) ? 'text-left' : 'text-center';
+  return `${size} ${align}`;
+};

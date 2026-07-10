@@ -147,6 +147,66 @@ Trả về ĐÚNG mảng JSON gốc với các trường đã sửa. Không thê
   }
 });
 
+// POST /api/ai/flashcard-define  — gợi ý định nghĩa cho danh sách từ vựng / mẫu ngữ pháp
+// Body: { terms: string[] }  → trả { items: [...] } (mảng JSON có cấu trúc do AI sinh)
+router.post('/flashcard-define', requireAuth, checkQuota('flashcard_ai_suggest_daily'), async (req, res) => {
+  const { terms } = req.body;
+  if (!Array.isArray(terms) || terms.length === 0)
+    return res.status(400).json({ error: 'terms phải là mảng không rỗng.' });
+
+  const cleaned = terms
+    .map(t => (typeof t === 'string' ? t.trim() : ''))
+    .filter(Boolean)
+    .filter(t => t.length <= 100);
+  if (cleaned.length === 0)   return res.status(400).json({ error: 'Không có từ vựng hợp lệ để gợi ý.' });
+  if (cleaned.length > 20)    return res.status(400).json({ error: 'Chỉ gợi ý tối đa 20 từ một lần.' });
+
+  const SYSTEM = `Bạn là chuyên gia từ điển tiếng Nhật. Với MỖI mục trong danh sách đầu vào, hãy tự phân loại là TỪ VỰNG hay MẪU NGỮ PHÁP rồi tạo định nghĩa.
+
+Nếu là TỪ VỰNG (một từ đơn: danh từ, động từ, tính từ...), trả về object:
+{ "term": "<giữ nguyên input>", "type": "vocabulary", "senses": [ { "pos": "<loại từ, ví dụ: động từ nhóm 2>", "meaning": "<nghĩa tiếng Việt>", "usage": "<cách dùng ngắn gọn, để rỗng nếu hiển nhiên>", "examples": [ { "ja": "<câu tiếng Nhật>", "vi": "<dịch tiếng Việt>" } ] } ] }
+- Tối đa 3 nghĩa (senses), mỗi nghĩa 1-2 ví dụ.
+
+Nếu là MẪU NGỮ PHÁP (bắt đầu bằng 〜, chứa trợ từ chuỗi, dạng V-て..., ví dụ 〜ばかりでなく), trả về object:
+{ "term": "<giữ nguyên input>", "type": "grammar", "structure": "<công thức kết hợp>", "meaning": "<nghĩa tiếng Việt>", "usage": "<cách dùng, sắc thái>", "examples": [ { "ja": "<câu>", "vi": "<dịch>" } ] }
+- 2 ví dụ.
+
+QUY TẮC:
+- Tất cả nghĩa/dịch/cách dùng viết bằng TIẾNG VIỆT.
+- Chỉ trả về ĐÚNG một mảng JSON hợp lệ chứa các object theo đúng thứ tự input, không giải thích gì ngoài JSON.`;
+
+  // Chia lô 10 term/lần gọi để tránh output bị cắt
+  const chunks = [];
+  for (let i = 0; i < cleaned.length; i += 10) chunks.push(cleaned.slice(i, i + 10));
+
+  try {
+    const items = [];
+    for (const chunk of chunks) {
+      const result = await chatCompletion(
+        [
+          { role: 'system', content: SYSTEM },
+          { role: 'user', content: 'Tạo định nghĩa cho danh sách sau:\n' + JSON.stringify(chunk) },
+        ],
+        { max_tokens: 4096, temperature: 0.3 }
+      );
+      const raw = result.choices?.[0]?.message?.content || '';
+      const match = raw.match(/\[[\s\S]*\]/);
+      if (!match) return res.status(502).json({ error: 'AI không trả về JSON hợp lệ.', raw: raw.slice(0, 500) });
+
+      let parsed;
+      try { parsed = JSON.parse(match[0]); }
+      catch { return res.status(502).json({ error: 'Không thể parse JSON từ AI.', raw: raw.slice(0, 500) }); }
+
+      if (Array.isArray(parsed)) items.push(...parsed);
+    }
+
+    incrementUsage(req.user.id, 'flashcard_ai_suggest_daily').catch(() => {});
+    res.json({ items });
+  } catch (err) {
+    res.status(502).json({ error: err.message });
+  }
+});
+
 // POST /api/ai/furigana  — annotate kanji in Japanese text with ruby tags
 router.post('/furigana', requireAuth, async (req, res) => {
   const { text } = req.body;
