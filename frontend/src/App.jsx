@@ -84,8 +84,7 @@ import AdminSubscriptions           from './pages/admin/AdminSubscriptions';
 import AdminPayments                from './pages/admin/AdminPayments';
 import ManageCourseContent     from './pages/admin/ManageCourseContent';
 import AdminLessonVocabulary   from './pages/admin/AdminLessonVocabulary';
-import AdminGrammar            from './pages/admin/AdminGrammar';
-import AdminLessonGrammar      from './pages/admin/AdminLessonGrammar';
+import AdminStudyLists         from './pages/admin/AdminStudyLists';
 import AdminLessonQuiz         from './pages/admin/AdminLessonQuiz';
 import AdminLessonReading      from './pages/admin/AdminLessonReading';
 import AdminLessonKanji        from './pages/admin/AdminLessonKanji';
@@ -170,7 +169,6 @@ export default function App() {
             {/* Trình soạn chuyên sâu cho giáo viên — dùng chung component với admin (role-aware) */}
             <Route path="/teacher/lessons/:lessonId/video"      element={<TeacherRoute><AdminLessonVideo /></TeacherRoute>} />
             <Route path="/teacher/lessons/:lessonId/reading"    element={<TeacherRoute><AdminLessonReading /></TeacherRoute>} />
-            <Route path="/teacher/lessons/:lessonId/grammar"    element={<TeacherRoute><AdminLessonGrammar /></TeacherRoute>} />
             <Route path="/teacher/lessons/:lessonId/vocabulary" element={<TeacherRoute><AdminLessonVocabulary /></TeacherRoute>} />
             <Route path="/teacher/lessons/:lessonId/kanji"      element={<TeacherRoute><AdminLessonKanji /></TeacherRoute>} />
             <Route path="/teacher/vocab" element={<TeacherRoute><TeacherVocabulary /></TeacherRoute>} />
@@ -186,9 +184,9 @@ export default function App() {
             <Route path="/admin"             element={<AdminRoute><AdminDashboard /></AdminRoute>} />
             <Route path="/admin/users"       element={<AdminRoute><AdminUsers /></AdminRoute>} />
             <Route path="/admin/courses"     element={<AdminRoute><AdminCourses /></AdminRoute>} />
-            <Route path="/admin/vocabulary"  element={<AdminRoute><AdminVocabulary /></AdminRoute>} />
-            <Route path="/admin/grammar"    element={<AdminRoute><AdminGrammar /></AdminRoute>} />
-            <Route path="/admin/kanji"       element={<AdminRoute><AdminKanji /></AdminRoute>} />
+            <Route path="/admin/vocabulary"   element={<AdminRoute><AdminVocabulary /></AdminRoute>} />
+            <Route path="/admin/study-lists" element={<AdminRoute><AdminStudyLists /></AdminRoute>} />
+            <Route path="/admin/kanji"        element={<AdminRoute><AdminKanji /></AdminRoute>} />
             <Route path="/admin/grammar-points" element={<AdminRoute><AdminGrammarPoints /></AdminRoute>} />
             <Route path="/admin/quizzes"      element={<AdminRoute><AdminQuizzes /></AdminRoute>} />
             <Route path="/admin/submissions" element={<AdminRoute><AdminSubmissions /></AdminRoute>} />
@@ -205,7 +203,6 @@ export default function App() {
             <Route path="/admin/courses/:courseId/edit"         element={<AdminRoute><ManageCourseContent /></AdminRoute>} />
             <Route path="/admin/courses/:courseId/units/:unitId/edit" element={<AdminRoute><UnitEditPage /></AdminRoute>} />
             <Route path="/admin/lessons/:lessonId/vocabulary"  element={<AdminRoute><AdminLessonVocabulary /></AdminRoute>} />
-            <Route path="/admin/lessons/:lessonId/grammar"     element={<AdminRoute><AdminLessonGrammar /></AdminRoute>} />
             <Route path="/admin/lessons/:lessonId/quiz"        element={<AdminRoute><AdminLessonQuiz /></AdminRoute>} />
             <Route path="/admin/lessons/:lessonId/reading"     element={<AdminRoute><AdminLessonReading /></AdminRoute>} />
             <Route path="/admin/lessons/:lessonId/kanji"       element={<AdminRoute><AdminLessonKanji /></AdminRoute>} />

@@ -7,7 +7,7 @@ const ADMIN_LINKS = (t) => [
   { to: '/admin/users',       icon: 'group',         label: t('admin.users') },
   { to: '/admin/courses',     icon: 'menu_book',     label: t('admin.courses') },
   { to: '/admin/vocabulary',  icon: 'translate',     label: t('admin.vocabulary') },
-  { to: '/admin/grammar',    icon: 'spellcheck',    label: 'Ngữ pháp' },
+  { to: '/admin/study-lists', icon: 'library_books', label: 'Bài đăng' },
   { to: '/admin/kanji',       icon: 'font_download', label: t('admin.kanji') },
   { to: '/admin/grammar-points', icon: 'menu_book',  label: 'Ngữ pháp (từ điển)' },
   { to: '/admin/quizzes',      icon: 'quiz',          label: t('admin.quizzes') },

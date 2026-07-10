@@ -6,6 +6,7 @@ import Button from '../../components/ui/Button';
 import Alert from '../../components/ui/Alert';
 import QuestionTypeForm from '../../components/admin/QuestionTypeForm';
 import ProctoredAttemptsModal from '../../components/admin/ProctoredAttemptsModal';
+import PassThresholdField from '../../components/admin/PassThresholdField';
 import {
   EMPTY_Q_FORM, QUESTION_TYPES, TYPE_MAP, LEVEL_COLORS, DIFF_COLORS,
   formToPayload, rowToForm,
@@ -180,7 +181,7 @@ export default function AdminLessonQuiz() {
 
   // Quiz settings modal
   const [settingsModal, setSettingsModal]   = useState(false);
-  const [quizForm, setQuizForm]             = useState({ title: '', time_limit: '', is_published: false, mode: 'normal', strict_fullscreen: false });
+  const [quizForm, setQuizForm]             = useState({ title: '', time_limit: '', is_published: false, mode: 'normal', strict_fullscreen: false, passing_type: '', passing_value: '' });
   const [savingSettings, setSavingSettings] = useState(false);
 
   // Question modal (create / edit)
@@ -248,11 +249,20 @@ export default function AdminLessonQuiz() {
   // ── Quiz settings ───────────────────────────────────────────────────────────
 
   const openSettings = () => {
-    setQuizForm({ title: quiz.title || '', time_limit: quiz.time_limit || '', is_published: quiz.is_published || false, mode: quiz.mode || 'normal', strict_fullscreen: quiz.strict_fullscreen || false });
+    setQuizForm({ title: quiz.title || '', time_limit: quiz.time_limit || '', is_published: quiz.is_published || false, mode: quiz.mode || 'normal', strict_fullscreen: quiz.strict_fullscreen || false, passing_type: quiz.passing_type || '', passing_value: quiz.passing_value ?? '' });
     setSettingsModal(true);
   };
 
   const saveSettings = async () => {
+    if (quizForm.passing_type) {
+      const val = Number(quizForm.passing_value);
+      if (!Number.isFinite(val) || val <= 0)
+        return setAlert({ type: 'error', msg: 'Giá trị điểm đạt phải là số dương.' });
+      if (quizForm.passing_type === 'percent' && val > 100)
+        return setAlert({ type: 'error', msg: 'Ngưỡng phần trăm không được vượt quá 100%.' });
+      if (quizForm.passing_type === 'count' && val > questions.length)
+        return setAlert({ type: 'error', msg: `Ngưỡng số câu không được vượt quá tổng số câu hiện có (${questions.length}).` });
+    }
     setSavingSettings(true);
     try {
       const r = await api.put(`/admin/quizzes/${quiz.id}`, {
@@ -261,6 +271,8 @@ export default function AdminLessonQuiz() {
         is_published: quizForm.is_published,
         mode: quizForm.mode,
         strict_fullscreen: quizForm.strict_fullscreen,
+        passing_type: quizForm.passing_type || null,
+        passing_value: quizForm.passing_type ? Number(quizForm.passing_value) : null,
       });
       setQuiz(r.data);
       setSettingsModal(false);
@@ -569,10 +581,10 @@ export default function AdminLessonQuiz() {
             <div className="grid grid-cols-2 gap-2">
               {[
                 { val: 'normal',    icon: 'edit_note',     label: 'Thường',   desc: 'Làm bài bình thường' },
-                { val: 'proctored', icon: 'verified_user', label: 'Giám sát', desc: 'Toàn màn hình + webcam' },
+                { val: 'proctored', icon: 'verified_user', label: 'Giám sát', desc: 'Toàn màn hình nghiêm ngặt' },
               ].map(m => (
                 <button key={m.val} type="button"
-                  onClick={() => setQuizForm(f => ({ ...f, mode: m.val }))}
+                  onClick={() => setQuizForm(f => ({ ...f, mode: m.val, strict_fullscreen: m.val === 'proctored' }))}
                   className={`text-left p-3 rounded-xl border-2 transition-all ${quizForm.mode === m.val ? 'border-tsubaki-red bg-tsubaki-red/5' : 'border-outline hover:border-tsubaki-red/40'}`}>
                   <span className={`material-symbols-outlined text-lg ${quizForm.mode === m.val ? 'text-tsubaki-red' : 'text-on-muted'}`}>{m.icon}</span>
                   <p className="text-sm font-semibold mt-0.5">{m.label}</p>
@@ -581,10 +593,12 @@ export default function AdminLessonQuiz() {
               ))}
             </div>
           </div>
-          <label className="flex items-start gap-2 cursor-pointer">
-            <input type="checkbox" checked={quizForm.strict_fullscreen} onChange={e => setQuizForm(f => ({ ...f, strict_fullscreen: e.target.checked }))} className="w-4 h-4 accent-tsubaki-red mt-0.5" />
-            <span className="text-sm text-on-surface">Bật chế độ toàn màn hình nghiêm ngặt (khóa bài nếu thoát fullscreen quá 5 lần, cấm thi 20 phút)</span>
-          </label>
+          <PassThresholdField
+            type={quizForm.passing_type}
+            value={quizForm.passing_value}
+            onChange={(type, value) => setQuizForm(f => ({ ...f, passing_type: type, passing_value: value }))}
+            totalQuestions={questions.length}
+          />
           <label className="flex items-center gap-3 cursor-pointer">
             <div
               onClick={() => setQuizForm(f => ({ ...f, is_published: !f.is_published }))}

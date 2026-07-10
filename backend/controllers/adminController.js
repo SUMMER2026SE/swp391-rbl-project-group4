@@ -1,6 +1,7 @@
 'use strict';
 
 const { supabaseAdmin } = require('../config/supabase');
+const { validateThreshold } = require('../services/passThreshold');
 
 // Bảng quiz đã chuyển sang schema exam_module (question_bank/users vẫn ở public)
 const examDb = supabaseAdmin.schema('exam_module');
@@ -715,31 +716,6 @@ exports.createGrammarPoint = async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message || 'Không thể tạo ngữ pháp.' }); }
 };
 
-// Gắn nhiều điểm ngữ pháp có sẵn vào một Mục (chọn từ list tổng).
-exports.attachGrammar = async (req, res) => {
-  const { lessonId } = req.params;
-  const ids = Array.isArray(req.body?.ids) ? req.body.ids : [];
-  if (ids.length === 0) return res.status(400).json({ error: 'Chưa chọn ngữ pháp nào.' });
-  try {
-    const rows = ids.map(grammar_point_id => ({ lesson_id: lessonId, grammar_point_id }));
-    const { error } = await contentDb.from('lesson_grammar_points')
-      .upsert(rows, { onConflict: 'lesson_id,grammar_point_id' });
-    if (error) throw error;
-    res.json({ message: `Đã thêm ${ids.length} ngữ pháp vào bài.` });
-  } catch (err) { res.status(500).json({ error: 'Không thể thêm ngữ pháp.' }); }
-};
-
-// Gỡ một điểm ngữ pháp khỏi Mục (không xóa khỏi thư viện).
-exports.detachGrammar = async (req, res) => {
-  const { lessonId, grammarId } = req.params;
-  try {
-    const { error } = await contentDb.from('lesson_grammar_points')
-      .delete().eq('lesson_id', lessonId).eq('grammar_point_id', grammarId);
-    if (error) throw error;
-    res.json({ message: 'Đã gỡ khỏi bài.' });
-  } catch (err) { res.status(500).json({ error: 'Không thể gỡ ngữ pháp.' }); }
-};
-
 exports.updateGrammarPoint = async (req, res) => {
   const allowed = ['title','title_ja','meaning_vi','explanation','example_sentence','level'];
   const updates = Object.fromEntries(Object.entries(req.body).filter(([k]) => allowed.includes(k)));
@@ -756,6 +732,57 @@ exports.deleteGrammarPoint = async (req, res) => {
     await supabaseAdmin.from('grammar_points').delete().eq('id', req.params.id);
     res.json({ message: 'Đã xóa.' });
   } catch (err) { res.status(500).json({ error: 'Không thể xóa.' }); }
+};
+
+// ── Admin Study Lists ─────────────────────────────────────────────────────────
+exports.adminListStudyLists = async (req, res) => {
+  const { type, sort = 'newest', search } = req.query;
+  const LIST_TYPES = ['vocabulary', 'kanji', 'grammar'];
+  if (!LIST_TYPES.includes(type)) return res.status(400).json({ error: 'type phải là vocabulary, kanji hoặc grammar.' });
+
+  const p   = Math.max(1, Number(req.query.page) || 1);
+  const lim = Math.min(100, Math.max(1, Number(req.query.limit) || 20));
+  const offset = (p - 1) * lim;
+
+  try {
+    let query = supabaseAdmin.from('study_list_posts')
+      .select('*', { count: 'exact' })
+      .eq('list_type', type)
+      .eq('creator_type', 'teacher');
+
+    const safe = search ? String(search).replace(/[,()%*]/g, ' ').trim() : '';
+    if (safe) query = query.or(`title.ilike.%${safe}%,description.ilike.%${safe}%`);
+
+    const sortCol = sort === 'popular' ? 'view_count' : 'created_at';
+    query = query.order(sortCol, { ascending: false }).range(offset, offset + lim - 1);
+
+    const { data, error, count } = await query;
+    if (error) throw error;
+
+    const posts = data || [];
+    const ids = posts.map(p => p.id);
+    const teacherIds = [...new Set(posts.map(p => p.created_by))];
+
+    const [itemRows, creatorRows] = await Promise.all([
+      ids.length ? supabaseAdmin.from('study_list_items').select('post_id').in('post_id', ids) : Promise.resolve({ data: [] }),
+      teacherIds.length ? supabaseAdmin.from('users').select('id,full_name,email').in('id', teacherIds) : Promise.resolve({ data: [] }),
+    ]);
+
+    const itemCount = {};
+    (itemRows.data || []).forEach(r => { itemCount[r.post_id] = (itemCount[r.post_id] || 0) + 1; });
+    const creatorMap = Object.fromEntries((creatorRows.data || []).map(u => [u.id, { name: u.full_name, email: u.email }]));
+
+    const result = posts.map(post => ({
+      ...post,
+      item_count: itemCount[post.id] || 0,
+      creator: creatorMap[post.created_by] || { name: null, email: null },
+    }));
+
+    res.json({ data: result, total: count, page: p, limit: lim });
+  } catch (err) {
+    console.error('admin.listStudyLists:', err);
+    res.status(500).json({ error: 'Không thể tải danh sách.' });
+  }
 };
 
 // ── Kanji Import ──────────────────────────────────────────────────────────────
@@ -1474,7 +1501,8 @@ exports.createQuiz = async (req, res) => {
     const { data, error } = await examDb.from('quizzes')
       .insert({ title, title_ja, description, course_id, lesson_id, type: type || 'multiple_choice', time_limit,
                 mode: mode === 'proctored' ? 'proctored' : 'normal',
-                strict_fullscreen: strict_fullscreen === true })
+                // "Giám sát" luôn kéo theo toàn màn hình nghiêm ngặt (webcam đã bỏ)
+                strict_fullscreen: mode === 'proctored' ? true : strict_fullscreen === true })
       .select().single();
     if (error) throw error;
     res.status(201).json(data);
@@ -1482,9 +1510,22 @@ exports.createQuiz = async (req, res) => {
 };
 
 exports.updateQuiz = async (req, res) => {
-  const allowed = ['title','title_ja','description','course_id','lesson_id','type','time_limit','is_published','mode','strict_fullscreen'];
+  const allowed = ['title','title_ja','description','course_id','lesson_id','type','time_limit','is_published','mode','strict_fullscreen','passing_type','passing_value'];
   const updates = Object.fromEntries(Object.entries(req.body).filter(([k]) => allowed.includes(k)));
+  if (updates.mode === 'proctored') updates.strict_fullscreen = true;
   try {
+    if ('passing_type' in updates || 'passing_value' in updates) {
+      let total = 0;
+      if (updates.passing_type === 'count') {
+        const { count } = await examDb.from('quiz_questions')
+          .select('id', { count: 'exact', head: true }).eq('quiz_id', req.params.id);
+        total = count || 0;
+      }
+      const v = validateThreshold(updates.passing_type, updates.passing_value, total);
+      if (v.error) return res.status(400).json({ error: v.error });
+      updates.passing_type  = v.type;
+      updates.passing_value = v.value;
+    }
     const { data, error } = await examDb.from('quizzes').update(updates).eq('id', req.params.id).select().single();
     if (error) throw error;
     res.json(data);

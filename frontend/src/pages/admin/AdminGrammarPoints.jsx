@@ -5,6 +5,7 @@ import Modal from '../../components/ui/Modal';
 import Button from '../../components/ui/Button';
 import Input from '../../components/ui/Input';
 import Alert from '../../components/ui/Alert';
+import ImportFileModal from '../../components/admin/ImportFileModal';
 import api from '../../lib/api';
 
 const EMPTY  = { title: '', title_ja: '', meaning_vi: '', explanation: '', example_sentence: '', level: '' };
@@ -20,10 +21,11 @@ export default function AdminGrammarPoints() {
   const [page, setPage]       = useState(1);
   const LIMIT = 20;
 
-  const [modal, setModal]   = useState(false);
-  const [form, setForm]     = useState(EMPTY);
-  const [editId, setEditId] = useState(null);
-  const [saving, setSaving] = useState(false);
+  const [modal, setModal]     = useState(false);
+  const [form, setForm]       = useState(EMPTY);
+  const [editId, setEditId]   = useState(null);
+  const [saving, setSaving]   = useState(false);
+  const [importModal, setImportModal] = useState(false);
 
   const fetchData = async () => {
     setLoading(true);
@@ -86,6 +88,9 @@ export default function AdminGrammarPoints() {
             <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Tìm kiếm..." className="px-3 py-2 border border-outline rounded-xl text-sm outline-none focus:border-tsubaki-red w-36" />
             <button type="submit" className="p-2 bg-tsubaki-red text-white rounded-xl"><span className="material-symbols-outlined text-lg">search</span></button>
           </form>
+          <Button variant="secondary" onClick={() => setImportModal(true)}>
+            <span className="material-symbols-outlined text-lg">upload_file</span> Nhập file
+          </Button>
           <Button onClick={openCreate}><span className="material-symbols-outlined text-lg">add</span> Thêm</Button>
         </div>
       </div>
@@ -124,6 +129,14 @@ export default function AdminGrammarPoints() {
           </div>
         </div>
       </Modal>
+      <ImportFileModal
+        open={importModal}
+        onClose={() => setImportModal(false)}
+        type="grammar"
+        previewUrl="/admin/grammar-points/import-file"
+        importUrl="/admin/grammar-points/import"
+        onImported={(msg) => { setAlert({ type: 'success', msg }); fetchData(); }}
+      />
     </AdminLayout>
   );
 }
