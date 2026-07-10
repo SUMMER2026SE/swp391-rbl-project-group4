@@ -35,6 +35,18 @@ function SkeletonCard() {
   );
 }
 
+const SORTS = [
+  { value: 'newest',      label: 'Mới nhất',       icon: 'schedule' },
+  { value: 'most_viewed', label: 'Xem nhiều nhất', icon: 'trending_up' },
+];
+
+// dd/mm/yyyy cho ngày đăng trên card
+function formatDate(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+}
+
 export default function NewsList() {
   const navigate = useNavigate();
   const [items, setItems]   = useState([]);
@@ -43,13 +55,14 @@ export default function NewsList() {
   const [error, setError]   = useState('');
   const [search, setSearch] = useState('');
   const [level, setLevel]   = useState('');
+  const [sort, setSort]     = useState('newest');
   const [page, setPage]     = useState(1);
   const LIMIT = 12;
 
   const fetchNews = async () => {
     setLoading(true);
     try {
-      const params = new URLSearchParams({ page, limit: LIMIT });
+      const params = new URLSearchParams({ page, limit: LIMIT, sort });
       if (search) params.set('search', search);
       if (level)  params.set('level', level);
       const r = await api.get(`/news?${params}`);
@@ -63,7 +76,7 @@ export default function NewsList() {
     }
   };
 
-  useEffect(() => { fetchNews(); }, [page, level]);
+  useEffect(() => { fetchNews(); }, [page, level, sort]);
 
   const handleSearch = (e) => {
     e.preventDefault();
@@ -72,14 +85,14 @@ export default function NewsList() {
   };
 
   return (
-    <StudentLayout title="Luyện đọc báo">
+    <StudentLayout title="Luyện đọc">
       {/* ── Page header ─────────────────────────────────────────────── */}
       <div className="mb-8">
         <h1 className="font-display text-display-mobile font-bold text-on-surface mb-2 tracking-tight">
-          Luyện đọc báo
+          Luyện đọc
         </h1>
         <p className="text-on-surface-variant text-base leading-relaxed whitespace-nowrap">
-          Đọc tin tức tiếng Nhật thật, bật furigana và bản dịch tiếng Việt, hỏi đáp cùng trợ lý AI để hiểu sâu hơn.
+          Đọc bài tiếng Nhật theo trình độ, bật furigana và bản dịch, tra từ, làm quiz và hỏi đáp cùng trợ lý AI.
         </p>
       </div>
 
@@ -104,6 +117,25 @@ export default function NewsList() {
           <option value="">Tất cả cấp độ</option>
           {LEVELS.map(l => <option key={l} value={l}>{`JLPT ${l}`}</option>)}
         </select>
+
+        {/* Sắp xếp: Mới nhất / Xem nhiều nhất */}
+        <div className="flex gap-2">
+          {SORTS.map(s => (
+            <button
+              key={s.value}
+              type="button"
+              onClick={() => { setSort(s.value); setPage(1); }}
+              className={`inline-flex items-center gap-1.5 px-4 py-3 rounded-2xl text-sm font-semibold border transition-colors ${
+                sort === s.value
+                  ? 'bg-tsubaki-red text-white border-tsubaki-red'
+                  : 'bg-white border-outline-variant text-on-muted hover:border-tsubaki-red hover:text-tsubaki-red'
+              }`}
+            >
+              <span className="material-symbols-outlined text-lg">{s.icon}</span>
+              {s.label}
+            </button>
+          ))}
+        </div>
       </form>
 
       {/* ── Error ────────────────────────────────────────────────────── */}
@@ -162,6 +194,24 @@ export default function NewsList() {
                     {item.summary_vi}
                   </p>
                 )}
+
+                {/* Meta: người đăng • ngày đăng • lượt xem */}
+                <div className="flex items-center gap-3 mt-3 pt-3 border-t border-outline/30 text-xs text-on-muted">
+                  <span className="inline-flex items-center gap-1 min-w-0">
+                    <span className="material-symbols-outlined text-sm">person</span>
+                    <span className="truncate">{item.author_name || 'Quản trị viên'}</span>
+                  </span>
+                  {item.published_at && (
+                    <span className="inline-flex items-center gap-1 shrink-0">
+                      <span className="material-symbols-outlined text-sm">calendar_today</span>
+                      {formatDate(item.published_at)}
+                    </span>
+                  )}
+                  <span className="inline-flex items-center gap-1 shrink-0 ml-auto">
+                    <span className="material-symbols-outlined text-sm">visibility</span>
+                    {item.view_count ?? 0}
+                  </span>
+                </div>
               </div>
             </button>
           ))}

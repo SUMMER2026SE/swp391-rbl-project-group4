@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import Alert from '../../components/ui/Alert';
 import SearchBar from '../../components/dictionary/SearchBar';
 import WordDetail from '../../components/dictionary/WordDetail';
@@ -8,6 +9,7 @@ import api from '../../lib/api';
 
 export default function DictionaryView() {
   const { t } = useLang();
+  const [searchParams] = useSearchParams();
   const [entry, setEntry] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -24,6 +26,12 @@ export default function DictionaryView() {
       setLoading(false);
     }
   };
+
+  // Deep-link: mở thẳng 1 từ khi có ?entry=<id> (dùng từ popup tra từ ở trang Luyện đọc)
+  useEffect(() => {
+    const entryId = searchParams.get('entry');
+    if (entryId) loadEntry(entryId);
+  }, [searchParams]);
 
   return (
     <>

@@ -1,4 +1,4 @@
-import Sidebar from './Sidebar';
+﻿import Sidebar from './Sidebar';
 import { useLang } from '../../contexts/LangContext';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -15,7 +15,7 @@ const ADMIN_LINKS = (t) => [
   { to: '/admin/mock-exams',   icon: 'fact_check',    label: 'Thi thử JLPT' },
   { to: '/admin/listening',    icon: 'headphones',      label: 'Hội thoại nghe' },
   { to: '/admin/placement',   icon: 'assignment_ind',  label: 'Kiểm tra NL' },
-  { to: '/admin/news',         icon: 'newspaper',     label: 'Đọc báo' },
+  { to: '/admin/news',         icon: 'newspaper',     label: 'Luyện đọc' },
   { to: '/admin/submissions',  icon: 'pending_actions', label: 'Yêu cầu duyệt' },
   { to: '/admin/classes',      icon: 'groups',          label: 'Lớp học' },
   { to: '/chat',               icon: 'smart_toy',       label: 'Trợ lý AI' },

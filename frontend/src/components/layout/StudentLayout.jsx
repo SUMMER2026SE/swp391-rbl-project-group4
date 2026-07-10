@@ -1,4 +1,4 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import { useAuth } from '../../contexts/AuthContext';
@@ -16,7 +16,7 @@ const STUDENT_LINKS = (t) => [
   { to: '/writing',        icon: 'edit_note',        label: 'Luyện viết' },
   { to: '/dictionary',     icon: 'auto_stories',     label: t('dictionary.title') },
   { to: '/flashcards',     icon: 'style',            label: 'Thẻ ghi nhớ' },
-  { to: '/news',           icon: 'newspaper',        label: 'Đọc báo' },
+  { to: '/news',           icon: 'newspaper',        label: 'Luyện đọc' },
   { to: '/classes',        icon: 'groups',           label: 'Lớp học' },
   { to: '/exams',          icon: 'quiz',             label: 'Đề thi' },
   { to: '/mock-exams',     icon: 'fact_check',       label: 'Thi thử JLPT' },

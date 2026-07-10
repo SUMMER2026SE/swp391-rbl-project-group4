@@ -366,7 +366,12 @@ CREATE TABLE IF NOT EXISTS materials_module.news_articles (
   source_url    text,
   content       text,                          -- toàn văn JA thuần (fallback + ngữ cảnh AI)
   segments      jsonb DEFAULT '[]'::jsonb,     -- [{ jp, furigana, vi }] theo câu
+  questions     jsonb DEFAULT '[]'::jsonb,     -- quiz đọc hiểu [{ question, options[4], answer, explanation_vi }]
+  vocab         jsonb DEFAULT '[]'::jsonb,     -- từ vựng trong bài [{ word, reading, meaning_vi, entry_id, jlpt_level }]
+  grammar       jsonb DEFAULT '[]'::jsonb,     -- ngữ pháp trong bài [{ pattern, explanation_vi, example_jp }]
+  view_count    int NOT NULL DEFAULT 0,        -- số user duy nhất đã mở bài
   is_published  boolean DEFAULT false,         -- chỉ bài published mới hiện cho student
+  published_at  timestamptz,                   -- set lần đầu khi publish
   created_by    uuid REFERENCES auth.users(id) ON DELETE SET NULL,
   created_at    timestamptz DEFAULT now(),
   updated_at    timestamptz DEFAULT now()
@@ -382,6 +387,23 @@ GRANT ALL ON materials_module.news_articles TO anon, authenticated, service_role
 ALTER TABLE materials_module.news_articles ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "news_articles: read published" ON materials_module.news_articles FOR SELECT TO authenticated USING (is_published = true);
+
+-- Lượt đọc: mỗi (bài, user) 1 dòng — dedupe view_count + đếm giới hạn bài mới/ngày
+CREATE TABLE IF NOT EXISTS materials_module.news_article_reads (
+  article_id    uuid NOT NULL REFERENCES materials_module.news_articles(id) ON DELETE CASCADE,
+  user_id       uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  first_read_at timestamptz DEFAULT now(),
+  read_date     date DEFAULT CURRENT_DATE,    -- ngày đọc lần đầu (tính quota theo ngày)
+  PRIMARY KEY (article_id, user_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_news_reads_user_date
+  ON materials_module.news_article_reads (user_id, read_date);
+
+GRANT ALL ON materials_module.news_article_reads TO anon, authenticated, service_role;
+
+-- RLS bật, không policy: chỉ backend (service-role, bypass RLS) được ghi/đọc
+ALTER TABLE materials_module.news_article_reads ENABLE ROW LEVEL SECURITY;
 
 -- ─── FLASHCARD MODULE: học phần / thư mục / thẻ / tiến độ (spaced repetition đơn giản) ──
 CREATE SCHEMA IF NOT EXISTS flashcard_module;
