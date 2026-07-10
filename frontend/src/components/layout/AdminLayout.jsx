@@ -17,7 +17,7 @@ const ADMIN_LINKS = (t) => [
   { to: '/admin/placement',   icon: 'assignment_ind',  label: 'Kiểm tra NL' },
   { to: '/admin/news',         icon: 'newspaper',     label: 'Đọc báo' },
   { to: '/admin/submissions',  icon: 'pending_actions', label: 'Yêu cầu duyệt' },
-  { to: '/admin/classes',      icon: 'groups',          label: 'Lớp học' },
+  // { to: '/admin/classes',      icon: 'groups',          label: 'Lớp học' }, // HIDDEN
   { to: '/chat',               icon: 'smart_toy',       label: 'Trợ lý AI' },
   { to: '/admin/subscriptions', icon: 'workspace_premium', label: 'Đăng ký' },
   { to: '/admin/payments',      icon: 'payments',          label: 'Thanh toán' },

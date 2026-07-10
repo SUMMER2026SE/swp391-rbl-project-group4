@@ -11,7 +11,7 @@ const TEACHER_LINKS = [
   { to: '/teacher/dictionary',    icon: 'auto_stories',  label: 'Từ điển' },
   { to: '/teacher/quizzes',       icon: 'quiz',          label: 'Bài kiểm tra' },
   { to: '/teacher/question-bank', icon: 'inventory_2',   label: 'Ngân hàng câu hỏi' },
-  { to: '/teacher/classes',       icon: 'groups',        label: 'Lớp học' },
+  // { to: '/teacher/classes',       icon: 'groups',        label: 'Lớp học' }, // HIDDEN
   { to: '/chat',                  icon: 'smart_toy',     label: 'Trợ lý AI' },
   { to: '/profile',               icon: 'person',        label: 'Hồ sơ' },
 ];

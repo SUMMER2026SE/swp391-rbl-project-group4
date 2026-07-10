@@ -29,7 +29,7 @@ import PlacementTest        from './pages/student/PlacementTest';
 import Pricing              from './pages/student/Pricing';
 import SubscriptionStatus   from './pages/student/SubscriptionStatus';
 import BillingHistory       from './pages/student/BillingHistory';
-import Classes      from './pages/student/Classes';
+// import Classes      from './pages/student/Classes'; // HIDDEN
 import Quiz         from './pages/student/Quiz';
 import Dictionary   from './pages/student/Dictionary';
 import NewsList     from './pages/student/NewsList';
@@ -58,7 +58,7 @@ import UnitEditPage      from './pages/shared/UnitEditPage';
 import TeacherVocabulary from './pages/teacher/TeacherVocabulary';
 import TeacherKanji      from './pages/teacher/TeacherKanji';
 import TeacherGrammar    from './pages/teacher/TeacherGrammar';
-import TeacherClasses    from './pages/teacher/TeacherClasses';
+// import TeacherClasses    from './pages/teacher/TeacherClasses'; // HIDDEN
 import TeacherDictionary from './pages/teacher/TeacherDictionary';
 import TeacherQuestionBank from './pages/teacher/TeacherQuestionBank';
 import TeacherExams      from './pages/teacher/TeacherExams';
@@ -72,7 +72,7 @@ import AdminVocabulary from './pages/admin/AdminVocabulary';
 import AdminKanji      from './pages/admin/AdminKanji';
 import AdminQuizzes      from './pages/admin/AdminQuizzes';
 import AdminSubmissions  from './pages/admin/AdminSubmissions';
-import AdminClasses      from './pages/admin/AdminClasses';
+// import AdminClasses      from './pages/admin/AdminClasses'; // HIDDEN
 import AdminSystemStatus  from './pages/admin/AdminSystemStatus';
 import AdminQuestionBank       from './pages/admin/AdminQuestionBank';
 import AdminMockExams          from './pages/admin/AdminMockExams';
@@ -92,7 +92,7 @@ import AdminLessonVideo        from './pages/admin/AdminLessonVideo';
 import AdminGrammarPoints      from './pages/admin/AdminGrammarPoints';
 
 import ChatPage from './pages/ChatPage';
-import ClassBoard from './pages/ClassBoard';
+// import ClassBoard from './pages/ClassBoard'; // HIDDEN
 
 // 404
 function NotFound() {
@@ -136,7 +136,7 @@ export default function App() {
             <Route path="/pricing"        element={<StudentRoute><Pricing /></StudentRoute>} />
             <Route path="/subscription"   element={<StudentRoute><SubscriptionStatus /></StudentRoute>} />
             <Route path="/billing"        element={<StudentRoute><BillingHistory /></StudentRoute>} />
-            <Route path="/classes"    element={<StudentRoute><Classes /></StudentRoute>} />
+            {/* <Route path="/classes"    element={<StudentRoute><Classes /></StudentRoute>} /> */}{/* HIDDEN */}
             <Route path="/quizzes/:id" element={<StudentRoute><Quiz /></StudentRoute>} />
             <Route path="/dictionary" element={<StudentRoute><Dictionary /></StudentRoute>} />
             <Route path="/news"       element={<StudentRoute><NewsList /></StudentRoute>} />
@@ -159,7 +159,7 @@ export default function App() {
             {/* Dùng chung mọi role (layout hiển thị theo role) */}
             <Route path="/profile"    element={<ProtectedRoute><Profile /></ProtectedRoute>} />
             <Route path="/chat"       element={<ProtectedRoute><ChatPage /></ProtectedRoute>} />
-            <Route path="/classes/:id" element={<ProtectedRoute><ClassBoard /></ProtectedRoute>} />
+            {/* <Route path="/classes/:id" element={<ProtectedRoute><ClassBoard /></ProtectedRoute>} /> */}{/* HIDDEN */}
 
             {/* Teacher (teacher + admin) */}
             <Route path="/teacher"       element={<TeacherRoute><TeacherDashboard /></TeacherRoute>} />
@@ -175,7 +175,7 @@ export default function App() {
             <Route path="/teacher/kanji"    element={<TeacherRoute><TeacherKanji /></TeacherRoute>} />
             <Route path="/teacher/grammar"  element={<TeacherRoute><TeacherGrammar /></TeacherRoute>} />
             <Route path="/teacher/study-lists" element={<TeacherRoute><TeacherStudyLists /></TeacherRoute>} />
-            <Route path="/teacher/classes"  element={<TeacherRoute><TeacherClasses /></TeacherRoute>} />
+            {/* <Route path="/teacher/classes"  element={<TeacherRoute><TeacherClasses /></TeacherRoute>} /> */}{/* HIDDEN */}
             <Route path="/teacher/dictionary" element={<TeacherRoute><TeacherDictionary /></TeacherRoute>} />
             <Route path="/teacher/question-bank" element={<TeacherRoute><TeacherQuestionBank /></TeacherRoute>} />
             <Route path="/teacher/quizzes"       element={<TeacherRoute><TeacherExams /></TeacherRoute>} />
@@ -190,7 +190,7 @@ export default function App() {
             <Route path="/admin/grammar-points" element={<AdminRoute><AdminGrammarPoints /></AdminRoute>} />
             <Route path="/admin/quizzes"      element={<AdminRoute><AdminQuizzes /></AdminRoute>} />
             <Route path="/admin/submissions" element={<AdminRoute><AdminSubmissions /></AdminRoute>} />
-            <Route path="/admin/classes"     element={<AdminRoute><AdminClasses /></AdminRoute>} />
+            {/* <Route path="/admin/classes"     element={<AdminRoute><AdminClasses /></AdminRoute>} /> */}{/* HIDDEN */}
             <Route path="/admin/system"     element={<AdminRoute><AdminSystemStatus /></AdminRoute>} />
             <Route path="/admin/questions"  element={<AdminRoute><AdminQuestionBank /></AdminRoute>} />
             <Route path="/admin/mock-exams"     element={<AdminRoute><AdminMockExams /></AdminRoute>} />

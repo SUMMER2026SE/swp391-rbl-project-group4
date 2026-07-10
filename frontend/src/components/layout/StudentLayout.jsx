@@ -17,7 +17,7 @@ const STUDENT_LINKS = (t) => [
   { to: '/dictionary',     icon: 'auto_stories',     label: t('dictionary.title') },
   { to: '/flashcards',     icon: 'style',            label: 'Thẻ ghi nhớ' },
   { to: '/news',           icon: 'newspaper',        label: 'Đọc báo' },
-  { to: '/classes',        icon: 'groups',           label: 'Lớp học' },
+  // { to: '/classes',        icon: 'groups',           label: 'Lớp học' }, // HIDDEN
   { to: '/exams',          icon: 'quiz',             label: 'Đề thi' },
   { to: '/mock-exams',     icon: 'fact_check',       label: 'Thi thử JLPT' },
   { to: '/chat',           icon: 'smart_toy',        label: 'Trợ lý AI' },
