@@ -4,12 +4,24 @@ const { supabaseAdmin } = require('../config/supabase');
 const { chatCompletion } = require('../config/ai');
 const { checkAccess, incrementUsage } = require('../services/quotaService');
 const { extractVocabCandidates } = require('../services/jaTokenizer');
+const { annotateQuestions } = require('../services/furiganaService');
 const { attachMeaningPreview } = require('./dictionaryController');
 
 // Bảng bài đọc nằm trong schema riêng materials_module — mọi truy vấn dùng client này
 const matDb = supabaseAdmin.schema('materials_module');
 // Từ điển (dictionary_module) — dùng để khớp từ vựng của bài với từ điển hệ thống
 const dictDb = supabaseAdmin.schema('dictionary_module');
+
+// Gắn furigana cho quiz trước khi lưu; lỗi kuroshiro → ghi questions không furigana (fail open)
+async function annotateQuizFurigana(questions) {
+  if (!Array.isArray(questions) || questions.length === 0) return [];
+  try {
+    return await annotateQuestions(questions);
+  } catch (e) {
+    console.error('news annotateQuizFurigana:', e.message);
+    return questions;
+  }
+}
 
 // Gắn tên người đăng (public.users nằm khác schema — không embed được, query tay)
 async function attachAuthorNames(rows) {
@@ -102,6 +114,18 @@ exports.getOne = async (req, res) => {
           .update({ view_count: data.view_count + 1 }).eq('id', data.id);
         if (!vErr) data.view_count += 1;
         incrementUsage(userId, 'news_read_daily').catch(() => {});
+      }
+    }
+
+    // Backfill furigana cho quiz bài cũ (chưa có question_furigana): sinh 1 lần
+    // rồi lưu lại. Lỗi kuroshiro → fail open, quiz hiện text thường như trước.
+    if (Array.isArray(data.questions) && data.questions.length > 0
+        && data.questions.some(q => q && q.question_furigana === undefined)) {
+      try {
+        data.questions = await annotateQuestions(data.questions);
+        await matDb.from('news_articles').update({ questions: data.questions }).eq('id', data.id);
+      } catch (e) {
+        console.error('news.getOne backfill furigana:', e.message);
       }
     }
 
@@ -385,6 +409,7 @@ exports.create = async (req, res) => {
   const { title, title_vi, summary_vi, level, source, source_url, thumbnail_url, content, segments, questions, vocab, grammar, is_published } = req.body;
   if (!title?.trim()) return res.status(400).json({ error: 'Tiêu đề là bắt buộc.' });
   try {
+    const questionsWithFuri = await annotateQuizFurigana(questions);
     const { data, error } = await matDb.from('news_articles')
       .insert({
         title,
@@ -396,7 +421,7 @@ exports.create = async (req, res) => {
         thumbnail_url: thumbnail_url || null,
         content:       content       || null,
         segments:      Array.isArray(segments)  ? segments  : [],
-        questions:     Array.isArray(questions) ? questions : [],
+        questions:     questionsWithFuri,
         vocab:         Array.isArray(vocab)     ? vocab     : [],
         grammar:       Array.isArray(grammar)   ? grammar   : [],
         is_published:  !!is_published,
@@ -420,6 +445,9 @@ exports.update = async (req, res) => {
   const updates = Object.fromEntries(Object.entries(req.body).filter(([k]) => allowed.includes(k)));
   updates.updated_at = new Date().toISOString();
   try {
+    // Sinh lại furigana cho quiz mỗi khi questions được gửi lên (admin có thể sửa tay text)
+    if ('questions' in updates) updates.questions = await annotateQuizFurigana(updates.questions);
+
     // Ngày đăng: set 1 lần khi publish lần đầu, các lần re-publish sau giữ nguyên
     if (updates.is_published === true) {
       const { data: cur } = await matDb.from('news_articles')
