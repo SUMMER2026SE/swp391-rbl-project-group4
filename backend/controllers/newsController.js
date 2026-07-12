@@ -3,6 +3,7 @@
 const { supabaseAdmin } = require('../config/supabase');
 const { chatCompletion } = require('../config/ai');
 const { checkAccess, incrementUsage } = require('../services/quotaService');
+const { logContentUse } = require('../utils/usageTracker');
 const { extractVocabCandidates } = require('../services/jaTokenizer');
 const { annotateQuestions } = require('../services/furiganaService');
 const { attachMeaningPreview } = require('./dictionaryController');
@@ -74,11 +75,13 @@ exports.list = async (req, res) => {
 exports.getOne = async (req, res) => {
   try {
     const { data, error } = await matDb.from('news_articles')
-      .select('id,title,title_vi,level,source,source_url,thumbnail_url,content,segments,questions,vocab,grammar,view_count,published_at,created_by')
+      .select('id,title,title_vi,level,source,source_url,thumbnail_url,content,segments,questions,vocab,grammar,view_count,published_at,created_by,creator_type')
       .eq('id', req.params.id)
       .eq('is_published', true)
       .single();
     if (error || !data) return res.status(404).json({ error: 'Không tìm thấy bài đọc.' });
+    logContentUse({ userId: req.user?.id, contentType: 'reading', contentId: data.id,
+      creatorType: data.creator_type, ownerId: data.created_by });
 
     // Bài đã đọc rồi → đọc lại tự do; bài mới → check quota rồi ghi nhận lượt đọc
     const userId = req.user.id;
@@ -476,4 +479,80 @@ exports.remove = async (req, res) => {
     console.error('news.remove:', err);
     res.status(500).json({ error: 'Không thể xóa bài đọc.' });
   }
+};
+
+// ── Teacher: own reading-article CRUD (created_by scoped) ─────────────────────
+
+async function ownsArticle(id, user) {
+  const { data } = await matDb.from('news_articles').select('created_by').eq('id', id).maybeSingle();
+  if (!data) return false;
+  return data.created_by === user.id || user.user_metadata?.role === 'admin';
+}
+
+// GET /api/teacher/my-reading
+exports.teacherList = async (req, res) => {
+  try {
+    const { data, error } = await matDb.from('news_articles')
+      .select('id,title,title_vi,level,thumbnail_url,view_count,is_published,published_at,created_at,updated_at')
+      .eq('created_by', req.user.id)
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    res.json({ data: data || [] });
+  } catch (err) {
+    console.error('news.teacherList:', err);
+    res.status(500).json({ error: 'Không thể tải danh sách bài đọc.' });
+  }
+};
+
+// GET /api/teacher/my-reading/:id
+exports.teacherGetOne = async (req, res) => {
+  if (!(await ownsArticle(req.params.id, req.user))) return res.status(403).json({ error: 'Không có quyền.' });
+  return exports.adminGetOne(req, res);
+};
+
+// POST /api/teacher/my-reading
+exports.teacherCreate = async (req, res) => {
+  const { title, title_vi, summary_vi, level, source, source_url, thumbnail_url, content, segments, questions, vocab, grammar, is_published } = req.body;
+  if (!title?.trim()) return res.status(400).json({ error: 'Tiêu đề là bắt buộc.' });
+  try {
+    const questionsWithFuri = await annotateQuizFurigana(questions);
+    const publish = is_published !== false; // teachers publish directly by default
+    const { data, error } = await matDb.from('news_articles')
+      .insert({
+        title,
+        title_vi:      title_vi      || null,
+        summary_vi:    summary_vi    || null,
+        level:         level         || null,
+        source:        source        || null,
+        source_url:    source_url    || null,
+        thumbnail_url: thumbnail_url || null,
+        content:       content       || null,
+        segments:      Array.isArray(segments)  ? segments  : [],
+        questions:     questionsWithFuri,
+        vocab:         Array.isArray(vocab)     ? vocab     : [],
+        grammar:       Array.isArray(grammar)   ? grammar   : [],
+        is_published:  publish,
+        published_at:  publish ? new Date().toISOString() : null,
+        created_by:    req.user.id,
+        creator_type:  'teacher',
+      })
+      .select().single();
+    if (error) throw error;
+    res.status(201).json(data);
+  } catch (err) {
+    console.error('news.teacherCreate:', err);
+    res.status(500).json({ error: 'Không thể tạo bài đọc.' });
+  }
+};
+
+// PUT /api/teacher/my-reading/:id
+exports.teacherUpdate = async (req, res) => {
+  if (!(await ownsArticle(req.params.id, req.user))) return res.status(403).json({ error: 'Không có quyền.' });
+  return exports.update(req, res);
+};
+
+// DELETE /api/teacher/my-reading/:id
+exports.teacherRemove = async (req, res) => {
+  if (!(await ownsArticle(req.params.id, req.user))) return res.status(403).json({ error: 'Không có quyền.' });
+  return exports.remove(req, res);
 };

@@ -190,6 +190,7 @@ async function getAllQuotas(userId) {
     'listening_practice_monthly',
     'ai_chat_daily',
     'flashcard_ai_suggest_daily',
+    'learning_path_generate_monthly',
     'flashcard_test_gen_daily',
   ];
 
