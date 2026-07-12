@@ -211,6 +211,15 @@ function buildAnalysis(correctCount, vocab, kanji, grammar, level = 'N5') {
   };
 }
 
+// Map a tested level + score into a clean current_level enum (N5..N1).
+// Solid at the tested level (>=60%) keeps it; otherwise drop one level (floor N5).
+function deriveCurrentLevel(testedLevel, score) {
+  const i = ALL_LEVELS.indexOf(testedLevel);
+  if (i < 0) return 'N5';
+  if (score >= 60) return testedLevel;
+  return i > 0 ? ALL_LEVELS[i - 1] : 'N5';
+}
+
 async function fetchQuestionsOrdered(questionIds) {
   const { data } = await supabaseAdmin
     .from('placement_test_questions')
@@ -285,6 +294,16 @@ async function scoreAndFinish(attemptId) {
     strengths: analysis.strengthsText, weaknesses: analysis.weaknessText,
     recommended_level: analysis.recommendedLevel,
   }).eq('id', attemptId);
+
+  // Persist a clean current_level enum so the learning path has a starting point.
+  // Best-effort — must never break scoring.
+  try {
+    await supabaseAdmin.from('student_profiles')
+      .update({ current_level: deriveCurrentLevel(attempt.jlpt_level_selected || 'N5', analysis.score) })
+      .eq('user_id', attempt.user_id);
+  } catch (e) {
+    console.error('current_level update failed (non-critical):', e.message);
+  }
 
   return analysis;
 }

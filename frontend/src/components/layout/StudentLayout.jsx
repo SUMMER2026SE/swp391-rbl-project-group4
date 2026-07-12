@@ -13,6 +13,7 @@ const STUDENT_LINKS = (t) => [
   { to: '/kanji',          icon: 'font_download',    label: 'Kanji' },
   { to: '/listening',      icon: 'headphones',       label: 'Luyện nghe' },
   { to: '/placement-test', icon: 'assignment_ind',   label: 'Kiểm tra NL' },
+  { to: '/learning-path',  icon: 'route',            label: 'Lộ trình học' },
   { to: '/writing',        icon: 'edit_note',        label: 'Luyện viết' },
   { to: '/dictionary',     icon: 'auto_stories',     label: t('dictionary.title') },
   { to: '/flashcards',     icon: 'style',            label: 'Thẻ ghi nhớ' },

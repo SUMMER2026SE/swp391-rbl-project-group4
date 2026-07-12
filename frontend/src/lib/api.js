@@ -50,4 +50,20 @@ export const createReview = (courseId, data)           => api.post(`/courses/${c
 export const updateReview = (courseId, reviewId, data) => api.put(`/courses/${courseId}/reviews/${reviewId}`, data).then(r => r.data);
 export const deleteReview = (courseId, reviewId)       => api.delete(`/courses/${courseId}/reviews/${reviewId}`).then(r => r.data);
 
+// ── Teacher applications (Đăng ký giáo viên) ──────────────────────────────────
+export const submitTeacherApplication = (formData) =>
+  api.post('/teacher-applications', formData, { headers: { 'Content-Type': 'multipart/form-data' } }).then(r => r.data);
+export const getMyTeacherApplication = () => api.get('/teacher-applications/me').then(r => r.data);
+export const adminListTeacherApplications = (status = 'pending') =>
+  api.get(`/admin/teacher-applications?status=${status}`).then(r => r.data);
+export const adminReviewTeacherApplication = (id, body) =>
+  api.post(`/admin/teacher-applications/${id}/review`, body).then(r => r.data);
+
+// ── Learning path (Lộ trình học) ──────────────────────────────────────────────
+export const getLearningPath        = ()               => api.get('/learning-path').then(r => r.data);
+export const generateLearningPath   = (body)           => api.post('/learning-path/generate', body).then(r => r.data);
+export const regenerateLearningPath = (body)           => api.post('/learning-path/regenerate', body).then(r => r.data);
+export const completeLearningStep   = (id, status = 'completed') =>
+  api.patch(`/learning-path/steps/${id}`, { status }).then(r => r.data);
+
 export default api;

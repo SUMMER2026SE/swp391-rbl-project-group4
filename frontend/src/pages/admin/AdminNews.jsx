@@ -25,7 +25,7 @@ const EMPTY = {
 
 const LIMIT = 20;
 
-export default function AdminNews() {
+export function NewsManager({ Layout = AdminLayout, base = '/admin/news', uploadPath = '/admin/reading-passages/upload', title = 'Quản lý Luyện đọc' }) {
   const [data, setData]       = useState([]);
   const [total, setTotal]     = useState(0);
   const [loading, setLoading] = useState(true);
@@ -57,7 +57,7 @@ export default function AdminNews() {
     try {
       const params = new URLSearchParams({ page, limit: LIMIT });
       if (search) params.set('search', search);
-      const r = await api.get(`/admin/news?${params}`);
+      const r = await api.get(`${base}?${params}`);
       setData(r.data.data || []);
       setTotal(r.data.total || 0);
     } catch (e) {
@@ -78,7 +78,7 @@ export default function AdminNews() {
     setEditId(row.id);
     setModal(true);
     try {
-      const r = await api.get(`/admin/news/${row.id}`);
+      const r = await api.get(`${base}/${row.id}`);
       const a = r.data;
       setForm({
         title:         a.title         || '',
@@ -105,7 +105,7 @@ export default function AdminNews() {
     if (!form.content.trim()) return showAlert('error', 'Hãy nhập nội dung bài đọc trước.');
     setGenerating(true);
     try {
-      const r = await api.post('/admin/news/generate-segments', { content: form.content });
+      const r = await api.post(`${base}/generate-segments`, { content: form.content });
       setForm(f => ({ ...f, segments: r.data.segments || [] }));
       showAlert('success', `Đã tách & sinh ${r.data.segments?.length || 0} câu. Hãy kiểm tra lại trước khi lưu.`);
     } catch (e) {
@@ -120,7 +120,7 @@ export default function AdminNews() {
     if (!topic.trim()) return showAlert('error', 'Hãy nhập chủ đề bài đọc.');
     setComposing(true);
     try {
-      const r = await api.post('/admin/news/generate-article', { topic, level: form.level, length });
+      const r = await api.post(`${base}/generate-article`, { topic, level: form.level, length });
       setForm(f => ({
         ...f,
         title:      r.data.title      || f.title,
@@ -141,7 +141,7 @@ export default function AdminNews() {
     if (!form.content.trim()) return showAlert('error', 'Hãy nhập nội dung bài đọc trước.');
     setGenQuiz(true);
     try {
-      const r = await api.post('/admin/news/generate-questions', { content: form.content, level: form.level });
+      const r = await api.post(`${base}/generate-questions`, { content: form.content, level: form.level });
       setForm(f => ({ ...f, questions: r.data.questions || [] }));
       showAlert('success', `Đã sinh ${r.data.questions?.length || 0} câu hỏi. Hãy kiểm tra lại trước khi lưu.`);
     } catch (e) {
@@ -156,7 +156,7 @@ export default function AdminNews() {
     if (!form.content.trim()) return showAlert('error', 'Hãy nhập nội dung bài đọc trước.');
     setGenVocab(true);
     try {
-      const r = await api.post('/admin/news/generate-vocab-grammar', { content: form.content, level: form.level });
+      const r = await api.post(`${base}/generate-vocab-grammar`, { content: form.content, level: form.level });
       setForm(f => ({ ...f, vocab: r.data.vocab || [], grammar: r.data.grammar || [] }));
       if (r.data.grammarError) showAlert('error', `Từ vựng OK nhưng ngữ pháp lỗi: ${r.data.grammarError}`);
       else showAlert('success', `Đã sinh ${r.data.vocab?.length || 0} từ vựng & ${r.data.grammar?.length || 0} điểm ngữ pháp.`);
@@ -174,7 +174,7 @@ export default function AdminNews() {
     try {
       const fd = new FormData();
       fd.append('image', file);
-      const r = await api.post('/admin/reading-passages/upload', fd, {
+      const r = await api.post(uploadPath, fd, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
       setForm(f => ({ ...f, thumbnail_url: r.data.url }));
@@ -212,8 +212,8 @@ export default function AdminNews() {
     if (!form.title.trim()) return showAlert('error', 'Tiêu đề (tiếng Nhật) là bắt buộc.');
     setSaving(true);
     try {
-      if (editId) await api.put(`/admin/news/${editId}`, form);
-      else        await api.post('/admin/news', form);
+      if (editId) await api.put(`${base}/${editId}`, form);
+      else        await api.post(base, form);
       showAlert('success', editId ? 'Đã cập nhật bài đọc.' : 'Đã tạo bài đọc.');
       setModal(false);
       fetchNews();
@@ -228,7 +228,7 @@ export default function AdminNews() {
     if (!deleteTarget) return;
     setDeleting(true);
     try {
-      await api.delete(`/admin/news/${deleteTarget.id}`);
+      await api.delete(`${base}/${deleteTarget.id}`);
       showAlert('success', 'Đã xóa bài đọc.');
       setDeleteTarget(null);
       if (data.length === 1 && page > 1) setPage(p => p - 1);
@@ -245,7 +245,7 @@ export default function AdminNews() {
 
   // ── Render ──────────────────────────────────────────────────────────────────
   return (
-    <AdminLayout title="Quản lý Luyện đọc">
+    <Layout title={title}>
       {alert.msg && (
         <Alert type={alert.type} onClose={() => setAlert({ type: '', msg: '' })}>{alert.msg}</Alert>
       )}
@@ -402,8 +402,12 @@ export default function AdminNews() {
           <p>Bài đọc <strong>"{deleteTarget?.title}"</strong> sẽ bị xóa vĩnh viễn. Hành động này không thể hoàn tác.</p>
         </div>
       </Modal>
-    </AdminLayout>
+    </Layout>
   );
+}
+
+export default function AdminNews() {
+  return <NewsManager />;
 }
 
 // ── Form ──────────────────────────────────────────────────────────────────────
