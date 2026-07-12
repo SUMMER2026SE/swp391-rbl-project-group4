@@ -66,6 +66,9 @@ import TeacherQuestionBank from './pages/teacher/TeacherQuestionBank';
 import TeacherExams      from './pages/teacher/TeacherExams';
 import ExamEditor        from './pages/teacher/ExamEditor';
 import TeacherStudyLists from './pages/teacher/TeacherStudyLists';
+import TeacherListening  from './pages/teacher/TeacherListening';
+import TeacherNews       from './pages/teacher/TeacherNews';
+import TeacherEarnings   from './pages/teacher/TeacherEarnings';
 // Admin pages
 import AdminDashboard  from './pages/admin/AdminDashboard';
 import AdminUsers      from './pages/admin/AdminUsers';
@@ -79,6 +82,7 @@ import AdminTeacherApplications from './pages/admin/AdminTeacherApplications';
 import AdminSystemStatus  from './pages/admin/AdminSystemStatus';
 import AdminQuestionBank       from './pages/admin/AdminQuestionBank';
 import AdminMockExams          from './pages/admin/AdminMockExams';
+import AdminRevenuePool        from './pages/admin/AdminRevenuePool';
 import AdminMockExamEditor     from './pages/admin/AdminMockExamEditor';
 import AdminNews               from './pages/admin/AdminNews';
 import AdminListening               from './pages/admin/AdminListening';
@@ -180,6 +184,9 @@ export default function App() {
             <Route path="/teacher/kanji"    element={<TeacherRoute><TeacherKanji /></TeacherRoute>} />
             <Route path="/teacher/grammar"  element={<TeacherRoute><TeacherGrammar /></TeacherRoute>} />
             <Route path="/teacher/study-lists" element={<TeacherRoute><TeacherStudyLists /></TeacherRoute>} />
+            <Route path="/teacher/listening" element={<TeacherRoute><TeacherListening /></TeacherRoute>} />
+            <Route path="/teacher/reading"   element={<TeacherRoute><TeacherNews /></TeacherRoute>} />
+            <Route path="/teacher/earnings"  element={<TeacherRoute><TeacherEarnings /></TeacherRoute>} />
             {/* <Route path="/teacher/classes"  element={<TeacherRoute><TeacherClasses /></TeacherRoute>} /> */}{/* HIDDEN */}
             <Route path="/teacher/dictionary" element={<TeacherRoute><TeacherDictionary /></TeacherRoute>} />
             <Route path="/teacher/question-bank" element={<TeacherRoute><TeacherQuestionBank /></TeacherRoute>} />
@@ -200,6 +207,7 @@ export default function App() {
             <Route path="/admin/system"     element={<AdminRoute><AdminSystemStatus /></AdminRoute>} />
             <Route path="/admin/questions"  element={<AdminRoute><AdminQuestionBank /></AdminRoute>} />
             <Route path="/admin/mock-exams"     element={<AdminRoute><AdminMockExams /></AdminRoute>} />
+            <Route path="/admin/revenue-pool"   element={<AdminRoute><AdminRevenuePool /></AdminRoute>} />
             <Route path="/admin/mock-exams/:id" element={<AdminRoute><AdminMockExamEditor /></AdminRoute>} />
             <Route path="/admin/news"       element={<AdminRoute><AdminNews /></AdminRoute>} />
             <Route path="/admin/listening"         element={<AdminRoute><AdminListening /></AdminRoute>} />

@@ -22,6 +22,7 @@ const ADMIN_LINKS = (t) => [
   { to: '/chat',               icon: 'smart_toy',       label: 'Trợ lý AI' },
   { to: '/admin/subscriptions', icon: 'workspace_premium', label: 'Đăng ký' },
   { to: '/admin/payments',      icon: 'payments',          label: 'Thanh toán' },
+  { to: '/admin/revenue-pool',  icon: 'savings',           label: 'Quỹ doanh thu' },
   { to: '/admin/system',        icon: 'monitor_heart',     label: 'Hoạt động HT' },
   { to: '/profile',            icon: 'person',          label: 'Hồ sơ' },
 ];

@@ -3,6 +3,7 @@
 const { supabaseAdmin } = require('../config/supabase');
 const { whisperTranscribe } = require('../config/ai');
 const { incrementUsage } = require('../services/quotaService');
+const { logContentUse } = require('../utils/usageTracker');
 
 // Tables are in public schema with listening_ prefix (schema exposure workaround)
 const dlg   = () => supabaseAdmin.from('listening_dialogues');
@@ -27,6 +28,8 @@ exports.getOne = async (req, res) => {
   ]);
   if (e1 || !dialogue) return res.status(404).json({ error: 'Không tìm thấy hội thoại.' });
   if (e2) return res.status(500).json({ error: 'Không tải được nội dung.' });
+  logContentUse({ userId: req.user?.id, contentType: 'listening', contentId: dialogue.id,
+    creatorType: dialogue.creator_type, ownerId: dialogue.created_by });
   res.json({ ...dialogue, lines: dlgLines });
 };
 
@@ -207,4 +210,71 @@ exports.adminDeleteLine = async (req, res) => {
   const { error } = await lines().delete().eq('id', req.params.lineId);
   if (error) return res.status(500).json({ error: error.message || 'Không thể xóa câu.' });
   res.json({ ok: true });
+};
+
+// ── Teacher: own dialogue CRUD (created_by scoped) ────────────────────────────
+
+// Ensure the dialogue belongs to the requesting teacher (admins bypass).
+async function ownsDialogue(id, user) {
+  const { data } = await dlg().select('created_by').eq('id', id).single();
+  if (!data) return false;
+  return data.created_by === user.id || user.user_metadata?.role === 'admin';
+}
+
+exports.listMyDialogues = async (req, res) => {
+  const [{ data: dlgs, error: e1 }, { data: dlgLines, error: e2 }] = await Promise.all([
+    dlg().select('*').eq('created_by', req.user.id).order('created_at', { ascending: false }),
+    lines().select('id, dialogue_id, line_order, speaker, text_jp, text_plain, text_vi').order('line_order'),
+  ]);
+  if (e1) return res.status(500).json({ error: e1.message || 'Không tải được.' });
+  if (e2) return res.status(500).json({ error: e2.message || 'Không tải được lines.' });
+  const map = {};
+  (dlgs || []).forEach(d => { map[d.id] = { ...d, dialogue_lines: [] }; });
+  (dlgLines || []).forEach(l => { if (map[l.dialogue_id]) map[l.dialogue_id].dialogue_lines.push(l); });
+  res.json(Object.values(map));
+};
+
+exports.createMyDialogue = async (req, res) => {
+  const { title, title_vi, level, topic, thumbnail_icon } = req.body;
+  if (!title || !level) return res.status(400).json({ error: 'Cần tiêu đề và cấp độ.' });
+  const { data, error } = await dlg()
+    .insert({ title, title_vi, level, topic, thumbnail_icon: thumbnail_icon || 'headphones',
+      created_by: req.user.id, creator_type: 'teacher', is_published: true })
+    .select().single();
+  if (error) return res.status(500).json({ error: error.message || 'Không thể tạo hội thoại.' });
+  res.json({ ...data, dialogue_lines: [] });
+};
+
+exports.updateMyDialogue = async (req, res) => {
+  if (!(await ownsDialogue(req.params.id, req.user))) return res.status(403).json({ error: 'Không có quyền.' });
+  const { title, title_vi, level, topic, thumbnail_icon } = req.body;
+  const { data, error } = await dlg()
+    .update({ title, title_vi, level, topic, thumbnail_icon, updated_at: new Date().toISOString() })
+    .eq('id', req.params.id).select().single();
+  if (error) return res.status(500).json({ error: error.message || 'Không thể cập nhật.' });
+  res.json(data);
+};
+
+exports.deleteMyDialogue = async (req, res) => {
+  if (!(await ownsDialogue(req.params.id, req.user))) return res.status(403).json({ error: 'Không có quyền.' });
+  const { error } = await dlg().delete().eq('id', req.params.id);
+  if (error) return res.status(500).json({ error: error.message || 'Không thể xóa.' });
+  res.json({ ok: true });
+};
+
+exports.addMyLine = async (req, res) => {
+  if (!(await ownsDialogue(req.params.id, req.user))) return res.status(403).json({ error: 'Không có quyền.' });
+  return exports.adminAddLine(req, res);
+};
+
+exports.updateMyLine = async (req, res) => {
+  const { data: line } = await lines().select('dialogue_id').eq('id', req.params.lineId).single();
+  if (!line || !(await ownsDialogue(line.dialogue_id, req.user))) return res.status(403).json({ error: 'Không có quyền.' });
+  return exports.adminUpdateLine(req, res);
+};
+
+exports.deleteMyLine = async (req, res) => {
+  const { data: line } = await lines().select('dialogue_id').eq('id', req.params.lineId).single();
+  if (!line || !(await ownsDialogue(line.dialogue_id, req.user))) return res.status(403).json({ error: 'Không có quyền.' });
+  return exports.adminDeleteLine(req, res);
 };

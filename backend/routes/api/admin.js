@@ -6,6 +6,7 @@ const { requireAuth, requireAdmin } = require('../../middleware/auth');
 const c = require('../../controllers/adminController');
 const news = require('../../controllers/newsController');
 const ta = require('../../controllers/teacherApplicationController');
+const rp = require('../../controllers/revenuePoolController');
 const { supabaseAdmin } = require('../../config/supabase');
 
 const upload = multer({
@@ -196,6 +197,13 @@ router.post('/submissions/kanji/:id/review',  c.reviewKanji);
 // Teacher applications
 router.get('/teacher-applications',             ta.adminListApplications);
 router.post('/teacher-applications/:id/review', ta.adminReviewApplication);
+
+// Revenue-share pool
+router.get('/revenue-pool/config',          rp.getConfig);
+router.put('/revenue-pool/config',          rp.updateConfig);
+router.get('/revenue-pool',                 rp.getPeriod);
+router.post('/revenue-pool/:period/finalize', rp.finalize);
+router.post('/teacher-payouts/:id/paid',    rp.markPaid);
 
 // Quizzes
 router.get('/quizzes',         c.listQuizzes);
