@@ -366,6 +366,10 @@ exports.getCourseBuilder = async (req, res) => {
     const { data: course, error: cErr } = await supabaseAdmin.from('courses').select('*').eq('id', courseId).single();
     if (cErr || !course) return res.status(404).json({ error: 'Không tìm thấy khóa học.' });
 
+    // View compat không có price/phân loại — lấy thêm từ bảng gốc (như updateCourse).
+    const { data: extra } = await contentDb.from('courses')
+      .select('is_free,price,creator_type,reference_curriculum,difficulty_level').eq('id', courseId).single();
+
     const [{ data: units }, { data: lessons }] = await Promise.all([
       contentDb.from('units').select('*').eq('course_id', courseId).order('sort_order'),
       supabaseAdmin.from('lessons')
@@ -374,7 +378,7 @@ exports.getCourseBuilder = async (req, res) => {
     ]);
     const items = lessons || [];
     const unitsWithItems = (units || []).map(u => ({ ...u, lessons: items.filter(l => l.unit_id === u.id) }));
-    res.json({ ...course, units: unitsWithItems });
+    res.json({ ...course, ...(extra || {}), units: unitsWithItems });
   } catch (err) { res.status(500).json({ error: 'Lỗi tải dữ liệu.' }); }
 };
 

@@ -247,13 +247,16 @@ router.post('/listening/dialogues/:id/lines',   lc.adminAddLine);
 router.put('/listening/lines/:lineId',          lc.adminUpdateLine);
 router.delete('/listening/lines/:lineId',       lc.adminDeleteLine);
 
-// News (Luyện đọc báo)
-router.post('/news/generate-segments', news.generateSegments);
-router.get('/news',                    news.adminList);
-router.get('/news/:id',                news.adminGetOne);
-router.post('/news',                   news.create);
-router.put('/news/:id',                news.update);
-router.delete('/news/:id',             news.remove);
+// News (Luyện đọc)
+router.post('/news/generate-article',       news.generateArticle);
+router.post('/news/generate-segments',      news.generateSegments);
+router.post('/news/generate-questions',     news.generateQuestions);
+router.post('/news/generate-vocab-grammar', news.generateVocabGrammar);
+router.get('/news',                         news.adminList);
+router.get('/news/:id',                     news.adminGetOne);
+router.post('/news',                        news.create);
+router.put('/news/:id',                     news.update);
+router.delete('/news/:id',                  news.remove);
 
 // Subscription / payments (admin)
 const sc = require('../../controllers/subscriptionController');

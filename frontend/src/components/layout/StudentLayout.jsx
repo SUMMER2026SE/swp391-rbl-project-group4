@@ -1,4 +1,4 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import { useAuth } from '../../contexts/AuthContext';
@@ -17,9 +17,10 @@ const STUDENT_LINKS = (t) => [
   { to: '/writing',        icon: 'edit_note',        label: 'Luyện viết' },
   { to: '/dictionary',     icon: 'auto_stories',     label: t('dictionary.title') },
   { to: '/flashcards',     icon: 'style',            label: 'Thẻ ghi nhớ' },
-  { to: '/news',           icon: 'newspaper',        label: 'Đọc báo' },
-  // { to: '/classes',        icon: 'groups',           label: 'Lớp học' }, // HIDDEN
-  { to: '/exams',          icon: 'quiz',             label: 'Đề thi' },
+  { to: '/news',           icon: 'newspaper',        label: 'Luyện đọc' },
+  // Ẩn khỏi sidebar theo yêu cầu (giữ nguyên route/API/component để bật lại sau)
+  // { to: '/classes',        icon: 'groups',           label: 'Lớp học' },
+  // { to: '/exams',          icon: 'quiz',             label: 'Đề thi' },
   { to: '/mock-exams',     icon: 'fact_check',       label: 'Thi thử JLPT' },
   { to: '/chat',           icon: 'smart_toy',        label: 'Trợ lý AI' },
   { to: '/profile',        icon: 'person',           label: t('profile.title') },
@@ -30,8 +31,17 @@ export default function StudentLayout({ children, title }) {
   const { t } = useLang();
   const navigate = useNavigate();
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState(() => localStorage.getItem('sidebar_collapsed') === '1');
   const { data: subData, loading: subLoading } = useSubscription();
   const isPremium = subData?.tier === 'premium';
+
+  const toggleSidebar = () => {
+    setCollapsed(prev => {
+      const next = !prev;
+      localStorage.setItem('sidebar_collapsed', next ? '1' : '0');
+      return next;
+    });
+  };
 
   const handleLogout = async () => {
     await logout();
@@ -40,9 +50,9 @@ export default function StudentLayout({ children, title }) {
 
   return (
     <div className="flex min-h-screen bg-surface">
-      <Sidebar links={STUDENT_LINKS(t)} />
+      <Sidebar links={STUDENT_LINKS(t)} collapsed={collapsed} onToggle={toggleSidebar} />
 
-      <div className="flex-1 md:ml-64 flex flex-col">
+      <div className={`flex-1 flex flex-col transition-all duration-200 ${collapsed ? 'md:ml-20' : 'md:ml-64'}`}>
         {/* Topbar */}
         <header className="sticky top-0 z-30 bg-white/80 backdrop-blur-md border-b border-outline/30 h-16 flex items-center justify-between px-6">
           <div className="flex items-center gap-2">

@@ -464,3 +464,47 @@ WHERE NOT EXISTS (
   SELECT 1 FROM public.feature_entitlements e
   WHERE e.tier = v.tier AND e.feature_code = 'flashcard_ai_suggest_daily'
 );
+
+-- ─── MATERIALS v2: "Luyện đọc" — metadata, quiz, từ vựng/ngữ pháp, lượt đọc ───
+-- Nâng cấp news_articles: quiz đọc hiểu (questions), từ vựng (vocab), ngữ pháp
+-- (grammar) sinh sẵn lúc admin tạo bài; view_count đếm user duy nhất; published_at
+-- là "ngày đăng" hiển thị. Bảng news_article_reads dedupe lượt xem + đếm quota
+-- bài mới/ngày. Idempotent — chạy lại an toàn.
+
+ALTER TABLE materials_module.news_articles
+  ADD COLUMN IF NOT EXISTS questions    jsonb DEFAULT '[]'::jsonb,
+  ADD COLUMN IF NOT EXISTS vocab        jsonb DEFAULT '[]'::jsonb,
+  ADD COLUMN IF NOT EXISTS grammar      jsonb DEFAULT '[]'::jsonb,
+  ADD COLUMN IF NOT EXISTS view_count   int NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS published_at timestamptz;
+
+-- Backfill ngày đăng cho bài đã publish trước migration
+UPDATE materials_module.news_articles
+SET published_at = created_at
+WHERE is_published = true AND published_at IS NULL;
+
+-- Lượt đọc: mỗi (bài, user) 1 dòng — dedupe view_count + đếm giới hạn bài mới/ngày
+CREATE TABLE IF NOT EXISTS materials_module.news_article_reads (
+  article_id    uuid NOT NULL REFERENCES materials_module.news_articles(id) ON DELETE CASCADE,
+  user_id       uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  first_read_at timestamptz DEFAULT now(),
+  read_date     date DEFAULT CURRENT_DATE,
+  PRIMARY KEY (article_id, user_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_news_reads_user_date
+  ON materials_module.news_article_reads (user_id, read_date);
+
+GRANT ALL ON materials_module.news_article_reads TO anon, authenticated, service_role;
+
+-- RLS bật, không policy: chỉ backend (service-role, bypass RLS) được ghi/đọc
+ALTER TABLE materials_module.news_article_reads ENABLE ROW LEVEL SECURITY;
+
+-- Quota: free = 2 bài MỚI/ngày (bài đã đọc mở lại không tính), premium = -1
+INSERT INTO public.feature_entitlements (tier, feature_code, limit_value, period_type)
+SELECT v.tier, 'news_read_daily', v.lim, 'daily'
+FROM (VALUES ('free', 2), ('premium', -1)) AS v(tier, lim)
+WHERE NOT EXISTS (
+  SELECT 1 FROM public.feature_entitlements e
+  WHERE e.tier = v.tier AND e.feature_code = 'news_read_daily'
+);
