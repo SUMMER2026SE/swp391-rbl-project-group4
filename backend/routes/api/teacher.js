@@ -104,6 +104,18 @@ router.post('/my-kanji',                   c.createMyKanji);
 router.put('/my-kanji/:id',                c.updateMyKanji);
 router.delete('/my-kanji/:id',             c.deleteMyKanji);
 
+// ── Quiz của Mục (lesson quiz) — sở hữu kiểm tra qua khóa do chính mình tạo ──
+router.get('/quizzes',                            c.listLessonQuizzes);
+router.post('/quizzes',                           c.createLessonQuiz);
+router.put('/quizzes/:id',                        c.updateLessonQuiz);
+router.delete('/quizzes/:id',                     c.deleteLessonQuiz);
+router.get('/quizzes/:quizId/questions',          c.listLessonQuizQuestions);
+router.post('/quizzes/:quizId/import-from-bank',  c.importLessonQuizFromBank);
+router.get('/quizzes/:quizId/attempts',           c.listLessonQuizAttempts);
+router.post('/questions',                         c.createLessonQuizQuestion);
+router.put('/questions/:id',                      c.updateLessonQuizQuestion);
+router.delete('/questions/:id',                   c.deleteLessonQuizQuestion);
+
 // ── Private question bank ─────────────────────────────────────────────────────
 router.get('/question-bank/stats',          qb.questionBankStats);
 router.get('/question-bank',                qb.listQuestionBank);

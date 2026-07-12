@@ -144,7 +144,6 @@ export default function AdminCourses() {
   const [loading, setLoading]   = useState(true);
   const [modal, setModal]       = useState(false);
   const [form, setForm]         = useState(EMPTY);
-  const [editId, setEditId]     = useState(null);
   const [saving, setSaving]     = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleting, setDeleting] = useState(false);
@@ -183,25 +182,14 @@ export default function AdminCourses() {
     return () => clearTimeout(t);
   }, [fetchCourses]);
 
-  const openCreate = () => { setForm(EMPTY); setEditId(null); setModal(true); };
-  const openEdit = (row) => {
-    setForm({
-      title: row.title || '', title_ja: row.title_ja || '',
-      description: row.description || '', description_ja: row.description_ja || '',
-      level: row.level || '', thumbnail_url: row.thumbnail_url || '', is_published: row.is_published || false,
-      reference_curriculum: row.reference_curriculum || '',
-    });
-    setEditId(row.id);
-    setModal(true);
-  };
+  const openCreate = () => { setForm(EMPTY); setModal(true); };
 
   const handleSave = async () => {
     if (!form.title.trim()) return showAlert('error', 'Tiêu đề không được để trống.');
     setSaving(true);
     try {
-      if (editId) await api.put(`/admin/courses/${editId}`, form);
-      else        await api.post('/admin/courses', form);
-      showAlert('success', editId ? 'Cập nhật khóa học thành công.' : 'Tạo khóa học thành công.');
+      await api.post('/admin/courses', form);
+      showAlert('success', 'Tạo khóa học thành công.');
       setModal(false);
       fetchCourses();
     } catch (e) {
@@ -324,7 +312,7 @@ export default function AdminCourses() {
           {data.map(course => (
             <CourseManageCard key={course.id} course={course}
               onManage={(c) => navigate(`/admin/courses/${c.id}/edit`)}
-              onEdit={openEdit}
+              onEdit={(c) => navigate(`/admin/courses/${c.id}/edit`)}
               onTogglePublish={togglePublish}
               onDelete={setDeleteTarget}
               uploadCover={uploadCover}
@@ -344,9 +332,9 @@ export default function AdminCourses() {
         </div>
       )}
 
-      {/* Create / Edit Modal */}
-      <Modal open={modal} onClose={() => setModal(false)} title={editId ? 'Chỉnh sửa khóa học' : 'Tạo khóa học mới'}
-        footer={<><Button variant="secondary" onClick={() => setModal(false)}>Hủy</Button><Button loading={saving} onClick={handleSave}>{editId ? 'Lưu thay đổi' : 'Tạo khóa học'}</Button></>}>
+      {/* Create Modal */}
+      <Modal open={modal} onClose={() => setModal(false)} title="Tạo khóa học mới"
+        footer={<><Button variant="secondary" onClick={() => setModal(false)}>Hủy</Button><Button loading={saving} onClick={handleSave}>Tạo khóa học</Button></>}>
         <CourseForm form={form} onChange={setForm} />
       </Modal>
 

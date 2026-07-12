@@ -20,8 +20,8 @@ const LESSON_TYPES = [
 ];
 const typeMeta = (t) => LESSON_TYPES.find(x => x.value === t) || LESSON_TYPES[1];
 
-// Loại có trình soạn chuyên sâu cho giáo viên (quiz hiện chưa có → dùng /teacher/quizzes).
-const DEEP_TYPES = new Set(['video', 'reading', 'vocabulary', 'kanji', 'grammar']);
+// Loại có trình soạn chuyên sâu cho giáo viên.
+const DEEP_TYPES = new Set(['video', 'reading', 'vocabulary', 'kanji', 'grammar', 'quiz']);
 // Loại có nội dung có thể nhập file ngay sau khi tạo.
 const IMPORT_TYPES = new Set(['vocabulary', 'kanji', 'grammar']);
 // Map lesson_type → ImportFileModal type prop
@@ -175,10 +175,9 @@ export default function TeacherCourseContent() {
   };
 
   // ── Lessons (Mục) ──────────────────────────────────────────────────────────
-  // Mở trình soạn chuyên sâu theo loại (video/reading/vocabulary/kanji/grammar).
+  // Mở trình soạn chuyên sâu theo loại (video/reading/vocabulary/kanji/grammar/quiz).
   const openDeepEditor = (item) => {
-    if (DEEP_TYPES.has(item.lesson_type)) navigate(`/teacher/lessons/${item.id}/${item.lesson_type}`);
-    else showAlert('info', 'Trình soạn Quiz cho giáo viên đang phát triển. Tạm thời dùng mục "Bài kiểm tra".');
+    navigate(`/teacher/lessons/${item.id}/${item.lesson_type}`);
   };
 
   const openAddItem = (unit) => { setItemForm(EMPTY_ITEM); setEditingItem(null); setTargetUnit(unit); setItemModal(true); };
@@ -406,7 +405,7 @@ export default function TeacherCourseContent() {
           ) : (
             <Input label="Thời lượng (phút)" type="number" min="0" value={itemForm.duration_minutes} onChange={e => setItemForm(f => ({ ...f, duration_minutes: e.target.value }))} placeholder="0" />
           )}
-          {!editingItem && !isQuiz && (
+          {!editingItem && (
             <p className="text-xs text-on-muted">
               {IMPORT_TYPES.has(itemForm.lesson_type)
                 ? 'Sau khi tạo, bạn có thể nhập nội dung từ file/JSON hoặc soạn thủ công.'

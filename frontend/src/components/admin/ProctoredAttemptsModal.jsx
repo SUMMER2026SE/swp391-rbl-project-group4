@@ -13,7 +13,7 @@ const VIOLATION_VI = {
 };
 
 // Modal xem bài làm chế độ giám sát: điểm, log vi phạm, ảnh webcam.
-export default function ProctoredAttemptsModal({ open, onClose, quizId }) {
+export default function ProctoredAttemptsModal({ open, onClose, quizId, apiBase = '/admin' }) {
   const [attempts, setAttempts] = useState([]);
   const [loading, setLoading]   = useState(false);
   const [zoomImg, setZoomImg]   = useState(null);
@@ -21,11 +21,11 @@ export default function ProctoredAttemptsModal({ open, onClose, quizId }) {
   useEffect(() => {
     if (!open || !quizId) return;
     setLoading(true);
-    api.get(`/admin/quizzes/${quizId}/attempts`)
+    api.get(`${apiBase}/quizzes/${quizId}/attempts`)
       .then(r => setAttempts(r.data || []))
       .catch(() => setAttempts([]))
       .finally(() => setLoading(false));
-  }, [open, quizId]);
+  }, [open, quizId, apiBase]);
 
   return (
     <Modal open={open} onClose={onClose} title="Bài làm — chế độ giám sát" size="xl"

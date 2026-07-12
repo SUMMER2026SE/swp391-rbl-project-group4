@@ -178,6 +178,7 @@ export default function App() {
             <Route path="/teacher/lessons/:lessonId/reading"    element={<TeacherRoute><AdminLessonReading /></TeacherRoute>} />
             <Route path="/teacher/lessons/:lessonId/vocabulary" element={<TeacherRoute><AdminLessonVocabulary /></TeacherRoute>} />
             <Route path="/teacher/lessons/:lessonId/kanji"      element={<TeacherRoute><AdminLessonKanji /></TeacherRoute>} />
+            <Route path="/teacher/lessons/:lessonId/quiz"       element={<TeacherRoute><AdminLessonQuiz /></TeacherRoute>} />
             <Route path="/teacher/vocab" element={<TeacherRoute><TeacherVocabulary /></TeacherRoute>} />
             <Route path="/teacher/kanji"    element={<TeacherRoute><TeacherKanji /></TeacherRoute>} />
             <Route path="/teacher/grammar"  element={<TeacherRoute><TeacherGrammar /></TeacherRoute>} />

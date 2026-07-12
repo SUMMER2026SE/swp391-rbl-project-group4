@@ -4,6 +4,7 @@ import AdminLayout from '../../components/layout/AdminLayout';
 import Modal from '../../components/ui/Modal';
 import Button from '../../components/ui/Button';
 import Alert from '../../components/ui/Alert';
+import CourseForm, { EMPTY } from '../../components/teacher/CourseForm';
 import api from '../../lib/api';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -234,6 +235,11 @@ export default function ManageCourseContent() {
   const [saving, setSaving]   = useState(false);
   const [alert, setAlert]     = useState({ type: '', msg: '' });
 
+  // Panel "Thông tin khóa học" (sửa inline, thay cho popup ở trang danh sách)
+  const [infoOpen, setInfoOpen]     = useState(false);
+  const [infoForm, setInfoForm]     = useState(EMPTY);
+  const [savingInfo, setSavingInfo] = useState(false);
+
   // Unit modal
   const [unitModal, setUnitModal]     = useState(false);
   const [unitForm, setUnitForm]       = useState(EMPTY_UNIT);
@@ -249,6 +255,15 @@ export default function ManageCourseContent() {
 
   const dragUnitIdx = useRef(null);
 
+  // Admin không có giá — khóa admin luôn miễn phí.
+  const courseToForm = (c) => ({
+    title: c.title || '', title_ja: c.title_ja || '',
+    description: c.description || '', description_ja: c.description_ja || '',
+    level: c.level || '', thumbnail_url: c.thumbnail_url || '',
+    is_published: c.is_published || false, price: '',
+    reference_curriculum: c.reference_curriculum || '',
+  });
+
   // ── Data ───────────────────────────────────────────────────────────────────
   const loadCourse = async () => {
     setLoading(true);
@@ -256,6 +271,7 @@ export default function ManageCourseContent() {
       const r = await api.get(`/admin/courses/${courseId}/builder`);
       setCourse(r.data);
       setUnits(r.data.units || []);
+      setInfoForm(courseToForm(r.data));
     } catch (e) {
       setAlert({ type: 'error', msg: e.message || 'Không thể tải khóa học.' });
     } finally {
@@ -264,12 +280,47 @@ export default function ManageCourseContent() {
   };
   useEffect(() => { loadCourse(); }, [courseId]);
 
+  // ── Thông tin khóa học (panel inline) ─────────────────────────────────────────
+  const handleSaveInfo = async () => {
+    if (!infoForm.title.trim()) return setAlert({ type: 'error', msg: 'Tiêu đề không được để trống.' });
+
+    const payload = {
+      title: infoForm.title, title_ja: infoForm.title_ja,
+      description: infoForm.description, description_ja: infoForm.description_ja,
+      level: infoForm.level, thumbnail_url: infoForm.thumbnail_url,
+      is_published: infoForm.is_published,
+    };
+    if (infoForm.reference_curriculum) payload.reference_curriculum = infoForm.reference_curriculum;
+
+    setSavingInfo(true);
+    try {
+      const r = await api.put(`/admin/courses/${courseId}`, payload);
+      const updated = { ...course, ...r.data };
+      setCourse(updated);
+      setInfoForm(courseToForm(updated));
+      setAlert({ type: 'success', msg: 'Đã cập nhật thông tin khóa học.' });
+    } catch (e) { setAlert({ type: 'error', msg: e.message }); } finally { setSavingInfo(false); }
+  };
+
+  const handleCancelInfo = () => {
+    setInfoForm(courseToForm(course));
+    setInfoOpen(false);
+  };
+
+  const uploadCover = async (file) => {
+    const fd = new FormData();
+    fd.append('image', file);
+    const r = await api.post('/admin/courses/upload-cover', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+    return r.data.url;
+  };
+
   // ── Publish / Preview ────────────────────────────────────────────────────────
   const handlePublishToggle = async () => {
     setSaving(true);
     try {
       const r = await api.put(`/admin/courses/${courseId}`, { is_published: !course.is_published });
       setCourse(prev => ({ ...prev, is_published: r.data.is_published }));
+      setInfoForm(f => ({ ...f, is_published: r.data.is_published }));
       setAlert({ type: 'success', msg: r.data.is_published ? 'Đã xuất bản khóa học.' : 'Đã đưa về bản nháp.' });
     } catch (e) { setAlert({ type: 'error', msg: e.message }); } finally { setSaving(false); }
   };
@@ -446,6 +497,33 @@ export default function ManageCourseContent() {
             {saving ? 'Đang lưu...' : course.is_published ? 'Bỏ xuất bản' : 'Xuất bản'}
           </button>
         </div>
+      </section>
+
+      {/* Thông tin khóa học (sửa inline) */}
+      <section className="mb-6 bg-white border border-outline/30 shadow-sm rounded-2xl overflow-hidden">
+        <button onClick={() => setInfoOpen(o => !o)}
+          className="w-full flex items-center justify-between px-5 py-4 text-left hover:bg-surface-container-lowest/40 transition-colors">
+          <div className="flex items-center gap-3">
+            <span className="w-8 h-8 rounded-full bg-tsubaki-red/10 text-tsubaki-red flex items-center justify-center shrink-0">
+              <span className="material-symbols-outlined text-lg">edit_note</span>
+            </span>
+            <div>
+              <h3 className="font-semibold text-on-surface text-sm">Thông tin khóa học</h3>
+              <p className="text-xs text-on-muted">Tiêu đề, cấp độ, ảnh bìa, mô tả, trạng thái xuất bản</p>
+            </div>
+          </div>
+          <span className="material-symbols-outlined text-on-muted transition-transform" style={{ transform: infoOpen ? 'rotate(180deg)' : 'none' }}>expand_more</span>
+        </button>
+        {infoOpen && (
+          <div className="px-5 pb-5 border-t border-outline/10 pt-4">
+            <CourseForm form={infoForm} onChange={setInfoForm} editing hidePrice
+              uploadCover={uploadCover} onError={(m) => setAlert({ type: 'error', msg: m })} />
+            <div className="flex justify-end gap-2 mt-4">
+              <Button variant="secondary" onClick={handleCancelInfo}>Hủy</Button>
+              <Button loading={savingInfo} onClick={handleSaveInfo}>Lưu thông tin</Button>
+            </div>
+          </div>
+        )}
       </section>
 
       {/* Builder */}
