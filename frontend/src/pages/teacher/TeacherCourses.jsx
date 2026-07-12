@@ -3,13 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import TeacherLayout from '../../components/layout/TeacherLayout';
 import Modal from '../../components/ui/Modal';
 import Button from '../../components/ui/Button';
-import Input from '../../components/ui/Input';
 import Alert from '../../components/ui/Alert';
 import CourseManageCard from '../../components/admin/CourseManageCard';
-import { formatVnd } from '../../lib/format';
+import CourseForm, { EMPTY, LEVELS } from '../../components/teacher/CourseForm';
 import api from '../../lib/api';
-
-const LEVELS = ['N5', 'N4', 'N3', 'N2', 'N1', 'Business'];
 
 const SORTS = [
   { value: 'newest', label: 'Mới nhất' },
@@ -22,82 +19,6 @@ const TABS = [
   { value: 'draft',     label: 'Nháp',     dot: 'bg-amber-500' },
 ];
 
-const EMPTY = {
-  title: '', title_ja: '', description: '', description_ja: '',
-  level: '', thumbnail_url: '', is_published: false,
-  price: '', reference_curriculum: '',
-};
-
-// ── Form ─────────────────────────────────────────────────────────────────────
-function CourseForm({ form, onChange, editing }) {
-  const validThumb = form.thumbnail_url && /^https?:\/\/.+/.test(form.thumbnail_url);
-  const priceNum = Number(form.price);
-  const showPayout = Number.isFinite(priceNum) && priceNum > 0;
-
-  return (
-    <div className="space-y-4">
-      {validThumb && (
-        <div className="relative h-36 rounded-xl overflow-hidden bg-surface-low">
-          <img src={form.thumbnail_url} alt="preview" className="w-full h-full object-cover"
-            onError={e => { e.currentTarget.parentElement.style.display = 'none'; }} />
-          <span className="absolute bottom-2 right-2 text-[10px] bg-black/50 text-white px-1.5 py-0.5 rounded">Preview</span>
-        </div>
-      )}
-
-      <Input label="Tiêu đề (Tiếng Việt) *" value={form.title}
-        onChange={e => onChange({ ...form, title: e.target.value })} placeholder="Nhập tên khóa học..." />
-      <Input label="Tiêu đề (Tiếng Nhật)" value={form.title_ja}
-        onChange={e => onChange({ ...form, title_ja: e.target.value })} placeholder="コース名を入力..." />
-
-      <div>
-        <label className="block text-sm font-medium text-on-muted mb-1">Cấp độ JLPT</label>
-        <select value={form.level} onChange={e => onChange({ ...form, level: e.target.value })}
-          className="w-full px-4 py-3 bg-white border border-outline rounded-xl text-sm outline-none focus:border-tsubaki-red focus:ring-2 focus:ring-tsubaki-red/10 transition-all">
-          <option value="">-- Chọn cấp độ --</option>
-          {LEVELS.map(l => <option key={l} value={l}>{l}</option>)}
-        </select>
-      </div>
-
-      <div>
-        <Input
-          label={editing ? 'Giá khóa học (₫) — để trống nếu không đổi' : 'Giá khóa học (₫) *'}
-          type="number" min="0" value={form.price}
-          onChange={e => onChange({ ...form, price: e.target.value })} placeholder="VD: 299000" />
-        <div className="mt-1.5 flex items-start gap-2 text-xs text-on-muted bg-sumire-purple/5 border border-sumire-purple/15 rounded-lg px-3 py-2">
-          <span className="material-symbols-outlined text-[16px] text-sumire-purple shrink-0">info</span>
-          <span>
-            Kizuna Nihongo giữ lại <strong>10% hoa hồng</strong>, bạn nhận <strong>90%</strong>.
-            {showPayout && <> Với giá này, bạn nhận <strong>{formatVnd(priceNum * 0.9)}</strong>/lượt mua.</>}
-          </span>
-        </div>
-      </div>
-
-      <Input label="URL Thumbnail (hoặc tải ảnh bìa trực tiếp trên thẻ)" value={form.thumbnail_url}
-        onChange={e => onChange({ ...form, thumbnail_url: e.target.value })} placeholder="https://example.com/image.jpg" />
-      <Input label="Giáo trình tham chiếu" value={form.reference_curriculum}
-        onChange={e => onChange({ ...form, reference_curriculum: e.target.value })} placeholder="VD: Minna no Nihongo Shokyu 1" />
-
-      <div>
-        <label className="block text-sm font-medium text-on-muted mb-1">Mô tả (Tiếng Việt)</label>
-        <textarea value={form.description} onChange={e => onChange({ ...form, description: e.target.value })} rows={3}
-          placeholder="Mô tả nội dung và mục tiêu khóa học..."
-          className="w-full px-4 py-3 bg-white border border-outline rounded-xl text-sm outline-none focus:border-tsubaki-red focus:ring-2 focus:ring-tsubaki-red/10 transition-all resize-none" />
-      </div>
-
-      <div>
-        <label className="block text-sm font-medium text-on-muted mb-1">Trạng thái</label>
-        <button type="button" onClick={() => onChange({ ...form, is_published: !form.is_published })}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border text-sm font-medium transition-all ${
-            form.is_published ? 'bg-green-50 border-green-300 text-green-700 hover:bg-green-100' : 'bg-surface-low border-outline text-on-muted hover:bg-outline/20'}`}>
-          <span className="material-symbols-outlined text-[18px]">{form.is_published ? 'public' : 'draft'}</span>
-          {form.is_published ? 'Xuất bản (học viên thấy được)' : 'Bản nháp'}
-        </button>
-        <p className="text-xs text-on-muted mt-1">Nhớ thêm bài học trước khi xuất bản để học viên có nội dung học.</p>
-      </div>
-    </div>
-  );
-}
-
 // ── Page ─────────────────────────────────────────────────────────────────────
 export default function TeacherCourses() {
   const navigate = useNavigate();
@@ -105,7 +26,6 @@ export default function TeacherCourses() {
   const [loading, setLoading] = useState(true);
   const [modal, setModal]     = useState(false);
   const [form, setForm]       = useState(EMPTY);
-  const [editId, setEditId]   = useState(null);
   const [saving, setSaving]   = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleting, setDeleting] = useState(false);
@@ -154,41 +74,27 @@ export default function TeacherCourses() {
     return arr;
   }, [courses, tab, filterLevel, search, sort]);
 
-  const openCreate = () => { setForm(EMPTY); setEditId(null); setModal(true); };
-  const openEdit = (row) => {
-    setForm({
-      title: row.title || '', title_ja: row.title_ja || '',
-      description: row.description || '', description_ja: row.description_ja || '',
-      level: row.level || '', thumbnail_url: row.thumbnail_url || '',
-      is_published: row.is_published || false, price: '', reference_curriculum: '',
-    });
-    setEditId(row.id);
-    setModal(true);
-  };
+  const openCreate = () => { setForm(EMPTY); setModal(true); };
 
   const handleSave = async () => {
     if (!form.title.trim()) return showAlert('error', 'Tiêu đề không được để trống.');
     const priceNum = Number(form.price);
-    const priceProvided = form.price !== '' && form.price !== null;
-    if (!editId && (!Number.isFinite(priceNum) || priceNum <= 0))
+    if (!Number.isFinite(priceNum) || priceNum <= 0)
       return showAlert('error', 'Khóa học có phí: giá phải lớn hơn 0.');
-    if (editId && priceProvided && (!Number.isFinite(priceNum) || priceNum <= 0))
-      return showAlert('error', 'Giá phải lớn hơn 0.');
 
     const payload = {
       title: form.title, title_ja: form.title_ja,
       description: form.description, description_ja: form.description_ja,
       level: form.level, thumbnail_url: form.thumbnail_url,
       is_published: form.is_published,
+      price: priceNum,
     };
-    if (priceProvided) payload.price = priceNum;
     if (form.reference_curriculum) payload.reference_curriculum = form.reference_curriculum;
 
     setSaving(true);
     try {
-      if (editId) await api.put(`/teacher/courses/${editId}`, payload);
-      else        await api.post('/teacher/courses', payload);
-      showAlert('success', editId ? 'Đã cập nhật khóa học.' : 'Đã tạo khóa học.');
+      await api.post('/teacher/courses', payload);
+      showAlert('success', 'Đã tạo khóa học.');
       setModal(false);
       fetchCourses();
     } catch (e) {
@@ -304,7 +210,7 @@ export default function TeacherCourses() {
           {visible.map(course => (
             <CourseManageCard key={course.id} course={course}
               onManage={(c) => navigate(`/teacher/courses/${c.id}/edit`)}
-              onEdit={openEdit}
+              onEdit={(c) => navigate(`/teacher/courses/${c.id}/edit`)}
               onTogglePublish={togglePublish}
               onDelete={setDeleteTarget}
               uploadCover={uploadCover}
@@ -315,10 +221,10 @@ export default function TeacherCourses() {
         </div>
       )}
 
-      {/* Create / Edit */}
-      <Modal open={modal} onClose={() => setModal(false)} title={editId ? 'Chỉnh sửa khóa học' : 'Tạo khóa học mới'}
-        footer={<><Button variant="secondary" onClick={() => setModal(false)}>Hủy</Button><Button loading={saving} onClick={handleSave}>{editId ? 'Lưu thay đổi' : 'Tạo khóa học'}</Button></>}>
-        <CourseForm form={form} onChange={setForm} editing={!!editId} />
+      {/* Create */}
+      <Modal open={modal} onClose={() => setModal(false)} title="Tạo khóa học mới"
+        footer={<><Button variant="secondary" onClick={() => setModal(false)}>Hủy</Button><Button loading={saving} onClick={handleSave}>Tạo khóa học</Button></>}>
+        <CourseForm form={form} onChange={setForm} editing={false} />
       </Modal>
 
       {/* Delete confirm */}

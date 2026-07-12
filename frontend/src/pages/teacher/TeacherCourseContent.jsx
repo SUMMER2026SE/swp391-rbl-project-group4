@@ -6,6 +6,8 @@ import Button from '../../components/ui/Button';
 import Input from '../../components/ui/Input';
 import Alert from '../../components/ui/Alert';
 import ImportFileModal from '../../components/admin/ImportFileModal';
+import CourseForm, { EMPTY } from '../../components/teacher/CourseForm';
+import { formatVnd } from '../../lib/format';
 import api from '../../lib/api';
 
 const LESSON_TYPES = [
@@ -38,6 +40,16 @@ export default function TeacherCourseContent() {
   const [saving, setSaving]   = useState(false);
   const [alert, setAlert]     = useState({ type: '', msg: '' });
 
+  // Panel "Thông tin khóa học" (sửa inline, thay cho popup ở trang danh sách)
+  const [infoOpen, setInfoOpen]     = useState(false);
+  const [infoForm, setInfoForm]     = useState(EMPTY);
+  const [savingInfo, setSavingInfo] = useState(false);
+
+  // Popup "Thay đổi giá" — giá có luồng lưu riêng, tách khỏi Lưu thông tin
+  const [priceModal, setPriceModal]   = useState(false);
+  const [priceInput, setPriceInput]   = useState('');
+  const [savingPrice, setSavingPrice] = useState(false);
+
   const [unitModal, setUnitModal]     = useState(false);
   const [unitForm, setUnitForm]       = useState(EMPTY_UNIT);
   const [editingUnit, setEditingUnit] = useState(null);
@@ -61,12 +73,22 @@ export default function TeacherCourseContent() {
 
   const showAlert = (type, msg) => { setAlert({ type, msg }); setTimeout(() => setAlert({ type: '', msg: '' }), 4000); };
 
+  // Giá không nằm trong form panel — chỉnh qua popup "Thay đổi giá" riêng.
+  const courseToForm = (c) => ({
+    title: c.title || '', title_ja: c.title_ja || '',
+    description: c.description || '', description_ja: c.description_ja || '',
+    level: c.level || '', thumbnail_url: c.thumbnail_url || '',
+    is_published: c.is_published || false, price: '',
+    reference_curriculum: c.reference_curriculum || '',
+  });
+
   const loadCourse = async () => {
     setLoading(true);
     try {
       const r = await api.get(`/teacher/courses/${courseId}/builder`);
       setCourse(r.data);
       setUnits(r.data.units || []);
+      setInfoForm(courseToForm(r.data));
     } catch (e) { showAlert('error', e.message); }
     finally { setLoading(false); }
   };
@@ -77,8 +99,57 @@ export default function TeacherCourseContent() {
     try {
       const r = await api.put(`/teacher/courses/${courseId}`, { is_published: !course.is_published });
       setCourse(prev => ({ ...prev, is_published: r.data.is_published }));
+      setInfoForm(f => ({ ...f, is_published: r.data.is_published }));
       showAlert('success', r.data.is_published ? 'Đã xuất bản khóa học.' : 'Đã đưa về bản nháp.');
     } catch (e) { showAlert('error', e.message); } finally { setSaving(false); }
+  };
+
+  const handleSaveInfo = async () => {
+    if (!infoForm.title.trim()) return showAlert('error', 'Tiêu đề không được để trống.');
+
+    const payload = {
+      title: infoForm.title, title_ja: infoForm.title_ja,
+      description: infoForm.description, description_ja: infoForm.description_ja,
+      level: infoForm.level, thumbnail_url: infoForm.thumbnail_url,
+      is_published: infoForm.is_published,
+    };
+    if (infoForm.reference_curriculum) payload.reference_curriculum = infoForm.reference_curriculum;
+
+    setSavingInfo(true);
+    try {
+      const r = await api.put(`/teacher/courses/${courseId}`, payload);
+      const updated = { ...course, ...r.data };
+      setCourse(updated);
+      setInfoForm(courseToForm(updated));
+      showAlert('success', 'Đã cập nhật thông tin khóa học.');
+    } catch (e) { showAlert('error', e.message); } finally { setSavingInfo(false); }
+  };
+
+  const handleCancelInfo = () => {
+    setInfoForm(courseToForm(course));
+    setInfoOpen(false);
+  };
+
+  const openPriceModal = () => { setPriceInput(course.price ?? ''); setPriceModal(true); };
+
+  const handleSavePrice = async () => {
+    const priceNum = Number(priceInput);
+    if (priceInput === '' || !Number.isFinite(priceNum) || priceNum <= 0)
+      return showAlert('error', 'Giá phải lớn hơn 0.');
+    setSavingPrice(true);
+    try {
+      const r = await api.put(`/teacher/courses/${courseId}`, { price: priceNum });
+      setCourse(prev => ({ ...prev, price: r.data.price ?? priceNum }));
+      setPriceModal(false);
+      showAlert('success', 'Đã cập nhật giá khóa học.');
+    } catch (e) { showAlert('error', e.message); } finally { setSavingPrice(false); }
+  };
+
+  const uploadCover = async (file) => {
+    const fd = new FormData();
+    fd.append('image', file);
+    const r = await api.post('/teacher/courses/upload-cover', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+    return r.data.url;
   };
 
   // ── Units ──────────────────────────────────────────────────────────────────
@@ -198,6 +269,34 @@ export default function TeacherCourseContent() {
         </div>
       </section>
 
+      {/* Thông tin khóa học (sửa inline) */}
+      <section className="mb-6 bg-white border border-outline/30 shadow-sm rounded-2xl overflow-hidden">
+        <button onClick={() => setInfoOpen(o => !o)}
+          className="w-full flex items-center justify-between px-5 py-4 text-left hover:bg-surface-container-lowest/40 transition-colors">
+          <div className="flex items-center gap-3">
+            <span className="w-8 h-8 rounded-full bg-tsubaki-red/10 text-tsubaki-red flex items-center justify-center shrink-0">
+              <span className="material-symbols-outlined text-lg">edit_note</span>
+            </span>
+            <div>
+              <h3 className="font-semibold text-on-surface text-sm">Thông tin khóa học</h3>
+              <p className="text-xs text-on-muted">Tiêu đề, cấp độ, giá, mô tả, trạng thái xuất bản</p>
+            </div>
+          </div>
+          <span className="material-symbols-outlined text-on-muted transition-transform" style={{ transform: infoOpen ? 'rotate(180deg)' : 'none' }}>expand_more</span>
+        </button>
+        {infoOpen && (
+          <div className="px-5 pb-5 border-t border-outline/10 pt-4">
+            <CourseForm form={infoForm} onChange={setInfoForm} editing
+              uploadCover={uploadCover} onError={(m) => showAlert('error', m)}
+              onEditPrice={openPriceModal} currentPrice={course.price} />
+            <div className="flex justify-end gap-2 mt-4">
+              <Button variant="secondary" onClick={handleCancelInfo}>Hủy</Button>
+              <Button loading={savingInfo} onClick={handleSaveInfo}>Lưu thông tin</Button>
+            </div>
+          </div>
+        )}
+      </section>
+
       {/* Units + lessons */}
       <div className="space-y-4">
         {units.map((unit, idx) => (
@@ -257,6 +356,22 @@ export default function TeacherCourseContent() {
           <p className="text-xs text-outline">Một bài học chứa nhiều mục: Video, Bài đọc, Từ vựng, Kanji, Ngữ pháp, Quiz</p>
         </button>
       </div>
+
+      {/* Price modal */}
+      <Modal open={priceModal} onClose={() => setPriceModal(false)} title="Thay đổi giá khóa học" size="sm"
+        footer={<><Button variant="secondary" onClick={() => setPriceModal(false)}>Hủy</Button><Button loading={savingPrice} onClick={handleSavePrice}>Lưu</Button></>}>
+        <div>
+          <Input label="Giá khóa học (₫) *" type="number" min="0" value={priceInput}
+            onChange={e => setPriceInput(e.target.value)} placeholder="VD: 299000" />
+          <div className="mt-1.5 flex items-start gap-2 text-xs text-on-muted bg-sumire-purple/5 border border-sumire-purple/15 rounded-lg px-3 py-2">
+            <span className="material-symbols-outlined text-[16px] text-sumire-purple shrink-0">info</span>
+            <span>
+              Kizuna Nihongo giữ lại <strong>10% hoa hồng</strong>, bạn nhận <strong>90%</strong>.
+              {Number(priceInput) > 0 && <> Với giá này, bạn nhận <strong>{formatVnd(Number(priceInput) * 0.9)}</strong>/lượt mua.</>}
+            </span>
+          </div>
+        </div>
+      </Modal>
 
       {/* Unit modal */}
       <Modal open={unitModal} onClose={() => setUnitModal(false)} title={editingUnit ? 'Chỉnh sửa bài học' : 'Thêm bài học mới'} size="sm"
