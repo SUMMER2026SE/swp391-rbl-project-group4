@@ -53,6 +53,7 @@ router.post('/lessons/upload-video', videoUpload.single('video'), ac.uploadLesso
 router.get('/vocabulary',                              ac.listVocab);
 router.post('/vocabulary',                             c.createVocabForLesson);
 router.put('/vocabulary/:id',                          ac.updateVocab);
+router.post('/vocabulary/upload-image',                upload.single('image'), ac.uploadVocabImage);
 router.post('/lessons/:lessonId/vocabulary/attach',    c.attachVocab);
 router.delete('/lessons/:lessonId/vocabulary/:vocabId', c.detachVocab);
 
