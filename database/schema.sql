@@ -445,15 +445,25 @@ CREATE TABLE IF NOT EXISTS flashcard_module.flashcards (
   created_at  timestamptz DEFAULT now()
 );
 
--- Tiến độ học per (student, card, mode): không có row = trạng thái 'new' (chưa học).
--- mode: 'cards' = Thẻ ghi nhớ (lật thẻ) | 'learn' = chế độ Học — tiến độ 2 chế độ độc lập.
+-- Tiến độ học per (student, card): không có row = trạng thái 'new' (chưa học).
+-- Chỉ phục vụ chế độ Thẻ ghi nhớ (lật thẻ).
 CREATE TABLE IF NOT EXISTS flashcard_module.flashcard_progress (
   student_id       uuid NOT NULL REFERENCES auth.users(id)                  ON DELETE CASCADE,
   card_id          uuid NOT NULL REFERENCES flashcard_module.flashcards(id) ON DELETE CASCADE,
   status           text NOT NULL DEFAULT 'learning' CHECK (status IN ('learning','mastered')),
-  mode             text NOT NULL DEFAULT 'learn'    CHECK (mode IN ('cards','learn')),
   last_reviewed_at timestamptz DEFAULT now(),
-  PRIMARY KEY (student_id, card_id, mode)
+  PRIMARY KEY (student_id, card_id)
+);
+
+-- Bài kiểm tra do AI sinh từ nội dung set (mỗi set 1 bài; tạo lại = ghi đè).
+-- Chỉ tạo khi user bấm → lưu DB; làm lại bài đã lưu không gọi AI, không tốn lượt.
+CREATE TABLE IF NOT EXISTS flashcard_module.flashcard_tests (
+  id         uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  set_id     uuid NOT NULL UNIQUE REFERENCES flashcard_module.flashcard_sets(id) ON DELETE CASCADE,
+  owner_id   uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  config     jsonb NOT NULL DEFAULT '{}'::jsonb,   -- { numQuestions, types: [...] }
+  questions  jsonb NOT NULL,                        -- mảng câu hỏi đã validate + trộn đáp án
+  created_at timestamptz DEFAULT now()
 );
 
 CREATE INDEX IF NOT EXISTS idx_flashcards_set            ON flashcard_module.flashcards (set_id, order_index);
@@ -467,6 +477,7 @@ GRANT ALL ON flashcard_module.flashcard_sets        TO anon, authenticated, serv
 GRANT ALL ON flashcard_module.flashcard_folder_sets TO anon, authenticated, service_role;
 GRANT ALL ON flashcard_module.flashcards            TO anon, authenticated, service_role;
 GRANT ALL ON flashcard_module.flashcard_progress    TO anon, authenticated, service_role;
+GRANT ALL ON flashcard_module.flashcard_tests       TO anon, authenticated, service_role;
 
 -- ⚠️ Schema này phải được THÊM vào danh sách "Exposed schemas" của PostgREST thì supabase-js
 -- mới gọi được (nếu thiếu -> lỗi PGRST106 "Invalid schema"). Trên Supabase: Dashboard →
@@ -481,6 +492,7 @@ ALTER TABLE flashcard_module.flashcard_sets        ENABLE ROW LEVEL SECURITY;
 ALTER TABLE flashcard_module.flashcard_folder_sets ENABLE ROW LEVEL SECURITY;
 ALTER TABLE flashcard_module.flashcards            ENABLE ROW LEVEL SECURITY;
 ALTER TABLE flashcard_module.flashcard_progress    ENABLE ROW LEVEL SECURITY;
+ALTER TABLE flashcard_module.flashcard_tests       ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "flashcard_folders: own" ON flashcard_module.flashcard_folders
   FOR ALL TO authenticated USING (auth.uid() = owner_id) WITH CHECK (auth.uid() = owner_id);
@@ -488,6 +500,8 @@ CREATE POLICY "flashcard_sets: own" ON flashcard_module.flashcard_sets
   FOR ALL TO authenticated USING (auth.uid() = owner_id) WITH CHECK (auth.uid() = owner_id);
 CREATE POLICY "flashcard_progress: own" ON flashcard_module.flashcard_progress
   FOR ALL TO authenticated USING (auth.uid() = student_id) WITH CHECK (auth.uid() = student_id);
+CREATE POLICY "flashcard_tests: own" ON flashcard_module.flashcard_tests
+  FOR ALL TO authenticated USING (auth.uid() = owner_id) WITH CHECK (auth.uid() = owner_id);
 CREATE POLICY "flashcards: own via set" ON flashcard_module.flashcards
   FOR ALL TO authenticated
   USING     (EXISTS (SELECT 1 FROM flashcard_module.flashcard_sets s WHERE s.id = set_id AND s.owner_id = auth.uid()))

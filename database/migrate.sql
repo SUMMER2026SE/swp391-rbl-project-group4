@@ -508,3 +508,67 @@ WHERE NOT EXISTS (
   SELECT 1 FROM public.feature_entitlements e
   WHERE e.tier = v.tier AND e.feature_code = 'news_read_daily'
 );
+
+-- ─── FLASHCARD v3: chế độ Kiểm tra sinh bằng AI (mỗi set 1 bài, lưu DB) ───────
+-- Bài kiểm tra do AI (LLM) sinh từ nội dung set, chỉ tạo khi user bấm → lưu DB.
+-- Mỗi set tối đa 1 bài (set_id UNIQUE); tạo lại = ghi đè (upsert onConflict set_id).
+-- Làm lại bài đã lưu không tốn lượt; chỉ lượt TẠO bị giới hạn theo quota bên dưới.
+-- Idempotent — chạy lại an toàn.
+CREATE TABLE IF NOT EXISTS flashcard_module.flashcard_tests (
+  id         uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  set_id     uuid NOT NULL UNIQUE REFERENCES flashcard_module.flashcard_sets(id) ON DELETE CASCADE,
+  owner_id   uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  config     jsonb NOT NULL DEFAULT '{}'::jsonb,   -- { numQuestions, types: [...] }
+  questions  jsonb NOT NULL,                        -- mảng câu hỏi đã validate + trộn đáp án
+  created_at timestamptz DEFAULT now()
+);
+
+GRANT ALL ON flashcard_module.flashcard_tests TO anon, authenticated, service_role;
+
+ALTER TABLE flashcard_module.flashcard_tests ENABLE ROW LEVEL SECURITY;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies
+                 WHERE schemaname = 'flashcard_module' AND tablename = 'flashcard_tests'
+                   AND policyname = 'flashcard_tests: own') THEN
+    CREATE POLICY "flashcard_tests: own" ON flashcard_module.flashcard_tests
+      FOR ALL TO authenticated USING (auth.uid() = owner_id) WITH CHECK (auth.uid() = owner_id);
+  END IF;
+END $$;
+
+-- Quota: free = 1 lượt TẠO bài kiểm tra/ngày (tính chung mọi set), premium = -1
+INSERT INTO public.feature_entitlements (tier, feature_code, limit_value, period_type)
+SELECT v.tier, 'flashcard_test_gen_daily', v.lim, 'daily'
+FROM (VALUES ('free', 1), ('premium', -1)) AS v(tier, lim)
+WHERE NOT EXISTS (
+  SELECT 1 FROM public.feature_entitlements e
+  WHERE e.tier = v.tier AND e.feature_code = 'flashcard_test_gen_daily'
+);
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- GỠ CHẾ ĐỘ HỌC (Learn) — 2026-07-12
+-- Chế độ Học bị bỏ hẳn ⇒ tiến độ chỉ còn Thẻ ghi nhớ ⇒ không cần cột `mode` nữa.
+-- Xoá tiến độ 'learn', bỏ cột mode, khôi phục PK (student_id, card_id). Idempotent.
+-- ⚠️ Destructive: xoá vĩnh viễn tiến độ chế độ Học cũ.
+-- ─────────────────────────────────────────────────────────────────────────────
+DELETE FROM flashcard_module.flashcard_progress WHERE mode = 'learn';
+
+ALTER TABLE flashcard_module.flashcard_progress DROP CONSTRAINT IF EXISTS flashcard_progress_mode_check;
+
+DO $$
+BEGIN
+  -- PK 3 cột (student_id, card_id, mode) → PK 2 cột (student_id, card_id)
+  IF EXISTS (SELECT 1 FROM pg_constraint c
+             JOIN pg_class t ON t.oid = c.conrelid
+             JOIN pg_namespace n ON n.oid = t.relnamespace
+             WHERE n.nspname = 'flashcard_module' AND t.relname = 'flashcard_progress'
+               AND c.conname = 'flashcard_progress_pkey' AND array_length(c.conkey, 1) = 3) THEN
+    ALTER TABLE flashcard_module.flashcard_progress DROP CONSTRAINT flashcard_progress_pkey;
+    ALTER TABLE flashcard_module.flashcard_progress ADD PRIMARY KEY (student_id, card_id);
+  END IF;
+END $$;
+
+ALTER TABLE flashcard_module.flashcard_progress DROP COLUMN IF EXISTS mode;
+
+NOTIFY pgrst, 'reload schema';
