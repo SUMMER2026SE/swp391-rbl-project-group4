@@ -4,136 +4,196 @@ import StudentLayout from '../../components/layout/StudentLayout';
 import Alert from '../../components/ui/Alert';
 import Modal from '../../components/ui/Modal';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
+import UpgradeModal from '../../components/UpgradeModal';
 import FlashcardModeTabs from '../../components/flashcards/FlashcardModeTabs';
 import api from '../../lib/api';
-import { shuffle, normalize, buildMcOptions, promptTextClass } from '../../lib/flashcardQuiz';
+import { normalize } from '../../lib/flashcardQuiz';
 
-// Loại câu hỏi: chọn 1 trong 3 (Cả hai = xen kẽ trắc nghiệm/tự luận)
-const Q_TYPES = [
-  ['mc',    'Trắc nghiệm'],
-  ['write', 'Tự luận'],
-  ['both',  'Cả hai'],
+// 5 loại câu hỏi (mcq_reading/mcq_kanji cần thẻ có kanji)
+const TYPE_OPTIONS = [
+  { key: 'mcq_meaning', label: 'Trắc nghiệm nghĩa', desc: 'Chọn từ đúng theo nghĩa tiếng Việt', kanji: false },
+  { key: 'mcq_reading', label: 'Chọn cách đọc',    desc: 'Chọn cách đọc đúng của từ có kanji',  kanji: true  },
+  { key: 'mcq_kanji',   label: 'Chọn kanji',       desc: 'Chọn chữ kanji đúng theo cách đọc',   kanji: true  },
+  { key: 'fill_blank',  label: 'Điền vào câu',      desc: 'Điền từ vào chỗ trống trong câu',      kanji: false },
+  { key: 'written',     label: 'Tự luận',           desc: 'Gõ lại từ tiếng Nhật theo nghĩa',      kanji: false },
+];
+const TYPE_LABEL = {
+  mcq_meaning: 'Trắc nghiệm nghĩa', mcq_reading: 'Cách đọc', mcq_kanji: 'Chọn kanji',
+  fill_blank: 'Điền vào câu', written: 'Tự luận',
+};
+const hasKanji = (s) => /[一-鿿㐀-䶿]/.test(s || '');
+
+// Cỡ chữ câu hỏi trong bài kiểm tra: vừa mắt, tự co theo độ dài (không quá to như trước)
+const questionTextClass = (text) => {
+  const s = text || '';
+  const len = s.length;
+  const multiline = s.includes('\n');
+  let size;
+  if (len <= 20)      size = 'text-lg sm:text-xl';
+  else if (len <= 60) size = 'text-base sm:text-lg';
+  else                size = 'text-sm sm:text-base';
+  const align = (multiline || len > 40) ? 'text-left' : 'text-center';
+  return `${size} ${align}`;
+};
+
+// Câu hỏi hợp lệ để làm bài (phòng test cũ/hỏng thiếu options → tránh crash trắng trang)
+const isValidQuestions = (qs) =>
+  Array.isArray(qs) && qs.length > 0 &&
+  qs.every(q => q && q.type && (q.type === 'written' || Array.isArray(q.options)));
+
+// Các bước hiển thị khi AI đang sinh đề (đổi chữ theo thời gian, không spinner trần)
+const GEN_STEPS = [
+  'Đang phân tích bộ từ vựng…',
+  'Đang soạn câu hỏi…',
+  'Đang kiểm tra & lọc đáp án…',
+  'Sắp xong…',
 ];
 
 export default function FlashcardTest() {
   const { id } = useParams();
 
-  const [set, setSet]         = useState(null);
+  const [set, setSet]           = useState(null);
   const [allCards, setAllCards] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError]     = useState('');
+  const [test, setTest]         = useState(null);   // bài kiểm tra đã lưu (DB) | null
+  const [loading, setLoading]   = useState(true);
+  const [error, setError]       = useState('');
 
-  const [stage, setStage] = useState('config'); // 'config' | 'doing' | 'result'
+  const [stage, setStage] = useState('intro'); // 'intro' | 'generating' | 'doing' | 'result'
 
-  // Cấu hình (popup Thiết lập bài kiểm tra)
-  const [configOpen, setConfigOpen]     = useState(false);
-  const [numQuestions, setNumQuestions] = useState(20);
-  const [promptSide, setPromptSide]     = useState('term'); // hỏi bằng mặt nào
-  const [qType, setQType]               = useState('both'); // 'mc' | 'write' | 'both'
+  // Cấu hình (popup)
+  const [configOpen, setConfigOpen]         = useState(false);
+  const [numQuestions, setNumQuestions]     = useState(20);
+  const [selectedTypes, setSelectedTypes]   = useState(() => new Set());
+  const [confirmRegen, setConfirmRegen]     = useState(false);
+
+  // Sinh đề
+  const [genStep, setGenStep]     = useState(0);
+  const [quotaError, setQuotaError] = useState(null);
 
   // Bài làm
   const [questions, setQuestions] = useState([]);
-  const [answers, setAnswers]     = useState([]); // song song questions: string | null
-  const [confirmSubmit, setConfirmSubmit] = useState(false); // popup xác nhận khi còn câu trống
+  const [answers, setAnswers]     = useState([]);
+  const [confirmSubmit, setConfirmSubmit] = useState(false);
 
   // Kết quả
-  const [resultFilter, setResultFilter] = useState('all'); // 'all' | 'correct' | 'wrong'
+  const [resultFilter, setResultFilter] = useState('all');
 
-  const canMulti = allCards.length >= 2; // đủ thẻ cho trắc nghiệm
+  const hasKanjiCard = allCards.some(c => hasKanji(c.term));
 
-  // ── Tải set ──
+  // ── Tải set + bài kiểm tra đã lưu ──
   useEffect(() => {
     (async () => {
       setLoading(true);
       try {
-        const r = await api.get(`/flashcards/sets/${id}`);
-        const data = r.data.data || r.data;
-        const cards = data.cards || data.flashcards || [];
-        setSet(data);
-        setAllCards(cards);
-        setNumQuestions(Math.min(20, cards.length || 1));
-        if (cards.length < 2) setQType('write'); // chỉ tự luận
-        setConfigOpen(cards.length > 0);         // vào trang là mở popup thiết lập
-      } catch (e) {
-        setError(e.message);
+        const [sRes, tRes] = await Promise.allSettled([
+          api.get(`/flashcards/sets/${id}`),
+          api.get(`/flashcards/sets/${id}/test`),
+        ]);
+        if (sRes.status === 'fulfilled') {
+          const data  = sRes.value.data.data || sRes.value.data;
+          const cards = data.cards || data.flashcards || [];
+          setSet(data);
+          setAllCards(cards);
+          setNumQuestions(Math.min(20, cards.length || 1));
+          // Mặc định chọn các loại khả dụng
+          const kanji = cards.some(c => hasKanji(c.term));
+          setSelectedTypes(new Set(
+            TYPE_OPTIONS.filter(t => !t.kanji || kanji).map(t => t.key)
+          ));
+        } else {
+          setError(sRes.reason?.message || 'Không thể tải học phần.');
+        }
+        if (tRes.status === 'fulfilled') {
+          const t = tRes.value.data.data || tRes.value.data || null;
+          // Test cũ/hỏng (thiếu options) → coi như chưa có bài, tránh trắng trang khi bấm Làm bài
+          setTest(isValidQuestions(t?.questions) ? t : null);
+        }
       } finally {
         setLoading(false);
       }
     })();
   }, [id]);
 
-  const answerSideOf = (side) => (side === 'term' ? 'definition' : 'term');
+  // ── Đổi chữ bước sinh đề theo thời gian ──
+  useEffect(() => {
+    if (stage !== 'generating') return;
+    setGenStep(0);
+    const iv = setInterval(() => setGenStep(s => Math.min(s + 1, GEN_STEPS.length - 1)), 4500);
+    return () => clearInterval(iv);
+  }, [stage]);
 
-  // ── Sinh 1 câu theo loại ──
-  const makeQuestion = (card, type, side) => {
-    const answerSide = answerSideOf(side);
-    if (type === 'mc') {
-      const options = buildMcOptions(allCards, card, answerSide, 3);
-      if (options.length >= 2) {
-        return { type: 'mc', card, promptSide: side, answerSide,
-          prompt: card[side], options, correctAnswer: card[answerSide] };
-      }
-      // không đủ lựa chọn → rơi về tự luận
+  const toggleType = (key) => setSelectedTypes(prev => {
+    const n = new Set(prev);
+    n.has(key) ? n.delete(key) : n.add(key);
+    return n;
+  });
+
+  // ── Vào làm bài với 1 bộ câu hỏi ──
+  const beginDoing = (qs) => {
+    if (!isValidQuestions(qs)) {
+      setError('Bài kiểm tra không hợp lệ, vui lòng tạo lại.');
+      setStage('intro');
+      return;
     }
-    // write (mặc định / fallback)
-    return { type: 'write', card, promptSide: side, answerSide,
-      prompt: card[side], correctAnswer: card[answerSide] };
-  };
-
-  // ── Bắt đầu: sinh đề ──
-  const startTest = () => {
-    const enabled = qType === 'both' ? ['mc', 'write'] : [qType];
-    const count = Math.min(numQuestions, allCards.length);
-    const picked = shuffle(allCards).slice(0, count);
-    const qs = picked.map((card, i) => {
-      const side = promptSide === 'both' ? (Math.random() < 0.5 ? 'term' : 'definition') : promptSide;
-      return makeQuestion(card, enabled[i % enabled.length], side);
-    });
     setQuestions(qs);
     setAnswers(qs.map(() => null));
     setResultFilter('all');
-    setConfigOpen(false);
     setStage('doing');
     window.scrollTo({ top: 0 });
   };
 
+  // ── Gọi AI sinh đề ──
+  const startGenerate = async () => {
+    if (selectedTypes.size === 0) return;
+    setConfigOpen(false);
+    setError('');
+    setStage('generating');
+    try {
+      const r = await api.post(`/flashcards/sets/${id}/test/generate`, {
+        numQuestions,
+        types: [...selectedTypes],
+      });
+      const t = r.data.data || r.data;
+      setTest(t);
+      beginDoing(t.questions);
+    } catch (e) {
+      if (e.status === 403 && e.data?.error === 'quota_exceeded') {
+        setQuotaError(e.data);
+      } else {
+        setError(e.message);
+      }
+      setStage('intro');
+    }
+  };
+
   const setAnswer = (i, val) => setAnswers(a => { const n = a.slice(); n[i] = val; return n; });
 
-  // Câu i coi là "đã làm" khi có nội dung (tự luận xoá trắng = chưa làm)
   const isAnswered = (i) => answers[i] != null && String(answers[i]).trim() !== '';
   const answeredCount = answers.reduce((n, _, i) => n + (isAnswered(i) ? 1 : 0), 0);
 
   // ── Chấm điểm ──
   const gradeOne = (q, ans) => {
     if (ans == null) return false;
-    return normalize(ans) === normalize(q.correctAnswer);
+    if (q.type === 'written') {
+      const accept = q.answersAccept?.length ? q.answersAccept : [q.answer];
+      return accept.some(a => normalize(a) === normalize(ans));
+    }
+    return normalize(ans) === normalize(q.answer);
   };
 
-  // ── Nộp bài (còn câu trống → hỏi xác nhận) ──
   const submit = () => {
     if (answeredCount < questions.length) setConfirmSubmit(true);
     else finishTest();
   };
-
   const finishTest = () => {
     setConfirmSubmit(false);
     setStage('result');
     window.scrollTo({ top: 0 });
   };
 
-  const resetToConfig = () => {
-    setStage('config');
-    setQuestions([]);
-    setAnswers([]);
-    setResultFilter('all');
-    setConfigOpen(true);
-  };
-
-  const jumpTo = (i) => {
+  const jumpTo = (i) =>
     document.getElementById(`test-q-${i}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  };
 
-  // Nhảy đến 1 câu ở màn kết quả; câu đang bị tab lọc ẩn → chuyển về "Tất cả" rồi mới cuộn
   const jumpToResult = (i, correct) => {
     const visible = resultFilter === 'all' || (resultFilter === 'correct') === correct;
     const scroll = () =>
@@ -141,7 +201,6 @@ export default function FlashcardTest() {
     if (visible) scroll();
     else {
       setResultFilter('all');
-      // Chờ danh sách render lại sau khi đổi tab rồi mới cuộn (2 khung hình cho chắc)
       requestAnimationFrame(() => requestAnimationFrame(scroll));
     }
   };
@@ -161,7 +220,7 @@ export default function FlashcardTest() {
 
   return (
     <StudentLayout title="Thẻ ghi nhớ">
-      {/* ── Header: nút back + tên học phần ─────────────────────── */}
+      {/* ── Header ─────────────────────────────────────── */}
       <div className="flex items-center gap-3 mb-4">
         <Link
           to="/flashcards"
@@ -180,52 +239,78 @@ export default function FlashcardTest() {
 
       {error && <div className="mb-6"><Alert type="error" onClose={() => setError('')}>{error}</Alert></div>}
 
-      {/* ── CONFIG: màn nền + popup Thiết lập bài kiểm tra ─────────── */}
-      {stage === 'config' && (
-        <div className="max-w-lg mx-auto glass-card rounded-2xl p-10 flex flex-col items-center text-center">
-          <span className="material-symbols-outlined text-5xl text-tsubaki-red/60 mb-3">quiz</span>
+      {/* ── INTRO: chưa có / đã có bài kiểm tra ─────────── */}
+      {stage === 'intro' && (
+        <div className="max-w-lg mx-auto glass-card rounded-2xl p-8 sm:p-10 flex flex-col items-center text-center">
           {allCards.length === 0 ? (
-            <p className="text-sm text-on-muted">Học phần này chưa có thẻ nào để kiểm tra.</p>
+            <>
+              <span className="material-symbols-outlined text-5xl text-tsubaki-red/60 mb-3">quiz</span>
+              <p className="text-sm text-on-muted">Học phần này chưa có thẻ nào để tạo bài kiểm tra.</p>
+            </>
+          ) : test ? (
+            <>
+              <span className="material-symbols-outlined text-5xl text-tsubaki-red/70 mb-3">assignment</span>
+              <h2 className="font-display text-lg font-bold text-on-surface mb-1">Bài kiểm tra của bạn</h2>
+              <p className="text-sm text-on-muted mb-4">
+                {test.questions?.length || 0} câu · {(test.config?.types || []).map(t => TYPE_LABEL[t]).filter(Boolean).join(', ')}
+              </p>
+              <p className="text-xs text-on-muted mb-6">
+                Tạo ngày {test.created_at ? new Date(test.created_at).toLocaleDateString('vi-VN') : '—'} · làm lại không giới hạn
+              </p>
+              <div className="flex flex-col sm:flex-row gap-3 w-full">
+                <button
+                  onClick={() => beginDoing(test.questions)}
+                  className="flex-1 inline-flex items-center justify-center gap-2 text-sm font-semibold text-white bg-tsubaki-red rounded-xl py-3 hover:opacity-90 transition-opacity"
+                >
+                  <span className="material-symbols-outlined text-lg">play_arrow</span>
+                  Làm bài
+                </button>
+                <button
+                  onClick={() => setConfirmRegen(true)}
+                  className="flex-1 inline-flex items-center justify-center gap-2 text-sm font-semibold text-tsubaki-red border border-tsubaki-red/30 rounded-xl py-3 hover:bg-tsubaki-red/5 transition-colors"
+                >
+                  <span className="material-symbols-outlined text-lg">auto_awesome</span>
+                  Tạo bài mới
+                </button>
+              </div>
+            </>
           ) : (
             <>
+              <span className="material-symbols-outlined text-5xl text-tsubaki-red/60 mb-3">auto_awesome</span>
+              <h2 className="font-display text-lg font-bold text-on-surface mb-1">Bài kiểm tra bằng AI</h2>
               <p className="text-sm text-on-muted mb-6">
-                Thiết lập số câu, cách hỏi và loại câu hỏi rồi bắt đầu làm bài.
+                AI sẽ soạn bài kiểm tra đa dạng (trắc nghiệm, cách đọc, điền câu, tự luận…) từ nội dung học phần này.
               </p>
               <button
                 onClick={() => setConfigOpen(true)}
                 className="inline-flex items-center gap-2 text-sm font-semibold text-white bg-tsubaki-red rounded-xl px-6 py-3 hover:opacity-90 transition-opacity"
               >
                 <span className="material-symbols-outlined text-lg">tune</span>
-                Thiết lập bài kiểm tra
+                Thiết lập & tạo bài kiểm tra
               </button>
             </>
           )}
         </div>
       )}
 
+      {/* ── Popup thiết lập ─────────────────────────────── */}
       <Modal
-        open={stage === 'config' && configOpen}
+        open={configOpen}
         onClose={() => setConfigOpen(false)}
         title="Thiết lập bài kiểm tra"
         size="md"
         footer={
           <button
-            onClick={startTest}
-            className="w-full inline-flex items-center justify-center gap-2 text-sm font-semibold text-white bg-tsubaki-red rounded-xl py-3.5 hover:opacity-90 transition-opacity"
+            onClick={startGenerate}
+            disabled={selectedTypes.size === 0}
+            className="w-full inline-flex items-center justify-center gap-2 text-sm font-semibold text-white bg-tsubaki-red rounded-xl py-3.5 hover:opacity-90 transition-opacity disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            <span className="material-symbols-outlined text-lg">play_arrow</span>
-            Bắt đầu làm kiểm tra
+            <span className="material-symbols-outlined text-lg">auto_awesome</span>
+            Tạo bài kiểm tra
           </button>
         }
       >
         <div className="space-y-6">
-          {!canMulti && (
-            <div className="flex items-start gap-2 text-xs text-amber-700 bg-amber-50 rounded-xl px-3 py-2">
-              <span className="material-symbols-outlined text-base">info</span>
-              Học phần chỉ có 1 thẻ nên chỉ dùng được câu tự luận.
-            </div>
-          )}
-
           {/* Số câu */}
           <div>
             <label className="block text-sm font-semibold text-on-surface mb-2">Số câu hỏi</label>
@@ -240,46 +325,40 @@ export default function FlashcardTest() {
             <span className="text-xs text-on-muted ml-2">/ {allCards.length} thẻ</span>
           </div>
 
-          {/* Hướng hỏi */}
-          <div>
-            <label className="block text-sm font-semibold text-on-surface mb-2">Hỏi bằng</label>
-            <div className="flex flex-wrap gap-2">
-              {[['term', 'Từ vựng → Nghĩa'], ['definition', 'Nghĩa → Từ vựng'], ['both', 'Cả hai']].map(([val, label]) => (
-                <button
-                  key={val}
-                  onClick={() => setPromptSide(val)}
-                  className={`flex-1 min-w-[7rem] px-3 py-2.5 rounded-xl text-sm font-semibold border-2 transition-colors ${
-                    promptSide === val
-                      ? 'border-tsubaki-red bg-tsubaki-red/5 text-tsubaki-red'
-                      : 'border-outline text-on-muted hover:border-tsubaki-red/50'
-                  }`}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-          </div>
-
           {/* Loại câu hỏi */}
           <div>
             <label className="block text-sm font-semibold text-on-surface mb-2">Loại câu hỏi</label>
-            <div className="flex flex-wrap gap-2">
-              {Q_TYPES.map(([val, label]) => {
-                const disabled = val !== 'write' && !canMulti;
+            {!hasKanjiCard && (
+              <div className="flex items-start gap-2 text-xs text-amber-700 bg-amber-50 rounded-xl px-3 py-2 mb-3">
+                <span className="material-symbols-outlined text-base">info</span>
+                Học phần không có từ chứa kanji nên loại "Chọn cách đọc" và "Chọn kanji" bị tắt.
+              </div>
+            )}
+            <div className="space-y-2">
+              {TYPE_OPTIONS.map(opt => {
+                const disabled = opt.kanji && !hasKanjiCard;
+                const checked  = selectedTypes.has(opt.key);
                 return (
                   <button
-                    key={val}
+                    key={opt.key}
+                    type="button"
                     disabled={disabled}
-                    onClick={() => setQType(val)}
-                    className={`flex-1 min-w-[7rem] px-3 py-2.5 rounded-xl text-sm font-semibold border-2 transition-colors ${
+                    onClick={() => toggleType(opt.key)}
+                    className={`w-full flex items-start gap-3 text-left px-4 py-3 rounded-xl border-2 transition-colors ${
                       disabled
-                        ? 'border-outline text-on-muted opacity-40 cursor-not-allowed'
-                        : qType === val
-                          ? 'border-tsubaki-red bg-tsubaki-red/5 text-tsubaki-red'
-                          : 'border-outline text-on-muted hover:border-tsubaki-red/50'
+                        ? 'border-outline opacity-40 cursor-not-allowed'
+                        : checked
+                          ? 'border-tsubaki-red bg-tsubaki-red/5'
+                          : 'border-outline hover:border-tsubaki-red/50'
                     }`}
                   >
-                    {label}
+                    <span className={`material-symbols-outlined text-lg shrink-0 ${checked ? 'text-tsubaki-red' : 'text-on-muted'}`}>
+                      {checked ? 'check_box' : 'check_box_outline_blank'}
+                    </span>
+                    <span className="min-w-0">
+                      <span className={`block text-sm font-semibold ${checked ? 'text-tsubaki-red' : 'text-on-surface'}`}>{opt.label}</span>
+                      <span className="block text-xs text-on-muted">{opt.desc}</span>
+                    </span>
                   </button>
                 );
               })}
@@ -288,10 +367,30 @@ export default function FlashcardTest() {
         </div>
       </Modal>
 
-      {/* ── DOING: câu hỏi + bảng điều hướng bên phải ───────────────── */}
+      <ConfirmDialog
+        open={confirmRegen}
+        icon="auto_awesome"
+        variant="primary"
+        title="Tạo bài kiểm tra mới?"
+        message="Bài kiểm tra hiện tại sẽ bị thay thế và bạn sẽ dùng 1 lượt tạo bằng AI trong ngày."
+        confirmLabel="Tạo mới"
+        cancelLabel="Hủy"
+        onConfirm={() => { setConfirmRegen(false); setConfigOpen(true); }}
+        onCancel={() => setConfirmRegen(false)}
+      />
+
+      {/* ── GENERATING ──────────────────────────────────── */}
+      {stage === 'generating' && (
+        <div className="max-w-lg mx-auto glass-card rounded-2xl p-10 flex flex-col items-center text-center">
+          <span className="material-symbols-outlined animate-spin text-tsubaki-red text-5xl mb-4">progress_activity</span>
+          <p className="font-display text-lg font-bold text-on-surface mb-1">{GEN_STEPS[genStep]}</p>
+          <p className="text-sm text-on-muted">AI đang tạo bài kiểm tra, việc này có thể mất khoảng 10–30 giây.</p>
+        </div>
+      )}
+
+      {/* ── DOING ───────────────────────────────────────── */}
       {stage === 'doing' && (
         <div className="max-w-5xl mx-auto grid gap-6 lg:grid-cols-[minmax(0,1fr)_240px] items-start">
-          {/* Danh sách câu hỏi */}
           <div className="order-2 lg:order-1 min-w-0 space-y-5">
             {questions.map((q, i) => (
               <div key={i} id={`test-q-${i}`} className="scroll-mt-24">
@@ -307,7 +406,6 @@ export default function FlashcardTest() {
             </button>
           </div>
 
-          {/* Bảng điều hướng câu hỏi */}
           <aside className="order-1 lg:order-2 lg:sticky lg:top-24 glass-card rounded-2xl p-4">
             <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-on-muted mb-1">Bảng câu hỏi</p>
             <p className="text-sm text-on-muted mb-3">
@@ -352,19 +450,16 @@ export default function FlashcardTest() {
         onCancel={() => setConfirmSubmit(false)}
       />
 
-      {/* ── RESULT: điểm + lọc Đúng/Sai + bảng điều hướng câu ───────── */}
+      {/* ── RESULT ──────────────────────────────────────── */}
       {stage === 'result' && (
         <div className="max-w-5xl mx-auto grid gap-6 lg:grid-cols-[minmax(0,1fr)_240px] items-start">
           <div className="min-w-0">
             <div className="glass-card rounded-2xl p-6 flex flex-col items-center text-center mb-6">
               <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-on-muted mb-4">Kết quả kiểm tra</p>
               <ScoreRing score={score} total={questions.length} />
-              <p className="text-sm text-on-muted mt-3">
-                Đúng {score}/{questions.length} câu
-              </p>
+              <p className="text-sm text-on-muted mt-3">Đúng {score}/{questions.length} câu</p>
             </div>
 
-            {/* Tab lọc kết quả */}
             <div className="flex flex-wrap gap-2 mb-4">
               {[
                 ['all',     'Tất cả',   questions.length],
@@ -407,16 +502,24 @@ export default function FlashcardTest() {
               )}
             </div>
 
-            <button
-              onClick={resetToConfig}
-              className="w-full inline-flex items-center justify-center gap-2 text-sm font-semibold text-tsubaki-red border border-tsubaki-red/30 rounded-xl py-3.5 hover:bg-tsubaki-red/5 transition-colors"
-            >
-              <span className="material-symbols-outlined text-lg">replay</span>
-              Làm lại
-            </button>
+            <div className="flex flex-col sm:flex-row gap-3">
+              <button
+                onClick={() => beginDoing(questions)}
+                className="flex-1 inline-flex items-center justify-center gap-2 text-sm font-semibold text-white bg-tsubaki-red rounded-xl py-3.5 hover:opacity-90 transition-opacity"
+              >
+                <span className="material-symbols-outlined text-lg">replay</span>
+                Làm lại
+              </button>
+              <button
+                onClick={() => setStage('intro')}
+                className="flex-1 inline-flex items-center justify-center gap-2 text-sm font-semibold text-tsubaki-red border border-tsubaki-red/30 rounded-xl py-3.5 hover:bg-tsubaki-red/5 transition-colors"
+              >
+                <span className="material-symbols-outlined text-lg">auto_awesome</span>
+                Bài kiểm tra khác
+              </button>
+            </div>
           </div>
 
-          {/* Bảng điều hướng câu ở kết quả: xanh = đúng, đỏ = sai */}
           <aside className="lg:sticky lg:top-24 glass-card rounded-2xl p-4">
             <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-on-muted mb-3">Bảng câu hỏi</p>
             <div className="grid grid-cols-5 gap-2 mb-3">
@@ -444,12 +547,15 @@ export default function FlashcardTest() {
           </aside>
         </div>
       )}
+
+      <UpgradeModal quota={quotaError} onClose={() => setQuotaError(null)} />
     </StudentLayout>
   );
 }
 
 // ── Một câu hỏi khi đang làm bài ──
 function QuestionCard({ index, q, value, onChange }) {
+  const isChoice = q.type !== 'written';
   return (
     <div className="glass-card rounded-2xl p-5">
       <div className="flex items-center gap-2 mb-3">
@@ -457,16 +563,17 @@ function QuestionCard({ index, q, value, onChange }) {
           {index + 1}
         </span>
         <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-on-muted">
-          {q.type === 'mc' ? 'Trắc nghiệm' : 'Tự luận'}
+          {TYPE_LABEL[q.type] || 'Câu hỏi'}
         </p>
       </div>
 
       <div className="max-h-[40vh] overflow-y-auto mb-4">
-        <p className={`font-display font-bold text-on-surface leading-tight break-words whitespace-pre-wrap ${promptTextClass(q.prompt)}`}>{q.prompt}</p>
+        <p className={`font-display font-semibold text-on-surface leading-snug break-words whitespace-pre-wrap ${questionTextClass(q.prompt)}`}>{q.prompt}</p>
       </div>
-      {q.type === 'mc' ? (
+
+      {isChoice ? (
         <div className="grid sm:grid-cols-2 gap-3">
-          {q.options.map((opt, i) => (
+          {(q.options || []).map((opt, i) => (
             <button
               key={i}
               onClick={() => onChange(opt)}
@@ -490,7 +597,7 @@ function QuestionCard({ index, q, value, onChange }) {
           value={value || ''}
           onChange={e => onChange(e.target.value)}
           onKeyDown={e => { if (e.key === 'Enter') e.preventDefault(); }}
-          placeholder={q.answerSide === 'term' ? 'Nhập từ vựng…' : 'Nhập định nghĩa…'}
+          placeholder="Nhập từ tiếng Nhật…"
           className="w-full px-4 py-3 bg-white border-2 border-outline rounded-xl text-base outline-none focus:border-tsubaki-red focus:ring-2 focus:ring-tsubaki-red/10 transition-all"
         />
       )}
@@ -498,7 +605,7 @@ function QuestionCard({ index, q, value, onChange }) {
   );
 }
 
-// ── Vòng điểm kết quả: cung xanh = phần đúng, nền đỏ = phần sai/chưa làm ──
+// ── Vòng điểm: cung xanh = phần đúng, nền đỏ = phần sai/chưa làm ──
 function ScoreRing({ score, total }) {
   const pct = total ? Math.round((score / total) * 100) : 0;
   const r = 42;
@@ -525,8 +632,6 @@ function ScoreRing({ score, total }) {
 // ── Một câu trong màn kết quả ──
 function ResultCard({ index, q, value, correct }) {
   const userText = value?.trim() ? value : '(bỏ trống)';
-  const correctText = q.correctAnswer;
-  const prompt = q.prompt;
 
   return (
     <div className={`rounded-2xl p-4 border-2 ${correct ? 'border-green-200 bg-green-50/50' : 'border-error/30 bg-error-bg/20'}`}>
@@ -535,8 +640,8 @@ function ResultCard({ index, q, value, correct }) {
           {correct ? 'check_circle' : 'cancel'}
         </span>
         <div className="min-w-0 flex-1">
-          <p className="text-xs text-on-muted mb-1">Câu {index + 1}</p>
-          <p className="text-sm font-semibold text-on-surface break-words whitespace-pre-wrap mb-2">{prompt}</p>
+          <p className="text-xs text-on-muted mb-1">Câu {index + 1} · {TYPE_LABEL[q.type] || ''}</p>
+          <p className="text-sm font-semibold text-on-surface break-words whitespace-pre-wrap mb-2">{q.prompt}</p>
           <p className="text-sm break-words">
             <span className="text-on-muted">Bạn trả lời: </span>
             <span className={`whitespace-pre-wrap ${correct ? 'text-green-700 font-medium' : 'text-error font-medium'}`}>{userText}</span>
@@ -544,7 +649,13 @@ function ResultCard({ index, q, value, correct }) {
           {!correct && (
             <p className="text-sm break-words">
               <span className="text-on-muted">Đáp án đúng: </span>
-              <span className="text-green-700 font-medium whitespace-pre-wrap">{correctText}</span>
+              <span className="text-green-700 font-medium whitespace-pre-wrap">{q.answer}</span>
+            </p>
+          )}
+          {q.explanation && (
+            <p className="text-xs text-on-muted mt-2 break-words whitespace-pre-wrap">
+              <span className="material-symbols-outlined text-sm align-middle mr-1">lightbulb</span>
+              {q.explanation}
             </p>
           )}
         </div>

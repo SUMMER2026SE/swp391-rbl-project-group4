@@ -7,6 +7,7 @@ const FEATURE_NAMES = {
   kanji_file_monthly:         'Luyện viết kanji',
   kanji_chars_per_file:       'Ký tự kanji',
   flashcard_ai_suggest_daily: 'AI gợi ý định nghĩa',
+  flashcard_test_gen_daily:   'Tạo bài kiểm tra AI',
 };
 
 /**

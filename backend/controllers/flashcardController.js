@@ -1,9 +1,14 @@
 'use strict';
 
 const { supabaseAdmin } = require('../config/supabase');
+const { generateTest } = require('../services/flashcardTestGen');
+const { incrementUsage } = require('../services/quotaService');
 
 // Toàn bộ bảng flashcard nằm trong schema riêng flashcard_module — mọi truy vấn dùng client này
 const fcDb = supabaseAdmin.schema('flashcard_module');
+
+// Loại câu hỏi hợp lệ cho bài kiểm tra AI
+const TEST_TYPES = ['mcq_meaning', 'mcq_reading', 'mcq_kanji', 'fill_blank', 'written'];
 
 // ── Helper: kiểm quyền sở hữu set/folder ──────────────────────────────────────
 // Trả về row nếu thuộc về user, ngược lại null (gọi nơi dùng để trả 404).
@@ -17,9 +22,6 @@ const ownFolder = async (id, userId) => {
     .select('id,name').eq('id', id).eq('owner_id', userId).single();
   return data || null;
 };
-
-// ── Chế độ của tiến độ: 'cards' (Thẻ ghi nhớ) | 'learn' (Học) — mặc định 'learn' ──
-const modeOf = (v) => (v === 'cards' ? 'cards' : 'learn');
 
 // ── Lấy danh sách id thẻ thuộc 1 set ──────────────────────────────────────────
 const cardIdsOfSet = async (setId) => {
@@ -57,7 +59,6 @@ exports.listSets = async (req, res) => {
         .select('card_id')
         .eq('student_id', userId)
         .eq('status', 'mastered')
-        .eq('mode', 'learn') // thanh % hub/thư mục = tiến độ chế độ Học
         .in('card_id', cards.map(c => c.id));
       if (pErr) throw pErr;
       prog.forEach(p => {
@@ -156,6 +157,36 @@ exports.updateSet = async (req, res) => {
   }
 };
 
+// POST /api/flashcards/sets/:id/cards   Body: { term, definition } — thêm 1 thẻ vào cuối set
+exports.addCard = async (req, res) => {
+  const userId = req.user.id;
+  const { term, definition } = req.body;
+  if (!term?.trim() || !definition?.trim()) {
+    return res.status(400).json({ error: 'Thẻ cần có đủ từ vựng và định nghĩa.' });
+  }
+  try {
+    const set = await ownSet(req.params.id, userId);
+    if (!set) return res.status(404).json({ error: 'Không tìm thấy học phần.' });
+
+    // Thẻ mới nằm cuối: order_index = max hiện có + 1
+    const { data: last, error: oErr } = await fcDb.from('flashcards')
+      .select('order_index').eq('set_id', set.id)
+      .order('order_index', { ascending: false }).limit(1);
+    if (oErr) throw oErr;
+    const nextIndex = last?.length ? (last[0].order_index ?? -1) + 1 : 0;
+
+    const { data: card, error } = await fcDb.from('flashcards')
+      .insert({ set_id: set.id, term: term.trim(), definition: definition.trim(), order_index: nextIndex })
+      .select('id').single();
+    if (error) throw error;
+
+    res.status(201).json({ data: { id: card.id } });
+  } catch (err) {
+    console.error('fc.addCard:', err);
+    res.status(500).json({ error: 'Không thể thêm thẻ vào học phần.' });
+  }
+};
+
 // DELETE /api/flashcards/sets/:id
 exports.deleteSet = async (req, res) => {
   const userId = req.user.id;
@@ -172,9 +203,82 @@ exports.deleteSet = async (req, res) => {
   }
 };
 
+// ─── BÀI KIỂM TRA AI ──────────────────────────────────────────────────────────
+
+// GET /api/flashcards/sets/:id/test  → bài kiểm tra đã lưu của set (hoặc null)
+exports.getTest = async (req, res) => {
+  const userId = req.user.id;
+  try {
+    const set = await ownSet(req.params.id, userId);
+    if (!set) return res.status(404).json({ error: 'Không tìm thấy học phần.' });
+
+    const { data: test, error } = await fcDb.from('flashcard_tests')
+      .select('id,config,questions,created_at')
+      .eq('set_id', set.id)
+      .maybeSingle();
+    if (error) throw error;
+
+    res.json({ data: test || null });
+  } catch (err) {
+    console.error('fc.getTest:', err);
+    res.status(500).json({ error: 'Không thể tải bài kiểm tra.' });
+  }
+};
+
+// POST /api/flashcards/sets/:id/test/generate   Body: { numQuestions, types: [...] }
+// Sinh bài kiểm tra bằng AI, ghi đè bài cũ của set. Trừ quota khi thành công.
+exports.generateTest = async (req, res) => {
+  const userId = req.user.id;
+  const { numQuestions, types } = req.body;
+  try {
+    const set = await ownSet(req.params.id, userId);
+    if (!set) return res.status(404).json({ error: 'Không tìm thấy học phần.' });
+
+    const { data: cards, error: cErr } = await fcDb.from('flashcards')
+      .select('id,term,definition')
+      .eq('set_id', set.id)
+      .order('order_index', { ascending: true });
+    if (cErr) throw cErr;
+    if (!cards.length) return res.status(400).json({ error: 'Học phần chưa có thẻ để tạo bài kiểm tra.' });
+
+    // Validate cấu hình
+    const validTypes = (Array.isArray(types) ? types : []).filter(t => TEST_TYPES.includes(t));
+    if (!validTypes.length) return res.status(400).json({ error: 'Vui lòng chọn ít nhất 1 loại câu hỏi.' });
+    const num = Math.max(1, Math.min(Number(numQuestions) || cards.length, cards.length));
+
+    // Sinh đề (có thể mất 10–30s). Lỗi AI → 502, KHÔNG trừ quota.
+    let questions;
+    try {
+      questions = await generateTest(cards, { numQuestions: num, types: validTypes });
+    } catch (genErr) {
+      console.error('fc.generateTest AI:', genErr);
+      return res.status(502).json({ error: 'AI không tạo được bài kiểm tra. Vui lòng thử lại.' });
+    }
+
+    // Ghi đè bài cũ của set (mỗi set 1 bài — set_id UNIQUE)
+    const { data: test, error: uErr } = await fcDb.from('flashcard_tests')
+      .upsert({
+        set_id:    set.id,
+        owner_id:  userId,
+        config:    { numQuestions: questions.length, types: validTypes },
+        questions,
+        created_at: new Date().toISOString(),
+      }, { onConflict: 'set_id' })
+      .select('id,config,questions,created_at')
+      .single();
+    if (uErr) throw uErr;
+
+    incrementUsage(userId, 'flashcard_test_gen_daily').catch(() => {});
+    res.json({ data: test });
+  } catch (err) {
+    console.error('fc.generateTest:', err);
+    res.status(500).json({ error: 'Không thể tạo bài kiểm tra.' });
+  }
+};
+
 // ─── PROGRESS ─────────────────────────────────────────────────────────────────
 
-// GET /api/flashcards/sets/:id/progress?mode=cards|learn  → map { card_id: 'learning' | 'mastered' }
+// GET /api/flashcards/sets/:id/progress  → map { card_id: 'learning' | 'mastered' }
 exports.getProgress = async (req, res) => {
   const userId = req.user.id;
   try {
@@ -187,7 +291,6 @@ exports.getProgress = async (req, res) => {
     const { data, error } = await fcDb.from('flashcard_progress')
       .select('card_id,status')
       .eq('student_id', userId)
-      .eq('mode', modeOf(req.query.mode))
       .in('card_id', cardIds);
     if (error) throw error;
 
@@ -200,17 +303,17 @@ exports.getProgress = async (req, res) => {
   }
 };
 
-// PUT /api/flashcards/sets/:id/progress   Body: { card_id, status, mode }
+// PUT /api/flashcards/sets/:id/progress   Body: { card_id, status }
 exports.upsertProgress = async (req, res) => {
   const userId = req.user.id;
-  const { card_id, status, mode } = req.body;
+  const { card_id, status } = req.body;
   if (!card_id) return res.status(400).json({ error: 'Thiếu card_id.' });
   if (!['learning', 'mastered'].includes(status)) return res.status(400).json({ error: 'Trạng thái không hợp lệ.' });
   try {
     const { error } = await fcDb.from('flashcard_progress')
       .upsert(
-        { student_id: userId, card_id, status, mode: modeOf(mode), last_reviewed_at: new Date().toISOString() },
-        { onConflict: 'student_id,card_id,mode' }
+        { student_id: userId, card_id, status, last_reviewed_at: new Date().toISOString() },
+        { onConflict: 'student_id,card_id' }
       );
     if (error) throw error;
     res.json({ data: { ok: true } });
@@ -220,7 +323,7 @@ exports.upsertProgress = async (req, res) => {
   }
 };
 
-// DELETE /api/flashcards/sets/:id/progress/:cardId?mode=  → xóa tiến độ 1 thẻ (dùng cho Hoàn tác)
+// DELETE /api/flashcards/sets/:id/progress/:cardId  → xóa tiến độ 1 thẻ (dùng cho Hoàn tác)
 exports.deleteCardProgress = async (req, res) => {
   const userId = req.user.id;
   try {
@@ -228,8 +331,7 @@ exports.deleteCardProgress = async (req, res) => {
     if (!set) return res.status(404).json({ error: 'Không tìm thấy học phần.' });
 
     const { error } = await fcDb.from('flashcard_progress')
-      .delete().eq('student_id', userId).eq('card_id', req.params.cardId)
-      .eq('mode', modeOf(req.query.mode));
+      .delete().eq('student_id', userId).eq('card_id', req.params.cardId);
     if (error) throw error;
     res.json({ data: { ok: true } });
   } catch (err) {
@@ -238,7 +340,7 @@ exports.deleteCardProgress = async (req, res) => {
   }
 };
 
-// DELETE /api/flashcards/sets/:id/progress?mode=  → khởi động lại (xóa tiến độ của user cho set, theo chế độ)
+// DELETE /api/flashcards/sets/:id/progress  → khởi động lại (xóa tiến độ của user cho set)
 exports.resetProgress = async (req, res) => {
   const userId = req.user.id;
   try {
@@ -248,8 +350,7 @@ exports.resetProgress = async (req, res) => {
     const cardIds = await cardIdsOfSet(set.id);
     if (cardIds.length) {
       const { error } = await fcDb.from('flashcard_progress')
-        .delete().eq('student_id', userId).in('card_id', cardIds)
-        .eq('mode', modeOf(req.query.mode));
+        .delete().eq('student_id', userId).in('card_id', cardIds);
       if (error) throw error;
     }
     res.json({ data: { ok: true } });
@@ -320,7 +421,6 @@ exports.getFolder = async (req, res) => {
         .select('card_id')
         .eq('student_id', userId)
         .eq('status', 'mastered')
-        .eq('mode', 'learn') // thanh % hub/thư mục = tiến độ chế độ Học
         .in('card_id', cards.map(c => c.id));
       if (pErr) throw pErr;
       prog.forEach(p => {

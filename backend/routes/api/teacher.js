@@ -6,6 +6,9 @@ const { requireAuth, requireTeacher } = require('../../middleware/auth');
 const c = require('../../controllers/teacherController');
 const ac = require('../../controllers/adminController'); // tái dùng cho thao tác trên kho chung (vocab/kanji)
 const qb = require('../../controllers/teacherQuestionBankController');
+const lc = require('../../controllers/listeningController');
+const nc = require('../../controllers/newsController');
+const rp = require('../../controllers/revenuePoolController');
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -113,6 +116,29 @@ router.delete('/question-bank/:id',         qb.deleteQuestionBank);
 
 // Admin global bank (read-only)
 router.get('/global-question-bank',         qb.listGlobalBank);
+
+// ── Luyện nghe (own dialogues) ────────────────────────────────────────────────
+router.get('/my-listening',                    lc.listMyDialogues);
+router.post('/my-listening',                   lc.createMyDialogue);
+router.put('/my-listening/:id',                lc.updateMyDialogue);
+router.delete('/my-listening/:id',             lc.deleteMyDialogue);
+router.post('/my-listening/:id/lines',         lc.addMyLine);
+router.put('/my-listening/lines/:lineId',      lc.updateMyLine);
+router.delete('/my-listening/lines/:lineId',   lc.deleteMyLine);
+
+// ── Luyện đọc (own reading articles) — tái dùng AI-gen helper của news ────────
+router.get('/my-reading',                      nc.teacherList);
+router.get('/my-reading/:id',                  nc.teacherGetOne);
+router.post('/my-reading',                     nc.teacherCreate);
+router.put('/my-reading/:id',                  nc.teacherUpdate);
+router.delete('/my-reading/:id',               nc.teacherRemove);
+router.post('/my-reading/generate-article',    nc.generateArticle);
+router.post('/my-reading/generate-segments',   nc.generateSegments);
+router.post('/my-reading/generate-questions',  nc.generateQuestions);
+router.post('/my-reading/generate-vocab-grammar', nc.generateVocabGrammar);
+
+// ── Thu nhập từ quỹ chia sẻ doanh thu ─────────────────────────────────────────
+router.get('/earnings',                        rp.teacherEarnings);
 
 // Private reading passages
 router.post('/reading-passages/upload', upload.single('image'), qb.uploadPassageImage);

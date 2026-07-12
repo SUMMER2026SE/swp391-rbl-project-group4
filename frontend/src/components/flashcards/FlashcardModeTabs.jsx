@@ -1,11 +1,10 @@
 import { Link } from 'react-router-dom';
 
-// Thanh chọn chế độ học của 1 học phần: Thẻ ghi nhớ / Học / Kiểm tra.
-// active ∈ 'cards' | 'learn' | 'test'
+// Thanh chọn chế độ học của 1 học phần: Thẻ ghi nhớ / Kiểm tra.
+// active ∈ 'cards' | 'test'
 const MODES = [
-  { key: 'cards', label: 'Thẻ ghi nhớ', icon: 'style',  to: (id) => `/flashcards/${id}` },
-  { key: 'learn', label: 'Học',         icon: 'school', to: (id) => `/flashcards/${id}/learn` },
-  { key: 'test',  label: 'Kiểm tra',    icon: 'quiz',   to: (id) => `/flashcards/${id}/test` },
+  { key: 'cards', label: 'Thẻ ghi nhớ', icon: 'style', to: (id) => `/flashcards/${id}` },
+  { key: 'test',  label: 'Kiểm tra',    icon: 'quiz',  to: (id) => `/flashcards/${id}/test` },
 ];
 
 export default function FlashcardModeTabs({ setId, active }) {

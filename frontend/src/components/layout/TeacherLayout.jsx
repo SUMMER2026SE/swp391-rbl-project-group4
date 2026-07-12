@@ -4,14 +4,19 @@ import { useAuth } from '../../contexts/AuthContext';
 const TEACHER_LINKS = [
   { to: '/teacher',               icon: 'dashboard',     label: 'Dashboard' },
   { to: '/teacher/courses',       icon: 'menu_book',     label: 'Khóa học' },
-  { to: '/teacher/vocab',         icon: 'translate',     label: 'Từ vựng' },
-  { to: '/teacher/kanji',         icon: 'font_download', label: 'Kanji' },
-  { to: '/teacher/grammar',       icon: 'spellcheck',    label: 'Ngữ pháp' },
+  // Ẩn khỏi sidebar theo yêu cầu (giữ nguyên route/API/component để bật lại sau)
+  // { to: '/teacher/vocab',         icon: 'translate',     label: 'Từ vựng' },
+  // { to: '/teacher/kanji',         icon: 'font_download', label: 'Kanji' },
+  // { to: '/teacher/grammar',       icon: 'spellcheck',    label: 'Ngữ pháp' },
   { to: '/teacher/study-lists',   icon: 'library_books', label: 'Bài đăng danh sách' },
+  { to: '/teacher/listening',     icon: 'headphones',    label: 'Luyện nghe' },
+  { to: '/teacher/reading',       icon: 'menu_book',     label: 'Luyện đọc' },
+  { to: '/teacher/earnings',      icon: 'payments',      label: 'Thu nhập' },
   { to: '/teacher/dictionary',    icon: 'auto_stories',  label: 'Từ điển' },
   { to: '/teacher/quizzes',       icon: 'quiz',          label: 'Bài kiểm tra' },
   { to: '/teacher/question-bank', icon: 'inventory_2',   label: 'Ngân hàng câu hỏi' },
-  { to: '/teacher/classes',       icon: 'groups',        label: 'Lớp học' },
+  // Ẩn khỏi sidebar theo yêu cầu (giữ nguyên route/API/component để bật lại sau)
+  // { to: '/teacher/classes',       icon: 'groups',        label: 'Lớp học' },
   { to: '/chat',                  icon: 'smart_toy',     label: 'Trợ lý AI' },
   { to: '/profile',               icon: 'person',        label: 'Hồ sơ' },
 ];

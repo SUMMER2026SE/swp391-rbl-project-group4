@@ -1,6 +1,7 @@
 'use strict';
 
 const { supabaseAdmin } = require('../config/supabase');
+const { logContentUse } = require('../utils/usageTracker');
 
 const TABLE_BY_TYPE = { vocabulary: 'vocabulary', kanji: 'kanji', grammar: 'grammar_points' };
 const LIST_TYPES = Object.keys(TABLE_BY_TYPE);
@@ -95,6 +96,8 @@ exports.getOne = async (req, res) => {
       supabaseAdmin.from('study_list_posts').update({ view_count: post.view_count + 1 }).eq('id', post.id)
         .then(({ error }) => { if (error) console.error('studyList view_count bump:', error); });
     }
+    logContentUse({ userId: req.user?.id, contentType: 'study_list', contentId: post.id,
+      creatorType: post.creator_type, ownerId: post.created_by });
 
     res.json({ ...post, view_count: post.view_count + (isOwnerViewing ? 0 : 1), items: orderedItems, creator_name });
   } catch (err) {

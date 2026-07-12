@@ -66,7 +66,7 @@ export default function FlashcardStudy() {
     (async () => {
       const [setRes, progRes] = await Promise.allSettled([
         api.get(`/flashcards/sets/${id}`),
-        api.get(`/flashcards/sets/${id}/progress?mode=cards`),
+        api.get(`/flashcards/sets/${id}/progress`),
       ]);
       const prog = progRes.status === 'fulfilled'
         ? (progRes.value.data.data || progRes.value.data || {})
@@ -147,7 +147,7 @@ export default function FlashcardStudy() {
     else setPos(pos + 1);
 
     try {
-      await api.put(`/flashcards/sets/${id}/progress`, { card_id: card.id, status, mode: 'cards' });
+      await api.put(`/flashcards/sets/${id}/progress`, { card_id: card.id, status });
     } catch (e) {
       setError(e.message);
     }
@@ -171,9 +171,9 @@ export default function FlashcardStudy() {
 
     try {
       if (last.prevStatus === undefined) {
-        await api.delete(`/flashcards/sets/${id}/progress/${last.cardId}?mode=cards`);
+        await api.delete(`/flashcards/sets/${id}/progress/${last.cardId}`);
       } else {
-        await api.put(`/flashcards/sets/${id}/progress`, { card_id: last.cardId, status: last.prevStatus, mode: 'cards' });
+        await api.put(`/flashcards/sets/${id}/progress`, { card_id: last.cardId, status: last.prevStatus });
       }
     } catch (e) {
       setError(e.message);
@@ -200,7 +200,7 @@ export default function FlashcardStudy() {
     setDone(false);
     setHistory([]);
     try {
-      await api.delete(`/flashcards/sets/${id}/progress?mode=cards`);
+      await api.delete(`/flashcards/sets/${id}/progress`);
     } catch (e) {
       setError(e.message);
     }

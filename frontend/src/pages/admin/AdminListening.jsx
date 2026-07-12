@@ -138,7 +138,7 @@ function LineForm({ init = EMPTY_LINE, onSave, onCancel, saving }) {
   );
 }
 
-function DialogueCard({ dlg, onUpdated, onDeleted }) {
+function DialogueCard({ dlg, onUpdated, onDeleted, ep }) {
   const [expanded, setExpanded]   = useState(false);
   const [editing, setEditing]     = useState(false);
   const [saving, setSaving]       = useState(false);
@@ -149,21 +149,21 @@ function DialogueCard({ dlg, onUpdated, onDeleted }) {
   const saveDialogue = async (f) => {
     setSaving(true);
     try {
-      const r = await api.put(`/admin/listening/dialogues/${dlg.id}`, f);
+      const r = await api.put(ep.update(dlg.id), f);
       onUpdated(r.data); setEditing(false);
     } catch { alert('Lỗi cập nhật.'); } finally { setSaving(false); }
   };
 
   const deleteDlg = async () => {
     if (!confirm('Xóa hội thoại này và toàn bộ câu thoại?')) return;
-    await api.delete(`/admin/listening/dialogues/${dlg.id}`);
+    await api.delete(ep.remove(dlg.id));
     onDeleted(dlg.id);
   };
 
   const addLine = async (f) => {
     setSaving(true);
     try {
-      const r = await api.post(`/admin/listening/dialogues/${dlg.id}/lines`, f);
+      const r = await api.post(ep.addLine(dlg.id), f);
       setLines(prev => [...prev, r.data]); setAddingLine(false);
     } catch { alert('Lỗi thêm câu.'); } finally { setSaving(false); }
   };
@@ -171,7 +171,7 @@ function DialogueCard({ dlg, onUpdated, onDeleted }) {
   const updateLine = async (f) => {
     setSaving(true);
     try {
-      const r = await api.put(`/admin/listening/lines/${editingLine.id}`, f);
+      const r = await api.put(ep.updateLine(editingLine.id), f);
       setLines(prev => prev.map(l => l.id === r.data.id ? r.data : l));
       setEditingLine(null);
     } catch { alert('Lỗi cập nhật câu.'); } finally { setSaving(false); }
@@ -179,7 +179,7 @@ function DialogueCard({ dlg, onUpdated, onDeleted }) {
 
   const deleteLine = async (id) => {
     if (!confirm('Xóa câu này?')) return;
-    await api.delete(`/admin/listening/lines/${id}`);
+    await api.delete(ep.removeLine(id));
     setLines(prev => prev.filter(l => l.id !== id));
   };
 
@@ -247,7 +247,17 @@ function DialogueCard({ dlg, onUpdated, onDeleted }) {
   );
 }
 
-export default function AdminListening() {
+const ADMIN_EP = {
+  list: '/admin/listening/dialogues',
+  create: '/admin/listening/dialogues',
+  update: (id) => `/admin/listening/dialogues/${id}`,
+  remove: (id) => `/admin/listening/dialogues/${id}`,
+  addLine: (id) => `/admin/listening/dialogues/${id}/lines`,
+  updateLine: (lineId) => `/admin/listening/lines/${lineId}`,
+  removeLine: (lineId) => `/admin/listening/lines/${lineId}`,
+};
+
+export function ListeningManager({ Layout = AdminLayout, ep = ADMIN_EP, title = 'Hội thoại luyện nghe' }) {
   const [dialogues, setDialogues] = useState([]);
   const [loading, setLoading]     = useState(true);
   const [creating, setCreating]   = useState(false);
@@ -255,13 +265,13 @@ export default function AdminListening() {
   const [levelFilter, setLevelFilter] = useState('');
 
   useEffect(() => {
-    api.get('/admin/listening/dialogues').then(r => setDialogues(r.data)).finally(() => setLoading(false));
+    api.get(ep.list).then(r => setDialogues(r.data)).finally(() => setLoading(false));
   }, []);
 
   const createDialogue = async (f) => {
     setSaving(true);
     try {
-      const r = await api.post('/admin/listening/dialogues', f);
+      const r = await api.post(ep.create, f);
       setDialogues(prev => [r.data, ...prev]); setCreating(false);
     } catch { alert('Lỗi tạo hội thoại.'); } finally { setSaving(false); }
   };
@@ -269,12 +279,12 @@ export default function AdminListening() {
   const filtered = levelFilter ? dialogues.filter(d => d.level === levelFilter) : dialogues;
 
   return (
-    <AdminLayout title="Hội thoại luyện nghe">
+    <Layout title={title}>
       <div className="max-w-3xl mx-auto">
         <div className="flex items-center justify-between mb-5">
           <div>
-            <h1 className="text-2xl font-bold">Hội thoại luyện nghe</h1>
-            <p className="text-sm text-on-muted">{dialogues.length} hội thoại · UC20-22</p>
+            <h1 className="text-2xl font-bold">{title}</h1>
+            <p className="text-sm text-on-muted">{dialogues.length} hội thoại</p>
           </div>
           <button onClick={() => setCreating(v => !v)}
             className="flex items-center gap-2 px-4 py-2 bg-tsubaki-red text-white text-sm font-semibold rounded-xl">
@@ -308,7 +318,7 @@ export default function AdminListening() {
 
         <div className="space-y-3">
           {filtered.map(dlg => (
-            <DialogueCard key={dlg.id} dlg={dlg}
+            <DialogueCard key={dlg.id} dlg={dlg} ep={ep}
               onUpdated={updated => setDialogues(prev => prev.map(d => d.id === updated.id ? { ...d, ...updated } : d))}
               onDeleted={id => setDialogues(prev => prev.filter(d => d.id !== id))} />
           ))}
@@ -321,6 +331,10 @@ export default function AdminListening() {
           </div>
         )}
       </div>
-    </AdminLayout>
+    </Layout>
   );
+}
+
+export default function AdminListening() {
+  return <ListeningManager />;
 }

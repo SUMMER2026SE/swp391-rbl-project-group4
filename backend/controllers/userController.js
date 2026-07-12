@@ -37,13 +37,21 @@ exports.updateProfile = async (req, res) => {
   const phone    = req.body.phone?.trim()      || null;
   const jlpt     = req.body.jlptTarget?.trim() || null;
   const bio      = req.body.bio?.trim()        || null;
+  const currentLevel = req.body.currentLevel?.trim() || null;
 
   if (!fullname) return res.status(400).json({ error: 'Họ và tên không được để trống.' });
+  if (currentLevel && !['N5', 'N4', 'N3', 'N2', 'N1'].includes(currentLevel)) {
+    return res.status(400).json({ error: 'Trình độ hiện tại không hợp lệ.' });
+  }
+
+  // Only overwrite current_level when explicitly provided (avoid clobbering on unrelated saves).
+  const profileUpdate = { jlpt_target_level: jlpt, study_goal: bio };
+  if (currentLevel) profileUpdate.current_level = currentLevel;
 
   try {
     await Promise.all([
       supabaseAdmin.from('users').update({ full_name: fullname, phone }).eq('id', userId),
-      supabaseAdmin.from('student_profiles').update({ jlpt_target_level: jlpt, study_goal: bio }).eq('user_id', userId),
+      supabaseAdmin.from('student_profiles').update(profileUpdate).eq('user_id', userId),
       supabaseAdmin.auth.admin.updateUserById(userId, { user_metadata: { full_name: fullname } }),
     ]);
     res.json({ message: 'Đã lưu thay đổi.' });

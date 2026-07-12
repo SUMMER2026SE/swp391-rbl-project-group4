@@ -4,7 +4,7 @@ import StudentLayout from '../../components/layout/StudentLayout';
 import Alert from '../../components/ui/Alert';
 import { useAuth } from '../../contexts/AuthContext';
 import { useLang } from '../../contexts/LangContext';
-import api from '../../lib/api';
+import api, { getLearningPath } from '../../lib/api';
 
 function StatCard({ label, value, icon, color = 'text-tsubaki-red', loading }) {
   return (
@@ -36,6 +36,7 @@ export default function Dashboard() {
   const { t } = useLang();
   const [dashData, setDashData]     = useState(null);
   const [latestCourse, setLatestCourse] = useState(null);
+  const [pathData, setPathData]     = useState(null);
   const [loading, setLoading]       = useState(true);
   const [error, setError]           = useState('');
 
@@ -47,10 +48,12 @@ export default function Dashboard() {
     Promise.allSettled([
       api.get('/users/dashboard'),
       api.get('/courses?limit=1&page=1'),
-    ]).then(([dashRes, courseRes]) => {
+      getLearningPath(),
+    ]).then(([dashRes, courseRes, pathRes]) => {
       if (dashRes.status === 'fulfilled') setDashData(dashRes.value.data);
       else setError(dashRes.reason.message);
       if (courseRes.status === 'fulfilled') setLatestCourse(courseRes.value.data.data?.[0] || null);
+      if (pathRes.status === 'fulfilled') setPathData(pathRes.value);
     }).finally(() => setLoading(false));
   }, []);
 
@@ -81,6 +84,54 @@ export default function Dashboard() {
         <StatCard loading={loading} label={t('dashboard.grammar_learned')} value={dash.total_grammar_learned} icon="spellcheck"    color="text-green-600" />
         <StatCard loading={loading} label={t('dashboard.total_hours')}     value={Math.floor((dash.total_study_minutes || 0) / 60)} icon="schedule" color="text-amber-500" />
       </div>
+
+      {/* Learning path — flagship personalized feature */}
+      {loading ? <div className="mb-6"><CardSkeleton /></div> : (() => {
+        const path      = pathData?.path || null;
+        const steps     = pathData?.steps || [];
+        const progress  = pathData?.progress || null;
+        const nextStep  = steps.find(s => s.status !== 'completed') || null;
+        return (
+          <div className="glass-card rounded-2xl p-6 mb-6 border border-sumire-purple/20">
+            <div className="flex items-center justify-between gap-4 flex-wrap">
+              <div className="flex items-center gap-3 min-w-0">
+                <span className="material-symbols-outlined text-sumire-purple text-2xl shrink-0">route</span>
+                <div className="min-w-0">
+                  <h2 className="font-display font-bold text-lg">Lộ trình học</h2>
+                  {path ? (
+                    <p className="text-sm text-on-muted">
+                      {path.current_level} → {path.target_level}
+                      {progress ? ` · ${progress.completed}/${progress.total} bước (${progress.pct}%)` : ''}
+                    </p>
+                  ) : (
+                    <p className="text-sm text-on-muted">Để AI xây lộ trình học cá nhân hoá từ trình độ đến mục tiêu của bạn.</p>
+                  )}
+                </div>
+              </div>
+              <Link to="/learning-path"
+                className="inline-flex items-center gap-1 text-sm text-sumire-purple font-semibold hover:underline shrink-0">
+                {path ? 'Tiếp tục lộ trình' : 'Tạo lộ trình học'}
+                <span className="material-symbols-outlined text-base">arrow_forward</span>
+              </Link>
+            </div>
+            {path && nextStep && (
+              <div className="mt-4 flex items-center gap-3 p-3 rounded-xl bg-surface-low/40">
+                <span className="material-symbols-outlined text-sumire-purple shrink-0">flag</span>
+                <div className="min-w-0">
+                  <p className="text-xs font-bold text-sumire-purple uppercase tracking-widest">Bước tiếp theo</p>
+                  <p className="font-semibold text-sm truncate">{nextStep.title}</p>
+                </div>
+              </div>
+            )}
+            {path && !nextStep && (
+              <p className="mt-4 text-sm font-semibold text-green-600 flex items-center gap-1">
+                <span className="material-symbols-outlined text-lg fill">check_circle</span>
+                Bạn đã hoàn thành toàn bộ lộ trình! 🎉
+              </p>
+            )}
+          </div>
+        );
+      })()}
 
       <div className="grid md:grid-cols-3 gap-6">
         {/* Streak */}
