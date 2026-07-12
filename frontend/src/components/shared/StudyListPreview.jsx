@@ -157,17 +157,11 @@ export default function StudyListPreview({ type }) {
       {search || activeFilter ? 'Không tìm thấy bài đăng.' : 'Chưa có bài đăng nào cho mục này.'}
     </div>
   ) : isTopicPrimary ? (
-    // Đã chọn 1 chủ đề → lưới phẳng bài đăng của chủ đề đó (mỗi bài có thể
-    // chứa từ ở nhiều cấp độ khác nhau). "Tất cả" → nhóm theo chủ đề.
-    activeFilter ? (
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-        {posts.map(post => <PostCard key={post.id} post={post} type={type} onClick={() => navigate(`/study-lists/${type}/${post.id}`)} />)}
-      </div>
-    ) : (
-      <div>
-        {groupByTopic(posts).map(g => <GroupSection key={g.key} label={g.label} icon={g.icon} items={g.items} type={type} navigate={navigate} />)}
-      </div>
-    )
+    // Từ vựng: cả khi chọn 1 chủ đề lẫn "Tất cả" đều hiện 1 lưới phẳng, chảy
+    // trái sang phải trên xuống dưới — không chia thành từng khối theo chủ đề.
+    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+      {posts.map(post => <PostCard key={post.id} post={post} type={type} onClick={() => navigate(`/study-lists/${type}/${post.id}`)} />)}
+    </div>
   ) : activeFilter ? (
     // Kanji/Ngữ pháp: cấp độ là bộ lọc chính — đã chọn 1 cấp độ, nhóm theo chủ đề bên trong.
     <div>
