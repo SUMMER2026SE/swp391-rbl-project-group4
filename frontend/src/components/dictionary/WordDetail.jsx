@@ -2,6 +2,8 @@ import { useState } from 'react';
 import FuriganaText from '../ui/FuriganaText';
 import Modal from '../ui/Modal';
 import SpeakButton from './SpeakButton';
+import AddToFlashcardModal from './AddToFlashcardModal';
+import { useAuth } from '../../contexts/AuthContext';
 import { useLang } from '../../contexts/LangContext';
 import { translatePos } from '../../lib/posLabels';
 
@@ -17,7 +19,13 @@ const KANJI_REGEX = /[一-龯]/g;
 
 export default function WordDetail({ entry, onSelectRelated }) {
   const { t } = useLang();
+  const { user } = useAuth();
   const [selectedKanji, setSelectedKanji] = useState(null);
+  const [fcOpen, setFcOpen] = useState(false);
+
+  // Flashcards chỉ dành cho student (route /flashcards/* bọc StudentRoute) — ẩn nút với teacher/admin
+  const role = user?.user_metadata?.role;
+  const canAddFlashcard = role !== 'teacher' && role !== 'admin';
 
   const kanjiMap = new Map((entry.kanji_breakdown || []).map(k => [k.character, k]));
   const hanViet = entry.kanji
@@ -60,7 +68,17 @@ export default function WordDetail({ entry, onSelectRelated }) {
           <div>
             <div className="flex items-center gap-3">
               <h2 className="font-display text-5xl font-bold text-tsubaki-red">{entry.kanji || entry.kana}</h2>
-              <SpeakButton text={entry.kanji || entry.kana} />
+              <SpeakButton text={entry.kana || entry.kanji} />
+              {canAddFlashcard && (
+                <button
+                  type="button"
+                  onClick={() => setFcOpen(true)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-semibold bg-tsubaki-red/10 text-tsubaki-red hover:bg-tsubaki-red/20 transition-colors"
+                >
+                  <span className="material-symbols-outlined text-[18px]">bookmark_add</span>
+                  {t('dictionary.add_to_flashcards')}
+                </button>
+              )}
             </div>
             {entry.kanji && (
               <p className="text-lg text-on-muted mt-1">
@@ -162,6 +180,10 @@ export default function WordDetail({ entry, onSelectRelated }) {
             </div>
           )}
         </div>
+      )}
+
+      {canAddFlashcard && (
+        <AddToFlashcardModal entry={entry} open={fcOpen} onClose={() => setFcOpen(false)} />
       )}
 
       <Modal open={!!selectedKanji} onClose={() => setSelectedKanji(null)} size="sm" showHeader={false}>

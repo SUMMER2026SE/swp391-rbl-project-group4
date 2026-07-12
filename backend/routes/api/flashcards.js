@@ -10,6 +10,7 @@ router.post('/sets',                requireAuth, c.createSet);
 router.get('/sets/:id',             requireAuth, c.getSet);
 router.put('/sets/:id',             requireAuth, c.updateSet);
 router.delete('/sets/:id',          requireAuth, c.deleteSet);
+router.post('/sets/:id/cards',      requireAuth, c.addCard);
 
 // Tiến độ học
 router.get('/sets/:id/progress',    requireAuth, c.getProgress);

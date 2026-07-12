@@ -156,6 +156,36 @@ exports.updateSet = async (req, res) => {
   }
 };
 
+// POST /api/flashcards/sets/:id/cards   Body: { term, definition } — thêm 1 thẻ vào cuối set
+exports.addCard = async (req, res) => {
+  const userId = req.user.id;
+  const { term, definition } = req.body;
+  if (!term?.trim() || !definition?.trim()) {
+    return res.status(400).json({ error: 'Thẻ cần có đủ từ vựng và định nghĩa.' });
+  }
+  try {
+    const set = await ownSet(req.params.id, userId);
+    if (!set) return res.status(404).json({ error: 'Không tìm thấy học phần.' });
+
+    // Thẻ mới nằm cuối: order_index = max hiện có + 1
+    const { data: last, error: oErr } = await fcDb.from('flashcards')
+      .select('order_index').eq('set_id', set.id)
+      .order('order_index', { ascending: false }).limit(1);
+    if (oErr) throw oErr;
+    const nextIndex = last?.length ? (last[0].order_index ?? -1) + 1 : 0;
+
+    const { data: card, error } = await fcDb.from('flashcards')
+      .insert({ set_id: set.id, term: term.trim(), definition: definition.trim(), order_index: nextIndex })
+      .select('id').single();
+    if (error) throw error;
+
+    res.status(201).json({ data: { id: card.id } });
+  } catch (err) {
+    console.error('fc.addCard:', err);
+    res.status(500).json({ error: 'Không thể thêm thẻ vào học phần.' });
+  }
+};
+
 // DELETE /api/flashcards/sets/:id
 exports.deleteSet = async (req, res) => {
   const userId = req.user.id;
