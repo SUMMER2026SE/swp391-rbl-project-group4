@@ -2,6 +2,7 @@
 
 const router = require('express').Router();
 const { requireAuth } = require('../../middleware/auth');
+const checkQuota = require('../../middleware/checkQuota');
 const c = require('../../controllers/flashcardController');
 
 // Học phần (sets)
@@ -11,6 +12,10 @@ router.get('/sets/:id',             requireAuth, c.getSet);
 router.put('/sets/:id',             requireAuth, c.updateSet);
 router.delete('/sets/:id',          requireAuth, c.deleteSet);
 router.post('/sets/:id/cards',      requireAuth, c.addCard);
+
+// Bài kiểm tra AI (mỗi set 1 bài; tạo tốn quota, làm lại miễn phí)
+router.get('/sets/:id/test',           requireAuth, c.getTest);
+router.post('/sets/:id/test/generate', requireAuth, checkQuota('flashcard_test_gen_daily'), c.generateTest);
 
 // Tiến độ học
 router.get('/sets/:id/progress',    requireAuth, c.getProgress);

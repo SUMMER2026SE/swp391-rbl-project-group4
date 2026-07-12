@@ -2,27 +2,39 @@
 
 const FPT_AI_BASE = 'https://mkp-api.fptcloud.com/v1';
 
+// options.timeoutMs (tùy chọn): hủy request nếu AI trả lời quá lâu — mặc định KHÔNG timeout
+// để không ảnh hưởng các caller hiện có (chat AI Sensei, sinh quiz...).
 async function chatCompletion(messages, options = {}) {
-  const res = await fetch(`${FPT_AI_BASE}/chat/completions`, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${process.env.FPT_AI_API_KEY}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model: options.model || process.env.FPT_AI_MODEL || 'gemma-4-31B-it',
-      messages,
-      max_tokens: options.max_tokens || 1024,
-      temperature: options.temperature ?? 0.7,
-    }),
-  });
+  const controller = options.timeoutMs ? new AbortController() : null;
+  const timer = controller ? setTimeout(() => controller.abort(), options.timeoutMs) : null;
+  try {
+    const res = await fetch(`${FPT_AI_BASE}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${process.env.FPT_AI_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: options.model || process.env.FPT_AI_MODEL || 'gemma-4-31B-it',
+        messages,
+        max_tokens: options.max_tokens || 1024,
+        temperature: options.temperature ?? 0.7,
+      }),
+      signal: controller?.signal,
+    });
 
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: { message: res.statusText } }));
-    throw new Error(err.error?.message || `FPT AI error ${res.status}`);
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: { message: res.statusText } }));
+      throw new Error(err.error?.message || `FPT AI error ${res.status}`);
+    }
+
+    return res.json();
+  } catch (err) {
+    if (err.name === 'AbortError') throw new Error(`FPT AI timeout sau ${options.timeoutMs}ms`);
+    throw err;
+  } finally {
+    if (timer) clearTimeout(timer);
   }
-
-  return res.json();
 }
 
 // Parse SRT subtitle text into segment array
