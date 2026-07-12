@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../../lib/api';
+import { TOPICS, TOPIC_ICONS } from '../../lib/studyListTopics';
 
 const TYPE_ICON  = { vocabulary: 'translate', kanji: 'font_download', grammar: 'spellcheck' };
 const ITEM_UNIT  = { vocabulary: 'từ vựng', kanji: 'kanji', grammar: 'mẫu ngữ pháp' };
@@ -18,14 +19,26 @@ const LEVEL_BADGE = {
   N1: 'bg-red-100 text-red-700',
 };
 
+// Nhóm danh sách bài đăng theo chủ đề (giữ thứ tự chủ đề cố định), bài chưa gắn
+// chủ đề nào rơi vào nhóm "Khác" ở cuối.
+function groupByTopic(posts) {
+  const groups = TOPICS
+    .map(t => ({ key: t, label: t, icon: TOPIC_ICONS[t], items: posts.filter(p => p.topic === t) }))
+    .filter(g => g.items.length > 0);
+  const rest = posts.filter(p => !p.topic || !TOPICS.includes(p.topic));
+  if (rest.length > 0) groups.push({ key: '__other', label: 'Khác', icon: 'more_horiz', items: rest });
+  return groups;
+}
+
 function PostCard({ post, type, onClick }) {
+  const headerIcon = post.topic ? (TOPIC_ICONS[post.topic] || TYPE_ICON[type]) : TYPE_ICON[type];
   return (
     <div
       onClick={onClick}
       className="rounded-2xl overflow-hidden glass-card hover:shadow-lg hover:-translate-y-0.5 border border-transparent hover:border-tsubaki-red/30 transition-all cursor-pointer"
     >
       <div className={`h-24 flex items-center justify-center ${LEVEL_BG[post.level] || 'bg-gradient-to-br from-slate-400 to-slate-600'}`}>
-        <span className="material-symbols-outlined text-4xl text-white/90">{TYPE_ICON[type]}</span>
+        <span className="material-symbols-outlined text-4xl text-white/90">{headerIcon}</span>
       </div>
       <div className="p-4">
         <h3 className="font-semibold text-charcoal text-sm line-clamp-2 mb-2 min-h-[2.5rem]">{post.title}</h3>
@@ -47,6 +60,25 @@ function PostCard({ post, type, onClick }) {
   );
 }
 
+function GroupSection({ label, icon, items, type, navigate }) {
+  return (
+    <div className="mb-5 last:mb-0">
+      <div className="flex items-center gap-2 mb-3">
+        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-bold bg-slate-100 text-slate-700">
+          {icon && <span className="material-symbols-outlined text-base">{icon}</span>}
+          {label}
+        </span>
+        <span className="text-sm text-on-muted">{items.length} bài đăng</span>
+      </div>
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+        {items.map(post => (
+          <PostCard key={post.id} post={post} type={type} onClick={() => navigate(`/study-lists/${type}/${post.id}`)} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function Skeleton() {
   return (
     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
@@ -57,21 +89,44 @@ function Skeleton() {
   );
 }
 
-// Toàn bộ khu vực "Bài đăng" (nhóm theo cấp độ N5-N1) — nhúng thẳng vào trang
-// Từ vựng/Kanji/Ngữ pháp, không cần chuyển trang riêng mới xem được.
+function SortToggle({ sort, setSort }) {
+  return (
+    <div className="flex gap-2">
+      {[['newest', 'Mới nhất'], ['popular', 'Nhiều lượt xem nhất']].map(([key, l]) => (
+        <button
+          key={key}
+          onClick={() => setSort(key)}
+          className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-colors ${sort === key ? 'bg-charcoal text-white' : 'bg-white border border-outline text-on-muted hover:border-charcoal'}`}
+        >
+          {l}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// Toàn bộ khu vực "Bài đăng" — nhúng thẳng vào trang Từ vựng/Kanji/Ngữ pháp.
+// Từ vựng: chủ đề là bộ lọc chính, liệt kê thành khung bên trái cho dễ chọn
+// (giống trang tham khảo) — vì cùng 1 chủ đề thường có từ ở nhiều cấp độ khác
+// nhau, việc lọc theo cấp độ chuyển vào bên trong từng bài khi xem từng từ.
+// Kanji/Ngữ pháp: chưa có nội dung theo chủ đề nên vẫn giữ cấp độ làm bộ lọc
+// chính (dải nút phía trên), chủ đề nhóm phụ bên trong, như trước.
 export default function StudyListPreview({ type }) {
   const navigate = useNavigate();
+  const isTopicPrimary = type === 'vocabulary';
   const [posts, setPosts]     = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch]   = useState('');
   const [level, setLevel]     = useState('');
+  const [topic, setTopic]     = useState('');
   const [sort, setSort]       = useState('newest');
 
-  const fetchPosts = useCallback(async (l, s, se) => {
+  const fetchPosts = useCallback(async (l, tp, s, se) => {
     setLoading(true);
     try {
       const params = new URLSearchParams({ type, sort: s, page: 1, limit: 100 });
       if (l)  params.set('level', l);
+      if (tp) params.set('topic', tp);
       if (se) params.set('search', se);
       const r = await api.get(`/study-lists?${params}`);
       setPosts(r.data.data || []);
@@ -82,16 +137,55 @@ export default function StudyListPreview({ type }) {
     }
   }, [type]);
 
-  useEffect(() => { fetchPosts(level, sort, search); }, [level, sort, type]);
+  useEffect(() => { fetchPosts(level, topic, sort, search); }, [level, topic, sort, type]);
 
   const handleSearch = (e) => {
     e.preventDefault();
-    fetchPosts(level, sort, search);
+    fetchPosts(level, topic, sort, search);
   };
 
-  const grouped = LEVELS
+  const activeFilter = isTopicPrimary ? topic : level;
+
+  const groupedByLevel = LEVELS
     .map(l => ({ level: l, items: posts.filter(p => p.level === l) }))
     .filter(g => g.items.length > 0);
+
+  const content = loading ? (
+    <Skeleton />
+  ) : posts.length === 0 ? (
+    <div className="glass-card rounded-2xl p-8 text-center text-on-muted text-sm">
+      {search || activeFilter ? 'Không tìm thấy bài đăng.' : 'Chưa có bài đăng nào cho mục này.'}
+    </div>
+  ) : isTopicPrimary ? (
+    // Đã chọn 1 chủ đề → lưới phẳng bài đăng của chủ đề đó (mỗi bài có thể
+    // chứa từ ở nhiều cấp độ khác nhau). "Tất cả" → nhóm theo chủ đề.
+    activeFilter ? (
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+        {posts.map(post => <PostCard key={post.id} post={post} type={type} onClick={() => navigate(`/study-lists/${type}/${post.id}`)} />)}
+      </div>
+    ) : (
+      <div>
+        {groupByTopic(posts).map(g => <GroupSection key={g.key} label={g.label} icon={g.icon} items={g.items} type={type} navigate={navigate} />)}
+      </div>
+    )
+  ) : activeFilter ? (
+    // Kanji/Ngữ pháp: cấp độ là bộ lọc chính — đã chọn 1 cấp độ, nhóm theo chủ đề bên trong.
+    <div>
+      {groupByTopic(posts).map(g => <GroupSection key={g.key} label={g.label} icon={g.icon} items={g.items} type={type} navigate={navigate} />)}
+    </div>
+  ) : (
+    <div className="space-y-8">
+      {groupedByLevel.map(lg => (
+        <div key={lg.level}>
+          <div className="flex items-center gap-2 mb-3">
+            <span className={`px-3 py-1 rounded-full text-sm font-bold ${LEVEL_BADGE[lg.level]}`}>{lg.level}</span>
+            <span className="text-sm text-on-muted">{lg.items.length} bài đăng</span>
+          </div>
+          {groupByTopic(lg.items).map(g => <GroupSection key={g.key} label={g.label} icon={g.icon} items={g.items} type={type} navigate={navigate} />)}
+        </div>
+      ))}
+    </div>
+  );
 
   return (
     <div className="mb-8">
@@ -113,62 +207,60 @@ export default function StudyListPreview({ type }) {
         </form>
       </div>
 
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
-        <div className="flex flex-wrap gap-2">
-          <button
-            onClick={() => setLevel('')}
-            className={`px-4 py-1.5 rounded-full text-sm font-semibold transition-colors ${!level ? 'bg-tsubaki-red text-white' : 'bg-white border border-outline text-on-muted hover:border-tsubaki-red'}`}
-          >
-            Tất cả
-          </button>
-          {LEVELS.map(l => (
-            <button key={l} onClick={() => setLevel(l)}
-              className={`px-4 py-1.5 rounded-full text-sm font-semibold transition-colors ${level === l ? 'bg-tsubaki-red text-white' : 'bg-white border border-outline text-on-muted hover:border-tsubaki-red'}`}>
-              {l}
-            </button>
-          ))}
-        </div>
-        <div className="flex gap-2">
-          {[['newest', 'Mới nhất'], ['popular', 'Nhiều lượt xem nhất']].map(([key, l]) => (
-            <button
-              key={key}
-              onClick={() => setSort(key)}
-              className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-colors ${sort === key ? 'bg-charcoal text-white' : 'bg-white border border-outline text-on-muted hover:border-charcoal'}`}
-            >
-              {l}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {loading ? (
-        <Skeleton />
-      ) : posts.length === 0 ? (
-        <div className="glass-card rounded-2xl p-8 text-center text-on-muted text-sm">
-          {search || level ? 'Không tìm thấy bài đăng.' : 'Chưa có bài đăng nào cho mục này.'}
-        </div>
-      ) : level ? (
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-          {posts.map(post => (
-            <PostCard key={post.id} post={post} type={type} onClick={() => navigate(`/study-lists/${type}/${post.id}`)} />
-          ))}
-        </div>
-      ) : (
-        <div className="space-y-6">
-          {grouped.map(g => (
-            <div key={g.level}>
-              <div className="flex items-center gap-2 mb-3">
-                <span className={`px-3 py-1 rounded-full text-sm font-bold ${LEVEL_BADGE[g.level]}`}>{g.level}</span>
-                <span className="text-sm text-on-muted">{g.items.length} bài đăng</span>
-              </div>
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                {g.items.map(post => (
-                  <PostCard key={post.id} post={post} type={type} onClick={() => navigate(`/study-lists/${type}/${post.id}`)} />
+      {isTopicPrimary ? (
+        <div className="flex flex-col lg:flex-row gap-6">
+          {/* Khung chủ đề bên trái — chọn 1 lần, dễ nhìn hơn dải nút cuộn ngang */}
+          <aside className="lg:w-64 shrink-0">
+            <div className="glass-card rounded-2xl p-3 lg:sticky lg:top-4">
+              <p className="px-3 py-2 text-xs font-semibold text-on-muted uppercase tracking-wide">Chủ đề</p>
+              <div className="flex lg:flex-col gap-1 overflow-x-auto lg:overflow-visible pb-1 lg:pb-0">
+                <button
+                  onClick={() => setTopic('')}
+                  className={`shrink-0 flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-left transition-colors ${!topic ? 'bg-tsubaki-red/10 text-tsubaki-red font-semibold' : 'text-on-muted hover:bg-surface-low'}`}
+                >
+                  <span className="material-symbols-outlined text-lg">apps</span> Tất cả
+                </button>
+                {TOPICS.map(t => (
+                  <button
+                    key={t}
+                    onClick={() => setTopic(t)}
+                    className={`shrink-0 flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-left transition-colors ${topic === t ? 'bg-tsubaki-red/10 text-tsubaki-red font-semibold' : 'text-on-muted hover:bg-surface-low'}`}
+                  >
+                    <span className="material-symbols-outlined text-lg">{TOPIC_ICONS[t]}</span> {t}
+                  </button>
                 ))}
               </div>
             </div>
-          ))}
+          </aside>
+
+          <div className="flex-1 min-w-0">
+            <div className="flex justify-end mb-4">
+              <SortToggle sort={sort} setSort={setSort} />
+            </div>
+            {content}
+          </div>
         </div>
+      ) : (
+        <>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => setLevel('')}
+                className={`px-4 py-1.5 rounded-full text-sm font-semibold transition-colors ${!level ? 'bg-tsubaki-red text-white' : 'bg-white border border-outline text-on-muted hover:border-tsubaki-red'}`}
+              >
+                Tất cả
+              </button>
+              {LEVELS.map(l => (
+                <button key={l} onClick={() => setLevel(l)}
+                  className={`px-4 py-1.5 rounded-full text-sm font-semibold transition-colors ${level === l ? 'bg-tsubaki-red text-white' : 'bg-white border border-outline text-on-muted hover:border-tsubaki-red'}`}>
+                  {l}
+                </button>
+              ))}
+            </div>
+            <SortToggle sort={sort} setSort={setSort} />
+          </div>
+          {content}
+        </>
       )}
     </div>
   );

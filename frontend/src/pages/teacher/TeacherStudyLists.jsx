@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import TeacherLayout from '../../components/layout/TeacherLayout';
 import Modal from '../../components/ui/Modal';
 import Button from '../../components/ui/Button';
@@ -6,6 +7,7 @@ import Input from '../../components/ui/Input';
 import Alert from '../../components/ui/Alert';
 import ImportFileModal from '../../components/admin/ImportFileModal';
 import api from '../../lib/api';
+import { TOPICS, TOPIC_ICONS } from '../../lib/studyListTopics';
 
 const TYPE_TO_IMPORT = { vocabulary: 'vocab', kanji: 'kanji', grammar: 'grammar' };
 
@@ -14,10 +16,169 @@ const TYPES = [
   ['kanji', 'font_download', 'Kanji'],
   ['grammar', 'spellcheck', 'Ngữ pháp'],
 ];
+const TYPE_ICON = { vocabulary: 'translate', kanji: 'font_download', grammar: 'spellcheck' };
+const ITEM_UNIT = { vocabulary: 'từ vựng', kanji: 'kanji', grammar: 'mẫu ngữ pháp' };
 const LEVELS = ['N5', 'N4', 'N3', 'N2', 'N1'];
+const LEVEL_BG = {
+  N5: 'bg-gradient-to-br from-emerald-400 to-emerald-600',
+  N4: 'bg-gradient-to-br from-sky-400 to-sky-600',
+  N3: 'bg-gradient-to-br from-violet-400 to-violet-600',
+  N2: 'bg-gradient-to-br from-orange-400 to-orange-600',
+  N1: 'bg-gradient-to-br from-red-400 to-red-600',
+};
+const LEVEL_BADGE = {
+  N5: 'bg-emerald-100 text-emerald-700', N4: 'bg-sky-100 text-sky-700',
+  N3: 'bg-violet-100 text-violet-700',   N2: 'bg-orange-100 text-orange-700',
+  N1: 'bg-red-100 text-red-700',
+};
+
+// Bản xem trước bài đăng — cập nhật theo thời gian thực khi giáo viên gõ form,
+// dùng đúng giao diện thẻ bài đăng thật (StudyListPreview) để không bị lệch.
+function PostPreviewCard({ type, form, base }) {
+  const post = {
+    title: form.title || '(Chưa có tiêu đề)',
+    level: form.level,
+    topic: form.topic,
+    item_count: base?.item_count ?? 0,
+    view_count: base?.view_count ?? 0,
+    creator_name: base?.creator_name || 'Bạn',
+  };
+  const headerIcon = post.topic ? (TOPIC_ICONS[post.topic] || TYPE_ICON[type]) : TYPE_ICON[type];
+  return (
+    <div className="rounded-2xl overflow-hidden glass-card border border-outline/30 w-56">
+      <div className={`h-24 flex items-center justify-center ${LEVEL_BG[post.level] || 'bg-gradient-to-br from-slate-400 to-slate-600'}`}>
+        <span className="material-symbols-outlined text-4xl text-white/90">{headerIcon}</span>
+      </div>
+      <div className="p-4">
+        <h3 className="font-semibold text-charcoal text-sm line-clamp-2 mb-2 min-h-[2.5rem]">{post.title}</h3>
+        <div className="flex items-center gap-2 flex-wrap mb-2">
+          {post.level && <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${LEVEL_BADGE[post.level]}`}>{post.level}</span>}
+          {post.topic && <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-600">{post.topic}</span>}
+          <span className="text-xs text-on-muted">{post.item_count} {ITEM_UNIT[type]}</span>
+        </div>
+        <div className="flex items-center justify-between text-xs text-on-muted">
+          <span className="flex items-center gap-1 truncate">
+            <span className="material-symbols-outlined text-sm">person</span>{post.creator_name}
+          </span>
+          <span className="flex items-center gap-1 shrink-0">
+            <span className="material-symbols-outlined text-sm">visibility</span>{post.view_count}
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Xem trước có thể sửa trực tiếp — dùng khi sửa bài đăng từ vựng đã có sẵn từ:
+// duyệt qua từng từ, sửa kanji/cách đọc/nghĩa/ảnh ngay trên thẻ, lưu khi rời ô.
+function VocabPreviewEditor({ items, idx, setIdx, onItemSaved }) {
+  const item = items[idx];
+  const [kanji, setKanji]     = useState(item.kanji || '');
+  const [reading, setReading] = useState(item.reading || '');
+  const [meaning, setMeaning] = useState(item.meaning_vi || '');
+  const [saving, setSaving]   = useState(false);
+  const fileRef = useRef(null);
+
+  useEffect(() => {
+    setKanji(item.kanji || '');
+    setReading(item.reading || '');
+    setMeaning(item.meaning_vi || '');
+  }, [item.id]);
+
+  const save = async (patch) => {
+    setSaving(true);
+    try {
+      await api.put(`/teacher/vocabulary/${item.id}`, patch);
+      onItemSaved(item.id, patch);
+    } catch (e) { alert(e.message); }
+    finally { setSaving(false); }
+  };
+
+  const handleFile = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setSaving(true);
+    try {
+      const fd = new FormData();
+      fd.append('image', file);
+      const up = await api.post('/teacher/vocabulary/upload-image', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+      await save({ image_url: up.data.url });
+    } catch (e2) { alert(e2.message); setSaving(false); }
+  };
+
+  const fieldClass = 'w-full text-center bg-transparent border-b border-transparent hover:border-outline focus:border-tsubaki-red outline-none transition-colors';
+
+  return (
+    <div className="w-full max-w-sm mx-auto">
+      <div className="rounded-2xl overflow-hidden glass-card border border-outline/30">
+        <div className="h-56 relative flex items-center justify-center bg-gradient-to-br from-tsubaki-red/80 to-sumire-purple/80 group">
+          {item.image_url && <img src={item.image_url} alt="" className="absolute inset-0 w-full h-full object-cover" />}
+          <button onClick={() => fileRef.current?.click()}
+            className="relative z-10 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-black/40 text-white text-sm opacity-0 group-hover:opacity-100 transition-opacity">
+            <span className="material-symbols-outlined text-base">add_photo_alternate</span> Đổi ảnh
+          </button>
+          <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleFile} />
+        </div>
+        <div className="p-6 space-y-3">
+          <input value={kanji} onChange={e => setKanji(e.target.value)} onBlur={() => kanji !== (item.kanji || '') && save({ kanji })}
+            placeholder="Kanji (nếu có)" className={`${fieldClass} text-3xl font-bold text-charcoal py-1`} />
+          <input value={reading} onChange={e => setReading(e.target.value)} onBlur={() => reading !== (item.reading || '') && save({ reading })}
+            placeholder="Cách đọc" className={`${fieldClass} text-lg text-on-muted py-1`} />
+          <input value={meaning} onChange={e => setMeaning(e.target.value)} onBlur={() => meaning !== (item.meaning_vi || '') && save({ meaning_vi: meaning })}
+            placeholder="Nghĩa tiếng Việt" className={`${fieldClass} text-lg font-medium text-tsubaki-red py-1`} />
+        </div>
+      </div>
+      <div className="flex items-center justify-between mt-3">
+        <button onClick={() => setIdx(i => Math.max(0, i - 1))} disabled={idx === 0}
+          className="flex items-center gap-1 px-3 py-2 rounded-lg text-sm text-on-muted hover:bg-surface-low disabled:opacity-30 transition-colors">
+          <span className="material-symbols-outlined text-lg">arrow_back</span> Trước
+        </button>
+        <span className="text-sm text-on-muted">{idx + 1} / {items.length}{saving ? ' · đang lưu…' : ''}</span>
+        <button onClick={() => setIdx(i => Math.min(items.length - 1, i + 1))} disabled={idx === items.length - 1}
+          className="flex items-center gap-1 px-3 py-2 rounded-lg text-sm text-on-muted hover:bg-surface-low disabled:opacity-30 transition-colors">
+          Tiếp <span className="material-symbols-outlined text-lg">arrow_forward</span>
+        </button>
+      </div>
+    </div>
+  );
+}
+
 const SEARCH_ENDPOINT = { vocabulary: '/vocabulary', kanji: '/kanji', grammar: '/grammar-points' };
 const ITEM_LABEL = (type, item) => type === 'kanji' ? item.character : type === 'grammar' ? item.title : (item.kanji || item.reading);
 const ITEM_SUB   = (type, item) => type === 'grammar' ? item.meaning_vi : item.meaning_vi;
+
+function VocabImageEdit({ item, onUpdated }) {
+  const inputRef = useRef(null);
+  const [uploading, setUploading] = useState(false);
+
+  const handleFile = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append('image', file);
+      const up = await api.post('/teacher/vocabulary/upload-image', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+      await api.put(`/teacher/vocabulary/${item.id}`, { image_url: up.data.url });
+      onUpdated();
+    } catch (e2) { alert(e2.message); }
+    finally { setUploading(false); }
+  };
+
+  return (
+    <>
+      <button onClick={() => inputRef.current?.click()} disabled={uploading} title="Đổi ảnh minh họa"
+        className="p-1 rounded-lg text-on-muted hover:text-tsubaki-red hover:bg-tsubaki-red/10 transition-colors disabled:opacity-40">
+        {item.image_url
+          ? <img src={item.image_url} alt="" className="w-6 h-6 rounded object-cover" />
+          : <span className="material-symbols-outlined text-lg">add_photo_alternate</span>}
+      </button>
+      <input ref={inputRef} type="file" accept="image/*" className="hidden" onChange={handleFile} />
+    </>
+  );
+}
 
 function ItemPickerModal({ open, onClose, post, listType, onChanged }) {
   const [detail, setDetail]     = useState(null);
@@ -102,9 +263,12 @@ function ItemPickerModal({ open, onClose, post, listType, onChanged }) {
               {detail.items.map(item => (
                 <div key={item.id} className="flex items-center justify-between px-3 py-2 text-sm">
                   <span><strong>{ITEM_LABEL(listType, item)}</strong> — {ITEM_SUB(listType, item)}</span>
-                  <button onClick={() => removeItem(item.id)} className="text-on-muted hover:text-error">
-                    <span className="material-symbols-outlined text-lg">close</span>
-                  </button>
+                  <div className="flex items-center gap-1">
+                    {listType === 'vocabulary' && <VocabImageEdit item={item} onUpdated={loadDetail} />}
+                    <button onClick={() => removeItem(item.id)} className="text-on-muted hover:text-error p-1">
+                      <span className="material-symbols-outlined text-lg">close</span>
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -136,8 +300,11 @@ export default function TeacherStudyLists() {
   const [alert, setAlert]     = useState({ type: '', msg: '' });
 
   const [modal, setModal]   = useState(false);
-  const [form, setForm]     = useState({ title: '', description: '', level: '' });
+  const [form, setForm]     = useState({ title: '', description: '', level: '', topic: '' });
   const [editId, setEditId] = useState(null);
+  const [previewBase, setPreviewBase]   = useState(null);
+  const [previewItems, setPreviewItems] = useState([]);
+  const [previewIdx, setPreviewIdx]     = useState(0);
   const [saving, setSaving] = useState(false);
 
   const [pickerPost, setPickerPost] = useState(null);
@@ -153,20 +320,44 @@ export default function TeacherStudyLists() {
 
   useEffect(() => { load(); }, [load]);
 
-  const openCreate = () => { setForm({ title: '', description: '', level: '' }); setEditId(null); setModal(true); };
-  const openEdit = (post) => { setForm({ title: post.title, description: post.description || '', level: post.level || '' }); setEditId(post.id); setModal(true); };
+  const openCreate = () => {
+    setForm({ title: '', description: '', level: '', topic: '' });
+    setEditId(null); setPreviewBase(null); setPreviewItems([]); setPreviewIdx(0);
+    setModal(true);
+  };
+  const openEdit = async (post) => {
+    setForm({ title: post.title, description: post.description || '', level: post.level || '', topic: post.topic || '' });
+    setEditId(post.id); setPreviewBase(post); setPreviewIdx(0);
+    setModal(true);
+    if (type === 'vocabulary') {
+      try {
+        const r = await api.get(`/study-lists/${post.id}`);
+        setPreviewItems(r.data.items || []);
+      } catch { setPreviewItems([]); }
+    } else {
+      setPreviewItems([]);
+    }
+  };
+
+  const handlePreviewItemSaved = (itemId, patch) => {
+    setPreviewItems(prev => prev.map(it => it.id === itemId ? { ...it, ...patch } : it));
+  };
 
   const handleSave = async () => {
     if (!form.title.trim()) return setAlert({ type: 'error', msg: 'Tiêu đề là bắt buộc.' });
-    if (!form.level) return setAlert({ type: 'error', msg: 'Vui lòng chọn cấp độ.' });
+    if (type === 'vocabulary') {
+      if (!form.topic) return setAlert({ type: 'error', msg: 'Vui lòng chọn chủ đề.' });
+    } else if (!form.level) {
+      return setAlert({ type: 'error', msg: 'Vui lòng chọn cấp độ.' });
+    }
     setSaving(true);
     try {
       if (editId) {
-        await api.put(`/study-lists/${editId}`, { title: form.title, description: form.description, level: form.level });
+        await api.put(`/study-lists/${editId}`, { title: form.title, description: form.description, level: form.level || null, topic: form.topic || null });
         setModal(false);
         await load();
       } else {
-        const r = await api.post('/study-lists', { list_type: type, title: form.title, description: form.description, level: form.level });
+        const r = await api.post('/study-lists', { list_type: type, title: form.title, description: form.description, level: form.level || null, topic: form.topic || null });
         setModal(false);
         await load();
         setPickerPost(r.data);
@@ -213,7 +404,7 @@ export default function TeacherStudyLists() {
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="bg-surface-low border-b border-outline/40">
-                <tr>{['Tiêu đề', 'Cấp độ', 'Số mục', 'Lượt xem', ''].map(h =>
+                <tr>{['Tiêu đề', 'Cấp độ', 'Chủ đề', 'Số mục', 'Lượt xem', ''].map(h =>
                   <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-on-muted uppercase tracking-wide">{h}</th>)}</tr>
               </thead>
               <tbody>
@@ -221,10 +412,15 @@ export default function TeacherStudyLists() {
                   <tr key={post.id} className={`border-t border-outline/40 ${i % 2 === 1 ? 'bg-surface-low/30' : ''}`}>
                     <td className="px-4 py-2.5 font-medium">{post.title}</td>
                     <td className="px-4 py-2.5">{post.level || '—'}</td>
+                    <td className="px-4 py-2.5">{post.topic || '—'}</td>
                     <td className="px-4 py-2.5">{post.item_count}</td>
                     <td className="px-4 py-2.5">{post.view_count}</td>
                     <td className="px-4 py-2.5">
                       <div className="flex gap-1.5 justify-end">
+                        <Link to={`/study-lists/${type}/${post.id}`} title="Xem trang"
+                          className="p-1.5 rounded-lg text-on-muted hover:text-tsubaki-red hover:bg-tsubaki-red/10 transition-colors">
+                          <span className="material-symbols-outlined text-lg">visibility</span>
+                        </Link>
                         <button onClick={() => openEdit(post)} title="Sửa"
                           className="p-1.5 rounded-lg text-on-muted hover:text-tsubaki-red hover:bg-tsubaki-red/10 transition-colors">
                           <span className="material-symbols-outlined text-lg">edit</span>
@@ -247,20 +443,45 @@ export default function TeacherStudyLists() {
         </div>
       )}
 
-      <Modal open={modal} onClose={() => setModal(false)} title={editId ? 'Sửa bài đăng' : 'Tạo bài đăng'}
+      <Modal open={modal} onClose={() => setModal(false)} title={editId ? 'Sửa bài đăng' : 'Tạo bài đăng'} size="xl"
         footer={<><Button variant="secondary" onClick={() => setModal(false)}>Huỷ</Button><Button loading={saving} onClick={handleSave}>{editId ? 'Lưu' : 'Tạo'}</Button></>}>
-        <div className="space-y-4">
-          <Input label="Tiêu đề *" value={form.title} onChange={e => setForm({ ...form, title: e.target.value })}
-            placeholder='vd "Kanji thường gặp trong đề JLPT N4"' />
-          <div>
-            <label className="block text-sm font-medium text-on-muted mb-1">Cấp độ *</label>
-            <select value={form.level} onChange={e => setForm({ ...form, level: e.target.value })}
-              className="w-full px-4 py-3 bg-white border border-outline rounded-xl text-sm outline-none focus:border-tsubaki-red">
-              <option value="">-- Chọn cấp độ --</option>
-              {LEVELS.map(l => <option key={l} value={l}>{l}</option>)}
-            </select>
+        <div className="flex flex-col sm:flex-row gap-6">
+          <div className="flex-1 space-y-4 min-w-0">
+            <Input label="Tiêu đề *" value={form.title} onChange={e => setForm({ ...form, title: e.target.value })}
+              placeholder='vd "Kanji thường gặp trong đề JLPT N4"' />
+            <div className="flex flex-col gap-4">
+              <div className={type === 'vocabulary' ? 'order-2' : 'order-1'}>
+                <label className="block text-sm font-medium text-on-muted mb-1">Cấp độ{type === 'vocabulary' ? '' : ' *'}</label>
+                <select value={form.level} onChange={e => setForm({ ...form, level: e.target.value })}
+                  className="w-full px-4 py-3 bg-white border border-outline rounded-xl text-sm outline-none focus:border-tsubaki-red">
+                  <option value="">-- Chọn cấp độ --</option>
+                  {LEVELS.map(l => <option key={l} value={l}>{l}</option>)}
+                </select>
+                {type === 'vocabulary' && (
+                  <p className="text-xs text-on-muted mt-1">Không bắt buộc — 1 chủ đề thường có từ ở nhiều cấp độ, cấp độ sẽ lọc bên trong khi xem từng từ.</p>
+                )}
+              </div>
+              <div className={type === 'vocabulary' ? 'order-1' : 'order-2'}>
+                <label className="block text-sm font-medium text-on-muted mb-1">Chủ đề{type === 'vocabulary' ? ' *' : ''}</label>
+                <select value={form.topic} onChange={e => setForm({ ...form, topic: e.target.value })}
+                  className="w-full px-4 py-3 bg-white border border-outline rounded-xl text-sm outline-none focus:border-tsubaki-red">
+                  <option value="">-- Không chọn --</option>
+                  {TOPICS.map(t => <option key={t} value={t}>{t}</option>)}
+                </select>
+              </div>
+            </div>
+            <Input label="Mô tả" value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} />
           </div>
-          <Input label="Mô tả" value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} />
+          <div className="shrink-0 sm:w-96 sm:pl-6 sm:border-l border-outline/30">
+            <p className="text-xs font-semibold text-on-muted uppercase tracking-wide mb-2">
+              {type === 'vocabulary' && previewItems.length > 0 ? 'Xem trước — sửa trực tiếp từng từ' : 'Xem trước'}
+            </p>
+            {type === 'vocabulary' && previewItems.length > 0 ? (
+              <VocabPreviewEditor items={previewItems} idx={previewIdx} setIdx={setPreviewIdx} onItemSaved={handlePreviewItemSaved} />
+            ) : (
+              <PostPreviewCard type={type} form={form} base={previewBase} />
+            )}
+          </div>
         </div>
       </Modal>
 

@@ -128,8 +128,8 @@ export default function App() {
             <Route path="/grammar"    element={<StudentRoute><Grammar /></StudentRoute>} />
             <Route path="/kanji"      element={<StudentRoute><Kanji /></StudentRoute>} />
             <Route path="/kanji/writing" element={<StudentRoute><KanjiWriting /></StudentRoute>} />
-            <Route path="/study-lists/:type/:id" element={<StudentRoute><StudyListDetail /></StudentRoute>} />
-            <Route path="/study-lists/:type/:id/:itemId" element={<StudentRoute><StudyListItemDetail /></StudentRoute>} />
+            <Route path="/study-lists/:type/:id" element={<ProtectedRoute><StudyListDetail /></ProtectedRoute>} />
+            <Route path="/study-lists/:type/:id/:itemId" element={<ProtectedRoute><StudyListItemDetail /></ProtectedRoute>} />
             <Route path="/writing"    element={<StudentRoute><Writing /></StudentRoute>} />
             <Route path="/listening"       element={<StudentRoute><Listening /></StudentRoute>} />
             <Route path="/placement-test" element={<StudentRoute><PlacementTest /></StudentRoute>} />

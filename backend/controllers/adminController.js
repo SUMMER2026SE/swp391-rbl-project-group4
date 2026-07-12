@@ -200,6 +200,22 @@ exports.uploadCourseCover = async (req, res) => {
   } catch (err) { res.status(500).json({ error: 'Không thể tải ảnh lên.' }); }
 };
 
+// Ảnh minh họa cho từng từ vựng — giáo viên tự tải lên, hiển thị trong chế độ
+// xem từng từ của bài đăng danh sách.
+exports.uploadVocabImage = async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'Không có file được tải lên.' });
+  const ext = (req.file.originalname.split('.').pop() || 'jpg').toLowerCase();
+  const filename = `vocab-${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+  try {
+    const { error } = await supabaseAdmin.storage
+      .from('passage-images')
+      .upload(filename, req.file.buffer, { contentType: req.file.mimetype, upsert: false });
+    if (error) throw error;
+    const { data: { publicUrl } } = supabaseAdmin.storage.from('passage-images').getPublicUrl(filename);
+    res.json({ url: publicUrl });
+  } catch (err) { res.status(500).json({ error: 'Không thể tải ảnh lên.' }); }
+};
+
 exports.createCourse = async (req, res) => {
   const { title, title_ja, description, description_ja, level, thumbnail_url, is_published = false,
           price, reference_curriculum, difficulty_level } = req.body;
@@ -576,7 +592,7 @@ exports.detachVocab = async (req, res) => {
 };
 
 exports.updateVocab = async (req, res) => {
-  const allowed = ['kanji','reading','meaning_vi','meaning_ja','level','lesson_id','type','topic','example_sentence'];
+  const allowed = ['kanji','reading','meaning_vi','meaning_ja','level','lesson_id','type','topic','example_sentence','image_url'];
   const updates = Object.fromEntries(Object.entries(req.body).filter(([k]) => allowed.includes(k)));
   try {
     const { data, error } = await supabaseAdmin.from('vocabulary').update(updates).eq('id', req.params.id).select().single();
