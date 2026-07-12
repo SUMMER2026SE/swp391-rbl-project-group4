@@ -17,8 +17,9 @@ const STUDENT_LINKS = (t) => [
   { to: '/dictionary',     icon: 'auto_stories',     label: t('dictionary.title') },
   { to: '/flashcards',     icon: 'style',            label: 'Thẻ ghi nhớ' },
   { to: '/news',           icon: 'newspaper',        label: 'Luyện đọc' },
-  { to: '/classes',        icon: 'groups',           label: 'Lớp học' },
-  { to: '/exams',          icon: 'quiz',             label: 'Đề thi' },
+  // Ẩn khỏi sidebar theo yêu cầu (giữ nguyên route/API/component để bật lại sau)
+  // { to: '/classes',        icon: 'groups',           label: 'Lớp học' },
+  // { to: '/exams',          icon: 'quiz',             label: 'Đề thi' },
   { to: '/mock-exams',     icon: 'fact_check',       label: 'Thi thử JLPT' },
   { to: '/chat',           icon: 'smart_toy',        label: 'Trợ lý AI' },
   { to: '/profile',        icon: 'person',           label: t('profile.title') },

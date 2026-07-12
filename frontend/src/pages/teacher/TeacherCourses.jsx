@@ -10,7 +10,6 @@ import { formatVnd } from '../../lib/format';
 import api from '../../lib/api';
 
 const LEVELS = ['N5', 'N4', 'N3', 'N2', 'N1', 'Business'];
-const DIFFICULTY = ['N5', 'N4', 'N3', 'N2', 'N1', 'mixed'];
 
 const SORTS = [
   { value: 'newest', label: 'Mới nhất' },
@@ -25,7 +24,7 @@ const TABS = [
 
 const EMPTY = {
   title: '', title_ja: '', description: '', description_ja: '',
-  level: '', difficulty_level: '', thumbnail_url: '', is_published: false,
+  level: '', thumbnail_url: '', is_published: false,
   price: '', reference_curriculum: '',
 };
 
@@ -50,23 +49,13 @@ function CourseForm({ form, onChange, editing }) {
       <Input label="Tiêu đề (Tiếng Nhật)" value={form.title_ja}
         onChange={e => onChange({ ...form, title_ja: e.target.value })} placeholder="コース名を入力..." />
 
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <label className="block text-sm font-medium text-on-muted mb-1">Cấp độ JLPT</label>
-          <select value={form.level} onChange={e => onChange({ ...form, level: e.target.value })}
-            className="w-full px-4 py-3 bg-white border border-outline rounded-xl text-sm outline-none focus:border-tsubaki-red focus:ring-2 focus:ring-tsubaki-red/10 transition-all">
-            <option value="">-- Chọn cấp độ --</option>
-            {LEVELS.map(l => <option key={l} value={l}>{l}</option>)}
-          </select>
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-on-muted mb-1">Độ khó (badge)</label>
-          <select value={form.difficulty_level} onChange={e => onChange({ ...form, difficulty_level: e.target.value })}
-            className="w-full px-4 py-3 bg-white border border-outline rounded-xl text-sm outline-none focus:border-tsubaki-red focus:ring-2 focus:ring-tsubaki-red/10 transition-all">
-            <option value="">-- Chọn độ khó --</option>
-            {DIFFICULTY.map(d => <option key={d} value={d}>{d === 'mixed' ? 'Tổng hợp' : d}</option>)}
-          </select>
-        </div>
+      <div>
+        <label className="block text-sm font-medium text-on-muted mb-1">Cấp độ JLPT</label>
+        <select value={form.level} onChange={e => onChange({ ...form, level: e.target.value })}
+          className="w-full px-4 py-3 bg-white border border-outline rounded-xl text-sm outline-none focus:border-tsubaki-red focus:ring-2 focus:ring-tsubaki-red/10 transition-all">
+          <option value="">-- Chọn cấp độ --</option>
+          {LEVELS.map(l => <option key={l} value={l}>{l}</option>)}
+        </select>
       </div>
 
       <div>
@@ -170,7 +159,7 @@ export default function TeacherCourses() {
     setForm({
       title: row.title || '', title_ja: row.title_ja || '',
       description: row.description || '', description_ja: row.description_ja || '',
-      level: row.level || '', difficulty_level: '', thumbnail_url: row.thumbnail_url || '',
+      level: row.level || '', thumbnail_url: row.thumbnail_url || '',
       is_published: row.is_published || false, price: '', reference_curriculum: '',
     });
     setEditId(row.id);
@@ -193,7 +182,6 @@ export default function TeacherCourses() {
       is_published: form.is_published,
     };
     if (priceProvided) payload.price = priceNum;
-    if (form.difficulty_level) payload.difficulty_level = form.difficulty_level;
     if (form.reference_curriculum) payload.reference_curriculum = form.reference_curriculum;
 
     setSaving(true);
