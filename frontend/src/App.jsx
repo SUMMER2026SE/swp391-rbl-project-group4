@@ -50,6 +50,8 @@ import FlashcardTest         from './pages/student/FlashcardTest';
 import FlashcardFolderDetail from './pages/student/FlashcardFolderDetail';
 import StudyListDetail from './pages/student/StudyListDetail';
 import StudyListItemDetail from './pages/student/StudyListItemDetail';
+import LearningPath from './pages/student/LearningPath';
+import TeacherApplication from './pages/public/TeacherApplication';
 // Teacher pages
 import TeacherDashboard  from './pages/teacher/TeacherDashboard';
 import TeacherCourses    from './pages/teacher/TeacherCourses';
@@ -72,6 +74,7 @@ import AdminVocabulary from './pages/admin/AdminVocabulary';
 import AdminKanji      from './pages/admin/AdminKanji';
 import AdminQuizzes      from './pages/admin/AdminQuizzes';
 import AdminSubmissions  from './pages/admin/AdminSubmissions';
+import AdminTeacherApplications from './pages/admin/AdminTeacherApplications';
 // import AdminClasses      from './pages/admin/AdminClasses'; // HIDDEN
 import AdminSystemStatus  from './pages/admin/AdminSystemStatus';
 import AdminQuestionBank       from './pages/admin/AdminQuestionBank';
@@ -133,6 +136,7 @@ export default function App() {
             <Route path="/writing"    element={<StudentRoute><Writing /></StudentRoute>} />
             <Route path="/listening"       element={<StudentRoute><Listening /></StudentRoute>} />
             <Route path="/placement-test" element={<StudentRoute><PlacementTest /></StudentRoute>} />
+            <Route path="/learning-path"  element={<StudentRoute><LearningPath /></StudentRoute>} />
             <Route path="/pricing"        element={<StudentRoute><Pricing /></StudentRoute>} />
             <Route path="/subscription"   element={<StudentRoute><SubscriptionStatus /></StudentRoute>} />
             <Route path="/billing"        element={<StudentRoute><BillingHistory /></StudentRoute>} />
@@ -159,6 +163,7 @@ export default function App() {
             {/* Dùng chung mọi role (layout hiển thị theo role) */}
             <Route path="/profile"    element={<ProtectedRoute><Profile /></ProtectedRoute>} />
             <Route path="/chat"       element={<ProtectedRoute><ChatPage /></ProtectedRoute>} />
+            <Route path="/teacher-application" element={<ProtectedRoute><TeacherApplication /></ProtectedRoute>} />
             {/* <Route path="/classes/:id" element={<ProtectedRoute><ClassBoard /></ProtectedRoute>} /> */}{/* HIDDEN */}
 
             {/* Teacher (teacher + admin) */}
@@ -190,6 +195,7 @@ export default function App() {
             <Route path="/admin/grammar-points" element={<AdminRoute><AdminGrammarPoints /></AdminRoute>} />
             <Route path="/admin/quizzes"      element={<AdminRoute><AdminQuizzes /></AdminRoute>} />
             <Route path="/admin/submissions" element={<AdminRoute><AdminSubmissions /></AdminRoute>} />
+            <Route path="/admin/teacher-applications" element={<AdminRoute><AdminTeacherApplications /></AdminRoute>} />
             {/* <Route path="/admin/classes"     element={<AdminRoute><AdminClasses /></AdminRoute>} /> */}{/* HIDDEN */}
             <Route path="/admin/system"     element={<AdminRoute><AdminSystemStatus /></AdminRoute>} />
             <Route path="/admin/questions"  element={<AdminRoute><AdminQuestionBank /></AdminRoute>} />

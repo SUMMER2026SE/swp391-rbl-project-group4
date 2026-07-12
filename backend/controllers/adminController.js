@@ -11,11 +11,12 @@ const contentDb = supabaseAdmin.schema('content_module');
 // ── Stats ────────────────────────────────────────────────────────────────────
 exports.getStats = async (req, res) => {
   try {
-    const [usersRes, coursesRes, vocabRes, quizzesRes] = await Promise.allSettled([
+    const [usersRes, coursesRes, vocabRes, quizzesRes, teacherAppsRes] = await Promise.allSettled([
       supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 1000 }),
       supabaseAdmin.from('courses').select('id', { count: 'exact', head: true }),
       supabaseAdmin.from('vocabulary').select('id', { count: 'exact', head: true }),
       examDb.from('quizzes').select('id', { count: 'exact', head: true }),
+      supabaseAdmin.from('teacher_applications').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
     ]);
     const authUsers    = usersRes.status === 'fulfilled' ? (usersRes.value.data?.users || []) : [];
     const teacherCount = authUsers.filter(u => u.user_metadata?.role === 'teacher').length;
@@ -25,6 +26,7 @@ exports.getStats = async (req, res) => {
       total_courses:  coursesRes.status  === 'fulfilled' ? (coursesRes.value.count    || 0) : 0,
       total_vocab:    vocabRes.status    === 'fulfilled' ? (vocabRes.value.count       || 0) : 0,
       total_quizzes:  quizzesRes.status  === 'fulfilled' ? (quizzesRes.value.count    || 0) : 0,
+      pending_teacher_applications: teacherAppsRes.status === 'fulfilled' ? (teacherAppsRes.value.count || 0) : 0,
     });
   } catch (err) {
     res.status(500).json({ error: 'Không thể tải thống kê.' });

@@ -52,6 +52,8 @@ app.use('/api/grammar',    require('./routes/api/grammar'));
 app.use('/api/writing',    require('./routes/api/writing'));
 app.use('/api/listening',      require('./routes/api/listening'));
 app.use('/api/placement',      require('./routes/api/placement'));
+app.use('/api/learning-path',  require('./routes/api/learningPath'));
+app.use('/api/teacher-applications', require('./routes/api/teacherApplications'));
 app.use('/api/study-lists',    require('./routes/api/studyLists'));
 app.use('/api/grammar-points', require('./routes/api/grammarPoints'));
 app.use('/api/subscription',   require('./routes/api/subscription'));

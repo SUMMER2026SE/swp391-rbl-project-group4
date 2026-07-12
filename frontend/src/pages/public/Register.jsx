@@ -12,7 +12,7 @@ export default function Register() {
   const { t } = useLang();
   const navigate = useNavigate();
 
-  const [form, setForm]       = useState({ fullname: '', email: '', password: '', terms: false });
+  const [form, setForm]       = useState({ fullname: '', email: '', password: '', terms: false, role: 'student' });
   const [error, setError]     = useState('');
   const [emailExists, setEmailExists] = useState(false);
   const [loading, setLoading]         = useState(false);
@@ -27,9 +27,10 @@ export default function Register() {
   useEffect(() => {
     if (!user) return;
     const role = user.user_metadata?.role;
-    if (role === 'admin')        navigate('/admin',    { replace: true });
-    else if (role === 'teacher') navigate('/teacher',  { replace: true });
-    else                         navigate('/dashboard', { replace: true });
+    if (role === 'admin')            navigate('/admin',    { replace: true });
+    else if (role === 'teacher')     navigate('/teacher',  { replace: true });
+    else if (form.role === 'teacher') navigate('/teacher-application', { replace: true });
+    else                             navigate('/dashboard', { replace: true });
   }, [user]);
 
   // Đếm ngược thời gian được phép gửi lại OTP
@@ -70,7 +71,11 @@ export default function Register() {
     setLoading(true);
     try {
       const data = await verifyOtp(form.email, otp);
-      navigate(data.session ? '/dashboard' : '/login?registered=1', { replace: true });
+      if (!data.session) {
+        navigate('/login?registered=1', { replace: true });
+      } else {
+        navigate(form.role === 'teacher' ? '/teacher-application' : '/dashboard', { replace: true });
+      }
     } catch (err) {
       setError(err.message);
       // Hết hạn hoặc bị khóa → quay lại form đăng ký
@@ -192,6 +197,33 @@ export default function Register() {
               </div>
             </Alert>
           )}
+
+          {/* Role selector */}
+          <div>
+            <p className="text-sm font-semibold text-on-muted mb-2">Bạn đăng ký với vai trò</p>
+            <div className="grid grid-cols-2 gap-3">
+              {[
+                { value: 'student', icon: 'school',      label: 'Học viên' },
+                { value: 'teacher', icon: 'co_present',  label: 'Giáo viên' },
+              ].map(opt => (
+                <button key={opt.value} type="button"
+                  onClick={() => setForm({ ...form, role: opt.value })}
+                  className={`flex items-center gap-2 justify-center rounded-xl border px-3 py-3 text-sm font-semibold transition-all ${
+                    form.role === opt.value
+                      ? 'border-tsubaki-red bg-tsubaki-red/5 text-tsubaki-red'
+                      : 'border-outline text-on-muted hover:bg-surface-low'}`}>
+                  <span className="material-symbols-outlined text-lg">{opt.icon}</span>
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+            {form.role === 'teacher' && (
+              <p className="text-xs text-on-muted mt-2 flex items-start gap-1">
+                <span className="material-symbols-outlined text-[14px] mt-0.5">info</span>
+                Sau khi xác thực email, bạn sẽ cung cấp CV, bằng cấp/chứng chỉ để xét duyệt làm giáo viên.
+              </p>
+            )}
+          </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <Input label={t('auth.fullname')} value={form.fullname}
