@@ -9,7 +9,6 @@ import CourseManageCard from '../../components/admin/CourseManageCard';
 import api from '../../lib/api';
 
 const LEVELS = ['N5', 'N4', 'N3', 'N2', 'N1', 'Business'];
-const DIFFICULTY = ['N5', 'N4', 'N3', 'N2', 'N1', 'mixed'];
 const LIMIT = 12;
 
 const SORTS = [
@@ -28,7 +27,7 @@ const EMPTY = {
   title: '', title_ja: '',
   description: '', description_ja: '',
   level: '', thumbnail_url: '', is_published: false,
-  difficulty_level: '', reference_curriculum: '',
+  reference_curriculum: '',
 };
 
 // ── Course form (create / edit) ───────────────────────────────────────────────
@@ -70,21 +69,11 @@ function CourseForm({ form, onChange }) {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <label className="block text-sm font-medium text-on-muted mb-1">Độ khó (badge)</label>
-          <select value={form.difficulty_level} onChange={e => onChange({ ...form, difficulty_level: e.target.value })}
-            className="w-full px-4 py-3 bg-white border border-outline rounded-xl text-sm outline-none focus:border-tsubaki-red focus:ring-2 focus:ring-tsubaki-red/10 transition-all">
-            <option value="">-- Chọn độ khó --</option>
-            {DIFFICULTY.map(d => <option key={d} value={d}>{d === 'mixed' ? 'Tổng hợp' : d}</option>)}
-          </select>
-        </div>
-        <div className="flex flex-col justify-end">
-          <label className="block text-sm font-medium text-on-muted mb-1">Học phí</label>
-          <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-green-300 bg-green-50 text-green-700 text-sm font-medium">
-            <span className="material-symbols-outlined text-[18px]">volunteer_activism</span>
-            Miễn phí (khóa của Admin)
-          </div>
+      <div>
+        <label className="block text-sm font-medium text-on-muted mb-1">Học phí</label>
+        <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-green-300 bg-green-50 text-green-700 text-sm font-medium">
+          <span className="material-symbols-outlined text-[18px]">volunteer_activism</span>
+          Miễn phí (khóa của Admin)
         </div>
       </div>
 
@@ -200,7 +189,7 @@ export default function AdminCourses() {
       title: row.title || '', title_ja: row.title_ja || '',
       description: row.description || '', description_ja: row.description_ja || '',
       level: row.level || '', thumbnail_url: row.thumbnail_url || '', is_published: row.is_published || false,
-      difficulty_level: row.difficulty_level || '', reference_curriculum: row.reference_curriculum || '',
+      reference_curriculum: row.reference_curriculum || '',
     });
     setEditId(row.id);
     setModal(true);
