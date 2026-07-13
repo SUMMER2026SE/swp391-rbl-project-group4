@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import TeacherLayout from '../../components/layout/TeacherLayout';
 import Modal from '../../components/ui/Modal';
@@ -227,6 +227,55 @@ export default function TeacherCourseContent() {
     catch (e) { showAlert('error', e.message); }
   };
 
+  // ── Reorder (kéo-thả, giống trang builder của admin) ───────────────────────
+  const dragUnitIdx = useRef(null);
+  const dragItem = useRef(null); // { uIdx, iIdx }
+
+  const handleUnitDragStart = (e, idx) => { dragUnitIdx.current = idx; e.dataTransfer.effectAllowed = 'move'; };
+  const handleUnitDragOver = (e, idx) => {
+    e.preventDefault();
+    if (dragUnitIdx.current === null || dragUnitIdx.current === idx) return;
+    const updated = [...units];
+    const [moved] = updated.splice(dragUnitIdx.current, 1);
+    updated.splice(idx, 0, moved);
+    dragUnitIdx.current = idx;
+    setUnits(updated);
+  };
+  const handleUnitDragEnd = async () => {
+    dragUnitIdx.current = null;
+    try {
+      await api.patch('/teacher/units/reorder', { items: units.map((u, i) => ({ id: u.id, sort_order: i })) });
+    } catch { showAlert('error', 'Không thể lưu thứ tự bài học.'); }
+  };
+
+  const handleItemDragStart = (e, uIdx, iIdx) => {
+    e.stopPropagation();
+    dragItem.current = { uIdx, iIdx };
+    e.dataTransfer.effectAllowed = 'move';
+  };
+  const handleItemDragOver = (e, uIdx, iIdx) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const cur = dragItem.current;
+    if (!cur || cur.uIdx !== uIdx || cur.iIdx === iIdx) return;
+    setUnits(prev => prev.map((u, i) => {
+      if (i !== uIdx) return u;
+      const lessons = [...(u.lessons || [])];
+      const [moved] = lessons.splice(cur.iIdx, 1);
+      lessons.splice(iIdx, 0, moved);
+      return { ...u, lessons };
+    }));
+    dragItem.current = { uIdx, iIdx };
+  };
+  const handleItemDragEnd = async (e, uIdx) => {
+    e.stopPropagation();
+    dragItem.current = null;
+    const lessons = units[uIdx]?.lessons || [];
+    try {
+      await api.patch('/teacher/lessons/reorder', { items: lessons.map((l, i) => ({ id: l.id, order_index: i })) });
+    } catch { showAlert('error', 'Không thể lưu thứ tự mục.'); }
+  };
+
   const isQuiz = itemForm.lesson_type === 'quiz';
 
   if (loading) return (
@@ -299,8 +348,16 @@ export default function TeacherCourseContent() {
       {/* Units + lessons */}
       <div className="space-y-4">
         {units.map((unit, idx) => (
-          <div key={unit.id} className="bg-white border border-outline/30 shadow-sm rounded-2xl overflow-hidden">
+          <div
+            key={unit.id}
+            draggable
+            onDragStart={(e) => handleUnitDragStart(e, idx)}
+            onDragOver={(e) => handleUnitDragOver(e, idx)}
+            onDragEnd={handleUnitDragEnd}
+            className="bg-white border border-outline/30 shadow-sm rounded-2xl overflow-hidden"
+          >
             <div className="flex items-center justify-between px-5 py-4 border-b border-outline/10 bg-surface-container-lowest/40">
+              <span className="material-symbols-outlined text-outline/50 cursor-grab text-xl shrink-0 mr-1" title="Kéo để đổi vị trí">drag_indicator</span>
               <button onClick={() => openEditUnit(unit)} className="flex items-center gap-3 min-w-0 text-left flex-1 group/unit">
                 <span className="w-8 h-8 rounded-full bg-sumire-purple/10 text-sumire-purple text-sm font-bold flex items-center justify-center shrink-0">{idx + 1}</span>
                 <div className="min-w-0">
@@ -314,10 +371,18 @@ export default function TeacherCourseContent() {
               </div>
             </div>
             <div className="p-4 space-y-2">
-              {(unit.lessons || []).map(item => {
+              {(unit.lessons || []).map((item, itemIdx) => {
                 const meta = typeMeta(item.lesson_type);
                 return (
-                  <div key={item.id} className="flex items-center gap-3 px-3 py-2.5 rounded-xl border border-outline/20 hover:border-sumire-purple/30 hover:bg-surface-stone/40 transition-all group/item">
+                  <div
+                    key={item.id}
+                    draggable
+                    onDragStart={(e) => handleItemDragStart(e, idx, itemIdx)}
+                    onDragOver={(e) => handleItemDragOver(e, idx, itemIdx)}
+                    onDragEnd={(e) => handleItemDragEnd(e, idx)}
+                    className="flex items-center gap-3 px-3 py-2.5 rounded-xl border border-outline/20 hover:border-sumire-purple/30 hover:bg-surface-stone/40 transition-all group/item"
+                  >
+                    <span className="material-symbols-outlined text-outline/50 cursor-grab text-lg shrink-0" title="Kéo để đổi vị trí">drag_indicator</span>
                     <button onClick={() => openDeepEditor(item)} className="flex items-center gap-3 min-w-0 flex-1 text-left" title="Soạn nội dung">
                       <span className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${meta.badge}`}>
                         <span className="material-symbols-outlined text-lg">{meta.icon}</span>

@@ -152,6 +152,7 @@ router.post('/lessons/upload-video', videoUpload.single('video'), c.uploadLesson
 router.get('/vocabulary',         c.listVocab);
 router.post('/vocabulary/import', c.importVocab);
 router.post('/vocabulary',        c.createVocab);
+router.post('/vocabulary/upload-image', upload.single('image'), c.uploadVocabImage);
 router.put('/vocabulary/:id',     c.updateVocab);
 router.delete('/vocabulary/:id',  c.deleteVocab);
 

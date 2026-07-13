@@ -39,6 +39,7 @@ router.post('/courses/upload-cover', upload.single('image'), ac.uploadCourseCove
 // Course content (Bài học/units + Mục/lessons) — chỉ trên khóa do chính mình tạo
 router.get('/courses/:courseId/builder', c.getCourseBuilder);
 router.post('/units',          c.createUnit);
+router.patch('/units/reorder', c.reorderUnits);
 router.put('/units/:id',       c.updateUnit);
 router.delete('/units/:id',    c.deleteUnit);
 router.get('/lessons/:id',     c.getLesson);

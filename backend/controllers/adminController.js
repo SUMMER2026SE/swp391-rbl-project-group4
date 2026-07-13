@@ -555,11 +555,11 @@ exports.listVocab = async (req, res) => {
 };
 
 exports.createVocab = async (req, res) => {
-  const { kanji, reading, meaning_vi, meaning_ja, level, lesson_id, type, topic, example_sentence } = req.body;
+  const { kanji, reading, meaning_vi, meaning_ja, level, lesson_id, type, topic, example_sentence, image_url } = req.body;
   if (!reading || !meaning_vi) return res.status(400).json({ error: 'Thiếu thông tin bắt buộc.' });
   try {
     const { data, error } = await supabaseAdmin.from('vocabulary')
-      .insert({ kanji, reading, meaning_vi, meaning_ja, level, lesson_id, type, topic, example_sentence, created_by: req.user?.id || null })
+      .insert({ kanji, reading, meaning_vi, meaning_ja, level, lesson_id, type, topic, example_sentence, image_url: image_url || null, created_by: req.user?.id || null })
       .select().single();
     if (error) throw error;
     // Gắn từ mới vào Mục qua bảng nối để hiển thị trong bài.

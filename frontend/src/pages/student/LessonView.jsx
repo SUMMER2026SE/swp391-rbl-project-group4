@@ -6,6 +6,7 @@ import Button from '../../components/ui/Button';
 import Modal from '../../components/ui/Modal';
 import FuriganaText from '../../components/ui/FuriganaText';
 import WorksheetPreview from '../../components/kanji/WorksheetPreview';
+import VocabWordViewer from '../../components/shared/VocabWordViewer';
 import api from '../../lib/api';
 import { downloadWorksheetPDF } from '../../lib/kanjiWorksheet';
 import { renderMarkdown, renderReadingText } from '../../lib/renderPreview';
@@ -375,10 +376,10 @@ export default function LessonView() {
           </div>
         )}
 
-        {/* ── Vocabulary ─────────────────────────────────────────────── */}
+        {/* ── Vocabulary — flashcard viewer dùng chung với bài đăng ───── */}
         {lesson.vocabulary?.length > 0 && (
-          <div className="glass-card rounded-2xl overflow-hidden mb-6">
-            <div className="p-5 border-b border-outline/30 flex items-center justify-between gap-3 flex-wrap">
+          <div className="mb-6">
+            <div className="flex items-center justify-between gap-3 flex-wrap mb-4">
               <h2 className="font-display font-bold text-lg flex items-center gap-2">
                 <span className="material-symbols-outlined text-tsubaki-red">translate</span>
                 Từ vựng trong bài ({lesson.vocabulary.length})
@@ -394,32 +395,20 @@ export default function LessonView() {
                 </Button>
               )}
             </div>
-            <div className="divide-y divide-outline/20">
-              {lesson.vocabulary.map(v => (
-                <div key={v.id} className="flex items-start gap-4 p-4">
-                  {selecting && (
-                    <input
-                      type="checkbox"
-                      checked={!!selected[`v-${v.id}`]}
-                      onChange={() => toggleSelect(`v-${v.id}`)}
-                      className="w-4 h-4 accent-tsubaki-red shrink-0 mt-2.5"
-                    />
-                  )}
-                  <div className="text-2xl font-bold text-tsubaki-red w-16 shrink-0 text-center pt-1">
-                    <FuriganaText text={v.kanji || v.reading} enabled={furigana} textClassName="text-2xl font-bold text-tsubaki-red" />
-                  </div>
-                  <div className="flex-1">
-                    <p className="font-semibold text-sm">{v.reading}</p>
-                    <p className="text-xs text-on-muted">{v.meaning_vi}</p>
-                    {v.meaning_ja && <p className="text-xs text-on-muted/70">{v.meaning_ja}</p>}
-                    {v.example_sentence && (
-                      <p className="text-xs text-on-muted italic mt-1.5 border-l-2 border-tsubaki-red/30 pl-2">{v.example_sentence}</p>
-                    )}
-                  </div>
-                  {v.type && <span className="text-xs px-2 py-0.5 rounded-full bg-surface-low text-on-muted shrink-0">{v.type}</span>}
-                </div>
-              ))}
-            </div>
+            <VocabWordViewer
+              items={vocabList}
+              showLevel={false}
+              showDetails
+              furiganaEnabled={false}
+              renderItemExtra={selecting ? (v) => (
+                <input
+                  type="checkbox"
+                  checked={!!selected[`v-${v.id}`]}
+                  onChange={() => toggleSelect(`v-${v.id}`)}
+                  className="w-4 h-4 accent-tsubaki-red"
+                />
+              ) : undefined}
+            />
           </div>
         )}
 

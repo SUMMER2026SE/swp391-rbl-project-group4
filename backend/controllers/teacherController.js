@@ -409,10 +409,29 @@ exports.updateUnit = async (req, res) => {
   } catch (err) { res.status(500).json({ error: 'Không thể cập nhật.' }); }
 };
 
+exports.reorderUnits = async (req, res) => {
+  const { items } = req.body; // [{ id, sort_order }]
+  if (!Array.isArray(items)) return res.status(400).json({ error: 'items phải là mảng.' });
+  try {
+    // Chỉ sắp xếp unit thuộc khóa do chính mình tạo.
+    const { data: rows } = await contentDb.from('units').select('course_id').in('id', items.map(i => i.id));
+    for (const cid of [...new Set((rows || []).map(r => r.course_id))])
+      if (!(await ownsCourse(cid, req.user.id))) return res.status(403).json({ error: 'Không có quyền.' });
+    await Promise.all(items.map(({ id, sort_order }) =>
+      contentDb.from('units').update({ sort_order, updated_at: new Date().toISOString() }).eq('id', id)
+    ));
+    res.json({ message: 'Đã cập nhật thứ tự.' });
+  } catch (err) { res.status(500).json({ error: 'Không thể cập nhật thứ tự.' }); }
+};
+
 exports.reorderLessons = async (req, res) => {
   const { items } = req.body; // [{ id, order_index }]
   if (!Array.isArray(items)) return res.status(400).json({ error: 'items phải là mảng.' });
   try {
+    // Chỉ sắp xếp mục thuộc khóa do chính mình tạo.
+    const { data: rows } = await supabaseAdmin.from('lessons').select('course_id').in('id', items.map(i => i.id));
+    for (const cid of [...new Set((rows || []).map(r => r.course_id))])
+      if (!(await ownsCourse(cid, req.user.id))) return res.status(403).json({ error: 'Không có quyền.' });
     await Promise.all(items.map(({ id, order_index }) =>
       supabaseAdmin.from('lessons').update({ order_index, updated_at: new Date().toISOString() }).eq('id', id)
     ));
