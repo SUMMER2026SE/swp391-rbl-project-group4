@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import AdminLayout from '../../components/layout/AdminLayout';
 import Modal from '../../components/ui/Modal';
 import Button from '../../components/ui/Button';
@@ -18,14 +19,14 @@ const LEVEL_STYLE = {
 
 const EMPTY = {
   title: '', title_vi: '', summary_vi: '', level: '',
-  source: '', source_url: '', thumbnail_url: '',
+  thumbnail_url: '',
   content: '', segments: [], questions: [], vocab: [], grammar: [],
   is_published: false,
 };
 
 const LIMIT = 20;
 
-export function NewsManager({ Layout = AdminLayout, base = '/admin/news', uploadPath = '/admin/reading-passages/upload', title = 'Quản lý Luyện đọc' }) {
+export function ReadingManager({ Layout = AdminLayout, base = '/admin/reading', uploadPath = '/admin/reading-passages/upload', title = 'Quản lý Luyện đọc' }) {
   const [data, setData]       = useState([]);
   const [total, setTotal]     = useState(0);
   const [loading, setLoading] = useState(true);
@@ -41,6 +42,10 @@ export function NewsManager({ Layout = AdminLayout, base = '/admin/news', upload
   const [genQuiz, setGenQuiz]       = useState(false);   // AI sinh câu hỏi
   const [genVocab, setGenVocab]     = useState(false);   // sinh từ vựng & ngữ pháp
   const [uploading, setUploading]   = useState(false);
+  const [segmenting, setSegmenting] = useState(false);   // tách câu thủ công (không AI)
+  const [parsingFile, setParsingFile] = useState(false); // đọc nội dung từ file .txt/.docx
+
+  const navigate = useNavigate();
 
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleting, setDeleting] = useState(false);
@@ -85,8 +90,6 @@ export function NewsManager({ Layout = AdminLayout, base = '/admin/news', upload
         title_vi:      a.title_vi      || '',
         summary_vi:    a.summary_vi    || '',
         level:         a.level         || '',
-        source:        a.source        || '',
-        source_url:    a.source_url    || '',
         thumbnail_url: a.thumbnail_url || '',
         content:       a.content       || '',
         segments:      Array.isArray(a.segments)  ? a.segments  : [],
@@ -112,6 +115,38 @@ export function NewsManager({ Layout = AdminLayout, base = '/admin/news', upload
       showAlert('error', e.message);
     } finally {
       setGenerating(false);
+    }
+  };
+
+  // ── Tách câu THỦ CÔNG (không AI): dán text lẫn Nhật + Việt → segments + furigana ──
+  const handleSegmentManual = async () => {
+    if (!form.content.trim()) return showAlert('error', 'Hãy nhập nội dung bài đọc trước.');
+    setSegmenting(true);
+    try {
+      const r = await api.post(`${base}/segment-manual`, { text: form.content });
+      setForm(f => ({ ...f, segments: r.data.segments || [], content: r.data.content || f.content }));
+      showAlert('success', `Đã tách ${r.data.segments?.length || 0} câu (furigana tạo tự động). Hãy kiểm tra & sửa nếu cần.`);
+    } catch (e) {
+      showAlert('error', e.message);
+    } finally {
+      setSegmenting(false);
+    }
+  };
+
+  // ── Đọc nội dung từ file .txt/.docx đổ vào ô nội dung ────────────────────────
+  const handleParseFile = async (file) => {
+    if (!file) return;
+    setParsingFile(true);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      const r = await api.post(`${base}/parse-file`, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+      setForm(f => ({ ...f, content: r.data.text || '' }));
+      showAlert('success', 'Đã đọc nội dung file. Bạn có thể tách câu bằng AI hoặc thủ công.');
+    } catch (e) {
+      showAlert('error', e.message);
+    } finally {
+      setParsingFile(false);
     }
   };
 
@@ -206,6 +241,16 @@ export function NewsManager({ Layout = AdminLayout, base = '/admin/news', upload
       questions: f.questions.map((q, idx) =>
         idx === i ? { ...q, options: q.options.map((o, oIdx) => oIdx === j ? val : o) } : q),
     }));
+  const updateOptionVi = (i, j, val) =>
+    setForm(f => ({
+      ...f,
+      questions: f.questions.map((q, idx) => {
+        if (idx !== i) return q;
+        const options_vi = Array.isArray(q.options_vi) ? [...q.options_vi] : ['', '', '', ''];
+        options_vi[j] = val;
+        return { ...q, options_vi };
+      }),
+    }));
 
   // ── Save ──────────────────────────────────────────────────────────────────────
   const handleSave = async () => {
@@ -260,10 +305,16 @@ export function NewsManager({ Layout = AdminLayout, base = '/admin/news', upload
             Soạn bài đọc tiếng Nhật (AI hỗ trợ), sinh furigana + bản dịch + quiz + từ vựng, rồi đăng cho học viên.
           </p>
         </div>
-        <Button onClick={openCreate} className="shrink-0">
-          <span className="material-symbols-outlined text-[18px]">add</span>
-          Tạo bài đọc mới
-        </Button>
+        <div className="flex items-center gap-2 shrink-0">
+          <Button variant="secondary" onClick={() => navigate('/admin/reading/preview')}>
+            <span className="material-symbols-outlined text-[18px]">visibility</span>
+            Xem như học viên
+          </Button>
+          <Button onClick={openCreate}>
+            <span className="material-symbols-outlined text-[18px]">add</span>
+            Tạo bài đọc mới
+          </Button>
+        </div>
       </div>
 
       {/* Search */}
@@ -284,7 +335,7 @@ export function NewsManager({ Layout = AdminLayout, base = '/admin/news', upload
         </div>
       ) : data.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-24 text-on-muted text-center">
-          <span className="material-symbols-outlined text-6xl mb-4 opacity-25">newspaper</span>
+          <span className="material-symbols-outlined text-6xl mb-4 opacity-25">auto_stories</span>
           <p className="text-lg font-semibold text-charcoal mb-1">
             {search ? 'Không tìm thấy bài đọc' : 'Chưa có bài đọc nào'}
           </p>
@@ -297,7 +348,7 @@ export function NewsManager({ Layout = AdminLayout, base = '/admin/news', upload
               <div className="w-12 h-12 rounded-lg bg-surface-low overflow-hidden shrink-0 flex items-center justify-center">
                 {row.thumbnail_url
                   ? <img src={row.thumbnail_url} alt="" className="w-full h-full object-cover" onError={e => { e.currentTarget.style.display = 'none'; }} />
-                  : <span className="material-symbols-outlined text-outline/40">newspaper</span>}
+                  : <span className="material-symbols-outlined text-outline/40">auto_stories</span>}
               </div>
               <div className="flex-1 min-w-0">
                 <p className="font-semibold text-charcoal text-sm truncate">{row.title}</p>
@@ -321,6 +372,10 @@ export function NewsManager({ Layout = AdminLayout, base = '/admin/news', upload
                 {row.published_at ? new Date(row.published_at).toLocaleDateString('vi') : '—'}
               </span>
               <div className="flex items-center gap-0.5 shrink-0">
+                <button onClick={() => navigate(`/admin/reading/preview/${row.id}`)} title="Xem như học viên"
+                  className="p-1.5 text-on-muted hover:text-sumire-purple hover:bg-sumire-purple/10 rounded-lg transition-colors">
+                  <span className="material-symbols-outlined text-[18px]">visibility</span>
+                </button>
                 <button onClick={() => openEdit(row)} title="Sửa"
                   className="p-1.5 text-on-muted hover:text-tsubaki-red hover:bg-tsubaki-red/10 rounded-lg transition-colors">
                   <span className="material-symbols-outlined text-[18px]">edit</span>
@@ -359,11 +414,15 @@ export function NewsManager({ Layout = AdminLayout, base = '/admin/news', upload
           </>
         }
       >
-        <NewsForm
+        <ReadingForm
           form={form}
           onChange={setForm}
           onGenerate={handleGenerate}
           generating={generating}
+          onSegmentManual={handleSegmentManual}
+          segmenting={segmenting}
+          onParseFile={handleParseFile}
+          parsingFile={parsingFile}
           onCompose={handleCompose}
           composing={composing}
           onGenQuestions={handleGenQuestions}
@@ -379,6 +438,7 @@ export function NewsManager({ Layout = AdminLayout, base = '/admin/news', upload
           removeItem={removeItem}
           addItem={addItem}
           updateOption={updateOption}
+          updateOptionVi={updateOptionVi}
         />
       </Modal>
 
@@ -406,16 +466,16 @@ export function NewsManager({ Layout = AdminLayout, base = '/admin/news', upload
   );
 }
 
-export default function AdminNews() {
-  return <NewsManager />;
+export default function AdminReading() {
+  return <ReadingManager />;
 }
 
 // ── Form ──────────────────────────────────────────────────────────────────────
-function NewsForm({
-  form, onChange, onGenerate, generating, onCompose, composing,
-  onGenQuestions, genQuiz, onGenVocabGrammar, genVocab,
+function ReadingForm({
+  form, onChange, onGenerate, generating, onSegmentManual, segmenting, onParseFile, parsingFile,
+  onCompose, composing, onGenQuestions, genQuiz, onGenVocabGrammar, genVocab,
   onUpload, uploading, updateSeg, removeSeg, addSeg,
-  updateItem, removeItem, addItem, updateOption,
+  updateItem, removeItem, addItem, updateOption, updateOptionVi,
 }) {
   const [topic, setTopic]   = useState('');
   const [length, setLength] = useState('medium');
@@ -509,21 +569,6 @@ function NewsForm({
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
-        <Input
-          label="Nguồn tham khảo (tùy chọn)"
-          value={form.source}
-          onChange={e => onChange({ ...form, source: e.target.value })}
-          placeholder="Tên nguồn tham khảo nếu có..."
-        />
-        <Input
-          label="Link nguồn tham khảo"
-          value={form.source_url}
-          onChange={e => onChange({ ...form, source_url: e.target.value })}
-          placeholder="https://..."
-        />
-      </div>
-
       {/* Thumbnail */}
       <div>
         <label className="block text-sm font-medium text-on-muted mb-1">Ảnh thumbnail</label>
@@ -547,18 +592,39 @@ function NewsForm({
 
       {/* Content + generate */}
       <div className="pt-2 border-t border-outline/30">
-        <label className="block text-sm font-medium text-on-muted mb-1">Toàn văn tiếng Nhật</label>
+        <div className="flex items-center justify-between mb-1">
+          <label className="block text-sm font-medium text-on-muted">Nội dung bài đọc</label>
+          {/* Tải nội dung từ file .txt/.docx */}
+          <label className={`shrink-0 cursor-pointer inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-semibold transition-colors ${
+            parsingFile ? 'border-outline text-on-muted' : 'border-outline text-on-muted hover:border-tsubaki-red hover:text-tsubaki-red'
+          }`}>
+            <span className={`material-symbols-outlined text-[16px] ${parsingFile ? 'animate-spin' : ''}`}>{parsingFile ? 'progress_activity' : 'upload_file'}</span>
+            {parsingFile ? 'Đang đọc...' : 'Tải file (.txt/.docx)'}
+            <input type="file" accept=".txt,.docx" className="hidden" disabled={parsingFile}
+              onChange={e => { onParseFile(e.target.files?.[0]); e.target.value = ''; }} />
+          </label>
+        </div>
         <textarea
           value={form.content}
           onChange={e => onChange({ ...form, content: e.target.value })}
           rows={5}
-          placeholder="Dán toàn bộ nội dung bài báo tiếng Nhật vào đây..."
+          placeholder="Dán nội dung tiếng Nhật (có thể kèm bản dịch tiếng Việt) vào đây, hoặc tải file lên..."
           className="w-full px-4 py-3 bg-white border border-outline rounded-xl text-sm outline-none focus:border-tsubaki-red focus:ring-2 focus:ring-tsubaki-red/10 transition-all resize-y leading-relaxed"
         />
-        <Button variant="purple" size="sm" className="mt-2" loading={generating} onClick={onGenerate}>
-          <span className="material-symbols-outlined text-[18px]">auto_awesome</span>
-          Tách câu &amp; sinh furigana + dịch
-        </Button>
+        <p className="text-xs text-on-muted mt-1.5">
+          <strong>Tách câu &amp; dịch (AI):</strong> AI tự dịch từng câu. <strong>Tách câu (không AI):</strong> nhanh, dùng khi
+          bạn đã có sẵn bản dịch tiếng Việt — dán lẫn Nhật + Việt, hệ thống tự phân loại và ghép cặp, furigana tạo tự động.
+        </p>
+        <div className="flex flex-wrap gap-2 mt-2">
+          <Button variant="purple" size="sm" loading={generating} onClick={onGenerate}>
+            <span className="material-symbols-outlined text-[18px]">auto_awesome</span>
+            Tách câu &amp; dịch (AI)
+          </Button>
+          <Button variant="secondary" size="sm" loading={segmenting} onClick={onSegmentManual}>
+            <span className="material-symbols-outlined text-[18px]">content_cut</span>
+            Tách câu (không AI)
+          </Button>
+        </div>
       </div>
 
       {/* Segments review */}
@@ -596,7 +662,7 @@ function NewsForm({
             Câu hỏi trắc nghiệm ({form.questions.length})
           </label>
           <div className="flex items-center gap-3">
-            <button type="button" onClick={() => addItem('questions', { question: '', options: ['', '', '', ''], answer: 0, explanation_vi: '' })}
+            <button type="button" onClick={() => addItem('questions', { question: '', question_vi: '', options: ['', '', '', ''], options_vi: ['', '', '', ''], answer: 0, explanation_vi: '' })}
               className="text-xs font-semibold text-tsubaki-red hover:underline inline-flex items-center gap-1">
               <span className="material-symbols-outlined text-[16px]">add</span> Thêm câu hỏi
             </button>
@@ -615,8 +681,9 @@ function NewsForm({
                   <span className="material-symbols-outlined text-[18px]">close</span>
                 </button>
                 <SegField label={`Câu hỏi ${i + 1}`} value={q.question} onChange={v => updateItem('questions', i, 'question', v)} />
+                <SegField label="Bản dịch câu hỏi (VI)" value={q.question_vi || ''} onChange={v => updateItem('questions', i, 'question_vi', v)} />
                 <div className="space-y-1.5">
-                  <label className="block text-[11px] font-semibold text-on-muted uppercase tracking-wide">Lựa chọn (chọn đáp án đúng)</label>
+                  <label className="block text-[11px] font-semibold text-on-muted uppercase tracking-wide">Lựa chọn (chọn đáp án đúng) — kèm bản dịch tiếng Việt</label>
                   {(q.options || []).map((opt, j) => (
                     <div key={j} className="flex items-center gap-2">
                       <input
@@ -633,6 +700,12 @@ function NewsForm({
                         className={`flex-1 px-3 py-1.5 bg-white border rounded-lg text-sm outline-none transition-colors ${
                           q.answer === j ? 'border-green-400 focus:border-green-500' : 'border-outline focus:border-tsubaki-red'
                         }`}
+                      />
+                      <input
+                        value={q.options_vi?.[j] || ''}
+                        onChange={e => updateOptionVi(i, j, e.target.value)}
+                        placeholder={`Dịch ${j + 1}`}
+                        className="flex-1 px-3 py-1.5 bg-white border border-outline rounded-lg text-sm text-on-muted outline-none focus:border-sumire-purple transition-colors"
                       />
                     </div>
                   ))}

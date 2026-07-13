@@ -32,8 +32,8 @@ import BillingHistory       from './pages/student/BillingHistory';
 // import Classes      from './pages/student/Classes'; // HIDDEN
 import Quiz         from './pages/student/Quiz';
 import Dictionary   from './pages/student/Dictionary';
-import NewsList     from './pages/student/NewsList';
-import NewsReader   from './pages/student/NewsReader';
+import ReadingList   from './pages/student/ReadingList';
+import ReadingReader from './pages/student/ReadingReader';
 import Exams        from './pages/student/Exams';
 import TakeExam     from './pages/student/TakeExam';
 import MockExamList    from './pages/student/MockExamList';
@@ -66,7 +66,6 @@ import TeacherExams      from './pages/teacher/TeacherExams';
 import ExamEditor        from './pages/teacher/ExamEditor';
 import TeacherStudyLists from './pages/teacher/TeacherStudyLists';
 import TeacherListening  from './pages/teacher/TeacherListening';
-import TeacherNews       from './pages/teacher/TeacherNews';
 import TeacherEarnings   from './pages/teacher/TeacherEarnings';
 // Admin pages
 import AdminDashboard  from './pages/admin/AdminDashboard';
@@ -83,7 +82,8 @@ import AdminQuestionBank       from './pages/admin/AdminQuestionBank';
 import AdminMockExams          from './pages/admin/AdminMockExams';
 import AdminRevenuePool        from './pages/admin/AdminRevenuePool';
 import AdminMockExamEditor     from './pages/admin/AdminMockExamEditor';
-import AdminNews               from './pages/admin/AdminNews';
+import AdminReading            from './pages/admin/AdminReading';
+import AdminReadingPreview     from './pages/admin/AdminReadingPreview';
 import AdminListening               from './pages/admin/AdminListening';
 import AdminPlacementQuestions      from './pages/admin/AdminPlacementQuestions';
 import AdminSubscriptions           from './pages/admin/AdminSubscriptions';
@@ -134,8 +134,8 @@ export default function App() {
             <Route path="/grammar"    element={<StudentRoute><Grammar /></StudentRoute>} />
             <Route path="/kanji"      element={<StudentRoute><Kanji /></StudentRoute>} />
             <Route path="/kanji/writing" element={<StudentRoute><KanjiWriting /></StudentRoute>} />
-            <Route path="/study-lists/:type/:id" element={<StudentRoute><StudyListDetail /></StudentRoute>} />
-            <Route path="/study-lists/:type/:id/:itemId" element={<StudentRoute><StudyListItemDetail /></StudentRoute>} />
+            <Route path="/study-lists/:type/:id" element={<ProtectedRoute><StudyListDetail /></ProtectedRoute>} />
+            <Route path="/study-lists/:type/:id/:itemId" element={<ProtectedRoute><StudyListItemDetail /></ProtectedRoute>} />
             <Route path="/writing"    element={<StudentRoute><Writing /></StudentRoute>} />
             <Route path="/listening"       element={<StudentRoute><Listening /></StudentRoute>} />
             <Route path="/placement-test" element={<StudentRoute><PlacementTest /></StudentRoute>} />
@@ -146,8 +146,8 @@ export default function App() {
             {/* <Route path="/classes"    element={<StudentRoute><Classes /></StudentRoute>} /> */}{/* HIDDEN */}
             <Route path="/quizzes/:id" element={<StudentRoute><Quiz /></StudentRoute>} />
             <Route path="/dictionary" element={<StudentRoute><Dictionary /></StudentRoute>} />
-            <Route path="/news"       element={<StudentRoute><NewsList /></StudentRoute>} />
-            <Route path="/news/:id"   element={<StudentRoute><NewsReader /></StudentRoute>} />
+            <Route path="/reading"     element={<StudentRoute><ReadingList /></StudentRoute>} />
+            <Route path="/reading/:id" element={<StudentRoute><ReadingReader /></StudentRoute>} />
             <Route path="/exams"      element={<StudentRoute><Exams /></StudentRoute>} />
             <Route path="/exams/:assignmentId" element={<StudentRoute><TakeExam /></StudentRoute>} />
             <Route path="/mock-exams"          element={<StudentRoute><MockExamList /></StudentRoute>} />
@@ -183,7 +183,6 @@ export default function App() {
             <Route path="/teacher/grammar"  element={<TeacherRoute><TeacherGrammar /></TeacherRoute>} />
             <Route path="/teacher/study-lists" element={<TeacherRoute><TeacherStudyLists /></TeacherRoute>} />
             <Route path="/teacher/listening" element={<TeacherRoute><TeacherListening /></TeacherRoute>} />
-            <Route path="/teacher/reading"   element={<TeacherRoute><TeacherNews /></TeacherRoute>} />
             <Route path="/teacher/earnings"  element={<TeacherRoute><TeacherEarnings /></TeacherRoute>} />
             {/* <Route path="/teacher/classes"  element={<TeacherRoute><TeacherClasses /></TeacherRoute>} /> */}{/* HIDDEN */}
             <Route path="/teacher/dictionary" element={<TeacherRoute><TeacherDictionary /></TeacherRoute>} />
@@ -207,7 +206,9 @@ export default function App() {
             <Route path="/admin/mock-exams"     element={<AdminRoute><AdminMockExams /></AdminRoute>} />
             <Route path="/admin/revenue-pool"   element={<AdminRoute><AdminRevenuePool /></AdminRoute>} />
             <Route path="/admin/mock-exams/:id" element={<AdminRoute><AdminMockExamEditor /></AdminRoute>} />
-            <Route path="/admin/news"       element={<AdminRoute><AdminNews /></AdminRoute>} />
+            <Route path="/admin/reading"                element={<AdminRoute><AdminReading /></AdminRoute>} />
+            <Route path="/admin/reading/preview"        element={<AdminRoute><AdminReadingPreview /></AdminRoute>} />
+            <Route path="/admin/reading/preview/:id"    element={<AdminRoute><AdminReadingPreview /></AdminRoute>} />
             <Route path="/admin/listening"         element={<AdminRoute><AdminListening /></AdminRoute>} />
             <Route path="/admin/placement"       element={<AdminRoute><AdminPlacementQuestions /></AdminRoute>} />
             <Route path="/admin/subscriptions"   element={<AdminRoute><AdminSubscriptions /></AdminRoute>} />

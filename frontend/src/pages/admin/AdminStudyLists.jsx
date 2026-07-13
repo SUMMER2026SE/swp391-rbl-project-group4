@@ -6,6 +6,7 @@ import Input from '../../components/ui/Input';
 import Alert from '../../components/ui/Alert';
 import ImportFileModal from '../../components/admin/ImportFileModal';
 import api from '../../lib/api';
+import { TOPICS } from '../../lib/studyListTopics';
 
 const TYPE_TO_IMPORT = { vocabulary: 'vocab', kanji: 'kanji', grammar: 'grammar' };
 const SEARCH_ENDPOINT = { vocabulary: '/vocabulary', kanji: '/kanji', grammar: '/grammar-points' };
@@ -136,7 +137,7 @@ export default function AdminStudyLists() {
   const [alert, setAlert]     = useState({ type: '', msg: '' });
 
   const [modal, setModal]   = useState(false);
-  const [form, setForm]     = useState({ title: '', description: '', level: '' });
+  const [form, setForm]     = useState({ title: '', description: '', level: '', topic: '' });
   const [editId, setEditId] = useState(null);
   const [saving, setSaving] = useState(false);
 
@@ -155,17 +156,21 @@ export default function AdminStudyLists() {
   useEffect(() => { load(); }, [load]);
 
   const openEdit = (post) => {
-    setForm({ title: post.title, description: post.description || '', level: post.level || '' });
+    setForm({ title: post.title, description: post.description || '', level: post.level || '', topic: post.topic || '' });
     setEditId(post.id);
     setModal(true);
   };
 
   const handleSave = async () => {
     if (!form.title.trim()) return setAlert({ type: 'error', msg: 'Tiêu đề là bắt buộc.' });
-    if (!form.level) return setAlert({ type: 'error', msg: 'Vui lòng chọn cấp độ.' });
+    if (type === 'vocabulary') {
+      if (!form.topic) return setAlert({ type: 'error', msg: 'Vui lòng chọn chủ đề.' });
+    } else if (!form.level) {
+      return setAlert({ type: 'error', msg: 'Vui lòng chọn cấp độ.' });
+    }
     setSaving(true);
     try {
-      await api.put(`/study-lists/${editId}`, { title: form.title, description: form.description, level: form.level });
+      await api.put(`/study-lists/${editId}`, { title: form.title, description: form.description, level: form.level || null, topic: form.topic || null });
       setModal(false);
       await load();
     } catch (e) { setAlert({ type: 'error', msg: e.message }); }
@@ -209,7 +214,7 @@ export default function AdminStudyLists() {
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="bg-surface-low border-b border-outline/40">
-                <tr>{['Tiêu đề', 'Giáo viên', 'Cấp độ', 'Số mục', 'Lượt xem', ''].map((h, i) =>
+                <tr>{['Tiêu đề', 'Giáo viên', 'Cấp độ', 'Chủ đề', 'Số mục', 'Lượt xem', ''].map((h, i) =>
                   <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-on-muted uppercase tracking-wide">{h}</th>)}</tr>
               </thead>
               <tbody>
@@ -218,6 +223,7 @@ export default function AdminStudyLists() {
                     <td className="px-4 py-2.5 font-medium">{post.title}</td>
                     <td className="px-4 py-2.5 text-on-muted">{post.creator?.name || post.creator?.email || '—'}</td>
                     <td className="px-4 py-2.5">{post.level || '—'}</td>
+                    <td className="px-4 py-2.5">{post.topic || '—'}</td>
                     <td className="px-4 py-2.5">{post.item_count}</td>
                     <td className="px-4 py-2.5">{post.view_count}</td>
                     <td className="px-4 py-2.5">
@@ -249,11 +255,22 @@ export default function AdminStudyLists() {
         <div className="space-y-4">
           <Input label="Tiêu đề *" value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} />
           <div>
-            <label className="block text-sm font-medium text-on-muted mb-1">Cấp độ *</label>
+            <label className="block text-sm font-medium text-on-muted mb-1">Cấp độ{type === 'vocabulary' ? '' : ' *'}</label>
             <select value={form.level} onChange={e => setForm({ ...form, level: e.target.value })}
               className="w-full px-4 py-3 bg-white border border-outline rounded-xl text-sm outline-none focus:border-tsubaki-red">
               <option value="">-- Chọn cấp độ --</option>
               {LEVELS.map(l => <option key={l} value={l}>{l}</option>)}
+            </select>
+            {type === 'vocabulary' && (
+              <p className="text-xs text-on-muted mt-1">Không bắt buộc — 1 chủ đề thường có từ ở nhiều cấp độ, cấp độ sẽ lọc bên trong khi xem từng từ.</p>
+            )}
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-on-muted mb-1">Chủ đề{type === 'vocabulary' ? ' *' : ''}</label>
+            <select value={form.topic} onChange={e => setForm({ ...form, topic: e.target.value })}
+              className="w-full px-4 py-3 bg-white border border-outline rounded-xl text-sm outline-none focus:border-tsubaki-red">
+              <option value="">-- Không chọn --</option>
+              {TOPICS.map(t => <option key={t} value={t}>{t}</option>)}
             </select>
           </div>
           <Input label="Mô tả" value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} />

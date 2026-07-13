@@ -157,30 +157,35 @@ exports.updateSet = async (req, res) => {
   }
 };
 
-// POST /api/flashcards/sets/:id/cards   Body: { term, definition } — thêm 1 thẻ vào cuối set
+// POST /api/flashcards/sets/:id/cards   thêm thẻ vào cuối set
+//   Body: { term, definition }               — thêm 1 thẻ
+//   Body: { cards: [{ term, definition }] }   — thêm nhiều thẻ 1 lần (lưu từ vựng/ngữ pháp bài đọc)
 exports.addCard = async (req, res) => {
   const userId = req.user.id;
-  const { term, definition } = req.body;
-  if (!term?.trim() || !definition?.trim()) {
+
+  // Chuẩn hóa về mảng thẻ hợp lệ (hỗ trợ cả body 1 thẻ lẫn body bulk)
+  const list = (Array.isArray(req.body.cards) ? req.body.cards : [req.body])
+    .filter(c => c && c.term?.trim() && c.definition?.trim())
+    .map(c => ({ term: c.term.trim(), definition: c.definition.trim() }));
+  if (list.length === 0) {
     return res.status(400).json({ error: 'Thẻ cần có đủ từ vựng và định nghĩa.' });
   }
   try {
     const set = await ownSet(req.params.id, userId);
     if (!set) return res.status(404).json({ error: 'Không tìm thấy học phần.' });
 
-    // Thẻ mới nằm cuối: order_index = max hiện có + 1
+    // Thẻ mới nằm cuối: order_index bắt đầu từ max hiện có + 1
     const { data: last, error: oErr } = await fcDb.from('flashcards')
       .select('order_index').eq('set_id', set.id)
       .order('order_index', { ascending: false }).limit(1);
     if (oErr) throw oErr;
-    const nextIndex = last?.length ? (last[0].order_index ?? -1) + 1 : 0;
+    let nextIndex = last?.length ? (last[0].order_index ?? -1) + 1 : 0;
 
-    const { data: card, error } = await fcDb.from('flashcards')
-      .insert({ set_id: set.id, term: term.trim(), definition: definition.trim(), order_index: nextIndex })
-      .select('id').single();
+    const rows = list.map(c => ({ set_id: set.id, term: c.term, definition: c.definition, order_index: nextIndex++ }));
+    const { data: cards, error } = await fcDb.from('flashcards').insert(rows).select('id');
     if (error) throw error;
 
-    res.status(201).json({ data: { id: card.id } });
+    res.status(201).json({ data: { added: cards.length, ids: cards.map(c => c.id) } });
   } catch (err) {
     console.error('fc.addCard:', err);
     res.status(500).json({ error: 'Không thể thêm thẻ vào học phần.' });

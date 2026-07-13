@@ -7,7 +7,7 @@ const c = require('../../controllers/teacherController');
 const ac = require('../../controllers/adminController'); // tái dùng cho thao tác trên kho chung (vocab/kanji)
 const qb = require('../../controllers/teacherQuestionBankController');
 const lc = require('../../controllers/listeningController');
-const nc = require('../../controllers/newsController');
+const nc = require('../../controllers/readingController');
 const rp = require('../../controllers/revenuePoolController');
 
 const upload = multer({
@@ -53,6 +53,7 @@ router.post('/lessons/upload-video', videoUpload.single('video'), ac.uploadLesso
 router.get('/vocabulary',                              ac.listVocab);
 router.post('/vocabulary',                             c.createVocabForLesson);
 router.put('/vocabulary/:id',                          ac.updateVocab);
+router.post('/vocabulary/upload-image',                upload.single('image'), ac.uploadVocabImage);
 router.post('/lessons/:lessonId/vocabulary/attach',    c.attachVocab);
 router.delete('/lessons/:lessonId/vocabulary/:vocabId', c.detachVocab);
 
