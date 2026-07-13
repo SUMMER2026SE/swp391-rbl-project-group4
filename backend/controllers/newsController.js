@@ -8,8 +8,8 @@ const { extractVocabCandidates } = require('../services/jaTokenizer');
 const { annotateQuestions } = require('../services/furiganaService');
 const { attachMeaningPreview } = require('./dictionaryController');
 
-// Bảng bài đọc nằm trong schema riêng materials_module — mọi truy vấn dùng client này
-const matDb = supabaseAdmin.schema('materials_module');
+// Bảng bài đọc nằm trong schema riêng reading_module — mọi truy vấn dùng client này
+const matDb = supabaseAdmin.schema('reading_module');
 // Từ điển (dictionary_module) — dùng để khớp từ vựng của bài với từ điển hệ thống
 const dictDb = supabaseAdmin.schema('dictionary_module');
 
@@ -42,7 +42,7 @@ exports.list = async (req, res) => {
   const lim = Math.min(100, Math.max(1, Number(req.query.limit) || 12));
   const offset = (p - 1) * lim;
   try {
-    let query = matDb.from('news_articles')
+    let query = matDb.from('articles')
       .select('id,title,title_vi,summary_vi,level,thumbnail_url,view_count,published_at,created_by', { count: 'exact' })
       .eq('is_published', true)
       .range(offset, offset + lim - 1);
@@ -74,8 +74,8 @@ exports.list = async (req, res) => {
 // GET /api/news/:id
 exports.getOne = async (req, res) => {
   try {
-    const { data, error } = await matDb.from('news_articles')
-      .select('id,title,title_vi,level,source,source_url,thumbnail_url,content,segments,questions,vocab,grammar,view_count,published_at,created_by,creator_type')
+    const { data, error } = await matDb.from('articles')
+      .select('id,title,title_vi,level,thumbnail_url,content,segments,questions,vocab,grammar,view_count,published_at,created_by,creator_type')
       .eq('id', req.params.id)
       .eq('is_published', true)
       .single();
@@ -85,7 +85,7 @@ exports.getOne = async (req, res) => {
 
     // Bài đã đọc rồi → đọc lại tự do; bài mới → check quota rồi ghi nhận lượt đọc
     const userId = req.user.id;
-    const { data: read } = await matDb.from('news_article_reads')
+    const { data: read } = await matDb.from('article_reads')
       .select('article_id')
       .eq('article_id', data.id).eq('user_id', userId)
       .maybeSingle();
@@ -110,10 +110,10 @@ exports.getOne = async (req, res) => {
       }
 
       // 2 request song song có thể đụng PK (article_id,user_id) — coi như đã đọc, bỏ qua
-      const { error: insErr } = await matDb.from('news_article_reads')
+      const { error: insErr } = await matDb.from('article_reads')
         .insert({ article_id: data.id, user_id: userId });
       if (!insErr) {
-        const { error: vErr } = await matDb.from('news_articles')
+        const { error: vErr } = await matDb.from('articles')
           .update({ view_count: data.view_count + 1 }).eq('id', data.id);
         if (!vErr) data.view_count += 1;
         incrementUsage(userId, 'news_read_daily').catch(() => {});
@@ -126,7 +126,7 @@ exports.getOne = async (req, res) => {
         && data.questions.some(q => q && q.question_furigana === undefined)) {
       try {
         data.questions = await annotateQuestions(data.questions);
-        await matDb.from('news_articles').update({ questions: data.questions }).eq('id', data.id);
+        await matDb.from('articles').update({ questions: data.questions }).eq('id', data.id);
       } catch (e) {
         console.error('news.getOne backfill furigana:', e.message);
       }
@@ -372,7 +372,7 @@ exports.adminList = async (req, res) => {
   const lim = Math.min(100, Math.max(1, Number(req.query.limit) || 20));
   const offset = (p - 1) * lim;
   try {
-    let query = matDb.from('news_articles')
+    let query = matDb.from('articles')
       .select('id,title,title_vi,level,thumbnail_url,view_count,is_published,published_at,created_at,updated_at', { count: 'exact' })
       .order('created_at', { ascending: false })
       .range(offset, offset + lim - 1);
@@ -394,8 +394,8 @@ exports.adminList = async (req, res) => {
 // GET /api/admin/news/:id
 exports.adminGetOne = async (req, res) => {
   try {
-    const { data, error } = await matDb.from('news_articles')
-      .select('id,title,title_vi,summary_vi,level,source,source_url,thumbnail_url,content,segments,questions,vocab,grammar,view_count,is_published,published_at,created_by,created_at,updated_at')
+    const { data, error } = await matDb.from('articles')
+      .select('id,title,title_vi,summary_vi,level,thumbnail_url,content,segments,questions,vocab,grammar,view_count,is_published,published_at,created_by,created_at,updated_at')
       .eq('id', req.params.id)
       .single();
     if (error || !data) return res.status(404).json({ error: 'Không tìm thấy bài đọc.' });
@@ -409,18 +409,16 @@ exports.adminGetOne = async (req, res) => {
 // ── Admin: tạo bài ────────────────────────────────────────────────────────────
 // POST /api/admin/news
 exports.create = async (req, res) => {
-  const { title, title_vi, summary_vi, level, source, source_url, thumbnail_url, content, segments, questions, vocab, grammar, is_published } = req.body;
+  const { title, title_vi, summary_vi, level, thumbnail_url, content, segments, questions, vocab, grammar, is_published } = req.body;
   if (!title?.trim()) return res.status(400).json({ error: 'Tiêu đề là bắt buộc.' });
   try {
     const questionsWithFuri = await annotateQuizFurigana(questions);
-    const { data, error } = await matDb.from('news_articles')
+    const { data, error } = await matDb.from('articles')
       .insert({
         title,
         title_vi:      title_vi      || null,
         summary_vi:    summary_vi    || null,
         level:         level         || null,
-        source:        source        || null,
-        source_url:    source_url    || null,
         thumbnail_url: thumbnail_url || null,
         content:       content       || null,
         segments:      Array.isArray(segments)  ? segments  : [],
@@ -444,7 +442,7 @@ exports.create = async (req, res) => {
 // ── Admin: cập nhật bài ───────────────────────────────────────────────────────
 // PUT /api/admin/news/:id
 exports.update = async (req, res) => {
-  const allowed = ['title', 'title_vi', 'summary_vi', 'level', 'source', 'source_url', 'thumbnail_url', 'content', 'segments', 'questions', 'vocab', 'grammar', 'is_published'];
+  const allowed = ['title', 'title_vi', 'summary_vi', 'level', 'thumbnail_url', 'content', 'segments', 'questions', 'vocab', 'grammar', 'is_published'];
   const updates = Object.fromEntries(Object.entries(req.body).filter(([k]) => allowed.includes(k)));
   updates.updated_at = new Date().toISOString();
   try {
@@ -453,12 +451,12 @@ exports.update = async (req, res) => {
 
     // Ngày đăng: set 1 lần khi publish lần đầu, các lần re-publish sau giữ nguyên
     if (updates.is_published === true) {
-      const { data: cur } = await matDb.from('news_articles')
+      const { data: cur } = await matDb.from('articles')
         .select('published_at').eq('id', req.params.id).maybeSingle();
       if (cur && !cur.published_at) updates.published_at = new Date().toISOString();
     }
 
-    const { data, error } = await matDb.from('news_articles')
+    const { data, error } = await matDb.from('articles')
       .update(updates).eq('id', req.params.id).select().single();
     if (error) throw error;
     res.json(data);
@@ -472,7 +470,7 @@ exports.update = async (req, res) => {
 // DELETE /api/admin/news/:id
 exports.remove = async (req, res) => {
   try {
-    const { error } = await matDb.from('news_articles').delete().eq('id', req.params.id);
+    const { error } = await matDb.from('articles').delete().eq('id', req.params.id);
     if (error) throw error;
     res.json({ message: 'Đã xóa.' });
   } catch (err) {
@@ -484,7 +482,7 @@ exports.remove = async (req, res) => {
 // ── Teacher: own reading-article CRUD (created_by scoped) ─────────────────────
 
 async function ownsArticle(id, user) {
-  const { data } = await matDb.from('news_articles').select('created_by').eq('id', id).maybeSingle();
+  const { data } = await matDb.from('articles').select('created_by').eq('id', id).maybeSingle();
   if (!data) return false;
   return data.created_by === user.id || user.user_metadata?.role === 'admin';
 }
@@ -492,7 +490,7 @@ async function ownsArticle(id, user) {
 // GET /api/teacher/my-reading
 exports.teacherList = async (req, res) => {
   try {
-    const { data, error } = await matDb.from('news_articles')
+    const { data, error } = await matDb.from('articles')
       .select('id,title,title_vi,level,thumbnail_url,view_count,is_published,published_at,created_at,updated_at')
       .eq('created_by', req.user.id)
       .order('created_at', { ascending: false });
@@ -512,19 +510,17 @@ exports.teacherGetOne = async (req, res) => {
 
 // POST /api/teacher/my-reading
 exports.teacherCreate = async (req, res) => {
-  const { title, title_vi, summary_vi, level, source, source_url, thumbnail_url, content, segments, questions, vocab, grammar, is_published } = req.body;
+  const { title, title_vi, summary_vi, level, thumbnail_url, content, segments, questions, vocab, grammar, is_published } = req.body;
   if (!title?.trim()) return res.status(400).json({ error: 'Tiêu đề là bắt buộc.' });
   try {
     const questionsWithFuri = await annotateQuizFurigana(questions);
     const publish = is_published !== false; // teachers publish directly by default
-    const { data, error } = await matDb.from('news_articles')
+    const { data, error } = await matDb.from('articles')
       .insert({
         title,
         title_vi:      title_vi      || null,
         summary_vi:    summary_vi    || null,
         level:         level         || null,
-        source:        source        || null,
-        source_url:    source_url    || null,
         thumbnail_url: thumbnail_url || null,
         content:       content       || null,
         segments:      Array.isArray(segments)  ? segments  : [],

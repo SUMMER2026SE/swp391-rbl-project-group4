@@ -765,8 +765,7 @@ exports.adminListStudyLists = async (req, res) => {
   try {
     let query = supabaseAdmin.from('study_list_posts')
       .select('*', { count: 'exact' })
-      .eq('list_type', type)
-      .eq('creator_type', 'teacher');
+      .eq('list_type', type);
 
     const safe = search ? String(search).replace(/[,()%*]/g, ' ').trim() : '';
     if (safe) query = query.or(`title.ilike.%${safe}%,description.ilike.%${safe}%`);
@@ -793,7 +792,9 @@ exports.adminListStudyLists = async (req, res) => {
     const result = posts.map(post => ({
       ...post,
       item_count: itemCount[post.id] || 0,
-      creator: creatorMap[post.created_by] || { name: null, email: null },
+      creator: post.creator_type === 'admin'
+        ? { name: 'Kizuna Nihongo', email: null }
+        : (creatorMap[post.created_by] || { name: null, email: null }),
     }));
 
     res.json({ data: result, total: count, page: p, limit: lim });
