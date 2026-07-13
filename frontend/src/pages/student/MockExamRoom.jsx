@@ -3,9 +3,8 @@ import { useParams, useNavigate } from 'react-router-dom';
 import Button from '../../components/ui/Button';
 import Alert from '../../components/ui/Alert';
 import Modal from '../../components/ui/Modal';
-import FuriganaText from '../../components/ui/FuriganaText';
 import AudioPlayer from '../../components/mockexam/AudioPlayer';
-import { SECTION_LABEL, mondaiJa, formatDuration } from '../../lib/mockExamConstants';
+import { sectionDisplay, MONDAI_INSTRUCTION_VI, formatDuration } from '../../lib/mockExamConstants';
 import { getMockCurrent, saveMockAnswers, submitMockSection } from '../../lib/mockExamApi';
 
 export default function MockExamRoom() {
@@ -16,7 +15,6 @@ export default function MockExamRoom() {
   const [remaining, setRemaining] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [furigana, setFurigana] = useState(false);
   const [confirmSubmit, setConfirmSubmit] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [breakInfo, setBreakInfo] = useState(null);  // { nextTitle } giữa các phần
@@ -81,7 +79,7 @@ export default function MockExamRoom() {
         return;
       }
       // sang phần kế — hiện màn nghỉ ngắn
-      setBreakInfo({ nextTitle: r.section.title || SECTION_LABEL[r.section.section_type], nextMin: Math.round(r.remaining_seconds / 60) });
+      setBreakInfo({ nextTitle: sectionDisplay(r.section), nextMin: Math.round(r.remaining_seconds / 60) });
       setSection(r.section);
       setAnswers({});
       setRemaining(r.remaining_seconds);
@@ -125,11 +123,9 @@ export default function MockExamRoom() {
         <div className="max-w-5xl mx-auto px-4 h-16 flex items-center justify-between gap-4">
           <div className="min-w-0">
             <p className="text-xs text-on-muted">Phần thi</p>
-            <p className="font-bold text-charcoal truncate">{section.title || SECTION_LABEL[section.section_type]}</p>
+            <p className="font-bold text-charcoal truncate">{sectionDisplay(section)}</p>
           </div>
           <div className="flex items-center gap-3 shrink-0">
-            <button onClick={() => setFurigana(f => !f)} title="Furigana"
-              className={`text-xs px-2.5 py-1.5 rounded-lg border font-semibold ${furigana ? 'bg-amber-100 border-amber-300 text-amber-700' : 'border-outline text-on-muted'}`}>あ</button>
             <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-bold tabular-nums ${lowTime ? 'bg-error-bg text-error animate-pulse' : 'bg-surface-low text-charcoal'}`}>
               <span className="material-symbols-outlined text-lg">timer</span>{formatDuration(remaining)}
             </div>
@@ -147,17 +143,21 @@ export default function MockExamRoom() {
             return (
               <div key={group.id} className="scroll-mt-20" id={`group-${group.id}`}>
                 {group.instruction_text && (
-                  <div className="bg-charcoal/5 rounded-lg px-3 py-2 text-sm font-semibold text-charcoal mb-3">
-                    問題{group.mondai_number} · <span className="text-on-muted font-normal">{group.instruction_text}</span>
+                  <div className="bg-charcoal/5 rounded-lg px-3 py-2 text-sm mb-3">
+                    <span className="font-semibold text-charcoal">問題{group.mondai_number} · </span>
+                    <span className="text-on-muted">{group.instruction_text}</span>
+                    {MONDAI_INSTRUCTION_VI[group.mondai_type] && (
+                      <p className="text-xs text-on-muted italic mt-1">{MONDAI_INSTRUCTION_VI[group.mondai_type]}</p>
+                    )}
                   </div>
                 )}
-                {group.audio_url && <div className="mb-3"><AudioPlayer src={group.audio_url} maxPlays={2} label={`問題${group.mondai_number} — Audio`} /></div>}
+                {group.audio_url && <div className="mb-3"><AudioPlayer src={group.audio_url} label={`問題${group.mondai_number} — Audio`} /></div>}
 
                 <div className={hasPassage ? 'grid grid-cols-1 md:grid-cols-2 gap-4' : ''}>
                   {hasPassage && (
                     <div className="md:sticky md:top-20 md:self-start bg-white border border-outline/40 rounded-xl p-4 max-h-[70vh] overflow-y-auto">
                       {group.image_url && <img src={group.image_url} className="w-full rounded-lg mb-3" alt="" />}
-                      {group.passage_text && <div className="text-sm leading-relaxed whitespace-pre-wrap"><FuriganaText text={group.passage_text} enabled={furigana} block /></div>}
+                      {group.passage_text && <p className="text-sm leading-relaxed whitespace-pre-wrap">{group.passage_text}</p>}
                     </div>
                   )}
                   <div className="space-y-4">
@@ -168,16 +168,16 @@ export default function MockExamRoom() {
                           <div className="flex items-start gap-2 mb-3">
                             <span className="w-6 h-6 shrink-0 rounded-full bg-tsubaki-red text-white text-xs font-bold flex items-center justify-center">{num}</span>
                             <div className="flex-1 text-sm font-medium text-charcoal">
-                              {q.question_text ? <FuriganaText text={q.question_text} enabled={furigana} /> : <span className="text-on-muted italic">Nghe audio và chọn đáp án</span>}
+                              {q.question_text ? <span className="whitespace-pre-wrap">{q.question_text}</span> : <span className="text-on-muted italic">Nghe audio và chọn đáp án</span>}
                             </div>
                           </div>
-                          {q.audio_url && <div className="mb-3"><AudioPlayer src={q.audio_url} maxPlays={2} label={`Câu ${num}`} /></div>}
+                          {q.audio_url && <div className="mb-3"><AudioPlayer src={q.audio_url} label={`Câu ${num}`} /></div>}
                           <div className="space-y-2">
                             {q.options.map((opt, idx) => (
                               <button key={idx} onClick={() => pick(q.id, idx)}
                                 className={`w-full text-left px-3 py-2.5 rounded-lg border text-sm flex items-center gap-2.5 transition-colors ${answers[q.id] === idx ? 'border-tsubaki-red bg-tsubaki-red/5 text-charcoal' : 'border-outline hover:border-tsubaki-red/40'}`}>
                                 <span className={`w-6 h-6 shrink-0 rounded-full text-xs font-bold flex items-center justify-center border ${answers[q.id] === idx ? 'bg-tsubaki-red border-tsubaki-red text-white' : 'border-outline text-on-muted'}`}>{idx + 1}</span>
-                                <FuriganaText text={opt} enabled={furigana} />
+                                <span>{opt}</span>
                               </button>
                             ))}
                           </div>

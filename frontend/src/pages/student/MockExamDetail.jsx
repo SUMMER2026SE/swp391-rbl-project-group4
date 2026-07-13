@@ -5,7 +5,7 @@ import Button from '../../components/ui/Button';
 import Alert from '../../components/ui/Alert';
 import Modal from '../../components/ui/Modal';
 import LeaderboardTable from '../../components/mockexam/LeaderboardTable';
-import { SECTION_LABEL, PASS_TOTAL, mondaiJa } from '../../lib/mockExamConstants';
+import { sectionDisplay, PASS_TOTAL, mondaiJa, mondaiVi } from '../../lib/mockExamConstants';
 import { getMockExamMeta, getMockLeaderboard, startMockAttempt } from '../../lib/mockExamApi';
 
 export default function MockExamDetail() {
@@ -79,12 +79,12 @@ export default function MockExamDetail() {
             {exam.sections.map(s => (
               <div key={s.id} className="border border-outline/40 rounded-xl p-4">
                 <div className="flex items-center justify-between mb-2">
-                  <h3 className="font-bold text-charcoal">{s.title || SECTION_LABEL[s.section_type]}</h3>
+                  <h3 className="font-bold text-charcoal">{sectionDisplay(s)}</h3>
                   <span className="text-xs text-on-muted flex items-center gap-1"><span className="material-symbols-outlined text-sm">timer</span>{s.time_limit_minutes} phút · {s.question_count} câu</span>
                 </div>
                 <div className="flex flex-wrap gap-1.5">
                   {s.mondai.map((m, i) => (
-                    <span key={i} className="text-[11px] px-2 py-0.5 rounded bg-surface-low text-on-muted">問題{m.mondai_number} {mondaiJa(m.mondai_type)}</span>
+                    <span key={i} className="text-[11px] px-2 py-0.5 rounded bg-surface-low text-on-muted">問題{m.mondai_number} {mondaiJa(m.mondai_type)} · {mondaiVi(m.mondai_type)}</span>
                   ))}
                 </div>
               </div>

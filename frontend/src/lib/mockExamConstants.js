@@ -46,6 +46,39 @@ export const MONDAI_LABEL = {
   integrated_listening: { ja: '統合理解（聴解）', vi: 'Nghe tổng hợp' },
 };
 
+// Tên phần thi hiển thị: "tiêu đề tiếng Nhật · tên tiếng Việt"
+export const sectionDisplay = (section) => {
+  const vi = SECTION_LABEL[section.section_type] || '';
+  if (!section.title) return vi;
+  return vi ? `${section.title} · ${vi}` : section.title;
+};
+
+// Bản dịch tiếng Việt của câu chỉ dẫn chuẩn từng loại mondai
+// (mirror MONDAI_TYPES[type].instruction ở backend/utils/jlptMock.js)
+export const MONDAI_INSTRUCTION_VI = {
+  kanji_reading:        'Chọn cách đọc đúng nhất cho từ được gạch dưới, từ 1・2・3・4.',
+  orthography:          'Từ được gạch dưới viết bằng kanji (hoặc cách viết đúng) như thế nào? Chọn đáp án đúng nhất từ 1・2・3・4.',
+  word_formation:       'Chọn phương án thích hợp nhất để điền vào chỗ trống（　　）, từ 1・2・3・4.',
+  context:              'Chọn từ thích hợp nhất để điền vào chỗ trống（　　）, từ 1・2・3・4.',
+  paraphrase:           'Chọn từ/cụm từ có nghĩa gần nhất với từ được gạch dưới, từ 1・2・3・4.',
+  usage:                'Chọn câu dùng đúng nhất từ đã cho, từ 1・2・3・4.',
+  grammar_form:         'Chọn cấu trúc ngữ pháp thích hợp nhất để điền vào chỗ trống（　　）, từ 1・2・3・4.',
+  sentence_assembly:    'Chọn phương án phù hợp nhất cho vị trí ＿★＿ khi sắp xếp câu, từ 1・2・3・4.',
+  text_grammar:         'Đọc đoạn văn, dựa vào nội dung toàn bài chọn phương án thích hợp nhất cho chỗ trống（　　）, từ 1・2・3・4.',
+  reading_short:        'Đọc đoạn văn và trả lời câu hỏi. Chọn đáp án đúng nhất từ 1・2・3・4.',
+  reading_mid:          'Đọc đoạn văn và trả lời câu hỏi. Chọn đáp án đúng nhất từ 1・2・3・4.',
+  reading_long:         'Đọc đoạn văn và trả lời câu hỏi. Chọn đáp án đúng nhất từ 1・2・3・4.',
+  integrated_reading:   'Đọc hai văn bản A và B rồi trả lời câu hỏi. Chọn đáp án đúng nhất từ 1・2・3・4.',
+  thematic_reading:     'Đọc bài văn và trả lời câu hỏi. Chọn đáp án đúng nhất từ 1・2・3・4.',
+  info_retrieval:       'Xem trang thông tin và trả lời câu hỏi bên dưới. Chọn đáp án đúng nhất từ 1・2・3・4.',
+  task_comprehension:   'Nghe câu hỏi trước, sau đó nghe hội thoại và chọn đáp án đúng nhất từ 1–4 in trên đề.',
+  point_comprehension:  'Nghe câu hỏi trước, đọc các lựa chọn in trên đề, sau đó nghe nội dung và chọn đáp án đúng nhất từ 1–4.',
+  summary_comprehension:'Trên đề không in gì. Dạng bài này hỏi nội dung tổng thể của bài nói; không có câu hỏi trước khi nghe.',
+  utterance_expression: 'Vừa nhìn tranh vừa nghe câu hỏi. Người có mũi tên (→) sẽ nói gì? Chọn đáp án đúng nhất từ 1–3.',
+  quick_response:       'Nghe câu nói và chọn câu đáp lại phù hợp nhất từ 1–3.',
+  integrated_listening: 'Nghe bài nói dài và trả lời câu hỏi. Chọn đáp án đúng nhất từ 1–4.',
+};
+
 // Danh sách mondai_type để chọn khi soạn đề (nhóm theo kỹ năng)
 export const MONDAI_TYPE_OPTIONS = Object.entries(MONDAI_LABEL).map(([value, l]) => ({
   value, label: `${l.ja} — ${l.vi}`,

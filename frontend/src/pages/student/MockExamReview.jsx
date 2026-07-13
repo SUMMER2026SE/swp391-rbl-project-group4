@@ -5,7 +5,7 @@ import Button from '../../components/ui/Button';
 import Alert from '../../components/ui/Alert';
 import FuriganaText from '../../components/ui/FuriganaText';
 import AudioPlayer from '../../components/mockexam/AudioPlayer';
-import { SECTION_LABEL, mondaiJa } from '../../lib/mockExamConstants';
+import { sectionDisplay, MONDAI_INSTRUCTION_VI } from '../../lib/mockExamConstants';
 import { getMockReview } from '../../lib/mockExamApi';
 
 export default function MockExamReview() {
@@ -46,10 +46,17 @@ export default function MockExamReview() {
 
         {data.sections.map(section => (
           <div key={section.id} className="space-y-3">
-            <h2 className="font-display font-bold text-charcoal border-b border-outline/30 pb-1">{section.title || SECTION_LABEL[section.section_type]}</h2>
+            <h2 className="font-display font-bold text-charcoal border-b border-outline/30 pb-1">{sectionDisplay(section)}</h2>
             {section.groups.map(group => (
               <div key={group.id} className="space-y-3">
-                {group.instruction_text && <p className="text-xs font-semibold text-on-muted">問題{group.mondai_number} · {group.instruction_text}</p>}
+                {group.instruction_text && (
+                  <div>
+                    <p className="text-xs font-semibold text-on-muted">問題{group.mondai_number} · {group.instruction_text}</p>
+                    {MONDAI_INSTRUCTION_VI[group.mondai_type] && (
+                      <p className="text-xs text-on-muted italic mt-0.5">{MONDAI_INSTRUCTION_VI[group.mondai_type]}</p>
+                    )}
+                  </div>
+                )}
                 {group.passage_text && (
                   <div className="bg-surface-low border border-outline/30 rounded-xl p-3 text-sm leading-relaxed whitespace-pre-wrap">
                     <FuriganaText text={group.passage_text} enabled={furigana} block />
