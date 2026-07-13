@@ -95,6 +95,9 @@ import AdminLessonQuiz         from './pages/admin/AdminLessonQuiz';
 import AdminLessonReading      from './pages/admin/AdminLessonReading';
 import AdminLessonKanji        from './pages/admin/AdminLessonKanji';
 import AdminLessonVideo        from './pages/admin/AdminLessonVideo';
+import AdminLessonGrammar      from './pages/admin/AdminLessonGrammar';
+import AdminLessonGrammarItem  from './pages/admin/AdminLessonGrammarItem';
+import LessonGrammarItemDetail from './pages/student/LessonGrammarItemDetail';
 import AdminGrammarPoints      from './pages/admin/AdminGrammarPoints';
 
 import ChatPage from './pages/ChatPage';
@@ -130,6 +133,7 @@ export default function App() {
             <Route path="/courses"    element={<StudentRoute><Courses /></StudentRoute>} />
             <Route path="/courses/:id" element={<StudentRoute><CourseDetail /></StudentRoute>} />
             <Route path="/lessons/:id" element={<StudentRoute><LessonView /></StudentRoute>} />
+            <Route path="/lessons/:lessonId/grammar/:itemId" element={<StudentRoute><LessonGrammarItemDetail /></StudentRoute>} />
             <Route path="/vocabulary" element={<StudentRoute><Vocabulary /></StudentRoute>} />
             <Route path="/grammar"    element={<StudentRoute><Grammar /></StudentRoute>} />
             <Route path="/kanji"      element={<StudentRoute><Kanji /></StudentRoute>} />
@@ -179,6 +183,8 @@ export default function App() {
             <Route path="/teacher/lessons/:lessonId/vocabulary" element={<TeacherRoute><AdminLessonVocabulary /></TeacherRoute>} />
             <Route path="/teacher/lessons/:lessonId/kanji"      element={<TeacherRoute><AdminLessonKanji /></TeacherRoute>} />
             <Route path="/teacher/lessons/:lessonId/quiz"       element={<TeacherRoute><AdminLessonQuiz /></TeacherRoute>} />
+            <Route path="/teacher/lessons/:lessonId/grammar"    element={<TeacherRoute><AdminLessonGrammar /></TeacherRoute>} />
+            <Route path="/teacher/lessons/:lessonId/grammar/:itemId" element={<TeacherRoute><AdminLessonGrammarItem /></TeacherRoute>} />
             <Route path="/teacher/vocab" element={<TeacherRoute><TeacherVocabulary /></TeacherRoute>} />
             <Route path="/teacher/kanji"    element={<TeacherRoute><TeacherKanji /></TeacherRoute>} />
             <Route path="/teacher/grammar"  element={<TeacherRoute><TeacherGrammar /></TeacherRoute>} />
@@ -221,6 +227,8 @@ export default function App() {
             <Route path="/admin/lessons/:lessonId/reading"     element={<AdminRoute><AdminLessonReading /></AdminRoute>} />
             <Route path="/admin/lessons/:lessonId/kanji"       element={<AdminRoute><AdminLessonKanji /></AdminRoute>} />
             <Route path="/admin/lessons/:lessonId/video"       element={<AdminRoute><AdminLessonVideo /></AdminRoute>} />
+            <Route path="/admin/lessons/:lessonId/grammar"     element={<AdminRoute><AdminLessonGrammar /></AdminRoute>} />
+            <Route path="/admin/lessons/:lessonId/grammar/:itemId" element={<AdminRoute><AdminLessonGrammarItem /></AdminRoute>} />
 
             {/* Fallback */}
             <Route path="*" element={<NotFound />} />

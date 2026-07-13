@@ -740,6 +740,31 @@ exports.createGrammarPoint = async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message || 'Không thể tạo ngữ pháp.' }); }
 };
 
+// Gắn hàng loạt ngữ pháp có sẵn vào Mục (bảng nối nhiều–nhiều, giống attachKanji).
+exports.attachGrammar = async (req, res) => {
+  const { lessonId } = req.params;
+  const ids = Array.isArray(req.body?.ids) ? req.body.ids : [];
+  if (ids.length === 0) return res.status(400).json({ error: 'Chưa chọn ngữ pháp nào.' });
+  try {
+    const rows = ids.map(grammar_point_id => ({ lesson_id: lessonId, grammar_point_id }));
+    const { error } = await contentDb.from('lesson_grammar_points')
+      .upsert(rows, { onConflict: 'lesson_id,grammar_point_id' });
+    if (error) throw error;
+    res.json({ message: `Đã thêm ${ids.length} ngữ pháp vào bài.` });
+  } catch (err) { res.status(500).json({ error: 'Không thể thêm ngữ pháp.' }); }
+};
+
+// Gỡ một ngữ pháp khỏi Mục (không xóa mẫu gốc).
+exports.detachGrammar = async (req, res) => {
+  const { lessonId, grammarId } = req.params;
+  try {
+    const { error } = await contentDb.from('lesson_grammar_points')
+      .delete().eq('lesson_id', lessonId).eq('grammar_point_id', grammarId);
+    if (error) throw error;
+    res.json({ message: 'Đã gỡ khỏi bài.' });
+  } catch (err) { res.status(500).json({ error: 'Không thể gỡ ngữ pháp.' }); }
+};
+
 exports.updateGrammarPoint = async (req, res) => {
   const allowed = ['title','title_ja','meaning_vi','explanation','example_sentence','level'];
   const updates = Object.fromEntries(Object.entries(req.body).filter(([k]) => allowed.includes(k)));

@@ -7,6 +7,7 @@ import Modal from '../../components/ui/Modal';
 import FuriganaText from '../../components/ui/FuriganaText';
 import WorksheetPreview from '../../components/kanji/WorksheetPreview';
 import VocabWordViewer from '../../components/shared/VocabWordViewer';
+import GrammarItemCard from '../../components/shared/GrammarItemCard';
 import api from '../../lib/api';
 import { downloadWorksheetPDF } from '../../lib/kanjiWorksheet';
 import { renderMarkdown, renderReadingText } from '../../lib/renderPreview';
@@ -329,33 +330,16 @@ export default function LessonView() {
           </div>
         )}
 
-        {/* ── Grammar points (item rời, gắn qua lesson_grammar_points) ── */}
+        {/* ── Grammar points — thẻ dùng chung với Study List, bấm mở trang chi tiết ── */}
         {lesson.grammar_points?.length > 0 && (
-          <div className="glass-card rounded-2xl overflow-hidden mb-6">
-            <div className="p-5 border-b border-outline/30">
-              <h2 className="font-display font-bold text-lg flex items-center gap-2">
-                <span className="material-symbols-outlined text-amber-600">spellcheck</span>
-                Ngữ pháp trong bài ({lesson.grammar_points.length})
-              </h2>
-            </div>
-            <div className="divide-y divide-outline/20">
-              {lesson.grammar_points.map(g => (
-                <div key={g.id} className="p-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="font-bold text-base text-on-surface">{g.title}</p>
-                      {g.title_ja && <p className="text-xs text-on-muted">{g.title_ja}</p>}
-                      <p className="text-sm text-tsubaki-red font-semibold mt-0.5">{g.meaning_vi}</p>
-                    </div>
-                    {g.level && <span className="text-xs px-2 py-0.5 rounded-full bg-surface-low text-on-muted shrink-0 font-bold">{g.level}</span>}
-                  </div>
-                  {g.explanation && (
-                    <p className="text-xs text-on-muted mt-1.5 leading-relaxed whitespace-pre-wrap">{g.explanation}</p>
-                  )}
-                  {g.example_sentence && (
-                    <p className="text-xs text-on-muted italic mt-1.5 border-l-2 border-amber-400/40 pl-2">{g.example_sentence}</p>
-                  )}
-                </div>
+          <div className="mb-6">
+            <h2 className="font-display font-bold text-lg flex items-center gap-2 mb-4">
+              <span className="material-symbols-outlined text-amber-600">spellcheck</span>
+              Ngữ pháp trong bài ({lesson.grammar_points.length})
+            </h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {lesson.grammar_points.map((g, i) => (
+                <GrammarItemCard key={g.id} item={g} index={i} to={`/lessons/${id}/grammar/${g.id}`} />
               ))}
             </div>
           </div>

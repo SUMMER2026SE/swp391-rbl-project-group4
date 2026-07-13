@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import StudentLayout from '../../components/layout/StudentLayout';
 import Alert from '../../components/ui/Alert';
 import Button from '../../components/ui/Button';
@@ -8,6 +8,7 @@ import FuriganaText from '../../components/ui/FuriganaText';
 import WorksheetPreview from '../../components/kanji/WorksheetPreview';
 import ImportFileModal from '../../components/admin/ImportFileModal';
 import CollapsibleSection from '../../components/shared/CollapsibleSection';
+import GrammarItemCard, { NumberBadge, RemoveBadge } from '../../components/shared/GrammarItemCard';
 import VocabWordViewer from '../../components/shared/VocabWordViewer';
 import { downloadWorksheetPDF } from '../../lib/kanjiWorksheet';
 import { TOPICS, TOPIC_ICONS } from '../../lib/studyListTopics';
@@ -24,26 +25,6 @@ const TYPE_TO_IMPORT = { vocabulary: 'vocab', kanji: 'kanji', grammar: 'grammar'
 const SEARCH_ENDPOINT = { vocabulary: '/vocabulary', kanji: '/kanji', grammar: '/grammar-points' };
 const ITEM_LABEL = (listType, item) => listType === 'kanji' ? item.character : listType === 'grammar' ? item.title : (item.kanji || item.reading);
 const ITEM_SUB   = (item) => item.meaning_vi;
-
-function NumberBadge({ n }) {
-  return (
-    <span className="absolute top-3 left-3 w-6 h-6 rounded-full bg-charcoal/80 text-white text-xs font-bold flex items-center justify-center">
-      {n}
-    </span>
-  );
-}
-
-function RemoveBadge({ onRemove }) {
-  return (
-    <button
-      onClick={(e) => { e.preventDefault(); e.stopPropagation(); onRemove(); }}
-      title="Xóa khỏi bài đăng"
-      className="absolute top-3 right-3 w-6 h-6 rounded-full bg-white/90 text-on-muted hover:text-error hover:bg-white flex items-center justify-center shadow-sm transition-colors"
-    >
-      <span className="material-symbols-outlined text-base">close</span>
-    </button>
-  );
-}
 
 function ItemCard({ item, listType, index, type, postId, editable, onRemove }) {
   if (listType === 'vocabulary') {
@@ -71,26 +52,10 @@ function ItemCard({ item, listType, index, type, postId, editable, onRemove }) {
       </div>
     );
   }
-  // grammar — thẻ gọn, bấm vào mở trang chi tiết riêng (URL thật, back trình duyệt hoạt động đúng)
+  // grammar — thẻ dùng chung với Mục ngữ pháp của khóa học
   return (
-    <div className="relative">
-      {editable && <RemoveBadge onRemove={onRemove} />}
-      <Link
-        to={`/study-lists/${type}/${postId}/${item.id}`}
-        className="relative glass-card rounded-2xl p-5 pt-8 block hover:shadow-lg hover:-translate-y-0.5 hover:border-tsubaki-red/30 border border-transparent transition-all"
-      >
-        <NumberBadge n={index + 1} />
-        <p className="text-xl font-bold text-tsubaki-red">{item.title}</p>
-        {item.title_ja && <p className="text-sm text-on-muted">{item.title_ja}</p>}
-        <p className="text-sm font-medium mt-2">{item.meaning_vi}</p>
-        <div className="flex items-center justify-between mt-3">
-          {item.level && <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${LEVEL_COLORS[item.level] || 'bg-surface-low text-on-muted'}`}>{item.level}</span>}
-          <span className="flex items-center gap-1 text-xs text-tsubaki-red font-semibold ml-auto">
-            Xem chi tiết <span className="material-symbols-outlined text-sm">arrow_forward</span>
-          </span>
-        </div>
-      </Link>
-    </div>
+    <GrammarItemCard item={item} index={index} to={`/study-lists/${type}/${postId}/${item.id}`}
+      editable={editable} onRemove={onRemove} />
   );
 }
 
