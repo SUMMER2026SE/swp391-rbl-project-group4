@@ -99,7 +99,7 @@ async function attachMeaningPreview(entries) {
   return entries.map(e => ({ ...e, meaning_vi: previewByEntry[e.id] || null }));
 }
 
-// Cho controller khác tái dùng (newsController: gắn nghĩa cho từ vựng bài luyện đọc)
+// Cho controller khác tái dùng (readingController: gắn nghĩa cho từ vựng bài luyện đọc)
 exports.attachMeaningPreview = attachMeaningPreview;
 
 // GET /api/dictionary/:id
