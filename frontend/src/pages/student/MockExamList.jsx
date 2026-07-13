@@ -55,7 +55,14 @@ export default function MockExamList() {
               <button key={e.id} onClick={() => navigate(`/mock-exams/${e.id}`)}
                 className="text-left bg-white border border-outline/40 rounded-2xl p-5 hover:border-tsubaki-red/50 hover:shadow-md transition-all">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="inline-flex px-2.5 py-1 rounded-lg bg-sumire-purple/10 text-sumire-purple font-bold text-sm">{e.level}</span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="inline-flex px-2.5 py-1 rounded-lg bg-sumire-purple/10 text-sumire-purple font-bold text-sm">{e.level}</span>
+                    {e.locked && (
+                      <span className="inline-flex items-center gap-0.5 px-2 py-1 rounded-lg bg-amber-50 text-amber-700 font-semibold text-xs">
+                        <span className="material-symbols-outlined text-sm">workspace_premium</span>Premium
+                      </span>
+                    )}
+                  </div>
                   {e.active_attempt_id && <span className="text-xs font-semibold text-amber-600 flex items-center gap-1"><span className="material-symbols-outlined text-sm">hourglass_top</span>Đang làm dở</span>}
                 </div>
                 <h3 className="font-display font-bold text-charcoal mb-3 line-clamp-2">{e.title}</h3>
@@ -66,6 +73,9 @@ export default function MockExamList() {
                 </div>
                 {e.best_score != null && (
                   <p className="text-xs text-green-700 font-semibold mt-2">Điểm cao nhất của bạn: {e.best_score}/180</p>
+                )}
+                {e.locked && e.best_score != null && !e.active_attempt_id && (
+                  <p className="text-xs text-amber-700 mt-1">Chỉ xem lại được kết quả — nâng cấp Premium để làm lại.</p>
                 )}
               </button>
             ))}

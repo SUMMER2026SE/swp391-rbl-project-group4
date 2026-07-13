@@ -41,6 +41,9 @@ export default function MockExamDetail() {
   if (loading) return <StudentLayout title="Thi thử JLPT"><div className="flex justify-center py-20"><span className="material-symbols-outlined animate-spin text-tsubaki-red text-4xl">progress_activity</span></div></StudentLayout>;
   if (!exam) return <StudentLayout title="Thi thử JLPT"><Alert type="error">{error || 'Không tìm thấy đề.'}</Alert></StudentLayout>;
 
+  // Đề premium bị khóa: chỉ được tiếp tục attempt dở (nếu có), không bắt đầu mới
+  const lockedNoResume = exam.locked && !exam.active_attempt_id;
+
   return (
     <StudentLayout title={exam.title}>
       <div className="space-y-5 max-w-3xl mx-auto">
@@ -50,14 +53,37 @@ export default function MockExamDetail() {
 
         <div className="flex items-start justify-between gap-4">
           <div>
-            <span className="inline-flex px-2.5 py-1 rounded-lg bg-sumire-purple/10 text-sumire-purple font-bold text-sm mb-2">{exam.level}</span>
+            <div className="flex items-center gap-1.5 mb-2">
+              <span className="inline-flex px-2.5 py-1 rounded-lg bg-sumire-purple/10 text-sumire-purple font-bold text-sm">{exam.level}</span>
+              {exam.locked && (
+                <span className="inline-flex items-center gap-0.5 px-2 py-1 rounded-lg bg-amber-50 text-amber-700 font-semibold text-xs">
+                  <span className="material-symbols-outlined text-sm">workspace_premium</span>Premium
+                </span>
+              )}
+            </div>
             <h1 className="font-display text-2xl font-bold text-charcoal">{exam.title}</h1>
             {exam.description && <p className="text-sm text-on-muted mt-1">{exam.description}</p>}
           </div>
-          <Button onClick={() => setConfirmStart(true)}>
-            {exam.active_attempt_id ? 'Tiếp tục làm' : 'Bắt đầu thi'}
-          </Button>
+          {lockedNoResume ? (
+            <button onClick={() => navigate('/subscription')}
+              className="shrink-0 inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-500 text-white text-sm font-bold transition-colors">
+              <span className="material-symbols-outlined text-lg">workspace_premium</span> Nâng cấp Premium
+            </button>
+          ) : (
+            <Button onClick={() => setConfirmStart(true)}>
+              {exam.active_attempt_id ? 'Tiếp tục làm' : 'Bắt đầu thi'}
+            </Button>
+          )}
         </div>
+
+        {lockedNoResume && (
+          <Alert type="warning">
+            Đề này dành cho tài khoản <b>Premium</b>.
+            {exam.submitted_attempts > 0
+              ? <> Bạn vẫn xem lại được kết quả các lần thi trước trong <button onClick={() => navigate('/mock-exams/history')} className="font-semibold text-tsubaki-red hover:underline">Lịch sử &amp; thống kê</button>, nhưng cần nâng cấp để làm lại.</>
+              : <> Nâng cấp để bắt đầu làm bài.</>}
+          </Alert>
+        )}
 
         {error && <Alert type="error" onClose={() => setError('')}>{error}</Alert>}
 

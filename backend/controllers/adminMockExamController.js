@@ -66,7 +66,7 @@ exports.listExams = async (req, res) => {
   const offset = (page - 1) * limit;
   try {
     let query = supabaseAdmin.from('mock_exams')
-      .select('id, level, title, description, is_published, created_at, published_at', { count: 'exact' })
+      .select('id, level, title, description, is_published, is_free, created_at, published_at', { count: 'exact' })
       .order('created_at', { ascending: false })
       .range(offset, offset + Number(limit) - 1);
     if (level)                      query = query.eq('level', level);
@@ -189,9 +189,10 @@ exports.getExam = async (req, res) => {
 
 // PUT /api/admin/mock-exams/:id — sửa meta (title/description/level)
 exports.updateExam = async (req, res) => {
-  const allowed = ['title', 'description', 'level'];
+  const allowed = ['title', 'description', 'level', 'is_free'];
   const updates = Object.fromEntries(Object.entries(req.body).filter(([k]) => allowed.includes(k)));
   if (!Object.keys(updates).length) return res.status(400).json({ error: 'Không có trường nào để cập nhật.' });
+  if ('is_free' in updates) updates.is_free = !!updates.is_free;
   if (updates.level && !BLUEPRINTS[updates.level]) return res.status(400).json({ error: 'Cấp độ JLPT không hợp lệ.' });
   try {
     const { data: exam } = await supabaseAdmin.from('mock_exams').select('id, is_published, level').eq('id', req.params.id).single();
