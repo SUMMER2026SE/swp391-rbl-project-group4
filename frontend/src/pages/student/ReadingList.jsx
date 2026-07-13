@@ -47,7 +47,13 @@ function formatDate(iso) {
   return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
 }
 
-export default function NewsList() {
+// Dùng cho student (mặc định) và cho trang admin "Xem như học viên" (truyền Layout/apiBase/linkBase/preview).
+export default function ReadingList({
+  Layout = StudentLayout,
+  apiBase = '/reading',
+  linkBase = '/reading',
+  preview = false,
+}) {
   const navigate = useNavigate();
   const [items, setItems]   = useState([]);
   const [total, setTotal]   = useState(0);
@@ -65,7 +71,8 @@ export default function NewsList() {
       const params = new URLSearchParams({ page, limit: LIMIT, sort });
       if (search) params.set('search', search);
       if (level)  params.set('level', level);
-      const r = await api.get(`/news?${params}`);
+      if (preview) params.set('published', '1');   // admin preview: chỉ xem bài đã đăng
+      const r = await api.get(`${apiBase}?${params}`);
       setItems(r.data.data || []);
       setTotal(r.data.total || 0);
       setError('');
@@ -85,7 +92,15 @@ export default function NewsList() {
   };
 
   return (
-    <StudentLayout title="Luyện đọc">
+    <Layout title="Luyện đọc">
+      {/* Banner khi admin xem thử giao diện học viên */}
+      {preview && (
+        <div className="flex items-center gap-2 bg-sumire-purple/10 border border-sumire-purple/20 text-sumire-purple rounded-xl px-4 py-2.5 text-sm mb-6">
+          <span className="material-symbols-outlined text-lg shrink-0">visibility</span>
+          <span>Bạn đang xem giao diện học viên. Bấm vào một bài để xem chi tiết (không tương tác được với quiz, từ vựng, chat AI).</span>
+        </div>
+      )}
+
       {/* ── Page header ─────────────────────────────────────────────── */}
       <div className="mb-8">
         <h1 className="font-display text-display-mobile font-bold text-on-surface mb-2 tracking-tight">
@@ -105,7 +120,7 @@ export default function NewsList() {
           <input
             value={search}
             onChange={e => setSearch(e.target.value)}
-            placeholder="Tìm kiếm bài báo..."
+            placeholder="Tìm kiếm bài đọc..."
             className="w-full pl-12 pr-4 py-3 border border-outline-variant rounded-2xl text-sm outline-none focus:border-tsubaki-red bg-white transition-colors"
           />
         </div>
@@ -148,7 +163,7 @@ export default function NewsList() {
         </div>
       ) : items.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-24 text-center">
-          <span className="material-symbols-outlined text-6xl text-on-muted/20 mb-4">newspaper</span>
+          <span className="material-symbols-outlined text-6xl text-on-muted/20 mb-4">auto_stories</span>
           <p className="font-semibold text-on-surface mb-1">Chưa có bài đọc nào</p>
           <p className="text-on-muted text-sm">Thử bỏ bộ lọc hoặc nhập từ khóa khác</p>
         </div>
@@ -157,7 +172,7 @@ export default function NewsList() {
           {items.map(item => (
             <button
               key={item.id}
-              onClick={() => navigate(`/news/${item.id}`)}
+              onClick={() => navigate(`${linkBase}/${item.id}`)}
               className="text-left glass-card rounded-2xl overflow-hidden group cursor-pointer border-2 border-transparent hover:border-tsubaki-red hover:-translate-y-1 transition-all duration-300 flex flex-col"
             >
               {/* Thumbnail */}
@@ -170,7 +185,7 @@ export default function NewsList() {
                   />
                 ) : (
                   <div className={`w-full h-full bg-gradient-to-br ${LEVEL_GRADIENT[item.level] || 'from-tsubaki-red/10 to-sumire-purple/10'} flex items-center justify-center`}>
-                    <span className="material-symbols-outlined text-6xl text-tsubaki-red/15">newspaper</span>
+                    <span className="material-symbols-outlined text-6xl text-tsubaki-red/15">auto_stories</span>
                   </div>
                 )}
                 {item.level && (
@@ -240,6 +255,6 @@ export default function NewsList() {
           </button>
         </div>
       )}
-    </StudentLayout>
+    </Layout>
   );
 }

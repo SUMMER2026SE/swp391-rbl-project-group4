@@ -7,7 +7,7 @@ const c = require('../../controllers/teacherController');
 const ac = require('../../controllers/adminController'); // tái dùng cho thao tác trên kho chung (vocab/kanji)
 const qb = require('../../controllers/teacherQuestionBankController');
 const lc = require('../../controllers/listeningController');
-const nc = require('../../controllers/newsController');
+const nc = require('../../controllers/readingController');
 const rp = require('../../controllers/revenuePoolController');
 
 const upload = multer({

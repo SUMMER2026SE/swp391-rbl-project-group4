@@ -4,7 +4,7 @@ const router  = require('express').Router();
 const multer  = require('multer');
 const { requireAuth, requireAdmin } = require('../../middleware/auth');
 const c = require('../../controllers/adminController');
-const news = require('../../controllers/newsController');
+const reading = require('../../controllers/readingController');
 const ta = require('../../controllers/teacherApplicationController');
 const rp = require('../../controllers/revenuePoolController');
 const { supabaseAdmin } = require('../../config/supabase');
@@ -22,6 +22,18 @@ const audioUpload = multer({
   fileFilter: (_req, file, cb) => {
     const ok = ['audio/mpeg','audio/mp4','audio/wav','audio/ogg','audio/webm','audio/aac','audio/x-m4a','video/mp4','video/webm'].includes(file.mimetype);
     ok ? cb(null, true) : cb(new Error('Chỉ chấp nhận file âm thanh/video.'));
+  },
+});
+
+// Tài liệu văn bản (.txt/.docx) — dùng để trích nội dung bài đọc, xử lý trong RAM không lưu file.
+const docUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const name = (file.originalname || '').toLowerCase();
+    (name.endsWith('.txt') || name.endsWith('.docx'))
+      ? cb(null, true)
+      : cb(new Error('Chỉ chấp nhận file .txt hoặc .docx.'));
   },
 });
 
@@ -255,16 +267,18 @@ router.post('/listening/dialogues/:id/lines',   lc.adminAddLine);
 router.put('/listening/lines/:lineId',          lc.adminUpdateLine);
 router.delete('/listening/lines/:lineId',       lc.adminDeleteLine);
 
-// News (Luyện đọc)
-router.post('/news/generate-article',       news.generateArticle);
-router.post('/news/generate-segments',      news.generateSegments);
-router.post('/news/generate-questions',     news.generateQuestions);
-router.post('/news/generate-vocab-grammar', news.generateVocabGrammar);
-router.get('/news',                         news.adminList);
-router.get('/news/:id',                     news.adminGetOne);
-router.post('/news',                        news.create);
-router.put('/news/:id',                     news.update);
-router.delete('/news/:id',                  news.remove);
+// Reading (Luyện đọc)
+router.post('/reading/generate-article',       reading.generateArticle);
+router.post('/reading/generate-segments',      reading.generateSegments);
+router.post('/reading/generate-questions',     reading.generateQuestions);
+router.post('/reading/generate-vocab-grammar', reading.generateVocabGrammar);
+router.post('/reading/segment-manual',         reading.segmentManual);
+router.post('/reading/parse-file', docUpload.single('file'), reading.parseFile);
+router.get('/reading',                         reading.adminList);
+router.get('/reading/:id',                     reading.adminGetOne);
+router.post('/reading',                        reading.create);
+router.put('/reading/:id',                     reading.update);
+router.delete('/reading/:id',                  reading.remove);
 
 // Subscription / payments (admin)
 const sc = require('../../controllers/subscriptionController');
