@@ -16,7 +16,6 @@ export default function MockExamReview() {
   const [error, setError] = useState('');
   const [furigana, setFurigana] = useState(false);
   const [openTranscript, setOpenTranscript] = useState({});
-  const [filter, setFilter] = useState('all');   // all | wrong
 
   useEffect(() => {
     getMockReview(attemptId).then(setData).catch(e => setError(e.message)).finally(() => setLoading(false));
@@ -25,23 +24,22 @@ export default function MockExamReview() {
   if (loading) return <StudentLayout title="Xem lại"><div className="flex justify-center py-20"><span className="material-symbols-outlined animate-spin text-tsubaki-red text-4xl">progress_activity</span></div></StudentLayout>;
   if (!data) return <StudentLayout title="Xem lại"><Alert type="error">{error}</Alert></StudentLayout>;
 
-  let counter = 0;
+  // Danh sách phẳng toàn bộ câu hỏi (đúng thứ tự hiển thị) cho đánh số + nav grid
+  const allQuestions = data.sections.flatMap(s => s.groups.flatMap(g => g.questions));
+  const numById = {};
+  allQuestions.forEach((q, i) => { numById[q.id] = i + 1; });
+  const correctCount = allQuestions.filter(q => q.is_correct).length;
 
   return (
     <StudentLayout title="Xem lại bài làm">
-      <div className="max-w-3xl mx-auto space-y-5">
+      <div className="max-w-5xl mx-auto grid grid-cols-1 lg:grid-cols-[1fr_200px] gap-5">
+      <div className="space-y-5 min-w-0">
         <div className="flex items-center justify-between gap-3">
           <button onClick={() => navigate(`/mock-exams/attempt/${attemptId}/result`)} className="text-sm text-on-muted hover:text-tsubaki-red flex items-center gap-1">
             <span className="material-symbols-outlined text-lg">arrow_back</span> Kết quả
           </button>
-          <div className="flex items-center gap-2">
-            <button onClick={() => setFilter(f => f === 'all' ? 'wrong' : 'all')}
-              className={`text-xs px-3 py-1.5 rounded-lg border font-semibold ${filter === 'wrong' ? 'bg-error-bg text-error border-error/30' : 'border-outline text-on-muted'}`}>
-              {filter === 'wrong' ? 'Chỉ câu sai' : 'Tất cả câu'}
-            </button>
-            <button onClick={() => setFurigana(f => !f)}
-              className={`text-xs px-2.5 py-1.5 rounded-lg border font-semibold ${furigana ? 'bg-amber-100 border-amber-300 text-amber-700' : 'border-outline text-on-muted'}`}>あ</button>
-          </div>
+          <button onClick={() => setFurigana(f => !f)}
+            className={`text-xs px-2.5 py-1.5 rounded-lg border font-semibold ${furigana ? 'bg-amber-100 border-amber-300 text-amber-700' : 'border-outline text-on-muted'}`}>あ</button>
         </div>
 
         {data.sections.map(section => (
@@ -72,11 +70,9 @@ export default function MockExamReview() {
                   </div>
                 )}
                 {group.questions.map(q => {
-                  counter += 1;
-                  const num = counter;
-                  if (filter === 'wrong' && q.is_correct) return null;
+                  const num = numById[q.id];
                   return (
-                    <div key={q.id} className={`border rounded-xl p-4 ${q.is_correct ? 'border-green-200 bg-green-50/40' : 'border-error/30 bg-error-bg/20'}`}>
+                    <div key={q.id} id={`q-${q.id}`} className={`border rounded-xl p-4 scroll-mt-20 ${q.is_correct ? 'border-green-200 bg-green-50/40' : 'border-error/30 bg-error-bg/20'}`}>
                       <div className="flex items-start gap-2 mb-2">
                         <span className={`w-6 h-6 shrink-0 rounded-full text-white text-xs font-bold flex items-center justify-center ${q.is_correct ? 'bg-green-500' : 'bg-error'}`}>{q.is_correct ? '✓' : '✕'}</span>
                         <div className="flex-1 text-sm font-medium text-charcoal">
@@ -109,6 +105,28 @@ export default function MockExamReview() {
             ))}
           </div>
         ))}
+      </div>
+
+      {/* Nav grid: bấm nhanh đến câu — xanh = đúng, đỏ = sai/chưa trả lời */}
+      <aside className="hidden lg:block">
+        <div className="sticky top-20 bg-white border border-outline/40 rounded-xl p-3">
+          <p className="text-xs font-semibold text-on-muted mb-2">Đúng {correctCount}/{allQuestions.length}</p>
+          <div className="grid grid-cols-5 gap-1.5">
+            {allQuestions.map((q, i) => (
+              <button key={q.id}
+                onClick={() => document.getElementById(`q-${q.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })}
+                title={q.is_correct ? 'Đúng' : 'Sai / chưa trả lời'}
+                className={`aspect-square rounded text-xs font-bold flex items-center justify-center text-white hover:opacity-80 transition-opacity ${q.is_correct ? 'bg-green-500' : 'bg-error'}`}>
+                {i + 1}
+              </button>
+            ))}
+          </div>
+          <div className="flex items-center gap-3 mt-3 text-[11px] text-on-muted">
+            <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-green-500 inline-block" />Đúng</span>
+            <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-error inline-block" />Sai</span>
+          </div>
+        </div>
+      </aside>
       </div>
     </StudentLayout>
   );
