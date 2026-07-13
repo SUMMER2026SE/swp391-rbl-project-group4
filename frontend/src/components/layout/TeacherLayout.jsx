@@ -10,7 +10,8 @@ const TEACHER_LINKS = [
   // { to: '/teacher/grammar',       icon: 'spellcheck',    label: 'Ngữ pháp' },
   { to: '/teacher/study-lists',   icon: 'library_books', label: 'Bài đăng danh sách' },
   { to: '/teacher/listening',     icon: 'headphones',    label: 'Luyện nghe' },
-  { to: '/teacher/reading',       icon: 'menu_book',     label: 'Luyện đọc' },
+  // Luyện đọc của giáo viên: ẩn khỏi sidebar theo yêu cầu (giữ route/API/component để bật lại sau)
+  // { to: '/teacher/reading',       icon: 'menu_book',     label: 'Luyện đọc' },
   { to: '/teacher/earnings',      icon: 'payments',      label: 'Thu nhập' },
   { to: '/teacher/dictionary',    icon: 'auto_stories',  label: 'Từ điển' },
   { to: '/teacher/quizzes',       icon: 'quiz',          label: 'Bài kiểm tra' },
