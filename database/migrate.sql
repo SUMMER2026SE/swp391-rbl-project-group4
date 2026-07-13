@@ -279,47 +279,44 @@ ALTER TABLE dictionary_module.dict_kanji DROP COLUMN IF EXISTS jlpt_level;
 ALTER TABLE dictionary_module.dict_entries DROP COLUMN IF EXISTS word_type;
 
 
--- ─── Materials: tính năng "Luyện đọc báo" cho student (schema riêng) ───────────
+-- ─── Reading: tính năng "Luyện đọc" cho student (schema riêng reading_module) ──
 -- Bài đọc lưu sẵn furigana (ruby HTML) + bản dịch tiếng Việt theo từng câu trong
 -- cột segments (jsonb): [{ jp, furigana, vi }]. AI chỉ chạy 1 lần lúc admin tạo bài;
 -- student đọc lấy thẳng từ DB, không gọi AI. Idempotent — chạy lại an toàn.
--- LƯU Ý: phải thêm 'materials_module' vào Exposed schemas trong Supabase (Settings → API)
---        thì supabase-js mới truy cập được qua .schema('materials_module').
+-- LƯU Ý: phải thêm 'reading_module' vào Exposed schemas trong Supabase (Settings → API)
+--        thì supabase-js mới truy cập được qua .schema('reading_module').
+-- (Trước v3 bảng tên materials_module.news_articles — xem section READING v3 cuối file.)
 
-CREATE SCHEMA IF NOT EXISTS materials_module;
-GRANT USAGE ON SCHEMA materials_module TO anon, authenticated, service_role;
+CREATE SCHEMA IF NOT EXISTS reading_module;
+GRANT USAGE ON SCHEMA reading_module TO anon, authenticated, service_role;
 
-CREATE TABLE IF NOT EXISTS materials_module.news_articles (
+CREATE TABLE IF NOT EXISTS reading_module.articles (
   id            uuid DEFAULT gen_random_uuid() PRIMARY KEY,
   title         text NOT NULL,                 -- tiêu đề tiếng Nhật
   title_vi      text,                          -- tiêu đề tiếng Việt (tùy chọn)
   summary_vi    text,                          -- mô tả ngắn cho card danh sách
   level         text CHECK (level IN ('N5','N4','N3','N2','N1')),
   thumbnail_url text,                          -- ảnh card (Supabase Storage)
-  source        text,                          -- nguồn (vd "NHK", "Asahi")
-  source_url    text,
   content       text,                          -- toàn văn JA thuần (fallback + ngữ cảnh AI)
   segments      jsonb DEFAULT '[]'::jsonb,     -- [{ jp, furigana, vi }] theo câu
   is_published  boolean DEFAULT false,         -- chỉ bài published mới hiện cho student
   created_by    uuid REFERENCES auth.users(id) ON DELETE SET NULL,
+  creator_type  text DEFAULT 'admin',          -- 'admin' | 'teacher' (revenue pool)
   created_at    timestamptz DEFAULT now(),
   updated_at    timestamptz DEFAULT now()
 );
 
 CREATE INDEX IF NOT EXISTS idx_news_articles_published
-  ON materials_module.news_articles (is_published, level, created_at DESC);
-
--- Bỏ cột topic nếu DB cũ đã tạo (tính năng không dùng chủ đề nữa)
-ALTER TABLE materials_module.news_articles DROP COLUMN IF EXISTS topic;
+  ON reading_module.articles (is_published, level, created_at DESC);
 
 -- Grant chỉ trên bảng của tính năng này (không đụng các bảng khác trong schema)
-GRANT ALL ON materials_module.news_articles TO anon, authenticated, service_role;
+GRANT ALL ON reading_module.articles TO anon, authenticated, service_role;
 
-ALTER TABLE materials_module.news_articles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE reading_module.articles ENABLE ROW LEVEL SECURITY;
 
 DO $$ BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname='materials_module' AND tablename='news_articles' AND policyname='news_articles: read published') THEN
-    CREATE POLICY "news_articles: read published" ON materials_module.news_articles FOR SELECT TO authenticated USING (is_published = true);
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname='reading_module' AND tablename='articles' AND policyname='articles: read published') THEN
+    CREATE POLICY "articles: read published" ON reading_module.articles FOR SELECT TO authenticated USING (is_published = true);
   END IF;
 END $$;
 
@@ -394,7 +391,7 @@ GRANT ALL ON flashcard_module.flashcard_progress    TO anon, authenticated, serv
 -- Trên Supabase nên thêm 'flashcard_module' ở Dashboard → Settings → API → Exposed schemas.
 -- Tương đương SQL (giữ nguyên các schema đang expose, bổ sung flashcard_module):
 ALTER ROLE authenticator SET pgrst.db_schemas =
-  'public, graphql_public, dictionary_module, materials_module, flashcard_module';
+  'public, graphql_public, dictionary_module, materials_module, reading_module, flashcard_module';
 NOTIFY pgrst, 'reload config';
 NOTIFY pgrst, 'reload schema';
 
@@ -465,13 +462,13 @@ WHERE NOT EXISTS (
   WHERE e.tier = v.tier AND e.feature_code = 'flashcard_ai_suggest_daily'
 );
 
--- ─── MATERIALS v2: "Luyện đọc" — metadata, quiz, từ vựng/ngữ pháp, lượt đọc ───
--- Nâng cấp news_articles: quiz đọc hiểu (questions), từ vựng (vocab), ngữ pháp
+-- ─── READING v2: "Luyện đọc" — metadata, quiz, từ vựng/ngữ pháp, lượt đọc ─────
+-- Nâng cấp articles: quiz đọc hiểu (questions), từ vựng (vocab), ngữ pháp
 -- (grammar) sinh sẵn lúc admin tạo bài; view_count đếm user duy nhất; published_at
--- là "ngày đăng" hiển thị. Bảng news_article_reads dedupe lượt xem + đếm quota
+-- là "ngày đăng" hiển thị. Bảng article_reads dedupe lượt xem + đếm quota
 -- bài mới/ngày. Idempotent — chạy lại an toàn.
 
-ALTER TABLE materials_module.news_articles
+ALTER TABLE reading_module.articles
   ADD COLUMN IF NOT EXISTS questions    jsonb DEFAULT '[]'::jsonb,
   ADD COLUMN IF NOT EXISTS vocab        jsonb DEFAULT '[]'::jsonb,
   ADD COLUMN IF NOT EXISTS grammar      jsonb DEFAULT '[]'::jsonb,
@@ -479,13 +476,13 @@ ALTER TABLE materials_module.news_articles
   ADD COLUMN IF NOT EXISTS published_at timestamptz;
 
 -- Backfill ngày đăng cho bài đã publish trước migration
-UPDATE materials_module.news_articles
+UPDATE reading_module.articles
 SET published_at = created_at
 WHERE is_published = true AND published_at IS NULL;
 
 -- Lượt đọc: mỗi (bài, user) 1 dòng — dedupe view_count + đếm giới hạn bài mới/ngày
-CREATE TABLE IF NOT EXISTS materials_module.news_article_reads (
-  article_id    uuid NOT NULL REFERENCES materials_module.news_articles(id) ON DELETE CASCADE,
+CREATE TABLE IF NOT EXISTS reading_module.article_reads (
+  article_id    uuid NOT NULL REFERENCES reading_module.articles(id) ON DELETE CASCADE,
   user_id       uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   first_read_at timestamptz DEFAULT now(),
   read_date     date DEFAULT CURRENT_DATE,
@@ -493,20 +490,20 @@ CREATE TABLE IF NOT EXISTS materials_module.news_article_reads (
 );
 
 CREATE INDEX IF NOT EXISTS idx_news_reads_user_date
-  ON materials_module.news_article_reads (user_id, read_date);
+  ON reading_module.article_reads (user_id, read_date);
 
-GRANT ALL ON materials_module.news_article_reads TO anon, authenticated, service_role;
+GRANT ALL ON reading_module.article_reads TO anon, authenticated, service_role;
 
 -- RLS bật, không policy: chỉ backend (service-role, bypass RLS) được ghi/đọc
-ALTER TABLE materials_module.news_article_reads ENABLE ROW LEVEL SECURITY;
+ALTER TABLE reading_module.article_reads ENABLE ROW LEVEL SECURITY;
 
 -- Quota: free = 2 bài MỚI/ngày (bài đã đọc mở lại không tính), premium = -1
 INSERT INTO public.feature_entitlements (tier, feature_code, limit_value, period_type)
-SELECT v.tier, 'news_read_daily', v.lim, 'daily'
+SELECT v.tier, 'reading_daily', v.lim, 'daily'
 FROM (VALUES ('free', 2), ('premium', -1)) AS v(tier, lim)
 WHERE NOT EXISTS (
   SELECT 1 FROM public.feature_entitlements e
-  WHERE e.tier = v.tier AND e.feature_code = 'news_read_daily'
+  WHERE e.tier = v.tier AND e.feature_code = 'reading_daily'
 );
 
 -- ─── FLASHCARD v3: chế độ Kiểm tra sinh bằng AI (mỗi set 1 bài, lưu DB) ───────
@@ -570,5 +567,46 @@ BEGIN
 END $$;
 
 ALTER TABLE flashcard_module.flashcard_progress DROP COLUMN IF EXISTS mode;
+
+NOTIFY pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- READING v3 — 2026-07-12: đổi định vị "Đọc báo" → "Luyện đọc"
+-- Chuyển 2 bảng news ra schema riêng reading_module + đổi tên bảng, bỏ cột
+-- nguồn tham khảo (không còn là bài báo), đổi mã quota news_read_daily →
+-- reading_daily. Idempotent: DO block chỉ chạy khi bảng cũ còn tồn tại.
+-- ⚠️ Nhớ thêm 'reading_module' vào Exposed schemas (Supabase → Settings → API).
+-- ─────────────────────────────────────────────────────────────────────────────
+
+CREATE SCHEMA IF NOT EXISTS reading_module;
+GRANT USAGE ON SCHEMA reading_module TO anon, authenticated, service_role;
+
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables
+             WHERE table_schema = 'materials_module' AND table_name = 'news_articles') THEN
+    -- View mirror cũ ở public (workaround trước khi expose materials_module)
+    DROP VIEW IF EXISTS public.news_articles;
+
+    ALTER TABLE materials_module.news_articles      SET SCHEMA reading_module;
+    ALTER TABLE materials_module.news_article_reads SET SCHEMA reading_module;
+    ALTER TABLE reading_module.news_articles      RENAME TO articles;
+    ALTER TABLE reading_module.news_article_reads RENAME TO article_reads;
+  END IF;
+
+  IF EXISTS (SELECT 1 FROM pg_policies WHERE schemaname='reading_module'
+             AND tablename='articles' AND policyname='news_articles: read published') THEN
+    ALTER POLICY "news_articles: read published" ON reading_module.articles
+      RENAME TO "articles: read published";
+  END IF;
+END $$;
+
+-- Không còn là bài báo → bỏ nguồn tham khảo
+ALTER TABLE reading_module.articles DROP COLUMN IF EXISTS source;
+ALTER TABLE reading_module.articles DROP COLUMN IF EXISTS source_url;
+
+-- Quota: news_read_daily → reading_daily (giữ limit/period, không mất counter)
+UPDATE public.feature_entitlements   SET feature_code = 'reading_daily' WHERE feature_code = 'news_read_daily';
+UPDATE public.feature_usage_counters SET feature_code = 'reading_daily' WHERE feature_code = 'news_read_daily';
 
 NOTIFY pgrst, 'reload schema';
