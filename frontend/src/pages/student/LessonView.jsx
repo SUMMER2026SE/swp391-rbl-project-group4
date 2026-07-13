@@ -299,6 +299,20 @@ export default function LessonView() {
           )}
         </div>
 
+        {/* ── Mô tả (teacher/admin ghi cho học sinh, tùy chọn) ─────────── */}
+        {lesson.description && (
+          <div className="glass-card rounded-2xl overflow-hidden mb-6">
+            <div className="p-5 border-b border-outline/30">
+              <h2 className="font-display font-bold text-lg flex items-center gap-2">
+                <span className="material-symbols-outlined text-tsubaki-red">info</span> Mô tả
+              </h2>
+            </div>
+            <div className="p-6 text-sm text-on-surface whitespace-pre-wrap leading-relaxed">
+              {lesson.description}
+            </div>
+          </div>
+        )}
+
         {/* ── Video ───────────────────────────────────────────────────── */}
         {lesson.content_url && (
           <div className="glass-card rounded-2xl overflow-hidden mb-6">
@@ -360,8 +374,8 @@ export default function LessonView() {
           </div>
         )}
 
-        {/* ── Reading ─────────────────────────────────────────────────── */}
-        {lesson.content && (
+        {/* ── Reading — chỉ mục loại "reading" mới có khối Bài đọc ────── */}
+        {lesson.lesson_type === 'reading' && lesson.content && (
           <div className="glass-card rounded-2xl overflow-hidden mb-6">
             <div className="p-5 border-b border-outline/30">
               <h2 className="font-display font-bold text-lg flex items-center gap-2">

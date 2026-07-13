@@ -55,9 +55,13 @@ export default function TeacherCourseContent() {
   const [editingUnit, setEditingUnit] = useState(null);
   const [savingUnit, setSavingUnit]   = useState(false);
 
+  // Thu gọn/mở từng "Bài học" (unit), key: unit.id — như UnitCard bên admin.
+  const [collapsedUnits, setCollapsedUnits] = useState({});
+  const toggleCollapse = (id) => setCollapsedUnits(c => ({ ...c, [id]: !c[id] }));
+
+  // Item modal chỉ dùng để tạo mới — sửa thông tin làm ngay trong trang editor của mục.
   const [itemModal, setItemModal]     = useState(false);
   const [itemForm, setItemForm]       = useState(EMPTY_ITEM);
-  const [editingItem, setEditingItem] = useState(null);
   const [targetUnit, setTargetUnit]   = useState(null);
   const [savingItem, setSavingItem]   = useState(false);
 
@@ -180,17 +184,7 @@ export default function TeacherCourseContent() {
     navigate(`/teacher/lessons/${item.id}/${item.lesson_type}`);
   };
 
-  const openAddItem = (unit) => { setItemForm(EMPTY_ITEM); setEditingItem(null); setTargetUnit(unit); setItemModal(true); };
-
-  // Sửa thông tin cơ bản (tiêu đề/loại/thời lượng) — nội dung chi tiết soạn ở deep editor.
-  const openEditInfo = (item) => {
-    setEditingItem(item); setTargetUnit(null);
-    setItemForm({
-      title: item.title || '', title_ja: item.title_ja || '', lesson_type: item.lesson_type || 'reading',
-      duration_minutes: item.duration_minutes || '', question_count: item.question_count || '',
-    });
-    setItemModal(true);
-  };
+  const openAddItem = (unit) => { setItemForm(EMPTY_ITEM); setTargetUnit(unit); setItemModal(true); };
 
   const saveItem = async () => {
     if (!itemForm.title.trim()) return showAlert('error', 'Tiêu đề mục không được để trống.');
@@ -202,21 +196,15 @@ export default function TeacherCourseContent() {
         duration_minutes: Number(itemForm.duration_minutes) || 0,
         question_count: Number(itemForm.question_count) || 0,
       };
-      if (editingItem) {
-        await api.put(`/teacher/lessons/${editingItem.id}`, payload);
-        setItemModal(false);
-        await loadCourse();
+      const r = await api.post('/teacher/lessons', { ...payload, course_id: courseId, unit_id: targetUnit?.id, order_index: (targetUnit?.lessons || []).length });
+      setItemModal(false);
+      if (IMPORT_TYPES.has(payload.lesson_type)) {
+        // Offer file import before going to the deep editor
+        setPendingLesson({ id: r.data.id, type: payload.lesson_type, title: payload.title });
+      } else if (DEEP_TYPES.has(payload.lesson_type)) {
+        navigate(`/teacher/lessons/${r.data.id}/${payload.lesson_type}`);
       } else {
-        const r = await api.post('/teacher/lessons', { ...payload, course_id: courseId, unit_id: targetUnit?.id, order_index: (targetUnit?.lessons || []).length });
-        setItemModal(false);
-        if (IMPORT_TYPES.has(payload.lesson_type)) {
-          // Offer file import before going to the deep editor
-          setPendingLesson({ id: r.data.id, type: payload.lesson_type, title: payload.title });
-        } else if (DEEP_TYPES.has(payload.lesson_type)) {
-          navigate(`/teacher/lessons/${r.data.id}/${payload.lesson_type}`);
-        } else {
-          await loadCourse();
-        }
+        await loadCourse();
       }
     } catch (e) { showAlert('error', e.message); } finally { setSavingItem(false); }
   };
@@ -358,6 +346,9 @@ export default function TeacherCourseContent() {
           >
             <div className="flex items-center justify-between px-5 py-4 border-b border-outline/10 bg-surface-container-lowest/40">
               <span className="material-symbols-outlined text-outline/50 cursor-grab text-xl shrink-0 mr-1" title="Kéo để đổi vị trí">drag_indicator</span>
+              <button onClick={() => toggleCollapse(unit.id)} className="p-1 text-on-muted hover:text-on-surface transition-colors shrink-0">
+                <span className={`material-symbols-outlined text-base transition-transform ${collapsedUnits[unit.id] ? '-rotate-90' : ''}`}>expand_more</span>
+              </button>
               <button onClick={() => openEditUnit(unit)} className="flex items-center gap-3 min-w-0 text-left flex-1 group/unit">
                 <span className="w-8 h-8 rounded-full bg-sumire-purple/10 text-sumire-purple text-sm font-bold flex items-center justify-center shrink-0">{idx + 1}</span>
                 <div className="min-w-0">
@@ -370,6 +361,7 @@ export default function TeacherCourseContent() {
                 <button onClick={() => deleteUnit(unit)} className="p-1.5 text-on-muted hover:text-error hover:bg-red-50 rounded-lg transition-colors"><span className="material-symbols-outlined text-lg">delete</span></button>
               </div>
             </div>
+            {!collapsedUnits[unit.id] && (
             <div className="p-4 space-y-2">
               {(unit.lessons || []).map((item, itemIdx) => {
                 const meta = typeMeta(item.lesson_type);
@@ -394,7 +386,7 @@ export default function TeacherCourseContent() {
                     </button>
                     <span className={`shrink-0 text-xs font-semibold px-2.5 py-1 rounded-full ${meta.badge}`}>{meta.label}</span>
                     <div className="flex items-center gap-1 shrink-0">
-                      <button onClick={() => openEditInfo(item)} title="Sửa thông tin" className="p-1 text-on-muted hover:text-sumire-purple rounded-lg transition-colors"><span className="material-symbols-outlined text-[18px]">tune</span></button>
+                      <button onClick={() => openDeepEditor(item)} title="Sửa thông tin" className="p-1 text-on-muted hover:text-sumire-purple rounded-lg transition-colors"><span className="material-symbols-outlined text-[18px]">tune</span></button>
                       <button onClick={() => deleteItem(item)} title="Xóa" className="p-1 text-on-muted hover:text-error rounded-lg transition-colors"><span className="material-symbols-outlined text-[18px]">delete</span></button>
                     </div>
                   </div>
@@ -404,6 +396,7 @@ export default function TeacherCourseContent() {
                 <span className="material-symbols-outlined text-base">add</span> Thêm mục
               </button>
             </div>
+            )}
           </div>
         ))}
 
@@ -446,9 +439,9 @@ export default function TeacherCourseContent() {
         </div>
       </Modal>
 
-      {/* Item info modal */}
-      <Modal open={itemModal} onClose={() => setItemModal(false)} title={editingItem ? 'Sửa thông tin mục' : 'Thêm mục'} size="md"
-        footer={<><Button variant="secondary" onClick={() => setItemModal(false)}>Hủy</Button><Button loading={savingItem} onClick={saveItem}>{editingItem ? 'Lưu' : 'Tạo & soạn nội dung'}</Button></>}>
+      {/* Item modal (tạo mới) */}
+      <Modal open={itemModal} onClose={() => setItemModal(false)} title="Thêm mục" size="md"
+        footer={<><Button variant="secondary" onClick={() => setItemModal(false)}>Hủy</Button><Button loading={savingItem} onClick={saveItem}>Tạo & soạn nội dung</Button></>}>
         <div className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-on-muted mb-2">Loại mục *</label>
@@ -470,13 +463,11 @@ export default function TeacherCourseContent() {
           ) : (
             <Input label="Thời lượng (phút)" type="number" min="0" value={itemForm.duration_minutes} onChange={e => setItemForm(f => ({ ...f, duration_minutes: e.target.value }))} placeholder="0" />
           )}
-          {!editingItem && (
-            <p className="text-xs text-on-muted">
-              {IMPORT_TYPES.has(itemForm.lesson_type)
-                ? 'Sau khi tạo, bạn có thể nhập nội dung từ file/JSON hoặc soạn thủ công.'
-                : 'Sau khi tạo, bạn sẽ được chuyển tới trình soạn nội dung chi tiết cho mục này.'}
-            </p>
-          )}
+          <p className="text-xs text-on-muted">
+            {IMPORT_TYPES.has(itemForm.lesson_type)
+              ? 'Sau khi tạo, bạn có thể nhập nội dung từ file/JSON hoặc soạn thủ công.'
+              : 'Sau khi tạo, bạn sẽ được chuyển tới trình soạn nội dung chi tiết cho mục này.'}
+          </p>
         </div>
       </Modal>
       {/* Post-create choice: import or manual */}

@@ -371,7 +371,9 @@ exports.getLesson = async (req, res) => {
   try {
     const { data, error } = await supabaseAdmin.from('lessons').select('*').eq('id', req.params.id).single();
     if (error || !data) return res.status(404).json({ error: 'Không tìm thấy bài học.' });
-    res.json(data);
+    // View compat không có description — lấy thêm từ bảng gốc (như price của course).
+    const { data: extra } = await contentDb.from('lessons').select('description').eq('id', req.params.id).single();
+    res.json({ ...data, description: extra?.description ?? null });
   } catch (err) { res.status(500).json({ error: 'Lỗi.' }); }
 };
 
@@ -418,7 +420,7 @@ exports.createLesson = async (req, res) => {
 
 exports.updateLesson = async (req, res) => {
   const FIELD_MAP = { content: 'content_body', lesson_type: 'content_type', order_index: 'sort_order', module_id: 'unit_id' };
-  const allowed = ['title','title_ja','content','order_index','is_published','course_id','module_id','unit_id','lesson_type','duration_minutes','question_count','grammar_notes','content_url','transcript'];
+  const allowed = ['title','title_ja','content','order_index','is_published','course_id','module_id','unit_id','lesson_type','duration_minutes','question_count','grammar_notes','content_url','transcript','description'];
   const raw = Object.fromEntries(Object.entries(req.body).filter(([k]) => allowed.includes(k)));
   const updates = Object.fromEntries(Object.entries(raw).map(([k, v]) => [FIELD_MAP[k] || k, v]));
 

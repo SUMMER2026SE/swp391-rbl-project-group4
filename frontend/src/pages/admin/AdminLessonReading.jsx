@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useEditorArea } from '../../lib/useEditorArea';
 import Button from '../../components/ui/Button';
 import Alert from '../../components/ui/Alert';
+import LessonInfoPanel from '../../components/shared/LessonInfoPanel';
 import api from '../../lib/api';
 
 // ── Preview renderer (HTML with <ruby> passthrough) ───────────────────────────
@@ -228,6 +229,8 @@ export default function AdminLessonReading() {
           </button>
         </div>
       </section>
+
+      <LessonInfoPanel lesson={lesson} apiBase={apiBase} onSaved={u => setLesson(l => ({ ...l, ...u }))} />
 
       {/* Image URL */}
       <div className="mb-4 flex items-center gap-3 bg-white rounded-2xl border border-outline/20 px-4 py-3 shadow-sm">

@@ -6,6 +6,7 @@ import Alert from '../../components/ui/Alert';
 import QuestionTypeForm from '../../components/admin/QuestionTypeForm';
 import ProctoredAttemptsModal from '../../components/admin/ProctoredAttemptsModal';
 import PassThresholdField from '../../components/admin/PassThresholdField';
+import LessonInfoPanel from '../../components/shared/LessonInfoPanel';
 import {
   EMPTY_Q_FORM, QUESTION_TYPES, TYPE_MAP, LEVEL_COLORS, DIFF_COLORS,
   formToPayload, rowToForm,
@@ -457,6 +458,8 @@ export default function AdminLessonQuiz() {
           </div>
         )}
       </section>
+
+      <LessonInfoPanel lesson={lesson} apiBase={apiBase} onSaved={u => setLesson(l => ({ ...l, ...u }))} />
 
       {/* No quiz yet */}
       {!quiz ? (

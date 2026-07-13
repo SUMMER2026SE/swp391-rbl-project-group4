@@ -6,6 +6,7 @@ import Button from '../../components/ui/Button';
 import Alert from '../../components/ui/Alert';
 import ImportFileModal from '../../components/admin/ImportFileModal';
 import CollapsibleSection from '../../components/shared/CollapsibleSection';
+import LessonInfoPanel from '../../components/shared/LessonInfoPanel';
 import VocabWordViewer from '../../components/shared/VocabWordViewer';
 import api from '../../lib/api';
 
@@ -345,6 +346,8 @@ export default function AdminLessonVocabulary() {
           {vocab.length} từ vựng trong bài học này
         </p>
       </section>
+
+      <LessonInfoPanel lesson={lesson} apiBase={apiBase} onSaved={u => setLesson(l => ({ ...l, ...u }))} />
 
       {/* Panel quản lý — thêm từ + tìm/lọc danh sách trong bài */}
       <CollapsibleSection icon="playlist_add" title="Quản lý từ vựng"
