@@ -5,6 +5,7 @@ import Button from '../../components/ui/Button';
 import api from '../../lib/api';
 import { downloadWorksheetPDF, SERIF } from '../../lib/kanjiWorksheet';
 import WorksheetPreview from '../../components/kanji/WorksheetPreview';
+import { parseKanjiText, parseFileText, SAMPLE_KANJI_JSON, downloadSampleJson } from '../../lib/kanjiExternal';
 
 const LEVELS = ['N5','N4','N3','N2','N1'];
 
@@ -107,6 +108,38 @@ export default function KanjiWriting() {
   const addKanji = (k) => { if (!has(k.char)) setList(l => [...l, k]); };
   const removeAt = (i) => { setList(l => l.filter((_,j)=>j!==i)); setIdx(p => i<=p&&p>0?p-1:p); };
 
+  // Thêm chữ Hán từ bên ngoài (gõ/dán/file). Enrich best-effort từ ngân hàng đã tải.
+  const [extraInput, setExtraInput] = useState('');
+  const [extraMsg, setExtraMsg]     = useState('');
+  const fileRef = useRef(null);
+
+  const addExternal = (items) => {
+    if (!items.length) { setExtraMsg('Không tìm thấy chữ Hán hợp lệ.'); return; }
+    let added = 0, skipped = 0;
+    setList(prev => {
+      const next = [...prev];
+      const seen = new Set(next.map(k => k.char));
+      for (const it of items) {
+        if (seen.has(it.char)) { skipped++; continue; }
+        const bank = browse.find(b => b.character === it.char);
+        next.push(bank
+          ? { char: it.char, reading_on: bank.reading_on, reading_kun: bank.reading_kun, meaning_vi: bank.meaning_vi, han_viet: bank.han_viet || '' }
+          : it);
+        seen.add(it.char); added++;
+      }
+      return next;
+    });
+    setExtraMsg(`Đã thêm ${added} chữ${skipped ? ` · bỏ qua ${skipped} trùng` : ''}.`);
+  };
+
+  const submitExtra = () => { addExternal(parseKanjiText(extraInput)); setExtraInput(''); };
+  const handleExtraFile = async (file) => {
+    if (!file) return;
+    try { addExternal(await parseFileText(file)); }
+    catch { setExtraMsg('Không đọc được file.'); }
+    finally { if (fileRef.current) fileRef.current.value = ''; }
+  };
+
   useEffect(() => {
     setLoadingBrowse(true);
     api.get(`/kanji?level=${level}&limit=200`)
@@ -186,6 +219,46 @@ export default function KanjiWriting() {
                 ))}
               </div>
             )}
+          </div>
+
+          {/* Thêm chữ Hán ngoài danh sách — gõ/dán hoặc tải file/JSON */}
+          <div className="pt-2 border-t border-outline/40 space-y-1.5">
+            <p className="text-xs font-semibold text-on-muted">Thêm chữ Hán ngoài danh sách</p>
+            <div className="flex flex-col sm:flex-row gap-2">
+              <input value={extraInput}
+                onChange={e=>setExtraInput(e.target.value)}
+                onKeyDown={e=>{ if(e.key==='Enter'){ e.preventDefault(); submitExtra(); } }}
+                placeholder="Gõ/dán chữ Hán (vd 好 漢 字) hoặc dán JSON..."
+                className="flex-1 px-3 py-2 border border-outline rounded-xl text-sm outline-none focus:border-tsubaki-red" />
+              <div className="flex gap-2">
+                <button onClick={submitExtra} disabled={!extraInput.trim()}
+                  className="px-4 py-2 bg-tsubaki-red text-white text-sm font-semibold rounded-xl disabled:opacity-40">
+                  Thêm
+                </button>
+                <button onClick={()=>fileRef.current?.click()}
+                  className="px-3 py-2 border border-outline rounded-xl text-sm font-medium hover:bg-surface-low inline-flex items-center gap-1.5">
+                  <span className="material-symbols-outlined text-base">upload_file</span>Tải file
+                </button>
+              </div>
+            </div>
+            <input ref={fileRef} type="file" accept=".txt,.json,.csv" className="hidden"
+              onChange={e=>handleExtraFile(e.target.files?.[0])} />
+            {extraMsg && <p className="text-xs text-on-muted">{extraMsg}</p>}
+
+            {/* Hướng dẫn định dạng + file mẫu */}
+            <details className="text-xs text-on-muted/80 rounded-lg bg-surface-low/50 px-3 py-2">
+              <summary className="cursor-pointer select-none font-medium text-on-muted">Hướng dẫn định dạng &amp; tải file mẫu</summary>
+              <div className="mt-2 space-y-2">
+                <p><b>Gõ/dán:</b> nhập trực tiếp các chữ Hán (vd <span className="font-semibold">好 漢 字</span>) — hệ thống tự bỏ qua hiragana/katakana, chữ latinh và ký tự trùng.</p>
+                <p><b>File .txt / .csv:</b> hệ thống tự nhặt tất cả chữ Hán trong file.</p>
+                <p><b>File / dán JSON:</b> một mảng, mỗi phần tử là <b>chữ (chuỗi)</b> hoặc <b>object</b> — chỉ <code>character</code> là bắt buộc, các trường còn lại tùy chọn (dùng để hiện Âm On/Kun, Nghĩa, Hán Việt trên bản in):</p>
+                <pre className="bg-white border border-outline/60 rounded-lg p-2 overflow-x-auto text-[11px] leading-snug" style={{ fontFamily:'monospace' }}>{SAMPLE_KANJI_JSON}</pre>
+                <button type="button" onClick={()=>downloadSampleJson()}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-outline rounded-lg font-medium text-charcoal hover:bg-white">
+                  <span className="material-symbols-outlined text-sm">download</span>Tải file JSON mẫu
+                </button>
+              </div>
+            </details>
           </div>
 
           {list.length > 0 && (
