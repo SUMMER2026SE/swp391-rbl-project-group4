@@ -3,10 +3,9 @@ import { useParams, useNavigate } from 'react-router-dom';
 import StudentLayout from '../../components/layout/StudentLayout';
 import FuriganaText from '../../components/ui/FuriganaText';
 import Alert from '../../components/ui/Alert';
-import Modal from '../../components/ui/Modal';
 import Button from '../../components/ui/Button';
-import Input from '../../components/ui/Input';
-import WordLookupPopup from '../../components/news/WordLookupPopup';
+import WordLookupPopup from '../../components/reading/WordLookupPopup';
+import AddCardsToFlashcardModal from '../../components/reading/AddCardsToFlashcardModal';
 import api from '../../lib/api';
 
 const FONT_STEPS = ['text-base', 'text-lg', 'text-xl', 'text-2xl', 'text-3xl'];
@@ -30,7 +29,15 @@ function formatDate(iso) {
   return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
 }
 
-export default function NewsReader() {
+// Dùng cho student (mặc định) và cho trang admin "Xem như học viên":
+//   preview=true → fetch qua /admin/reading/:id (không tốn quota/không tăng view),
+//   ẩn chat AI, quiz read-only, ẩn nút lưu Flashcard.
+export default function ReadingReader({
+  Layout = StudentLayout,
+  apiBase = '/reading',
+  listPath = '/reading',
+  preview = false,
+}) {
   const { id } = useParams();
   const navigate = useNavigate();
 
@@ -47,15 +54,15 @@ export default function NewsReader() {
   const [activeTab, setActiveTab]         = useState(null);    // panel phải desktop: 'ai'|'quiz'|'vocab'|'grammar'|null
 
   const readRef = useRef(null);   // vùng đọc — để bắt selection cho popup tra từ
-  const chat = useArticleChat(article);
+  const chat = useArticleChat(article, apiBase);
 
-  // Tab khả dụng của panel phải (desktop): AI luôn có; Quiz/Vocab/Grammar chỉ khi bài có dữ liệu.
+  // Tab khả dụng của panel phải (desktop): AI luôn có (trừ preview); Quiz/Vocab/Grammar chỉ khi bài có dữ liệu.
   const availableTabs = useMemo(() => (article ? TABS.filter(t =>
-    t.key === 'ai'
+    (t.key === 'ai'      && !preview)
     || (t.key === 'quiz'    && article.questions?.length > 0)
     || (t.key === 'vocab'   && article.vocab?.length > 0)
     || (t.key === 'grammar' && article.grammar?.length > 0)
-  ) : []), [article]);
+  ) : []), [article, preview]);
 
   // Mở sẵn tab đầu tiên có dữ liệu (ưu tiên Quiz) mỗi khi vào một bài mới — user vẫn tự đổi/đóng được.
   useEffect(() => {
@@ -66,7 +73,7 @@ export default function NewsReader() {
     let active = true;
     setLoading(true);
     setQuotaBlock(null);
-    api.get(`/news/${id}`)
+    api.get(`${apiBase}/${id}`)
       .then(r => { if (active) setArticle(r.data); })
       .catch(e => {
         if (!active) return;
@@ -75,7 +82,7 @@ export default function NewsReader() {
       })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [id]);
+  }, [id, apiBase]);
 
   // Hỏi AI về 1 từ (từ popup tra từ khi không có trong từ điển)
   const askAboutWord = (word) => {
@@ -88,10 +95,10 @@ export default function NewsReader() {
   const segments = article?.segments || [];
 
   return (
-    <StudentLayout title="Luyện đọc báo">
+    <Layout title="Luyện đọc">
       {/* ── Back ─────────────────────────────────────────────────────── */}
       <button
-        onClick={() => navigate('/news')}
+        onClick={() => navigate(listPath)}
         className="inline-flex items-center gap-1.5 text-sm text-on-muted hover:text-tsubaki-red transition-colors mb-5"
       >
         <span className="material-symbols-outlined text-lg">arrow_back</span>
@@ -111,7 +118,7 @@ export default function NewsReader() {
           </p>
           <p className="text-on-muted text-sm mb-6">{quotaBlock.resetInfo} Bài đã đọc trước đó vẫn xem lại được bình thường.</p>
           <div className="flex gap-3 justify-center">
-            <button onClick={() => navigate('/news')}
+            <button onClick={() => navigate(listPath)}
               className="px-5 py-2.5 rounded-xl border border-outline text-sm font-semibold hover:bg-surface-low transition-colors">
               Quay lại danh sách
             </button>
@@ -140,14 +147,6 @@ export default function NewsReader() {
                   <span className="bg-tsubaki-red text-white px-2.5 py-1 rounded-lg flex items-center gap-1.5 text-xs font-bold">
                     <span className={`w-1.5 h-1.5 rounded-full ${LEVEL_DOT[article.level] || 'bg-white'}`} />
                     {article.level}
-                  </span>
-                )}
-                {article.source && (
-                  <span className="inline-flex items-center gap-1 text-xs font-semibold text-on-muted bg-surface-low px-2.5 py-1 rounded-lg">
-                    <span className="material-symbols-outlined text-sm">newspaper</span>
-                    {article.source_url
-                      ? <a href={article.source_url} target="_blank" rel="noreferrer" className="hover:text-tsubaki-red hover:underline">{article.source}</a>
-                      : article.source}
                   </span>
                 )}
               </div>
@@ -233,14 +232,16 @@ export default function NewsReader() {
                 </>
               )}
 
-              {/* AI — chỉ hiện ở mobile (desktop đã có panel cố định bên phải) */}
-              <button
-                onClick={() => setChatOpen(true)}
-                className="lg:hidden ml-auto inline-flex items-center justify-center gap-1.5 h-10 px-3 rounded-xl text-sm font-semibold bg-sumire-purple text-white hover:opacity-90 transition-all"
-              >
-                <span className="material-symbols-outlined text-lg">smart_toy</span>
-                Trợ lý AI
-              </button>
+              {/* AI — chỉ hiện ở mobile (desktop đã có panel cố định bên phải); ẩn khi admin xem thử */}
+              {!preview && (
+                <button
+                  onClick={() => setChatOpen(true)}
+                  className="lg:hidden ml-auto inline-flex items-center justify-center gap-1.5 h-10 px-3 rounded-xl text-sm font-semibold bg-sumire-purple text-white hover:opacity-90 transition-all"
+                >
+                  <span className="material-symbols-outlined text-lg">smart_toy</span>
+                  Trợ lý AI
+                </button>
+              )}
             </div>
 
             {/* Banner mẹo tra từ — đặt đầu bài cho dễ thấy */}
@@ -275,17 +276,18 @@ export default function NewsReader() {
 
             {/* Quiz / Từ vựng / Ngữ pháp — chỉ xếp dưới bài trên MOBILE (desktop dùng panel phải) */}
             <div className="lg:hidden">
-              {article.questions?.length > 0 && <QuizSection questions={article.questions} furiganaOn={furiganaOn} />}
+              {article.questions?.length > 0 && <QuizSection questions={article.questions} furiganaOn={furiganaOn} readOnly={preview} />}
 
               {article.vocab?.length > 0 && (
                 <VocabSection
                   vocab={article.vocab}
                   articleTitle={article.title}
                   onWordClick={(entryId) => navigate(`/dictionary?entry=${entryId}`)}
+                  readOnly={preview}
                 />
               )}
 
-              {article.grammar?.length > 0 && <GrammarSection grammar={article.grammar} />}
+              {article.grammar?.length > 0 && <GrammarSection grammar={article.grammar} articleTitle={article.title} readOnly={preview} />}
             </div>
 
             {/* Disclaimer */}
@@ -317,16 +319,17 @@ export default function NewsReader() {
                         <ChatPanel chat={chat} />
                       ) : (
                         <div className="flex-1 overflow-y-auto p-4">
-                          {activeTab === 'quiz'    && <QuizSection questions={article.questions} furiganaOn={furiganaOn} compact />}
+                          {activeTab === 'quiz'    && <QuizSection questions={article.questions} furiganaOn={furiganaOn} readOnly={preview} compact />}
                           {activeTab === 'vocab'   && (
                             <VocabSection
                               vocab={article.vocab}
                               articleTitle={article.title}
                               onWordClick={(entryId) => navigate(`/dictionary?entry=${entryId}`)}
+                              readOnly={preview}
                               compact
                             />
                           )}
-                          {activeTab === 'grammar' && <GrammarSection grammar={article.grammar} compact />}
+                          {activeTab === 'grammar' && <GrammarSection grammar={article.grammar} articleTitle={article.title} readOnly={preview} compact />}
                         </div>
                       )}
                     </div>
@@ -382,22 +385,22 @@ export default function NewsReader() {
           </div>
         </div>
       )}
-    </StudentLayout>
+    </Layout>
   );
 }
 
-// ── Hook giữ state hội thoại — nối tạm /api/ai/chat (BE teammate có thể thay ───
-//    bằng endpoint news riêng sau) ──────────────────────────────────────────────
-function useArticleChat(article) {
+// ── Hook giữ state hội thoại — gọi endpoint chat đọc hiểu riêng của bài ─────────
+//    Server tự nạp nội dung bài từ DB theo id (client không gửi nội dung → an toàn,
+//    tiết kiệm token). UI chỉ giữ lịch sử cục bộ và gửi lại các lượt gần nhất.
+function useArticleChat(article, apiBase = '/reading') {
   const [messages, setMessages] = useState([]);   // { role: 'user'|'assistant', content }
   const [input, setInput]       = useState('');
   const [sending, setSending]   = useState(false);
   const [error, setError]       = useState('');
-  const sessionRef = useRef(null);
 
-  // Reset hội thoại khi đổi sang bài đọc khác (route /news/:id đổi id không remount component)
+  // Reset hội thoại khi đổi sang bài đọc khác (route /reading/:id đổi id không remount component)
   useEffect(() => {
-    setMessages([]); setInput(''); setSending(false); setError(''); sessionRef.current = null;
+    setMessages([]); setInput(''); setSending(false); setError('');
   }, [article?.id]);
 
   const send = async () => {
@@ -410,16 +413,7 @@ function useArticleChat(article) {
     setInput('');
     setSending(true);
     try {
-      // Lần gửi đầu chèn ngữ cảnh bài đọc (không hiển thị trên UI) để AI biết bài
-      const articleContext = '[Ngữ cảnh: học viên đang đọc bài báo tiếng Nhật sau]\n' +
-        `Tiêu đề: ${article.title}\n` +
-        'Nội dung: ' + (article.content || (article.segments || []).map(s => s.jp).join('')) +
-        '\n[Hãy trả lời các câu hỏi của học viên dựa trên bài đọc này.]';
-      const payload = messages.length === 0
-        ? [{ role: 'user', content: articleContext }, userMsg]
-        : next;
-      const r = await api.post('/ai/chat', { messages: payload, sessionId: sessionRef.current });
-      sessionRef.current = r.data.sessionId || sessionRef.current;
+      const r = await api.post(`${apiBase}/${article.id}/chat`, { messages: next });
       setMessages(m => [...m, { role: 'assistant', content: r.data.reply || '' }]);
     } catch (e) {
       setError(e.message);
@@ -497,7 +491,8 @@ function ChatPanel({ chat }) {
 
 // ── Quiz đọc hiểu (chấm client-side — đây là luyện tập, không phải thi) ─────────
 //    furiganaOn: bật/tắt ruby cho câu hỏi + đáp án (dùng ruby HTML sinh sẵn, không gọi AI)
-function QuizSection({ questions, furiganaOn = false, compact = false }) {
+//    readOnly: admin xem thử → khóa tương tác, không có nút Kiểm tra đáp án
+function QuizSection({ questions, furiganaOn = false, compact = false, readOnly = false }) {
   const [answers, setAnswers] = useState({});   // { [qIndex]: optionIndex }
   const [checked, setChecked] = useState(false);
 
@@ -518,12 +513,18 @@ function QuizSection({ questions, furiganaOn = false, compact = false }) {
           <div key={i} className="glass-card rounded-2xl p-4 border border-outline/30">
             <div className="font-semibold text-on-surface mb-3 flex items-start gap-1.5">
               <span className="shrink-0">{i + 1}.</span>
-              <FuriganaText
-                text={q.question}
-                html={q.question_furigana || q.question}
-                enabled={furiganaOn}
-                textClassName={furiganaOn ? '!leading-[2.2]' : ''}
-              />
+              <div className="min-w-0">
+                <FuriganaText
+                  text={q.question}
+                  html={q.question_furigana || q.question}
+                  enabled={furiganaOn}
+                  textClassName={furiganaOn ? '!leading-[2.2]' : ''}
+                />
+                {/* Bản dịch câu hỏi — chỉ hiện sau khi kiểm tra đáp án */}
+                {checked && q.question_vi && (
+                  <p className="mt-1 text-xs font-normal text-sumire-purple/90 leading-relaxed">{q.question_vi}</p>
+                )}
+              </div>
             </div>
             <div className="space-y-2">
               {q.options.map((opt, j) => {
@@ -541,20 +542,24 @@ function QuizSection({ questions, furiganaOn = false, compact = false }) {
                   <button
                     key={j}
                     type="button"
-                    disabled={checked}
+                    disabled={checked || readOnly}
                     onClick={() => setAnswers(a => ({ ...a, [i]: j }))}
                     className={`w-full text-left px-4 py-2.5 rounded-xl border text-sm transition-colors flex items-center gap-2 ${cls}`}
                   >
                     <span className="shrink-0 w-5 h-5 rounded-full border border-current flex items-center justify-center text-[11px] font-bold">
                       {String.fromCharCode(65 + j)}
                     </span>
-                    <span className="flex-1">
+                    <span className="flex-1 min-w-0">
                       <FuriganaText
                         text={opt}
                         html={q.options_furigana?.[j] || opt}
                         enabled={furiganaOn}
                         textClassName={furiganaOn ? '!leading-[2.2]' : ''}
                       />
+                      {/* Bản dịch lựa chọn — chỉ hiện sau khi kiểm tra đáp án */}
+                      {checked && q.options_vi?.[j] && (
+                        <span className="block mt-0.5 text-[11px] text-on-muted leading-snug">{q.options_vi[j]}</span>
+                      )}
                     </span>
                     {checked && isCorrect && <span className="material-symbols-outlined text-green-600 text-lg">check_circle</span>}
                     {checked && selected && !isCorrect && <span className="material-symbols-outlined text-red-500 text-lg">cancel</span>}
@@ -572,7 +577,9 @@ function QuizSection({ questions, furiganaOn = false, compact = false }) {
       </div>
 
       <div className="mt-5 flex items-center gap-3">
-        {!checked ? (
+        {readOnly ? (
+          <p className="text-sm text-on-muted italic">Chế độ xem thử — học viên sẽ chọn đáp án và bấm kiểm tra tại đây.</p>
+        ) : !checked ? (
           <Button disabled={!allAnswered} onClick={() => setChecked(true)}>
             <span className="material-symbols-outlined text-[18px]">task_alt</span>
             Kiểm tra đáp án
@@ -595,52 +602,41 @@ function QuizSection({ questions, furiganaOn = false, compact = false }) {
   );
 }
 
-// ── Từ vựng trong bài + lưu nhanh vào Flashcard ───────────────────────────────
-function VocabSection({ vocab, articleTitle, onWordClick, compact = false }) {
-  const navigate = useNavigate();
+// ── Từ vựng trong bài + tick chọn để lưu vào Flashcard ────────────────────────
+//    readOnly: admin xem thử → ẩn checkbox + nút lưu Flashcard
+function VocabSection({ vocab, articleTitle, onWordClick, compact = false, readOnly = false }) {
+  const [selected, setSelected] = useState(() => new Set(vocab.map((_, i) => i)));  // mặc định chọn tất cả
   const [modalOpen, setModalOpen] = useState(false);
-  const [setTitle, setSetTitle]   = useState('');
-  const [saving, setSaving]       = useState(false);
-  const [error, setError]         = useState('');
-  const [savedId, setSavedId]     = useState(null);
 
-  const openModal = () => {
-    setSetTitle(`Từ vựng: ${articleTitle}`.slice(0, 100));
-    setError(''); setSavedId(null); setModalOpen(true);
-  };
+  const allSelected = selected.size === vocab.length;
+  const toggle = (i) => setSelected(s => { const n = new Set(s); n.has(i) ? n.delete(i) : n.add(i); return n; });
+  const toggleAll = () => setSelected(allSelected ? new Set() : new Set(vocab.map((_, i) => i)));
 
-  const save = async () => {
-    if (!setTitle.trim()) return setError('Hãy nhập tên học phần.');
-    setSaving(true); setError('');
-    try {
-      const cards = vocab
-        .filter(v => v.word)
-        .map(v => ({
-          term: v.word,
-          definition: [v.reading, v.meaning_vi].filter(Boolean).join(' — ') || v.word,
-        }));
-      const r = await api.post('/flashcards/sets', { title: setTitle.trim(), cards });
-      setSavedId(r.data?.data?.id || null);
-    } catch (e) {
-      setError(e.message);
-    } finally {
-      setSaving(false);
-    }
-  };
+  // Thẻ từ các từ đang chọn: mặt trước = từ, mặt sau = cách đọc — nghĩa
+  const cards = vocab
+    .filter((v, i) => selected.has(i) && v.word)
+    .map(v => ({ term: v.word, definition: [v.reading, v.meaning_vi].filter(Boolean).join(' — ') || v.word }));
 
   return (
     <section className={compact ? '' : 'mt-10 pt-6 border-t border-outline/30'}>
-      <div className={`flex items-center gap-3 mb-4 ${compact ? 'justify-end' : 'justify-between'}`}>
+      <div className={`flex items-center gap-3 mb-4 ${compact ? 'justify-between' : 'justify-between'}`}>
         {!compact && (
           <h2 className="font-display text-lg font-bold text-on-surface flex items-center gap-2">
             <span className="material-symbols-outlined text-tsubaki-red">translate</span>
             Từ vựng trong bài
           </h2>
         )}
-        <Button size="sm" onClick={openModal}>
-          <span className="material-symbols-outlined text-[18px]">style</span>
-          Lưu vào Flashcard
-        </Button>
+        {!readOnly && (
+          <div className="flex items-center gap-2 ml-auto">
+            <button onClick={toggleAll} className="text-xs font-semibold text-on-muted hover:text-tsubaki-red transition-colors">
+              {allSelected ? 'Bỏ chọn tất cả' : 'Chọn tất cả'}
+            </button>
+            <Button size="sm" disabled={cards.length === 0} onClick={() => setModalOpen(true)}>
+              <span className="material-symbols-outlined text-[18px]">style</span>
+              Thêm vào Flashcard ({cards.length})
+            </Button>
+          </div>
+        )}
       </div>
 
       <div className="glass-card rounded-2xl border border-outline/30 divide-y divide-outline/20 overflow-hidden">
@@ -650,6 +646,15 @@ function VocabSection({ vocab, articleTitle, onWordClick, compact = false }) {
             className={`flex items-center gap-3 px-4 py-2.5 ${v.entry_id ? 'cursor-pointer hover:bg-surface-low/60' : ''} transition-colors`}
             onClick={() => v.entry_id && onWordClick(v.entry_id)}
           >
+            {!readOnly && (
+              <input
+                type="checkbox"
+                checked={selected.has(i)}
+                onClick={e => e.stopPropagation()}
+                onChange={() => toggle(i)}
+                className="shrink-0 w-4 h-4 accent-tsubaki-red cursor-pointer"
+              />
+            )}
             <div className="w-28 shrink-0">
               <p className="font-semibold text-on-surface">{v.word}</p>
               {v.reading && <p className="text-xs text-on-muted">{v.reading}</p>}
@@ -663,69 +668,84 @@ function VocabSection({ vocab, articleTitle, onWordClick, compact = false }) {
         ))}
       </div>
 
-      <Modal
+      <AddCardsToFlashcardModal
         open={modalOpen}
         onClose={() => setModalOpen(false)}
-        title="Lưu từ vựng vào Flashcard"
-        footer={savedId ? (
-          <>
-            <Button variant="secondary" onClick={() => setModalOpen(false)}>Đóng</Button>
-            <Button onClick={() => navigate(`/flashcards/${savedId}`)}>Mở học phần</Button>
-          </>
-        ) : (
-          <>
-            <Button variant="secondary" onClick={() => setModalOpen(false)}>Hủy</Button>
-            <Button loading={saving} onClick={save}>Tạo học phần</Button>
-          </>
-        )}
-      >
-        {savedId ? (
-          <div className="flex items-start gap-3 p-4 bg-green-50 rounded-xl border border-green-200 text-sm text-green-800">
-            <span className="material-symbols-outlined text-green-600 shrink-0">check_circle</span>
-            <p>Đã tạo học phần với <strong>{vocab.length}</strong> thẻ từ vựng.</p>
-          </div>
-        ) : (
-          <>
-            {error && <Alert type="error">{error}</Alert>}
-            <Input
-              label="Tên học phần"
-              value={setTitle}
-              onChange={e => setSetTitle(e.target.value)}
-              placeholder="Tên học phần flashcard..."
-            />
-            <p className="text-xs text-on-muted mt-2">
-              Sẽ tạo <strong>{vocab.length}</strong> thẻ (mặt trước: từ, mặt sau: cách đọc + nghĩa).
-            </p>
-          </>
-        )}
-      </Modal>
+        cards={cards}
+        suggestedTitle={`Từ vựng bài đọc “${articleTitle}”`.slice(0, 100)}
+      />
     </section>
   );
 }
 
-// ── Ngữ pháp trong bài ────────────────────────────────────────────────────────
-function GrammarSection({ grammar, compact = false }) {
+// ── Ngữ pháp trong bài + tick chọn để lưu vào Flashcard ───────────────────────
+function GrammarSection({ grammar, articleTitle, compact = false, readOnly = false }) {
+  const [selected, setSelected] = useState(() => new Set(grammar.map((_, i) => i)));
+  const [modalOpen, setModalOpen] = useState(false);
+
+  const allSelected = selected.size === grammar.length;
+  const toggle = (i) => setSelected(s => { const n = new Set(s); n.has(i) ? n.delete(i) : n.add(i); return n; });
+  const toggleAll = () => setSelected(allSelected ? new Set() : new Set(grammar.map((_, i) => i)));
+
+  // Thẻ: mặt trước = mẫu ngữ pháp, mặt sau = nghĩa/cách dùng + ví dụ (nếu có)
+  const cards = grammar
+    .filter((g, i) => selected.has(i) && g.pattern)
+    .map(g => ({
+      term: g.pattern,
+      definition: [g.explanation_vi, g.example_jp ? `例: ${g.example_jp}` : ''].filter(Boolean).join('\n') || g.pattern,
+    }));
+
   return (
     <section className={compact ? '' : 'mt-10 pt-6 border-t border-outline/30'}>
-      {!compact && (
-        <h2 className="font-display text-lg font-bold text-on-surface mb-4 flex items-center gap-2">
-          <span className="material-symbols-outlined text-tsubaki-red">school</span>
-          Ngữ pháp trong bài
-        </h2>
-      )}
+      <div className="flex items-center gap-3 mb-4 justify-between">
+        {!compact && (
+          <h2 className="font-display text-lg font-bold text-on-surface flex items-center gap-2">
+            <span className="material-symbols-outlined text-tsubaki-red">school</span>
+            Ngữ pháp trong bài
+          </h2>
+        )}
+        {!readOnly && (
+          <div className="flex items-center gap-2 ml-auto">
+            <button onClick={toggleAll} className="text-xs font-semibold text-on-muted hover:text-tsubaki-red transition-colors">
+              {allSelected ? 'Bỏ chọn tất cả' : 'Chọn tất cả'}
+            </button>
+            <Button size="sm" disabled={cards.length === 0} onClick={() => setModalOpen(true)}>
+              <span className="material-symbols-outlined text-[18px]">style</span>
+              Thêm vào Flashcard ({cards.length})
+            </Button>
+          </div>
+        )}
+      </div>
       <div className="space-y-3">
         {grammar.map((g, i) => (
-          <div key={i} className="glass-card rounded-2xl border border-outline/30 p-4">
-            <p className="font-display font-bold text-tsubaki-red mb-1">{g.pattern}</p>
-            <p className="text-sm text-on-surface-variant leading-relaxed mb-2">{g.explanation_vi}</p>
-            {g.example_jp && (
-              <p className="text-sm text-on-surface bg-surface-low rounded-xl px-3 py-2 leading-relaxed">
-                {g.example_jp}
-              </p>
+          <div key={i} className="glass-card rounded-2xl border border-outline/30 p-4 flex gap-3">
+            {!readOnly && (
+              <input
+                type="checkbox"
+                checked={selected.has(i)}
+                onChange={() => toggle(i)}
+                className="shrink-0 mt-1 w-4 h-4 accent-tsubaki-red cursor-pointer"
+              />
             )}
+            <div className="min-w-0 flex-1">
+              <p className="font-display font-bold text-tsubaki-red mb-1">{g.pattern}</p>
+              <p className="text-sm text-on-surface-variant leading-relaxed mb-2">{g.explanation_vi}</p>
+              {g.example_jp && (
+                <p className="text-sm text-on-surface bg-surface-low rounded-xl px-3 py-2 leading-relaxed">
+                  {g.example_jp}
+                </p>
+              )}
+            </div>
           </div>
         ))}
       </div>
+
+      <AddCardsToFlashcardModal
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+        cards={cards}
+        suggestedTitle={`Ngữ pháp bài đọc “${articleTitle}”`.slice(0, 100)}
+      />
     </section>
   );
 }

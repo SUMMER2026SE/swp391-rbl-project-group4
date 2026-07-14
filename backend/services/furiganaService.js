@@ -48,4 +48,4 @@ async function annotateQuestions(questions) {
   })));
 }
 
-module.exports = { annotateQuestions };
+module.exports = { annotateQuestions, toRubyHtml };

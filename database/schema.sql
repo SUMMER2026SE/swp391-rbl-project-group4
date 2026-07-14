@@ -345,52 +345,51 @@ CREATE POLICY "dict_examples: read all"      ON dictionary_module.dict_examples 
 CREATE POLICY "dict_related_words: read all" ON dictionary_module.dict_related_words FOR SELECT TO authenticated USING (true);
 
 
--- ─── 7. MATERIALS TABLES (schema riêng materials_module) ──────────────────────
--- Tính năng "Luyện đọc báo" cho student, độc lập với lessons/reading_passages.
+-- ─── 7. READING TABLES (schema riêng reading_module) ──────────────────────────
+-- Tính năng "Luyện đọc" cho student, độc lập với lessons/reading_passages.
 -- Bài đọc lưu sẵn furigana (ruby HTML) + bản dịch tiếng Việt theo từng câu trong
 -- cột segments (jsonb): [{ jp, furigana, vi }]. AI chỉ chạy 1 lần lúc admin tạo bài;
--- student đọc lấy thẳng từ DB, không gọi AI. LƯU Ý: phải thêm 'materials_module' vào
--- Exposed schemas (Supabase → Settings → API) để supabase-js .schema('materials_module') hoạt động.
+-- student đọc lấy thẳng từ DB, không gọi AI. LƯU Ý: phải thêm 'reading_module' vào
+-- Exposed schemas (Supabase → Settings → API) để supabase-js .schema('reading_module') hoạt động.
 
-CREATE SCHEMA IF NOT EXISTS materials_module;
-GRANT USAGE ON SCHEMA materials_module TO anon, authenticated, service_role;
+CREATE SCHEMA IF NOT EXISTS reading_module;
+GRANT USAGE ON SCHEMA reading_module TO anon, authenticated, service_role;
 
-CREATE TABLE IF NOT EXISTS materials_module.news_articles (
+CREATE TABLE IF NOT EXISTS reading_module.articles (
   id            uuid DEFAULT gen_random_uuid() PRIMARY KEY,
   title         text NOT NULL,                 -- tiêu đề tiếng Nhật
   title_vi      text,                          -- tiêu đề tiếng Việt (tùy chọn)
   summary_vi    text,                          -- mô tả ngắn cho card danh sách
   level         text CHECK (level IN ('N5','N4','N3','N2','N1')),
   thumbnail_url text,                          -- ảnh card (Supabase Storage)
-  source        text,                          -- nguồn (vd "NHK", "Asahi")
-  source_url    text,
   content       text,                          -- toàn văn JA thuần (fallback + ngữ cảnh AI)
   segments      jsonb DEFAULT '[]'::jsonb,     -- [{ jp, furigana, vi }] theo câu
-  questions     jsonb DEFAULT '[]'::jsonb,     -- quiz đọc hiểu [{ question, options[4], answer, explanation_vi }]
+  questions     jsonb DEFAULT '[]'::jsonb,     -- quiz đọc hiểu [{ question, question_vi, options[4], options_vi[4], answer, explanation_vi }]
   vocab         jsonb DEFAULT '[]'::jsonb,     -- từ vựng trong bài [{ word, reading, meaning_vi, entry_id, jlpt_level }]
   grammar       jsonb DEFAULT '[]'::jsonb,     -- ngữ pháp trong bài [{ pattern, explanation_vi, example_jp }]
   view_count    int NOT NULL DEFAULT 0,        -- số user duy nhất đã mở bài
   is_published  boolean DEFAULT false,         -- chỉ bài published mới hiện cho student
   published_at  timestamptz,                   -- set lần đầu khi publish
   created_by    uuid REFERENCES auth.users(id) ON DELETE SET NULL,
+  creator_type  text DEFAULT 'admin',          -- 'admin' | 'teacher' (revenue pool)
   created_at    timestamptz DEFAULT now(),
   updated_at    timestamptz DEFAULT now()
 );
 
 CREATE INDEX IF NOT EXISTS idx_news_articles_published
-  ON materials_module.news_articles (is_published, level, created_at DESC);
+  ON reading_module.articles (is_published, level, created_at DESC);
 
 -- Grant chỉ trên bảng của tính năng này (không đụng các bảng khác trong schema)
-GRANT ALL ON materials_module.news_articles TO anon, authenticated, service_role;
+GRANT ALL ON reading_module.articles TO anon, authenticated, service_role;
 
 -- RLS: student chỉ đọc bài đã publish; ghi qua supabaseAdmin
-ALTER TABLE materials_module.news_articles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE reading_module.articles ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "news_articles: read published" ON materials_module.news_articles FOR SELECT TO authenticated USING (is_published = true);
+CREATE POLICY "articles: read published" ON reading_module.articles FOR SELECT TO authenticated USING (is_published = true);
 
 -- Lượt đọc: mỗi (bài, user) 1 dòng — dedupe view_count + đếm giới hạn bài mới/ngày
-CREATE TABLE IF NOT EXISTS materials_module.news_article_reads (
-  article_id    uuid NOT NULL REFERENCES materials_module.news_articles(id) ON DELETE CASCADE,
+CREATE TABLE IF NOT EXISTS reading_module.article_reads (
+  article_id    uuid NOT NULL REFERENCES reading_module.articles(id) ON DELETE CASCADE,
   user_id       uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   first_read_at timestamptz DEFAULT now(),
   read_date     date DEFAULT CURRENT_DATE,    -- ngày đọc lần đầu (tính quota theo ngày)
@@ -398,12 +397,12 @@ CREATE TABLE IF NOT EXISTS materials_module.news_article_reads (
 );
 
 CREATE INDEX IF NOT EXISTS idx_news_reads_user_date
-  ON materials_module.news_article_reads (user_id, read_date);
+  ON reading_module.article_reads (user_id, read_date);
 
-GRANT ALL ON materials_module.news_article_reads TO anon, authenticated, service_role;
+GRANT ALL ON reading_module.article_reads TO anon, authenticated, service_role;
 
 -- RLS bật, không policy: chỉ backend (service-role, bypass RLS) được ghi/đọc
-ALTER TABLE materials_module.news_article_reads ENABLE ROW LEVEL SECURITY;
+ALTER TABLE reading_module.article_reads ENABLE ROW LEVEL SECURITY;
 
 -- ─── FLASHCARD MODULE: học phần / thư mục / thẻ / tiến độ (spaced repetition đơn giản) ──
 CREATE SCHEMA IF NOT EXISTS flashcard_module;
@@ -483,7 +482,7 @@ GRANT ALL ON flashcard_module.flashcard_tests       TO anon, authenticated, serv
 -- mới gọi được (nếu thiếu -> lỗi PGRST106 "Invalid schema"). Trên Supabase: Dashboard →
 -- Settings → API → Exposed schemas (thêm flashcard_module). Tương đương SQL:
 --   ALTER ROLE authenticator SET pgrst.db_schemas =
---     'public, graphql_public, dictionary_module, materials_module, flashcard_module';
+--     'public, graphql_public, dictionary_module, materials_module, reading_module, flashcard_module';
 --   NOTIFY pgrst, 'reload config';  NOTIFY pgrst, 'reload schema';
 
 -- RLS: mỗi student chỉ thao tác trên dữ liệu của chính mình (backend service-role bypass)

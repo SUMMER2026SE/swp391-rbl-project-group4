@@ -133,6 +133,7 @@ export default function FlashcardStudy() {
   const go = (delta) => {
     if (done) return;
     resetFlip();
+    if (delta > 0 && pos >= deck.length - 1) { setDone(true); return; } // thẻ cuối → màn kết quả
     setPos(p => Math.min(Math.max(p + delta, 0), deck.length - 1));
   };
 
@@ -498,8 +499,7 @@ export default function FlashcardStudy() {
               <span className="text-sm font-medium text-on-muted tabular-nums">{pos + 1}/{deck.length}</span>
               <button
                 onClick={() => go(1)}
-                disabled={pos >= deck.length - 1}
-                className="w-12 h-12 flex items-center justify-center rounded-full border border-outline text-on-muted hover:border-tsubaki-red hover:text-tsubaki-red disabled:opacity-30 disabled:hover:border-outline disabled:hover:text-on-muted transition-colors"
+                className="w-12 h-12 flex items-center justify-center rounded-full border border-outline text-on-muted hover:border-tsubaki-red hover:text-tsubaki-red transition-colors"
               >
                 <span className="material-symbols-outlined">arrow_forward</span>
               </button>
