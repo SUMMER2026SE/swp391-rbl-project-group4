@@ -142,6 +142,9 @@ router.patch('/units/reorder',   c.reorderUnits);
 
 // Lessons
 router.get('/lessons',               c.listLessons);
+// Bài đọc gắn với Mục (reading_module.articles) — đặt trước '/lessons/:id'
+router.get('/lessons/reading/:id',        reading.adminLessonReadingGet);
+router.put('/lessons/:lessonId/reading',  reading.adminLessonReadingUpsert);
 router.get('/lessons/:id',           c.getLesson);
 router.post('/lessons',              c.createLesson);
 router.put('/lessons/:id',           c.updateLesson);

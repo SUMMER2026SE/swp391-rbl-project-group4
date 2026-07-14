@@ -42,6 +42,9 @@ router.post('/units',          c.createUnit);
 router.patch('/units/reorder', c.reorderUnits);
 router.put('/units/:id',       c.updateUnit);
 router.delete('/units/:id',    c.deleteUnit);
+// Bài đọc gắn với Mục (reading_module.articles) — đặt trước '/lessons/:id'
+router.get('/lessons/reading/:id',       nc.teacherLessonReadingGet);
+router.put('/lessons/:lessonId/reading', nc.teacherLessonReadingUpsert);
 router.get('/lessons/:id',     c.getLesson);
 router.post('/lessons',        c.createLesson);
 router.patch('/lessons/reorder', c.reorderLessons);
@@ -149,6 +152,17 @@ router.post('/my-reading/generate-article',    nc.generateArticle);
 router.post('/my-reading/generate-segments',   nc.generateSegments);
 router.post('/my-reading/generate-questions',  nc.generateQuestions);
 router.post('/my-reading/generate-vocab-grammar', nc.generateVocabGrammar);
+router.post('/my-reading/segment-manual',      nc.segmentManual);
+const docUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const name = (file.originalname || '').toLowerCase();
+    (name.endsWith('.txt') || name.endsWith('.docx'))
+      ? cb(null, true) : cb(new Error('Chỉ hỗ trợ file .txt hoặc .docx.'));
+  },
+});
+router.post('/my-reading/parse-file', docUpload.single('file'), nc.parseFile);
 
 // ── Thu nhập từ quỹ chia sẻ doanh thu ─────────────────────────────────────────
 router.get('/earnings',                        rp.teacherEarnings);

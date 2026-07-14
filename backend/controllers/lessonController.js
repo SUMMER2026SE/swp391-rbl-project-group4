@@ -68,8 +68,8 @@ exports.getOne = async (req, res) => {
       buildCourseItemOrder(lesson.course_id),
       contentDb.from('lesson_progress')
         .select('status').eq('lesson_id', id).eq('student_id', req.user.id).maybeSingle(),
-      // View compat không có description — lấy thêm từ bảng gốc.
-      contentDb.from('lessons').select('description').eq('id', id).single(),
+      // View compat không có description/reading_article_id — lấy thêm từ bảng gốc.
+      contentDb.from('lessons').select('description,reading_article_id').eq('id', id).single(),
     ]);
 
     const idx = order.findIndex(i => i.id === id);
@@ -84,6 +84,7 @@ exports.getOne = async (req, res) => {
     res.json({
       ...lesson,
       description: extra?.description ?? null,
+      reading_article_id: extra?.reading_article_id ?? null,
       vocabulary: vocab || [],
       kanji: kanji || [],
       grammar_points: grammarPoints || [],

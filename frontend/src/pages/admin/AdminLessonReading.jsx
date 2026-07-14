@@ -1,61 +1,73 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useEditorArea } from '../../lib/useEditorArea';
 import Button from '../../components/ui/Button';
 import Alert from '../../components/ui/Alert';
 import LessonInfoPanel from '../../components/shared/LessonInfoPanel';
+import { ReadingForm } from './AdminReading';
 import api from '../../lib/api';
 
-// ── Preview renderer (HTML with <ruby> passthrough) ───────────────────────────
-function renderPreview(text) {
-  if (!text) return '';
-  // Don't escape < > so that <ruby> tags render
-  return text
-    .replace(/^#{3}\s+(.+)$/gm, '<h3 class="text-base font-bold text-tsubaki-red mt-4 mb-1">$1</h3>')
-    .replace(/^#{2}\s+(.+)$/gm, '<h2 class="text-lg font-bold text-on-surface mt-5 mb-2">$1</h2>')
-    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-    .replace(/\*(.+?)\*/g, '<em>$1</em>')
-    .replace(/^---$/gm, '<hr class="border-outline/20 my-4"/>')
-    .replace(/^>\s+(.+)$/gm, '<blockquote class="border-l-4 border-tsubaki-red/40 pl-4 my-2 text-on-muted italic">$1</blockquote>')
-    .replace(/\n\n/g, '</p><p class="mb-4">')
-    .replace(/\n/g, '<br/>');
-}
+const EMPTY = {
+  title: '', title_vi: '', summary_vi: '', level: '',
+  thumbnail_url: '',
+  content: '', segments: [], questions: [], vocab: [], grammar: [],
+};
 
-// ── Main Page ─────────────────────────────────────────────────────────────────
-
+// Soạn bài đọc cho Mục "Bài đọc" của khóa học — dùng chung cơ chế
+// reading_module.articles + editor cấu trúc của trang Luyện đọc (ReadingForm):
+// AI tách câu/furigana/dịch, sinh quiz, từ vựng & ngữ pháp. Lưu qua
+// PUT {apiBase}/lessons/:lessonId/reading (upsert article gắn với lesson).
 export default function AdminLessonReading() {
   const { lessonId } = useParams();
   const navigate     = useNavigate();
-  const { apiBase, Layout } = useEditorArea();
+  const { apiBase, Layout, isTeacher } = useEditorArea();
+  // Các endpoint AI hỗ trợ soạn bài tái dùng nguyên vẹn từ trang Luyện đọc
+  const aiBase     = isTeacher ? '/teacher/my-reading' : '/admin/reading';
+  const uploadPath = `${apiBase}/reading-passages/upload`;
 
   const [lesson, setLesson]   = useState(null);
-  const [content, setContent] = useState('');
-  const [imageUrl, setImageUrl] = useState('');
+  const [form, setForm]       = useState(EMPTY);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving]   = useState(false);
   const [saved, setSaved]     = useState(false);
   const [alert, setAlert]     = useState({ type: '', msg: '' });
-  const [tab, setTab]         = useState('edit'); // 'edit' | 'split' | 'preview'
-  const [furiModal, setFuriModal] = useState(false);
-  const [furiForm, setFuriForm]   = useState({ kanji: '', reading: '' });
-  const textareaRef = useRef(null);
 
-  // ── Load ────────────────────────────────────────────────────────────────────
+  const [generating, setGenerating] = useState(false);
+  const [composing, setComposing]   = useState(false);
+  const [genQuiz, setGenQuiz]       = useState(false);
+  const [genVocab, setGenVocab]     = useState(false);
+  const [uploading, setUploading]   = useState(false);
+  const [segmenting, setSegmenting] = useState(false);
+  const [parsingFile, setParsingFile] = useState(false);
 
+  const showAlert = (type, msg) => {
+    setAlert({ type, msg });
+    setTimeout(() => setAlert({ type: '', msg: '' }), 4000);
+  };
+
+  // ── Load: thông tin Mục + article đã gắn (404 = chưa có → form trống) ────────
   useEffect(() => {
     const load = async () => {
       try {
         const r = await api.get(`${apiBase}/lessons/${lessonId}`);
         setLesson(r.data);
-        // content field stores: JSON { text, imageUrl } OR plain string (legacy)
-        const raw = r.data.content || '';
         try {
-          const parsed = JSON.parse(raw);
-          setContent(parsed.text || '');
-          setImageUrl(parsed.imageUrl || '');
-        } catch {
-          setContent(raw);
-          setImageUrl('');
+          const a = (await api.get(`${apiBase}/lessons/reading/${lessonId}`)).data;
+          setForm({
+            title:         a.title         || '',
+            title_vi:      a.title_vi      || '',
+            summary_vi:    a.summary_vi    || '',
+            level:         a.level         || '',
+            thumbnail_url: a.thumbnail_url || '',
+            content:       a.content       || '',
+            segments:      Array.isArray(a.segments)  ? a.segments  : [],
+            questions:     Array.isArray(a.questions) ? a.questions : [],
+            vocab:         Array.isArray(a.vocab)     ? a.vocab     : [],
+            grammar:       Array.isArray(a.grammar)   ? a.grammar   : [],
+          });
+        } catch (e) {
+          if (e.status !== 404) throw e;
+          // Chưa có bài đọc — form trống, lưu lần đầu sẽ tạo article mới
         }
       } catch (e) {
         setAlert({ type: 'error', msg: e.message });
@@ -66,114 +78,168 @@ export default function AdminLessonReading() {
     load();
   }, [lessonId]);
 
-  // ── Save ────────────────────────────────────────────────────────────────────
-
+  // ── Save (upsert article gắn với lesson) ─────────────────────────────────────
   const handleSave = async () => {
     setSaving(true);
     try {
-      const payload = JSON.stringify({ text: content, imageUrl: imageUrl.trim() || null });
-      await api.put(`${apiBase}/lessons/${lessonId}`, { content: payload });
+      // Tiêu đề Nhật/Việt lấy theo thông tin Mục (server tự đồng bộ) — không gửi từ form
+      const { title, title_vi, ...payload } = form;
+      await api.put(`${apiBase}/lessons/${lessonId}/reading`, payload);
       setSaved(true);
       setTimeout(() => setSaved(false), 2500);
     } catch (e) {
-      setAlert({ type: 'error', msg: e.message });
+      showAlert('error', e.message);
     } finally {
       setSaving(false);
     }
   };
 
-  // Ctrl/Cmd + S shortcut
-  useEffect(() => {
-    const handler = (e) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); handleSave(); }
-    };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-  }, [content, imageUrl]);
-
-  // ── Cursor helpers ──────────────────────────────────────────────────────────
-
-  const insertAtCursor = (before, after = '') => {
-    const el = textareaRef.current;
-    if (!el) return;
-    const start = el.selectionStart;
-    const end   = el.selectionEnd;
-    const selected = content.slice(start, end);
-    const newText = content.slice(0, start) + before + selected + after + content.slice(end);
-    setContent(newText);
-    setTimeout(() => {
-      el.focus();
-      el.selectionStart = start + before.length;
-      el.selectionEnd   = start + before.length + selected.length;
-    }, 0);
+  // ── AI helpers (tái dùng endpoint của trang Luyện đọc) ───────────────────────
+  const handleGenerate = async () => {
+    if (!form.content.trim()) return showAlert('error', 'Hãy nhập nội dung bài đọc trước.');
+    setGenerating(true);
+    try {
+      const r = await api.post(`${aiBase}/generate-segments`, { content: form.content });
+      setForm(f => ({ ...f, segments: r.data.segments || [] }));
+      showAlert('success', `Đã tách & sinh ${r.data.segments?.length || 0} câu. Hãy kiểm tra lại trước khi lưu.`);
+    } catch (e) {
+      showAlert('error', e.message);
+    } finally {
+      setGenerating(false);
+    }
   };
 
-  const insertFurigana = () => {
-    const { kanji, reading } = furiForm;
-    if (!kanji.trim() || !reading.trim()) return;
-    insertAtCursor(`<ruby>${kanji.trim()}<rt>${reading.trim()}</rt></ruby>`);
-    setFuriModal(false);
-    setFuriForm({ kanji: '', reading: '' });
+  const handleSegmentManual = async () => {
+    if (!form.content.trim()) return showAlert('error', 'Hãy nhập nội dung bài đọc trước.');
+    setSegmenting(true);
+    try {
+      const r = await api.post(`${aiBase}/segment-manual`, { text: form.content });
+      setForm(f => ({ ...f, segments: r.data.segments || [], content: r.data.content || f.content }));
+      showAlert('success', `Đã tách ${r.data.segments?.length || 0} câu (furigana tạo tự động). Hãy kiểm tra & sửa nếu cần.`);
+    } catch (e) {
+      showAlert('error', e.message);
+    } finally {
+      setSegmenting(false);
+    }
   };
 
-  const TOOLBAR = [
-    { icon: 'format_h2',          title: 'Tiêu đề lớn',  action: () => insertAtCursor('## ') },
-    { icon: 'format_h3',          title: 'Tiêu đề nhỏ',  action: () => insertAtCursor('### ') },
-    { icon: 'format_bold',        title: 'In đậm',       action: () => insertAtCursor('**', '**') },
-    { icon: 'format_italic',      title: 'In nghiêng',   action: () => insertAtCursor('*', '*') },
-    { icon: 'format_quote',       title: 'Trích dẫn',    action: () => insertAtCursor('> ') },
-    { icon: 'horizontal_rule',    title: 'Đường kẻ',     action: () => insertAtCursor('\n---\n') },
-  ];
+  const handleParseFile = async (file) => {
+    if (!file) return;
+    setParsingFile(true);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      const r = await api.post(`${aiBase}/parse-file`, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+      setForm(f => ({ ...f, content: r.data.text || '' }));
+      showAlert('success', 'Đã đọc nội dung file. Bạn có thể tách câu bằng AI hoặc thủ công.');
+    } catch (e) {
+      showAlert('error', e.message);
+    } finally {
+      setParsingFile(false);
+    }
+  };
+
+  const handleCompose = async (topic, length) => {
+    if (!topic.trim()) return showAlert('error', 'Hãy nhập chủ đề bài đọc.');
+    setComposing(true);
+    try {
+      const r = await api.post(`${aiBase}/generate-article`, { topic, level: form.level, length });
+      setForm(f => ({
+        ...f,
+        title:      r.data.title      || f.title,
+        title_vi:   r.data.title_vi   || f.title_vi,
+        summary_vi: r.data.summary_vi || f.summary_vi,
+        content:    r.data.content    || f.content,
+      }));
+      showAlert('success', 'AI đã soạn xong bài. Hãy đọc lại, chỉnh sửa rồi tách câu.');
+    } catch (e) {
+      showAlert('error', e.message);
+    } finally {
+      setComposing(false);
+    }
+  };
+
+  const handleGenQuestions = async () => {
+    if (!form.content.trim()) return showAlert('error', 'Hãy nhập nội dung bài đọc trước.');
+    setGenQuiz(true);
+    try {
+      const r = await api.post(`${aiBase}/generate-questions`, { content: form.content, level: form.level });
+      setForm(f => ({ ...f, questions: r.data.questions || [] }));
+      showAlert('success', `Đã sinh ${r.data.questions?.length || 0} câu hỏi. Hãy kiểm tra lại trước khi lưu.`);
+    } catch (e) {
+      showAlert('error', e.message);
+    } finally {
+      setGenQuiz(false);
+    }
+  };
+
+  const handleGenVocabGrammar = async () => {
+    if (!form.content.trim()) return showAlert('error', 'Hãy nhập nội dung bài đọc trước.');
+    setGenVocab(true);
+    try {
+      const r = await api.post(`${aiBase}/generate-vocab-grammar`, { content: form.content, level: form.level });
+      setForm(f => ({ ...f, vocab: r.data.vocab || [], grammar: r.data.grammar || [] }));
+      if (r.data.grammarError) showAlert('error', `Từ vựng OK nhưng ngữ pháp lỗi: ${r.data.grammarError}`);
+      else showAlert('success', `Đã sinh ${r.data.vocab?.length || 0} từ vựng & ${r.data.grammar?.length || 0} điểm ngữ pháp.`);
+    } catch (e) {
+      showAlert('error', e.message);
+    } finally {
+      setGenVocab(false);
+    }
+  };
+
+  const handleUpload = async (file) => {
+    if (!file) return;
+    setUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append('image', file);
+      const r = await api.post(uploadPath, fd, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      setForm(f => ({ ...f, thumbnail_url: r.data.url }));
+    } catch (e) {
+      showAlert('error', e.message);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  // ── Edit helpers (segments / questions / vocab / grammar) ────────────────────
+  const updateSeg = (i, key, val) =>
+    setForm(f => ({ ...f, segments: f.segments.map((s, idx) => idx === i ? { ...s, [key]: val } : s) }));
+  const removeSeg = (i) =>
+    setForm(f => ({ ...f, segments: f.segments.filter((_, idx) => idx !== i) }));
+  const addSeg = () =>
+    setForm(f => ({ ...f, segments: [...f.segments, { jp: '', furigana: '', vi: '' }] }));
+
+  const updateItem = (key, i, field, val) =>
+    setForm(f => ({ ...f, [key]: f[key].map((it, idx) => idx === i ? { ...it, [field]: val } : it) }));
+  const removeItem = (key, i) =>
+    setForm(f => ({ ...f, [key]: f[key].filter((_, idx) => idx !== i) }));
+  const addItem = (key, empty) =>
+    setForm(f => ({ ...f, [key]: [...f[key], empty] }));
+  const updateOption = (i, j, val) =>
+    setForm(f => ({
+      ...f,
+      questions: f.questions.map((q, idx) =>
+        idx === i ? { ...q, options: q.options.map((o, oIdx) => oIdx === j ? val : o) } : q),
+    }));
+  const updateOptionVi = (i, j, val) =>
+    setForm(f => ({
+      ...f,
+      questions: f.questions.map((q, idx) => {
+        if (idx !== i) return q;
+        const options_vi = Array.isArray(q.options_vi) ? [...q.options_vi] : ['', '', '', ''];
+        options_vi[j] = val;
+        return { ...q, options_vi };
+      }),
+    }));
 
   const goBack = () => {
     if (lesson?.course_id) navigate(`${apiBase}/courses/${lesson.course_id}/edit`);
     else navigate(`${apiBase}/courses`);
   };
-
-  // ── Render preview ──────────────────────────────────────────────────────────
-
-  const PreviewPane = () => (
-    <div className="p-6 overflow-y-auto" style={{ minHeight: tab === 'split' ? '60vh' : '65vh' }}>
-      {content || imageUrl ? (
-        <>
-          {/* Lesson header preview */}
-          <div className="mb-6 pb-4 border-b border-outline/10">
-            <div className="flex items-center gap-2 mb-2">
-              <span className="px-3 py-1 bg-primary/10 text-primary rounded-full text-xs font-semibold">
-                {lesson?.level ? `${lesson.level} Reading` : 'Reading Lesson'}
-              </span>
-            </div>
-            <h1 className="text-lg font-bold text-on-surface">{lesson?.title}</h1>
-            {lesson?.title_ja && <p className="text-sm text-on-muted">{lesson.title_ja}</p>}
-          </div>
-
-          {/* Image */}
-          {imageUrl && (
-            <img
-              src={imageUrl}
-              alt="Ảnh bài đọc"
-              className="w-full rounded-xl mb-6 object-cover max-h-60 border border-outline/10"
-              onError={e => { e.target.style.display = 'none'; }}
-            />
-          )}
-
-          {/* Text with furigana */}
-          <div
-            className="prose prose-sm max-w-none text-on-surface leading-loose text-[16px]"
-            style={{ fontFamily: "'Noto Sans JP', 'Plus Jakarta Sans', sans-serif", lineHeight: 2.2 }}
-            dangerouslySetInnerHTML={{ __html: `<p class="mb-4">${renderPreview(content)}</p>` }}
-          />
-        </>
-      ) : (
-        <div className="flex flex-col items-center justify-center h-full text-on-muted text-center py-16">
-          <span className="material-symbols-outlined text-5xl mb-3 opacity-20">description</span>
-          <p className="text-sm">Bắt đầu soạn thảo để xem trước nội dung</p>
-        </div>
-      )}
-    </div>
-  );
-
-  // ── Loading state ───────────────────────────────────────────────────────────
 
   if (loading) {
     return (
@@ -218,7 +284,10 @@ export default function AdminLessonReading() {
               Đã lưu
             </span>
           )}
-          <span className="text-xs text-on-muted hidden sm:block">Ctrl+S để lưu nhanh</span>
+          <Button variant="secondary" onClick={() => navigate(`${apiBase}/lessons/${lessonId}/reading-view`)}>
+            <span className="material-symbols-outlined text-[18px]">visibility</span>
+            Xem như học viên
+          </Button>
           <button
             onClick={handleSave}
             disabled={saving}
@@ -232,167 +301,37 @@ export default function AdminLessonReading() {
 
       <LessonInfoPanel lesson={lesson} apiBase={apiBase} onSaved={u => setLesson(l => ({ ...l, ...u }))} />
 
-      {/* Image URL */}
-      <div className="mb-4 flex items-center gap-3 bg-white rounded-2xl border border-outline/20 px-4 py-3 shadow-sm">
-        <span className="material-symbols-outlined text-on-muted text-xl shrink-0">image</span>
-        <div className="flex-1">
-          <label className="block text-xs font-medium text-on-muted mb-0.5">URL hình ảnh (không bắt buộc)</label>
-          <input
-            type="url"
-            value={imageUrl}
-            onChange={e => setImageUrl(e.target.value)}
-            placeholder="https://... hoặc để trống"
-            className="w-full text-sm outline-none text-on-surface bg-transparent placeholder:text-on-muted/40"
-          />
-        </div>
-        {imageUrl && (
-          <img
-            src={imageUrl}
-            alt=""
-            className="w-12 h-12 rounded-xl object-cover border border-outline/20 shrink-0"
-            onError={e => { e.target.style.display = 'none'; }}
-          />
-        )}
+      {/* Editor cấu trúc dùng chung với trang Luyện đọc */}
+      <div className="bg-white rounded-2xl border border-outline/20 shadow-sm p-5">
+        <ReadingForm
+          form={form}
+          onChange={setForm}
+          onGenerate={handleGenerate}
+          generating={generating}
+          onSegmentManual={handleSegmentManual}
+          segmenting={segmenting}
+          onParseFile={handleParseFile}
+          parsingFile={parsingFile}
+          onCompose={handleCompose}
+          composing={composing}
+          onGenQuestions={handleGenQuestions}
+          genQuiz={genQuiz}
+          onGenVocabGrammar={handleGenVocabGrammar}
+          genVocab={genVocab}
+          onUpload={handleUpload}
+          uploading={uploading}
+          updateSeg={updateSeg}
+          removeSeg={removeSeg}
+          addSeg={addSeg}
+          updateItem={updateItem}
+          removeItem={removeItem}
+          addItem={addItem}
+          updateOption={updateOption}
+          updateOptionVi={updateOptionVi}
+          hidePublish
+          hideTitles
+        />
       </div>
-
-      {/* Furigana toolbar button */}
-      <div className="mb-3 flex items-center gap-2">
-        <span className="text-xs text-on-muted font-medium">Công cụ:</span>
-        <button
-          onClick={() => setFuriModal(true)}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-outline/30 text-xs text-on-muted hover:border-tsubaki-red/50 hover:text-tsubaki-red transition-colors"
-        >
-          <span className="material-symbols-outlined text-sm">translate</span>
-          Thêm Furigana
-        </button>
-        <span className="text-xs text-on-muted/60 ml-1">
-          Hoặc gõ trực tiếp: <code className="bg-surface-container px-1 rounded font-mono">&lt;ruby&gt;漢字&lt;rt&gt;かんじ&lt;/rt&gt;&lt;/ruby&gt;</code>
-        </span>
-      </div>
-
-      {/* Editor area */}
-      <div className="bg-white rounded-2xl border border-outline/20 shadow-sm overflow-hidden">
-        {/* Tabs */}
-        <div className="flex items-center justify-between border-b border-outline/20 px-4 py-2 bg-surface-stone/30">
-          <div className="flex gap-1">
-            {[
-              { id: 'edit',    icon: 'edit',        label: 'Soạn thảo' },
-              { id: 'split',   icon: 'view_column', label: 'Split view' },
-              { id: 'preview', icon: 'visibility',  label: 'Xem trước' },
-            ].map(t => (
-              <button
-                key={t.id} onClick={() => setTab(t.id)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors
-                  ${tab === t.id ? 'bg-tsubaki-red/10 text-tsubaki-red' : 'text-on-muted hover:bg-surface-container-low'}`}
-              >
-                <span className="material-symbols-outlined text-base">{t.icon}</span>
-                {t.label}
-              </button>
-            ))}
-          </div>
-
-          {tab !== 'preview' && (
-            <div className="flex gap-0.5">
-              {TOOLBAR.map(btn => (
-                <button
-                  key={btn.icon} onClick={btn.action} title={btn.title}
-                  className="p-1.5 text-on-muted hover:text-tsubaki-red hover:bg-tsubaki-red/10 rounded-lg transition-colors"
-                >
-                  <span className="material-symbols-outlined text-[18px]">{btn.icon}</span>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Panels */}
-        <div className={tab === 'split' ? 'grid grid-cols-2 divide-x divide-outline/20' : ''}>
-          {/* Editor */}
-          {tab !== 'preview' && (
-            <div className="relative">
-              <textarea
-                ref={textareaRef}
-                value={content}
-                onChange={e => setContent(e.target.value)}
-                placeholder={'## Kintsugi: Vẻ đẹp của sự không hoàn hảo\n\n<ruby>金継<rt>きんつ</rt></ruby>ぎは、<ruby>壊<rt>こわ</rt></ruby>れた<ruby>陶磁器<rt>とうじき</rt></ruby>を...\n\n---\n\n> Viết nội dung bài đọc với furigana HTML hoặc dùng nút "Thêm Furigana" ở trên.'}
-                className="w-full p-5 text-sm font-mono text-on-surface outline-none resize-none leading-relaxed"
-                style={{ minHeight: tab === 'split' ? '60vh' : '65vh' }}
-              />
-              {content && (
-                <div className="absolute bottom-3 right-4 text-xs text-on-muted opacity-50">
-                  {content.length} ký tự
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Preview */}
-          {tab !== 'edit' && <PreviewPane />}
-        </div>
-      </div>
-
-      {/* Furigana helper */}
-      <div className="mt-4 p-4 bg-white/60 rounded-xl border border-outline/20">
-        <p className="text-xs font-bold text-on-muted uppercase tracking-wider mb-2">Cú pháp Furigana</p>
-        <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs text-on-muted">
-          <span><code className="bg-surface-container px-1 py-0.5 rounded font-mono text-tsubaki-red">&lt;ruby&gt;漢字&lt;rt&gt;かんじ&lt;/rt&gt;&lt;/ruby&gt;</code> → Furigana cơ bản</span>
-          <span><code className="bg-surface-container px-1 py-0.5 rounded font-mono text-tsubaki-red">**chữ**</code> → <strong>In đậm</strong></span>
-          <span><code className="bg-surface-container px-1 py-0.5 rounded font-mono text-tsubaki-red">*chữ*</code> → <em>In nghiêng</em></span>
-          <span><code className="bg-surface-container px-1 py-0.5 rounded font-mono text-tsubaki-red">&gt; văn bản</code> → Trích dẫn</span>
-          <span><code className="bg-surface-container px-1 py-0.5 rounded font-mono text-tsubaki-red">---</code> → Đường kẻ</span>
-        </div>
-      </div>
-
-      {/* Furigana Insert Modal */}
-      {furiModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl">
-            <h3 className="font-bold text-on-surface mb-4 flex items-center gap-2">
-              <span className="material-symbols-outlined text-tsubaki-red">translate</span>
-              Thêm Furigana
-            </h3>
-            <div className="space-y-3 mb-5">
-              <div>
-                <label className="block text-sm font-medium text-on-muted mb-1">Chữ Kanji / Kana</label>
-                <input
-                  autoFocus
-                  value={furiForm.kanji}
-                  onChange={e => setFuriForm(f => ({ ...f, kanji: e.target.value }))}
-                  placeholder="例: 漢字"
-                  className="w-full px-4 py-3 border border-outline rounded-xl text-lg outline-none focus:border-tsubaki-red transition-colors"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-on-muted mb-1">Cách đọc (Furigana)</label>
-                <input
-                  value={furiForm.reading}
-                  onChange={e => setFuriForm(f => ({ ...f, reading: e.target.value }))}
-                  onKeyDown={e => e.key === 'Enter' && insertFurigana()}
-                  placeholder="例: かんじ"
-                  className="w-full px-4 py-3 border border-outline rounded-xl text-lg outline-none focus:border-tsubaki-red transition-colors"
-                />
-              </div>
-            </div>
-            {furiForm.kanji && furiForm.reading && (
-              <div className="mb-4 p-3 bg-surface-stone rounded-xl text-center">
-                <ruby className="text-xl">{furiForm.kanji}<rt className="text-xs text-tsubaki-red">{furiForm.reading}</rt></ruby>
-              </div>
-            )}
-            <div className="flex gap-2">
-              <button onClick={() => setFuriModal(false)} className="flex-1 py-2.5 border border-outline rounded-xl text-sm font-medium text-on-muted hover:bg-surface-low transition-colors">
-                Hủy
-              </button>
-              <button
-                onClick={insertFurigana}
-                disabled={!furiForm.kanji.trim() || !furiForm.reading.trim()}
-                className="flex-1 py-2.5 bg-tsubaki-red text-white rounded-xl text-sm font-medium hover:shadow-md active:scale-95 transition-all disabled:opacity-50"
-              >
-                Chèn vào văn bản
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </Layout>
   );
 }

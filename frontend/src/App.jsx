@@ -34,6 +34,7 @@ import Quiz         from './pages/student/Quiz';
 import Dictionary   from './pages/student/Dictionary';
 import ReadingList   from './pages/student/ReadingList';
 import ReadingReader from './pages/student/ReadingReader';
+import LessonReadingView from './pages/student/LessonReadingView';
 import Exams        from './pages/student/Exams';
 import TakeExam     from './pages/student/TakeExam';
 import MockExamList    from './pages/student/MockExamList';
@@ -56,6 +57,7 @@ import TeacherDashboard  from './pages/teacher/TeacherDashboard';
 import TeacherCourses    from './pages/teacher/TeacherCourses';
 import TeacherCoursePreview from './pages/teacher/TeacherCoursePreview';
 import TeacherLessonPreview from './pages/teacher/TeacherLessonPreview';
+import TeacherLessonReadingView from './pages/teacher/TeacherLessonReadingView';
 import TeacherQuizPreview from './pages/teacher/TeacherQuizPreview';
 import TeacherCourseContent from './pages/teacher/TeacherCourseContent';
 import UnitEditPage      from './pages/shared/UnitEditPage';
@@ -76,6 +78,7 @@ import AdminUsers      from './pages/admin/AdminUsers';
 import AdminCourses    from './pages/admin/AdminCourses';
 import AdminCoursePreview from './pages/admin/AdminCoursePreview';
 import AdminLessonPreview from './pages/admin/AdminLessonPreview';
+import AdminLessonReadingView from './pages/admin/AdminLessonReadingView';
 import AdminQuizPreview from './pages/admin/AdminQuizPreview';
 import AdminVocabulary from './pages/admin/AdminVocabulary';
 import AdminKanji      from './pages/admin/AdminKanji';
@@ -140,6 +143,7 @@ export default function App() {
             <Route path="/courses"    element={<StudentRoute allowAdmin><Courses /></StudentRoute>} />
             <Route path="/courses/:id" element={<StudentRoute adminRedirectTo="/admin/courses/preview/:id"><CourseDetail /></StudentRoute>} />
             <Route path="/lessons/:id" element={<StudentRoute adminRedirectTo="/admin/lessons/preview/:id" teacherRedirectTo="/teacher/lessons/preview/:id"><LessonView /></StudentRoute>} />
+            <Route path="/lessons/:id/reading" element={<StudentRoute adminRedirectTo="/admin/lessons/:id/reading-view" teacherRedirectTo="/teacher/lessons/:id/reading-view"><LessonReadingView /></StudentRoute>} />
             <Route path="/lessons/:lessonId/grammar/:itemId" element={<StudentRoute allowAdmin><LessonGrammarItemDetail /></StudentRoute>} />
             <Route path="/vocabulary" element={<StudentRoute><Vocabulary /></StudentRoute>} />
             <Route path="/grammar"    element={<StudentRoute><Grammar /></StudentRoute>} />
@@ -184,6 +188,7 @@ export default function App() {
             <Route path="/teacher/courses" element={<TeacherRoute><TeacherCourses /></TeacherRoute>} />
             <Route path="/teacher/courses/preview/:id" element={<TeacherRoute><TeacherCoursePreview /></TeacherRoute>} />
             <Route path="/teacher/lessons/preview/:id" element={<TeacherRoute><TeacherLessonPreview /></TeacherRoute>} />
+            <Route path="/teacher/lessons/:id/reading-view" element={<TeacherRoute><TeacherLessonReadingView /></TeacherRoute>} />
             <Route path="/teacher/quizzes/preview/:id" element={<TeacherRoute><TeacherQuizPreview /></TeacherRoute>} />
             <Route path="/teacher/courses/:courseId/edit" element={<TeacherRoute><TeacherCourseContent /></TeacherRoute>} />
             <Route path="/teacher/courses/:courseId/units/:unitId/edit" element={<TeacherRoute><UnitEditPage /></TeacherRoute>} />
@@ -212,6 +217,7 @@ export default function App() {
             <Route path="/admin/courses"     element={<AdminRoute><AdminCourses /></AdminRoute>} />
             <Route path="/admin/courses/preview/:id" element={<AdminRoute><AdminCoursePreview /></AdminRoute>} />
             <Route path="/admin/lessons/preview/:id" element={<AdminRoute><AdminLessonPreview /></AdminRoute>} />
+            <Route path="/admin/lessons/:id/reading-view" element={<AdminRoute><AdminLessonReadingView /></AdminRoute>} />
             <Route path="/admin/quizzes/preview/:id" element={<AdminRoute><AdminQuizPreview /></AdminRoute>} />
             <Route path="/admin/vocabulary"   element={<AdminRoute><AdminVocabulary /></AdminRoute>} />
             <Route path="/admin/study-lists" element={<AdminRoute><AdminStudyLists /></AdminRoute>} />

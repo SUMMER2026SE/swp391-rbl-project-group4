@@ -16,17 +16,3 @@ export function renderMarkdown(text) {
     .replace(/\n\n/g, '</p><p class="mb-3">')
     .replace(/\n/g, '<br/>');
 }
-
-// For reading lessons — allows <ruby> tags, converts markdown
-export function renderReadingText(text) {
-  if (!text) return '';
-  return text
-    .replace(/^#{3}\s+(.+)$/gm, '<h3 class="text-base font-bold text-tsubaki-red mt-4 mb-1">$1</h3>')
-    .replace(/^#{2}\s+(.+)$/gm, '<h2 class="text-lg font-bold text-on-surface mt-5 mb-2">$1</h2>')
-    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-    .replace(/\*(.+?)\*/g, '<em>$1</em>')
-    .replace(/^---$/gm, '<hr class="border-outline/20 my-4"/>')
-    .replace(/^>\s+(.+)$/gm, '<blockquote class="border-l-4 border-tsubaki-red/40 pl-4 my-2 text-on-muted italic">$1</blockquote>')
-    .replace(/\n\n/g, '</p><p class="mb-4">')
-    .replace(/\n/g, '<br/>');
-}

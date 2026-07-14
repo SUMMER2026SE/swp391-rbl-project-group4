@@ -10,22 +10,8 @@ import VocabWordViewer from '../../components/shared/VocabWordViewer';
 import GrammarItemCard from '../../components/shared/GrammarItemCard';
 import api from '../../lib/api';
 import { downloadWorksheetPDF } from '../../lib/kanjiWorksheet';
-import { renderMarkdown, renderReadingText } from '../../lib/renderPreview';
+import { renderMarkdown } from '../../lib/renderPreview';
 
-// Reading lưu trong `content` dạng JSON { text, imageUrl } (hoặc chuỗi thuần — legacy).
-function getReadingHtml(content) {
-  if (!content) return '';
-  try {
-    const parsed = JSON.parse(content);
-    return `<p class="mb-4">${renderReadingText(parsed.text || '')}</p>`;
-  } catch {
-    return `<p class="mb-4">${renderReadingText(content)}</p>`;
-  }
-}
-function getReadingImage(content) {
-  if (!content) return null;
-  try { return JSON.parse(content).imageUrl || null; } catch { return null; }
-}
 function toEmbed(url) {
   if (!url) return null;
   const yt = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([\w-]{11})/);
@@ -59,6 +45,8 @@ export default function LessonView({ Layout = StudentLayout, previewBase = '' })
   const lessonPath = (lid) => previewBase ? `${previewBase}/lessons/preview/${lid}` : `/lessons/${lid}`;
   const coursePath = (cid) => previewBase ? `${previewBase}/courses/preview/${cid}` : `/courses/${cid}`;
   const quizPath   = (qid) => previewBase ? `${previewBase}/quizzes/preview/${qid}` : `/quizzes/${qid}`;
+  // Bài đọc của Mục mở bằng ReadingReader; preview admin/teacher giữ nguyên layout riêng
+  const readingPath = (lid) => previewBase ? `${previewBase}/lessons/${lid}/reading-view` : `/lessons/${lid}/reading`;
   const [lesson, setLesson]   = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState('');
@@ -127,7 +115,6 @@ export default function LessonView({ Layout = StudentLayout, previewBase = '' })
   );
 
   const nav = lesson.nav || {};
-  const readingImage = getReadingImage(lesson.content);
   const embed = toEmbed(lesson.content_url);
 
   // Bộ luyện viết chỉ gồm đúng các kanji của bài học (map `character` → `char` cho worksheet).
@@ -364,8 +351,8 @@ export default function LessonView({ Layout = StudentLayout, previewBase = '' })
           </div>
         )}
 
-        {/* ── Reading — chỉ mục loại "reading" mới có khối Bài đọc ────── */}
-        {lesson.lesson_type === 'reading' && lesson.content && (
+        {/* ── Reading — mở trải nghiệm đọc đầy đủ (ReadingReader) qua route riêng ── */}
+        {lesson.lesson_type === 'reading' && (
           <div className="glass-card rounded-2xl overflow-hidden mb-6">
             <div className="p-5 border-b border-outline/30">
               <h2 className="font-display font-bold text-lg flex items-center gap-2">
@@ -373,9 +360,22 @@ export default function LessonView({ Layout = StudentLayout, previewBase = '' })
               </h2>
             </div>
             <div className="p-6">
-              {readingImage && <img src={readingImage} alt="" className="w-full rounded-xl mb-5 object-cover max-h-72" />}
-              <div className="prose prose-sm max-w-none text-on-surface leading-relaxed"
-                dangerouslySetInnerHTML={{ __html: getReadingHtml(lesson.content) }} />
+              {lesson.reading_article_id ? (
+                <div className="flex items-center justify-between gap-4 flex-wrap">
+                  <p className="text-sm text-on-muted">
+                    Đọc bài với furigana, bản dịch từng câu, tra từ nhanh, quiz đọc hiểu và từ vựng/ngữ pháp trong bài.
+                  </p>
+                  <Link
+                    to={readingPath(id)}
+                    className="inline-flex items-center gap-2 bg-tsubaki-red text-white px-5 py-2.5 rounded-xl font-semibold text-sm hover:bg-primary transition-colors shadow-md shadow-tsubaki-red/20 shrink-0"
+                  >
+                    <span className="material-symbols-outlined text-lg">auto_stories</span>
+                    Đọc bài
+                  </Link>
+                </div>
+              ) : (
+                <p className="text-sm text-on-muted italic">Mục này chưa có bài đọc.</p>
+              )}
             </div>
           </div>
         )}
