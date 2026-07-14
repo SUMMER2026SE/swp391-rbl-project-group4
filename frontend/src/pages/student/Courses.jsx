@@ -4,7 +4,7 @@ import StudentLayout from '../../components/layout/StudentLayout';
 import CourseCard, { CourseCardSkeleton } from '../../components/ui/CourseCard';
 import api from '../../lib/api';
 
-const LEVELS = ['N5', 'N4', 'N3', 'N2', 'N1'];
+const LEVELS = ['N5', 'N4', 'N3', 'N2', 'N1', 'Business'];
 const SORTS = [
   { value: 'newest',  label: 'Mới nhất' },
   { value: 'popular', label: 'Nhiều học viên' },
@@ -20,7 +20,7 @@ const LIMIT = 9;
 
 export default function Courses() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const difficulty = searchParams.get('difficulty') || '';
+  const level      = searchParams.get('level')      || '';
   const isFree     = searchParams.get('is_free')    || '';
   const sort       = searchParams.get('sort')       || 'newest';
   const q          = searchParams.get('search')     || '';
@@ -50,16 +50,16 @@ export default function Courses() {
     setError('');
     const params = new URLSearchParams({ page, limit: LIMIT, sort });
     if (q)          params.set('search', q);
-    if (difficulty) params.set('difficulty', difficulty);
+    if (level)      params.set('level', level);
     if (isFree)     params.set('is_free', isFree);
     api.get(`/courses?${params}`)
       .then(r => { setCourses(r.data.data || []); setTotal(r.data.total || 0); })
       .catch(e => setError(e.message))
       .finally(() => setLoading(false));
-  }, [page, sort, q, difficulty, isFree]);
+  }, [page, sort, q, level, isFree]);
 
   const totalPages = Math.ceil(total / LIMIT);
-  const hasFilters = difficulty || isFree || q;
+  const hasFilters = level || isFree || q;
 
   return (
     <StudentLayout title="Khóa học">
@@ -116,9 +116,9 @@ export default function Courses() {
         {/* Difficulty chips */}
         <div className="flex flex-wrap gap-2.5">
           <button
-            onClick={() => setParam({ difficulty: '' })}
+            onClick={() => setParam({ level: '' })}
             className={`px-4 py-2 rounded-full text-sm font-semibold transition-all ${
-              !difficulty
+              !level
                 ? 'bg-tsubaki-red text-white shadow-md shadow-tsubaki-red/20'
                 : 'bg-white border border-outline-variant text-charcoal-text hover:border-tsubaki-red hover:text-tsubaki-red'
             }`}
@@ -128,14 +128,14 @@ export default function Courses() {
           {LEVELS.map(l => (
             <button
               key={l}
-              onClick={() => setParam({ difficulty: l })}
+              onClick={() => setParam({ level: l })}
               className={`px-4 py-2 rounded-full text-sm font-semibold transition-all ${
-                difficulty === l
+                level === l
                   ? 'bg-tsubaki-red text-white shadow-md shadow-tsubaki-red/20'
                   : 'bg-white border border-outline-variant text-charcoal-text hover:border-tsubaki-red hover:text-tsubaki-red'
               }`}
             >
-              JLPT {l}
+              {l === 'Business' ? 'Business' : `JLPT ${l}`}
             </button>
           ))}
         </div>

@@ -5,6 +5,7 @@ import Alert from '../../components/ui/Alert';
 import Button from '../../components/ui/Button';
 import Modal from '../../components/ui/Modal';
 import FuriganaText from '../../components/ui/FuriganaText';
+import FuriganaToggle from '../../components/ui/FuriganaToggle';
 import WorksheetPreview from '../../components/kanji/WorksheetPreview';
 import VocabWordViewer from '../../components/shared/VocabWordViewer';
 import GrammarItemCard from '../../components/shared/GrammarItemCard';
@@ -116,6 +117,8 @@ export default function LessonView({ Layout = StudentLayout, previewBase = '' })
 
   const nav = lesson.nav || {};
   const embed = toEmbed(lesson.content_url);
+  // Nút furigana chỉ có nghĩa với mục nhiều văn bản tiếng Nhật dài cần đọc.
+  const showFuriganaToggle = ['reading', 'grammar', 'kanji'].includes(lesson.lesson_type);
 
   // Bộ luyện viết chỉ gồm đúng các kanji của bài học (map `character` → `char` cho worksheet).
   const worksheetList = (lesson.kanji || []).map(k => ({
@@ -278,14 +281,9 @@ export default function LessonView({ Layout = StudentLayout, previewBase = '' })
                   <span className="material-symbols-outlined text-base">check_circle</span> Đã hoàn thành
                 </span>
               )}
-              <button
-                type="button"
-                onClick={() => setFurigana(v => !v)}
-                title={furigana ? 'Ẩn furigana' : 'Hiển thị furigana'}
-                className={`inline-flex items-center gap-1 text-[11px] px-2.5 py-1.5 rounded-lg border font-medium transition-all select-none ${furigana ? 'bg-amber-100 border-amber-300 text-amber-700' : 'bg-white border-outline/60 text-on-muted hover:border-amber-300 hover:text-amber-600 hover:bg-amber-50'}`}>
-                <span className="font-bold" style={{ fontFamily: 'serif', fontSize: '13px' }}>あ</span>
-                ふりがな
-              </button>
+              {showFuriganaToggle && (
+                <FuriganaToggle active={furigana} onToggle={() => setFurigana(v => !v)} />
+              )}
             </div>
           </div>
           {lesson.title_ja && (
