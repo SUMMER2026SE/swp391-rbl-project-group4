@@ -429,11 +429,14 @@ export default function TeacherStudyLists() {
       </div>
 
       {loading ? (
-        <div className="glass-card rounded-2xl p-8 text-center text-on-muted animate-pulse">Đang tải...</div>
+        <div className="flex items-center justify-center py-24">
+          <span className="material-symbols-outlined animate-spin text-tsubaki-red text-5xl">progress_activity</span>
+        </div>
       ) : items.length === 0 ? (
-        <div className="glass-card rounded-2xl p-12 text-center">
-          <span className="material-symbols-outlined text-5xl text-on-muted/20 block mb-3">library_books</span>
-          <p className="text-on-muted">Bạn chưa tạo bài đăng nào cho mục này.</p>
+        <div className="flex flex-col items-center justify-center py-24 text-on-muted text-center">
+          <span className="material-symbols-outlined text-6xl mb-4 opacity-25">library_books</span>
+          <p className="text-lg font-semibold text-charcoal mb-1">Bạn chưa tạo bài đăng nào cho mục này</p>
+          <p className="text-sm">Bấm "Tạo bài đăng" để bắt đầu</p>
         </div>
       ) : (
         <div className="glass-card rounded-2xl overflow-hidden divide-y divide-outline/40">
@@ -451,7 +454,14 @@ export default function TeacherStudyLists() {
 
                   {/* Info */}
                   <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-charcoal text-sm truncate">{post.title}</p>
+                    <p className="font-semibold text-charcoal text-sm truncate flex items-center gap-1.5">
+                      {post.title}
+                      {post.is_locked && (
+                        <span title={post.lock_note ? `Quản trị viên yêu cầu sửa: ${post.lock_note}` : 'Quản trị viên đã khóa bài đăng này'} className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-red-100 text-error text-[10px] font-bold shrink-0">
+                          <span className="material-symbols-outlined text-[12px]">lock</span>CẦN SỬA
+                        </span>
+                      )}
+                    </p>
                     <div className="flex flex-wrap items-center gap-2 mt-1">
                       {post.level && <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${LEVEL_BADGE[post.level]}`}>{post.level}</span>}
                       {post.topic && <span className="px-2 py-0.5 rounded-full text-xs bg-slate-100 text-slate-600">{post.topic}</span>}
@@ -460,6 +470,9 @@ export default function TeacherStudyLists() {
                         <span className="material-symbols-outlined text-[14px]">visibility</span>{post.view_count}
                       </span>
                     </div>
+                    {post.is_locked && post.lock_note && (
+                      <p className="text-xs text-error truncate mt-1">Lý do: {post.lock_note}</p>
+                    )}
                   </div>
 
                   {/* Actions — stopPropagation để không toggle accordion */}

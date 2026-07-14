@@ -29,8 +29,10 @@ exports.list = async (req, res) => {
     if (level) query = query.eq('level', level);
     if (topic) query = query.eq('topic', topic);
 
-    // mine=true — chỉ giáo viên/admin xem bài đăng của chính mình (trang quản lý)
+    // mine=true — chỉ giáo viên/admin xem bài đăng của chính mình (trang quản lý,
+    // vẫn thấy cả bài bị khóa để sửa theo yêu cầu). Duyệt công khai thì ẩn bài bị khóa.
     if (mine === 'true' && req.user) query = query.eq('created_by', req.user.id);
+    else query = query.eq('is_locked', false);
 
     const safe = search ? String(search).replace(/[,()%*]/g, ' ').trim() : '';
     if (safe) query = query.or(`title.ilike.%${safe}%,description.ilike.%${safe}%`);
@@ -72,6 +74,10 @@ exports.getOne = async (req, res) => {
   try {
     const { data: post, error } = await supabaseAdmin.from('study_list_posts').select('*').eq('id', req.params.id).single();
     if (error || !post) return res.status(404).json({ error: 'Không tìm thấy.' });
+
+    // Bài bị khóa (admin ẩn để yêu cầu sửa) — chỉ chủ bài và admin xem được.
+    const isOwnerOrAdmin = req.user && (req.user.id === post.created_by || req.user.user_metadata?.role === 'admin');
+    if (post.is_locked && !isOwnerOrAdmin) return res.status(404).json({ error: 'Không tìm thấy.' });
 
     const { data: itemRows } = await supabaseAdmin.from('study_list_items')
       .select('item_id,sort_order').eq('post_id', post.id).order('sort_order', { ascending: true });

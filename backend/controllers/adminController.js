@@ -804,6 +804,24 @@ exports.adminListStudyLists = async (req, res) => {
   }
 };
 
+// Khóa/mở bài đăng — khóa thì ẩn khỏi học sinh (giáo viên vẫn sửa được để khắc
+// phục), kèm ghi chú lý do; mở lại thì hiện lại bình thường.
+// PUT /api/admin/study-lists/:id/lock  { locked: boolean, note?: string }
+exports.lockStudyList = async (req, res) => {
+  const { locked, note } = req.body;
+  try {
+    const { data, error } = await supabaseAdmin.from('study_list_posts')
+      .update({ is_locked: !!locked, lock_note: locked ? (note || null) : null })
+      .eq('id', req.params.id).select().single();
+    if (error) throw error;
+    if (!data) return res.status(404).json({ error: 'Không tìm thấy.' });
+    res.json(data);
+  } catch (err) {
+    console.error('admin.lockStudyList:', err);
+    res.status(500).json({ error: 'Không thể cập nhật trạng thái khóa.' });
+  }
+};
+
 // ── Kanji Import ──────────────────────────────────────────────────────────────
 exports.importKanji = async (req, res) => {
   const rows = req.body;
