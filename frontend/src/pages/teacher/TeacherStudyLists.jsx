@@ -32,8 +32,6 @@ const LEVEL_BADGE = {
   N1: 'bg-red-100 text-red-700',
 };
 
-// Bản xem trước bài đăng — cập nhật theo thời gian thực khi giáo viên gõ form,
-// dùng đúng giao diện thẻ bài đăng thật (StudyListPreview) để không bị lệch.
 function PostPreviewCard({ type, form, base }) {
   const post = {
     title: form.title || '(Chưa có tiêu đề)',
@@ -45,9 +43,9 @@ function PostPreviewCard({ type, form, base }) {
   };
   const headerIcon = post.topic ? (TOPIC_ICONS[post.topic] || TYPE_ICON[type]) : TYPE_ICON[type];
   return (
-    <div className="rounded-2xl overflow-hidden glass-card border border-outline/30 w-56">
-      <div className={`h-24 flex items-center justify-center ${LEVEL_BG[post.level] || 'bg-gradient-to-br from-slate-400 to-slate-600'}`}>
-        <span className="material-symbols-outlined text-4xl text-white/90">{headerIcon}</span>
+    <div className="rounded-2xl overflow-hidden glass-card border border-outline/30 w-56 shadow-lg">
+      <div className={`h-28 flex items-center justify-center ${LEVEL_BG[post.level] || 'bg-gradient-to-br from-slate-400 to-slate-600'}`}>
+        <span className="material-symbols-outlined text-5xl text-white/90">{headerIcon}</span>
       </div>
       <div className="p-4">
         <h3 className="font-semibold text-charcoal text-sm line-clamp-2 mb-2 min-h-[2.5rem]">{post.title}</h3>
@@ -69,8 +67,6 @@ function PostPreviewCard({ type, form, base }) {
   );
 }
 
-// Xem trước có thể sửa trực tiếp — dùng khi sửa bài đăng từ vựng đã có sẵn từ:
-// duyệt qua từng từ, sửa kanji/cách đọc/nghĩa/ảnh ngay trên thẻ, lưu khi rời ô.
 function VocabPreviewEditor({ items, idx, setIdx, onItemSaved }) {
   const item = items[idx];
   const [kanji, setKanji]     = useState(item.kanji || '');
@@ -180,7 +176,7 @@ function VocabImageEdit({ item, onUpdated }) {
   );
 }
 
-function ItemPickerModal({ open, onClose, post, listType, onChanged }) {
+function ItemPickerContent({ post, listType, onChanged }) {
   const [detail, setDetail]     = useState(null);
   const [search, setSearch]     = useState('');
   const [results, setResults]   = useState([]);
@@ -193,7 +189,12 @@ function ItemPickerModal({ open, onClose, post, listType, onChanged }) {
     setDetail(r.data);
   }, [post]);
 
-  useEffect(() => { if (open) { loadDetail(); setSearch(''); setResults([]); setAlert(''); } }, [open, loadDetail]);
+  useEffect(() => {
+    loadDetail();
+    setSearch('');
+    setResults([]);
+    setAlert('');
+  }, [loadDetail]);
 
   const runSearch = async (e) => {
     e.preventDefault();
@@ -222,7 +223,6 @@ function ItemPickerModal({ open, onClose, post, listType, onChanged }) {
 
   return (
     <>
-    <Modal open={open} onClose={onClose} title={`Quản lý mục — ${post?.title || ''}`} size="lg">
       <div className="space-y-4">
         {alert && <Alert type="error" onClose={() => setAlert('')}>{alert}</Alert>}
 
@@ -275,20 +275,18 @@ function ItemPickerModal({ open, onClose, post, listType, onChanged }) {
           )}
         </div>
       </div>
-    </Modal>
 
-    <ImportFileModal
-      open={importOpen}
-      onClose={() => setImportOpen(false)}
-      type={TYPE_TO_IMPORT[listType]}
-      studyListId={post?.id}
-      onImported={async (msg) => {
-        await loadDetail();
-        onChanged();
-        setImportOpen(false);
-        setAlert('');
-      }}
-    />
+      <ImportFileModal
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        type={TYPE_TO_IMPORT[listType]}
+        studyListId={post?.id}
+        onImported={async () => {
+          await loadDetail();
+          onChanged();
+          setImportOpen(false);
+        }}
+      />
     </>
   );
 }
@@ -299,15 +297,26 @@ export default function TeacherStudyLists() {
   const [loading, setLoading] = useState(true);
   const [alert, setAlert]     = useState({ type: '', msg: '' });
 
-  const [modal, setModal]   = useState(false);
-  const [form, setForm]     = useState({ title: '', description: '', level: '', topic: '' });
-  const [editId, setEditId] = useState(null);
+  // Modal — chỉ dùng cho tạo mới
+  const [modal, setModal]     = useState(false);
+  const [editTab, setEditTab] = useState('info');
+  const [form, setForm]       = useState({ title: '', description: '', level: '', topic: '' });
+  const [editId, setEditId]   = useState(null);
+  const [editPost, setEditPost] = useState(null);
   const [previewBase, setPreviewBase]   = useState(null);
   const [previewItems, setPreviewItems] = useState([]);
   const [previewIdx, setPreviewIdx]     = useState(0);
   const [saving, setSaving] = useState(false);
 
-  const [pickerPost, setPickerPost] = useState(null);
+  // Accordion — dùng cho chỉnh sửa
+  const [expandedId, setExpandedId]         = useState(null);
+  const [accTab, setAccTab]                 = useState('info');
+  const [accForm, setAccForm]               = useState({ title: '', description: '', level: '', topic: '' });
+  const [accPost, setAccPost]               = useState(null);
+  const [accPreviewBase, setAccPreviewBase] = useState(null);
+  const [accPreviewItems, setAccPreviewItems] = useState([]);
+  const [accPreviewIdx, setAccPreviewIdx]   = useState(0);
+  const [accSaving, setAccSaving]           = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -320,23 +329,13 @@ export default function TeacherStudyLists() {
 
   useEffect(() => { load(); }, [load]);
 
+  /* ── Tạo mới (modal) ── */
   const openCreate = () => {
+    setExpandedId(null);
     setForm({ title: '', description: '', level: '', topic: '' });
-    setEditId(null); setPreviewBase(null); setPreviewItems([]); setPreviewIdx(0);
+    setEditId(null); setEditPost(null); setPreviewBase(null); setPreviewItems([]); setPreviewIdx(0);
+    setEditTab('info');
     setModal(true);
-  };
-  const openEdit = async (post) => {
-    setForm({ title: post.title, description: post.description || '', level: post.level || '', topic: post.topic || '' });
-    setEditId(post.id); setPreviewBase(post); setPreviewIdx(0);
-    setModal(true);
-    if (type === 'vocabulary') {
-      try {
-        const r = await api.get(`/study-lists/${post.id}`);
-        setPreviewItems(r.data.items || []);
-      } catch { setPreviewItems([]); }
-    } else {
-      setPreviewItems([]);
-    }
   };
 
   const handlePreviewItemSaved = (itemId, patch) => {
@@ -352,20 +351,57 @@ export default function TeacherStudyLists() {
     }
     setSaving(true);
     try {
-      if (editId) {
-        await api.put(`/study-lists/${editId}`, { title: form.title, description: form.description, level: form.level || null, topic: form.topic || null });
-        setModal(false);
-        await load();
-      } else {
-        const r = await api.post('/study-lists', { list_type: type, title: form.title, description: form.description, level: form.level || null, topic: form.topic || null });
-        setModal(false);
-        await load();
-        setPickerPost(r.data);
-      }
+      const r = await api.post('/study-lists', { list_type: type, title: form.title, description: form.description, level: form.level || null, topic: form.topic || null });
+      setEditId(r.data.id);
+      setEditPost(r.data);
+      setPreviewBase(r.data);
+      setEditTab('items');
+      await load();
     } catch (e) { setAlert({ type: 'error', msg: e.message }); }
     finally { setSaving(false); }
   };
 
+  /* ── Chỉnh sửa (accordion) ── */
+  const toggleAccordion = async (post) => {
+    if (expandedId === post.id) { setExpandedId(null); return; }
+    setModal(false);
+    setExpandedId(post.id);
+    setAccForm({ title: post.title, description: post.description || '', level: post.level || '', topic: post.topic || '' });
+    setAccPost(post);
+    setAccPreviewBase(post);
+    setAccTab('info');
+    setAccPreviewIdx(0);
+    if (type === 'vocabulary') {
+      try {
+        const r = await api.get(`/study-lists/${post.id}`);
+        setAccPreviewItems(r.data.items || []);
+      } catch { setAccPreviewItems([]); }
+    } else {
+      setAccPreviewItems([]);
+    }
+  };
+
+  const handleAccPreviewItemSaved = (itemId, patch) => {
+    setAccPreviewItems(prev => prev.map(it => it.id === itemId ? { ...it, ...patch } : it));
+  };
+
+  const handleAccSave = async () => {
+    if (!accForm.title.trim()) return setAlert({ type: 'error', msg: 'Tiêu đề là bắt buộc.' });
+    if (type === 'vocabulary') {
+      if (!accForm.topic) return setAlert({ type: 'error', msg: 'Vui lòng chọn chủ đề.' });
+    } else if (!accForm.level) {
+      return setAlert({ type: 'error', msg: 'Vui lòng chọn cấp độ.' });
+    }
+    setAccSaving(true);
+    try {
+      await api.put(`/study-lists/${accPost.id}`, { title: accForm.title, description: accForm.description, level: accForm.level || null, topic: accForm.topic || null });
+      setExpandedId(null);
+      await load();
+    } catch (e) { setAlert({ type: 'error', msg: e.message }); }
+    finally { setAccSaving(false); }
+  };
+
+  /* ── Xoá ── */
   const handleDelete = async (post) => {
     if (!confirm(`Xóa bài đăng "${post.title}"?`)) return;
     try { await api.delete(`/study-lists/${post.id}`); load(); }
@@ -380,7 +416,7 @@ export default function TeacherStudyLists() {
         <h1 className="font-display text-2xl font-bold">Bài đăng danh sách</h1>
         <div className="flex rounded-xl border border-outline overflow-hidden text-sm font-medium">
           {TYPES.map(([key, icon, label]) => (
-            <button key={key} onClick={() => setType(key)}
+            <button key={key} onClick={() => { setType(key); setExpandedId(null); }}
               className={`flex items-center gap-2 px-5 py-2.5 transition-colors ${type === key ? 'bg-tsubaki-red text-white' : 'bg-surface-low text-on-muted hover:bg-surface'}`}>
               <span className="material-symbols-outlined text-lg">{icon}</span>{label}
             </button>
@@ -400,92 +436,195 @@ export default function TeacherStudyLists() {
           <p className="text-on-muted">Bạn chưa tạo bài đăng nào cho mục này.</p>
         </div>
       ) : (
-        <div className="glass-card rounded-2xl overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-surface-low border-b border-outline/40">
-                <tr>{['Tiêu đề', 'Cấp độ', 'Chủ đề', 'Số mục', 'Lượt xem', ''].map(h =>
-                  <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-on-muted uppercase tracking-wide">{h}</th>)}</tr>
-              </thead>
-              <tbody>
-                {items.map((post, i) => (
-                  <tr key={post.id} className={`border-t border-outline/40 ${i % 2 === 1 ? 'bg-surface-low/30' : ''}`}>
-                    <td className="px-4 py-2.5 font-medium">{post.title}</td>
-                    <td className="px-4 py-2.5">{post.level || '—'}</td>
-                    <td className="px-4 py-2.5">{post.topic || '—'}</td>
-                    <td className="px-4 py-2.5">{post.item_count}</td>
-                    <td className="px-4 py-2.5">{post.view_count}</td>
-                    <td className="px-4 py-2.5">
-                      <div className="flex gap-1.5 justify-end">
-                        <Link to={`/study-lists/${type}/${post.id}`} title="Xem trang"
-                          className="p-1.5 rounded-lg text-on-muted hover:text-tsubaki-red hover:bg-tsubaki-red/10 transition-colors">
-                          <span className="material-symbols-outlined text-lg">visibility</span>
-                        </Link>
-                        <button onClick={() => openEdit(post)} title="Sửa"
-                          className="p-1.5 rounded-lg text-on-muted hover:text-tsubaki-red hover:bg-tsubaki-red/10 transition-colors">
-                          <span className="material-symbols-outlined text-lg">edit</span>
+        <div className="glass-card rounded-2xl overflow-hidden divide-y divide-outline/40">
+          {items.map(post => {
+            const isOpen = expandedId === post.id;
+            return (
+              <div key={post.id}>
+                {/* ── Accordion header ── */}
+                <div
+                  onClick={() => toggleAccordion(post)}
+                  className={`flex items-center gap-4 px-5 py-4 cursor-pointer select-none transition-colors ${isOpen ? 'bg-tsubaki-red/5' : 'hover:bg-surface-low/50'}`}
+                >
+                  {/* Level color bar */}
+                  <div className={`w-1 h-11 rounded-full shrink-0 ${LEVEL_BG[post.level] || 'bg-gradient-to-b from-slate-300 to-slate-400'}`} />
+
+                  {/* Info */}
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold text-charcoal text-sm truncate">{post.title}</p>
+                    <div className="flex flex-wrap items-center gap-2 mt-1">
+                      {post.level && <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${LEVEL_BADGE[post.level]}`}>{post.level}</span>}
+                      {post.topic && <span className="px-2 py-0.5 rounded-full text-xs bg-slate-100 text-slate-600">{post.topic}</span>}
+                      <span className="text-xs text-on-muted">{post.item_count} {ITEM_UNIT[type]}</span>
+                      <span className="flex items-center gap-0.5 text-xs text-on-muted">
+                        <span className="material-symbols-outlined text-[14px]">visibility</span>{post.view_count}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Actions — stopPropagation để không toggle accordion */}
+                  <div className="flex items-center gap-1 shrink-0" onClick={e => e.stopPropagation()}>
+                    <Link to={`/study-lists/${type}/${post.id}`} title="Xem trang"
+                      className="p-1.5 rounded-lg text-on-muted hover:text-tsubaki-red hover:bg-tsubaki-red/10 transition-colors">
+                      <span className="material-symbols-outlined text-lg">visibility</span>
+                    </Link>
+                    <button onClick={() => handleDelete(post)} title="Xóa"
+                      className="p-1.5 rounded-lg text-on-muted hover:text-red-500 hover:bg-red-50 transition-colors">
+                      <span className="material-symbols-outlined text-lg">delete</span>
+                    </button>
+                  </div>
+
+                  {/* Chevron */}
+                  <span className={`material-symbols-outlined text-on-muted shrink-0 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}>
+                    expand_more
+                  </span>
+                </div>
+
+                {/* ── Accordion body ── */}
+                {isOpen && (
+                  <div className="border-t border-outline/40 bg-surface-low/20 px-6 py-5">
+                    {/* Tabs */}
+                    <div className="flex border-b border-outline/40 mb-5">
+                      {[['info', 'Thông tin'], ['items', 'Quản lý mục']].map(([tab, label]) => (
+                        <button key={tab} onClick={() => setAccTab(tab)}
+                          className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${accTab === tab ? 'border-tsubaki-red text-tsubaki-red' : 'border-transparent text-on-muted hover:text-charcoal'}`}>
+                          {label}
                         </button>
-                        <button onClick={() => setPickerPost(post)} title="Quản lý mục"
-                          className="p-1.5 rounded-lg text-on-muted hover:text-tsubaki-red hover:bg-tsubaki-red/10 transition-colors">
-                          <span className="material-symbols-outlined text-lg">list</span>
-                        </button>
-                        <button onClick={() => handleDelete(post)} title="Xóa"
-                          className="p-1.5 rounded-lg text-on-muted hover:text-red-500 hover:bg-red-50 transition-colors">
-                          <span className="material-symbols-outlined text-lg">delete</span>
-                        </button>
+                      ))}
+                    </div>
+
+                    {/* Tab: Thông tin */}
+                    {accTab === 'info' && (
+                      <div className="flex flex-col sm:flex-row gap-6">
+                        <div className="flex-1 space-y-4 min-w-0">
+                          <Input label="Tiêu đề *" value={accForm.title} onChange={e => setAccForm({ ...accForm, title: e.target.value })}
+                            placeholder='vd "Kanji thường gặp trong đề JLPT N4"' />
+                          <div className="flex flex-col gap-4">
+                            <div className={type === 'vocabulary' ? 'order-2' : 'order-1'}>
+                              <label className="block text-sm font-medium text-on-muted mb-1">Cấp độ{type === 'vocabulary' ? '' : ' *'}</label>
+                              <select value={accForm.level} onChange={e => setAccForm({ ...accForm, level: e.target.value })}
+                                className="w-full px-4 py-3 bg-white border border-outline rounded-xl text-sm outline-none focus:border-tsubaki-red">
+                                <option value="">-- Chọn cấp độ --</option>
+                                {LEVELS.map(l => <option key={l} value={l}>{l}</option>)}
+                              </select>
+                              {type === 'vocabulary' && (
+                                <p className="text-xs text-on-muted mt-1">Không bắt buộc — 1 chủ đề thường có từ ở nhiều cấp độ, cấp độ sẽ lọc bên trong khi xem từng từ.</p>
+                              )}
+                            </div>
+                            <div className={type === 'vocabulary' ? 'order-1' : 'order-2'}>
+                              <label className="block text-sm font-medium text-on-muted mb-1">Chủ đề{type === 'vocabulary' ? ' *' : ''}</label>
+                              <select value={accForm.topic} onChange={e => setAccForm({ ...accForm, topic: e.target.value })}
+                                className="w-full px-4 py-3 bg-white border border-outline rounded-xl text-sm outline-none focus:border-tsubaki-red">
+                                <option value="">-- Không chọn --</option>
+                                {TOPICS.map(t => <option key={t} value={t}>{t}</option>)}
+                              </select>
+                            </div>
+                          </div>
+                          <Input label="Mô tả" value={accForm.description} onChange={e => setAccForm({ ...accForm, description: e.target.value })} />
+                        </div>
+                        <div className="shrink-0 sm:w-80 sm:pl-6 sm:border-l border-outline/30 flex flex-col">
+                          <p className="text-xs font-semibold text-on-muted uppercase tracking-wide mb-4">
+                            {type === 'vocabulary' && accPreviewItems.length > 0 ? 'Xem trước — sửa trực tiếp từng từ' : 'Xem trước'}
+                          </p>
+                          {type === 'vocabulary' && accPreviewItems.length > 0 ? (
+                            <VocabPreviewEditor items={accPreviewItems} idx={accPreviewIdx} setIdx={setAccPreviewIdx} onItemSaved={handleAccPreviewItemSaved} />
+                          ) : (
+                            <div className="flex justify-center">
+                              <PostPreviewCard type={type} form={accForm} base={accPreviewBase} />
+                            </div>
+                          )}
+                          {!(type === 'vocabulary' && accPreviewItems.length > 0) && (
+                            <p className="text-xs text-on-muted/60 text-center mt-3">Cập nhật theo thời gian thực</p>
+                          )}
+                        </div>
                       </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                    )}
+
+                    {/* Tab: Quản lý mục */}
+                    {accTab === 'items' && accPost && (
+                      <ItemPickerContent post={accPost} listType={type} onChanged={load} />
+                    )}
+
+                    {/* Footer */}
+                    <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-outline/20">
+                      {accTab === 'info' ? (
+                        <>
+                          <Button variant="secondary" onClick={() => setExpandedId(null)}>Huỷ</Button>
+                          <Button loading={accSaving} onClick={handleAccSave}>Lưu</Button>
+                        </>
+                      ) : (
+                        <Button variant="secondary" onClick={() => setExpandedId(null)}>Đóng</Button>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
 
-      <Modal open={modal} onClose={() => setModal(false)} title={editId ? 'Sửa bài đăng' : 'Tạo bài đăng'} size="xl"
-        footer={<><Button variant="secondary" onClick={() => setModal(false)}>Huỷ</Button><Button loading={saving} onClick={handleSave}>{editId ? 'Lưu' : 'Tạo'}</Button></>}>
-        <div className="flex flex-col sm:flex-row gap-6">
-          <div className="flex-1 space-y-4 min-w-0">
-            <Input label="Tiêu đề *" value={form.title} onChange={e => setForm({ ...form, title: e.target.value })}
-              placeholder='vd "Kanji thường gặp trong đề JLPT N4"' />
-            <div className="flex flex-col gap-4">
-              <div className={type === 'vocabulary' ? 'order-2' : 'order-1'}>
-                <label className="block text-sm font-medium text-on-muted mb-1">Cấp độ{type === 'vocabulary' ? '' : ' *'}</label>
-                <select value={form.level} onChange={e => setForm({ ...form, level: e.target.value })}
-                  className="w-full px-4 py-3 bg-white border border-outline rounded-xl text-sm outline-none focus:border-tsubaki-red">
-                  <option value="">-- Chọn cấp độ --</option>
-                  {LEVELS.map(l => <option key={l} value={l}>{l}</option>)}
-                </select>
-                {type === 'vocabulary' && (
-                  <p className="text-xs text-on-muted mt-1">Không bắt buộc — 1 chủ đề thường có từ ở nhiều cấp độ, cấp độ sẽ lọc bên trong khi xem từng từ.</p>
-                )}
-              </div>
-              <div className={type === 'vocabulary' ? 'order-1' : 'order-2'}>
-                <label className="block text-sm font-medium text-on-muted mb-1">Chủ đề{type === 'vocabulary' ? ' *' : ''}</label>
-                <select value={form.topic} onChange={e => setForm({ ...form, topic: e.target.value })}
-                  className="w-full px-4 py-3 bg-white border border-outline rounded-xl text-sm outline-none focus:border-tsubaki-red">
-                  <option value="">-- Không chọn --</option>
-                  {TOPICS.map(t => <option key={t} value={t}>{t}</option>)}
-                </select>
-              </div>
-            </div>
-            <Input label="Mô tả" value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} />
-          </div>
-          <div className="shrink-0 sm:w-96 sm:pl-6 sm:border-l border-outline/30">
-            <p className="text-xs font-semibold text-on-muted uppercase tracking-wide mb-2">
-              {type === 'vocabulary' && previewItems.length > 0 ? 'Xem trước — sửa trực tiếp từng từ' : 'Xem trước'}
-            </p>
-            {type === 'vocabulary' && previewItems.length > 0 ? (
-              <VocabPreviewEditor items={previewItems} idx={previewIdx} setIdx={setPreviewIdx} onItemSaved={handlePreviewItemSaved} />
-            ) : (
-              <PostPreviewCard type={type} form={form} base={previewBase} />
-            )}
-          </div>
-        </div>
-      </Modal>
+      {/* ── Modal tạo mới ── */}
+      <Modal open={modal} onClose={() => setModal(false)} title="Tạo bài đăng" size="xl"
+        footer={
+          editTab === 'items'
+            ? <Button variant="secondary" onClick={() => setModal(false)}>Đóng</Button>
+            : <><Button variant="secondary" onClick={() => setModal(false)}>Huỷ</Button><Button loading={saving} onClick={handleSave}>Tạo</Button></>
+        }>
 
-      <ItemPickerModal open={!!pickerPost} onClose={() => { setPickerPost(null); load(); }} post={pickerPost} listType={type} onChanged={load} />
+        {editId && (
+          <div className="flex border-b border-outline/40 mb-5">
+            {[['info', 'Thông tin'], ['items', 'Quản lý mục']].map(([tab, label]) => (
+              <button key={tab} onClick={() => setEditTab(tab)}
+                className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${editTab === tab ? 'border-tsubaki-red text-tsubaki-red' : 'border-transparent text-on-muted hover:text-charcoal'}`}>
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {editTab === 'info' && (
+          <div className="flex flex-col sm:flex-row gap-6">
+            <div className="flex-1 space-y-4 min-w-0">
+              <Input label="Tiêu đề *" value={form.title} onChange={e => setForm({ ...form, title: e.target.value })}
+                placeholder='vd "Kanji thường gặp trong đề JLPT N4"' />
+              <div className="flex flex-col gap-4">
+                <div className={type === 'vocabulary' ? 'order-2' : 'order-1'}>
+                  <label className="block text-sm font-medium text-on-muted mb-1">Cấp độ{type === 'vocabulary' ? '' : ' *'}</label>
+                  <select value={form.level} onChange={e => setForm({ ...form, level: e.target.value })}
+                    className="w-full px-4 py-3 bg-white border border-outline rounded-xl text-sm outline-none focus:border-tsubaki-red">
+                    <option value="">-- Chọn cấp độ --</option>
+                    {LEVELS.map(l => <option key={l} value={l}>{l}</option>)}
+                  </select>
+                  {type === 'vocabulary' && (
+                    <p className="text-xs text-on-muted mt-1">Không bắt buộc — 1 chủ đề thường có từ ở nhiều cấp độ, cấp độ sẽ lọc bên trong khi xem từng từ.</p>
+                  )}
+                </div>
+                <div className={type === 'vocabulary' ? 'order-1' : 'order-2'}>
+                  <label className="block text-sm font-medium text-on-muted mb-1">Chủ đề{type === 'vocabulary' ? ' *' : ''}</label>
+                  <select value={form.topic} onChange={e => setForm({ ...form, topic: e.target.value })}
+                    className="w-full px-4 py-3 bg-white border border-outline rounded-xl text-sm outline-none focus:border-tsubaki-red">
+                    <option value="">-- Không chọn --</option>
+                    {TOPICS.map(t => <option key={t} value={t}>{t}</option>)}
+                  </select>
+                </div>
+              </div>
+              <Input label="Mô tả" value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} />
+            </div>
+            <div className="shrink-0 sm:w-80 sm:pl-6 sm:border-l border-outline/30 flex flex-col">
+              <p className="text-xs font-semibold text-on-muted uppercase tracking-wide mb-4">Xem trước</p>
+              <div className="flex justify-center">
+                <PostPreviewCard type={type} form={form} base={previewBase} />
+              </div>
+              <p className="text-xs text-on-muted/60 text-center mt-3">Cập nhật theo thời gian thực</p>
+            </div>
+          </div>
+        )}
+
+        {editTab === 'items' && editPost && (
+          <ItemPickerContent post={editPost} listType={type} onChanged={load} />
+        )}
+      </Modal>
     </TeacherLayout>
   );
 }
