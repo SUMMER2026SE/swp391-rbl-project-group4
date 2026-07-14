@@ -3,6 +3,15 @@
 
 export const JLPT_LEVELS = ['N5', 'N4', 'N3', 'N2', 'N1'];
 
+// Class badge tô màu theo cấp (dễ phân biệt trong bảng lịch sử)
+export const LEVEL_BADGE_CLASS = {
+  N5: 'bg-green-100 text-green-700',
+  N4: 'bg-sky-100 text-sky-700',
+  N3: 'bg-amber-100 text-amber-700',
+  N2: 'bg-orange-100 text-orange-700',
+  N1: 'bg-rose-100 text-rose-700',
+};
+
 export const PASS_TOTAL = { N1: 100, N2: 90, N3: 95, N4: 90, N5: 80 };
 
 // Nhãn cột chấm điểm

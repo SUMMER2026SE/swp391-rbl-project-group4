@@ -1,7 +1,7 @@
 'use strict';
 
 const { supabaseAdmin } = require('../config/supabase');
-const { computeJlptScores, SCORE_COLUMNS, PASS_TOTAL, MONDAI_TYPES } = require('../utils/jlptMock');
+const { computeJlptScores, SCORE_COLUMNS, PASS_TOTAL } = require('../utils/jlptMock');
 const { getUserTier } = require('../services/quotaService');
 
 // Grace 10s cho độ trễ mạng khi auto-submit lúc hết giờ
@@ -533,62 +533,4 @@ exports.getHistory = async (req, res) => {
       ...a, level: examMap[a.exam_id]?.level || null, exam_title: examMap[a.exam_id]?.title || '(đã xóa)',
     })));
   } catch (err) { handleError(res, err, 'Không thể tải lịch sử.'); }
-};
-
-// GET /api/mock-exams/me/stats — điểm theo thời gian + mạnh/yếu theo mondai_type
-exports.getStats = async (req, res) => {
-  try {
-    // Chuỗi điểm theo thời gian
-    const { data: attempts } = await supabaseAdmin.from('mock_attempts')
-      .select('id, exam_id, scores, total_score, submitted_at')
-      .eq('user_id', req.user.id).eq('status', 'submitted')
-      .order('submitted_at', { ascending: true });
-
-    const examIds = [...new Set((attempts || []).map(a => a.exam_id))];
-    let examMap = {};
-    if (examIds.length) {
-      const { data: exams } = await supabaseAdmin.from('mock_exams').select('id, level').in('id', examIds);
-      (exams || []).forEach(e => { examMap[e.id] = e; });
-    }
-    const timeline = (attempts || []).map(a => ({
-      submitted_at: a.submitted_at, level: examMap[a.exam_id]?.level || null,
-      total_score: a.total_score, scores: a.scores,
-    }));
-
-    // Mạnh/yếu theo mondai_type (join answers → questions → groups)
-    const attemptIds = (attempts || []).map(a => a.id);
-    let byMondai = [];
-    if (attemptIds.length) {
-      const { data: answers } = await supabaseAdmin.from('mock_attempt_answers')
-        .select('question_id, is_correct').in('attempt_id', attemptIds);
-      const questionIds = [...new Set((answers || []).map(a => a.question_id))];
-      if (questionIds.length) {
-        const { data: questions } = await supabaseAdmin.from('mock_questions').select('id, group_id').in('id', questionIds);
-        const qToGroup = {};
-        (questions || []).forEach(q => { qToGroup[q.id] = q.group_id; });
-        const groupIds = [...new Set(Object.values(qToGroup))];
-        const { data: groups } = await supabaseAdmin.from('mock_question_groups').select('id, mondai_type').in('id', groupIds);
-        const groupToType = {};
-        (groups || []).forEach(g => { groupToType[g.id] = g.mondai_type; });
-
-        const agg = {};
-        (answers || []).forEach(a => {
-          const type = groupToType[qToGroup[a.question_id]];
-          if (!type) return;
-          (agg[type] ||= { correct: 0, total: 0 });
-          agg[type].total += 1;
-          if (a.is_correct) agg[type].correct += 1;
-        });
-        byMondai = Object.entries(agg).map(([mondai_type, v]) => ({
-          mondai_type,
-          ja: MONDAI_TYPES[mondai_type]?.ja || mondai_type,
-          vi: MONDAI_TYPES[mondai_type]?.vi || mondai_type,
-          correct: v.correct, total: v.total,
-          pct: Math.round((v.correct / v.total) * 100),
-        })).sort((a, b) => a.pct - b.pct);
-      }
-    }
-
-    res.json({ timeline, by_mondai: byMondai });
-  } catch (err) { handleError(res, err, 'Không thể tải thống kê.'); }
 };

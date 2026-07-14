@@ -51,7 +51,7 @@ export default function LeaderboardTable({ board, myRank }) {
   return (
     <div className="space-y-4">
       <Alert type="info">
-        Bảng xếp hạng chỉ tính <b>lần thi đầu tiên</b> của mỗi người — điểm cao xếp trước, cùng điểm thì ai làm nhanh hơn xếp trên.
+        Bảng xếp hạng chỉ tính <b>lần thi đầu tiên</b> của mỗi người.
       </Alert>
 
       {/* Bục vinh danh top 3: hạng 2 trái — hạng 1 giữa — hạng 3 phải */}

@@ -9,7 +9,6 @@ router.use(requireAuth);
 
 // Cố định trước các route động /:id để "me"/"attempts" không bị nuốt thành id
 router.get('/me/history', c.getHistory);
-router.get('/me/stats',   c.getStats);
 
 router.get('/attempts/:attemptId/current', c.getCurrent);
 router.put('/attempts/:attemptId/answers', c.saveAnswers);

@@ -36,6 +36,12 @@ export default function MockExamCertificate({ result, userName }) {
 
   return (
     <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <h2 className="font-display font-bold text-charcoal">Phiếu báo điểm</h2>
+        <Button variant="secondary" onClick={handleDownload} loading={downloading}>
+          <span className="material-symbols-outlined text-lg">download</span> Tải ảnh (PNG)
+        </Button>
+      </div>
       <div className="overflow-x-auto">
         {/* Vùng chụp PNG */}
         <div ref={certRef} className="bg-white p-2 min-w-[560px]">
@@ -104,12 +110,6 @@ export default function MockExamCertificate({ result, userName }) {
             </div>
           </div>
         </div>
-      </div>
-
-      <div className="flex justify-end">
-        <Button variant="secondary" onClick={handleDownload} loading={downloading}>
-          <span className="material-symbols-outlined text-lg">download</span> Tải ảnh (PNG)
-        </Button>
       </div>
     </div>
   );

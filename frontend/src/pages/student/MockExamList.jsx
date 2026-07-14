@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import StudentLayout from '../../components/layout/StudentLayout';
 import Alert from '../../components/ui/Alert';
 import { JLPT_LEVELS } from '../../lib/mockExamConstants';
@@ -10,7 +10,7 @@ export default function MockExamList() {
   const [exams, setExams] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [level, setLevel] = useState('');
+  const [level, setLevel] = useState('N5');
 
   useEffect(() => {
     setLoading(true);
@@ -23,20 +23,22 @@ export default function MockExamList() {
   return (
     <StudentLayout title="Thi thử JLPT">
       <div className="space-y-5">
-        <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-start justify-between gap-3">
           <div>
             <h1 className="font-display text-2xl font-bold text-charcoal">Thi thử JLPT</h1>
             <p className="text-sm text-on-muted mt-1">Đề mô phỏng kỳ thi thật: tính giờ từng phần, chấm điểm, xem lại & bảng xếp hạng.</p>
           </div>
-          <Link to="/mock-exams/history" className="text-sm font-semibold text-tsubaki-red flex items-center gap-1 hover:underline">
-            <span className="material-symbols-outlined text-lg">bar_chart</span> Lịch sử & thống kê
-          </Link>
+          {/* Lối vào lịch sử — nút nhỏ góc phải */}
+          <button onClick={() => navigate('/mock-exams/history')}
+            className="shrink-0 inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-outline/40 text-sm font-semibold text-on-muted hover:border-tsubaki-red/50 hover:text-tsubaki-red transition-all">
+            <span className="material-symbols-outlined text-lg">history</span>
+            <span className="hidden sm:inline">Lịch sử bài làm</span>
+          </button>
         </div>
 
         {error && <Alert type="error" onClose={() => setError('')}>{error}</Alert>}
 
         <div className="flex items-center gap-2">
-          <button onClick={() => setLevel('')} className={`px-3 py-1.5 rounded-lg text-sm font-semibold ${!level ? 'bg-tsubaki-red text-white' : 'bg-surface-low text-on-muted hover:bg-outline/30'}`}>Tất cả</button>
           {JLPT_LEVELS.map(lv => (
             <button key={lv} onClick={() => setLevel(lv)} className={`px-3 py-1.5 rounded-lg text-sm font-semibold ${level === lv ? 'bg-tsubaki-red text-white' : 'bg-surface-low text-on-muted hover:bg-outline/30'}`}>{lv}</button>
           ))}
@@ -50,34 +52,42 @@ export default function MockExamList() {
             Chưa có đề thi thử nào{level && ` cấp ${level}`}.
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
             {exams.map(e => (
-              <button key={e.id} onClick={() => navigate(`/mock-exams/${e.id}`)}
-                className="text-left bg-white border border-outline/40 rounded-2xl p-5 hover:border-tsubaki-red/50 hover:shadow-md transition-all">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-1.5">
-                    <span className="inline-flex px-2.5 py-1 rounded-lg bg-sumire-purple/10 text-sumire-purple font-bold text-sm">{e.level}</span>
-                    {e.locked && (
-                      <span className="inline-flex items-center gap-0.5 px-2 py-1 rounded-lg bg-amber-50 text-amber-700 font-semibold text-xs">
-                        <span className="material-symbols-outlined text-sm">workspace_premium</span>Premium
-                      </span>
-                    )}
-                  </div>
-                  {e.active_attempt_id && <span className="text-xs font-semibold text-amber-600 flex items-center gap-1"><span className="material-symbols-outlined text-sm">hourglass_top</span>Đang làm dở</span>}
+              <div key={e.id} role="button" tabIndex={0} onClick={() => navigate(`/mock-exams/${e.id}`)}
+                className="text-left bg-white border border-outline/40 rounded-2xl p-4 hover:border-tsubaki-red/50 hover:shadow-md transition-all cursor-pointer">
+                {/* Tên đề + badge Miễn phí/Mở khóa ngang hàng */}
+                <div className="flex items-center justify-between gap-2">
+                  <h3 className="font-display font-bold text-charcoal truncate flex-1">{e.title}</h3>
+                  {e.locked ? (
+                    <button
+                      onClick={(ev) => { ev.stopPropagation(); navigate('/subscription'); }}
+                      className="shrink-0 inline-flex items-center gap-0.5 px-2 py-0.5 rounded-lg bg-amber-500 text-white font-semibold text-[11px] hover:bg-amber-600 transition-colors">
+                      <span className="material-symbols-outlined text-sm">lock</span>Mở khóa
+                    </button>
+                  ) : (
+                    <span className="shrink-0 inline-flex items-center gap-0.5 px-2 py-0.5 rounded-lg bg-green-100 text-green-700 font-semibold text-[11px]">
+                      <span className="material-symbols-outlined text-sm">lock_open</span>Miễn phí
+                    </span>
+                  )}
                 </div>
-                <h3 className="font-display font-bold text-charcoal mb-3 line-clamp-2">{e.title}</h3>
-                <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-on-muted">
+                {e.active_attempt_id && (
+                  <span className="mt-1 text-[11px] font-semibold text-amber-600 flex items-center gap-1"><span className="material-symbols-outlined text-sm">hourglass_top</span>Đang làm dở</span>
+                )}
+                <div className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-on-muted mt-2">
                   <span className="flex items-center gap-1"><span className="material-symbols-outlined text-sm">timer</span>{e.total_minutes} phút</span>
                   <span className="flex items-center gap-1"><span className="material-symbols-outlined text-sm">quiz</span>{e.question_count} câu</span>
                   <span className="flex items-center gap-1"><span className="material-symbols-outlined text-sm">group</span>{e.attempt_count} lượt</span>
                 </div>
-                {e.best_score != null && (
-                  <p className="text-xs text-green-700 font-semibold mt-2">Điểm cao nhất của bạn: {e.best_score}/180</p>
+                {e.best_score != null ? (
+                  <p className="text-[11px] text-green-700 font-semibold mt-2">Điểm cao nhất của bạn: {e.best_score}/180</p>
+                ) : (
+                  <p className="text-[11px] text-on-muted mt-2">Đề này bạn chưa làm lần nào</p>
                 )}
                 {e.locked && e.best_score != null && !e.active_attempt_id && (
-                  <p className="text-xs text-amber-700 mt-1">Chỉ xem lại được kết quả — nâng cấp Premium để làm lại.</p>
+                  <p className="text-[11px] text-amber-700 mt-1">Chỉ xem lại được kết quả — nâng cấp Premium để làm lại.</p>
                 )}
-              </button>
+              </div>
             ))}
           </div>
         )}

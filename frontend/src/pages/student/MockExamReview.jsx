@@ -14,7 +14,6 @@ export default function MockExamReview() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [furigana, setFurigana] = useState(false);
   const [openTranscript, setOpenTranscript] = useState({});
 
   useEffect(() => {
@@ -34,13 +33,9 @@ export default function MockExamReview() {
     <StudentLayout title="Xem lại bài làm">
       <div className="max-w-5xl mx-auto grid grid-cols-1 lg:grid-cols-[1fr_200px] gap-5">
       <div className="space-y-5 min-w-0">
-        <div className="flex items-center justify-between gap-3">
-          <button onClick={() => navigate(`/mock-exams/attempt/${attemptId}/result`)} className="text-sm text-on-muted hover:text-tsubaki-red flex items-center gap-1">
-            <span className="material-symbols-outlined text-lg">arrow_back</span> Kết quả
-          </button>
-          <button onClick={() => setFurigana(f => !f)}
-            className={`text-xs px-2.5 py-1.5 rounded-lg border font-semibold ${furigana ? 'bg-amber-100 border-amber-300 text-amber-700' : 'border-outline text-on-muted'}`}>あ</button>
-        </div>
+        <button onClick={() => navigate(`/mock-exams/attempt/${attemptId}/result`)} className="text-sm text-on-muted hover:text-tsubaki-red flex items-center gap-1">
+          <span className="material-symbols-outlined text-lg">arrow_back</span> Kết quả
+        </button>
 
         {data.sections.map(section => (
           <div key={section.id} className="space-y-3">
@@ -57,7 +52,7 @@ export default function MockExamReview() {
                 )}
                 {group.passage_text && (
                   <div className="bg-surface-low border border-outline/30 rounded-xl p-3 text-sm leading-relaxed whitespace-pre-wrap">
-                    <FuriganaText text={group.passage_text} enabled={furigana} block />
+                    <FuriganaText text={group.passage_text} enabled={false} block />
                   </div>
                 )}
                 {group.audio_url && <AudioPlayer src={group.audio_url} label={`問題${group.mondai_number} — Audio`} />}
@@ -77,7 +72,7 @@ export default function MockExamReview() {
                         <span className={`w-6 h-6 shrink-0 rounded-full text-white text-xs font-bold flex items-center justify-center ${q.is_correct ? 'bg-green-500' : 'bg-error'}`}>{q.is_correct ? '✓' : '✕'}</span>
                         <div className="flex-1 text-sm font-medium text-charcoal">
                           <span className="text-on-muted mr-1">{num}.</span>
-                          {q.question_text ? <FuriganaText text={q.question_text} enabled={furigana} /> : <span className="text-on-muted italic">Câu nghe</span>}
+                          {q.question_text ? <FuriganaText text={q.question_text} enabled={false} /> : <span className="text-on-muted italic">Câu nghe</span>}
                         </div>
                       </div>
                       {q.audio_url && <div className="mb-2"><AudioPlayer src={q.audio_url} label={`Câu ${num}`} /></div>}
@@ -89,7 +84,7 @@ export default function MockExamReview() {
                             <div key={idx} className={`px-3 py-2 rounded-lg border text-sm flex items-center gap-2 ${
                               isCorrect ? 'border-green-400 bg-green-100/60' : isPicked ? 'border-error/50 bg-error-bg/40' : 'border-outline/40'}`}>
                               <span className={`w-5 h-5 shrink-0 rounded-full text-[11px] font-bold flex items-center justify-center border ${isCorrect ? 'bg-green-500 border-green-500 text-white' : isPicked ? 'bg-error border-error text-white' : 'border-outline text-on-muted'}`}>{idx + 1}</span>
-                              <FuriganaText text={opt} enabled={furigana} />
+                              <FuriganaText text={opt} enabled={false} />
                               {isCorrect && <span className="ml-auto text-xs text-green-700 font-semibold">Đáp án đúng</span>}
                               {isPicked && !isCorrect && <span className="ml-auto text-xs text-error font-semibold">Bạn chọn</span>}
                             </div>
@@ -107,23 +102,35 @@ export default function MockExamReview() {
         ))}
       </div>
 
-      {/* Nav grid: bấm nhanh đến câu — xanh = đúng, đỏ = sai/chưa trả lời */}
+      {/* Nav grid: bấm nhanh đến câu — chia theo phần thi, xanh = đúng, đỏ = sai/chưa trả lời */}
       <aside className="hidden lg:block">
-        <div className="sticky top-20 bg-white border border-outline/40 rounded-xl p-3">
-          <p className="text-xs font-semibold text-on-muted mb-2">Đúng {correctCount}/{allQuestions.length}</p>
-          <div className="grid grid-cols-5 gap-1.5">
-            {allQuestions.map((q, i) => (
-              <button key={q.id}
-                onClick={() => document.getElementById(`q-${q.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })}
-                title={q.is_correct ? 'Đúng' : 'Sai / chưa trả lời'}
-                className={`aspect-square rounded text-xs font-bold flex items-center justify-center text-white hover:opacity-80 transition-opacity ${q.is_correct ? 'bg-green-500' : 'bg-error'}`}>
-                {i + 1}
-              </button>
-            ))}
-          </div>
-          <div className="flex items-center gap-3 mt-3 text-[11px] text-on-muted">
-            <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-green-500 inline-block" />Đúng</span>
-            <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-error inline-block" />Sai</span>
+        <div className="sticky top-20 bg-white border border-outline/40 rounded-xl p-3 space-y-3">
+          <p className="text-xs font-semibold text-on-muted">Đúng {correctCount}/{allQuestions.length}</p>
+          {data.sections.map(section => {
+            const secQuestions = section.groups.flatMap(g => g.questions);
+            if (!secQuestions.length) return null;
+            const start = numById[secQuestions[0].id];
+            const end = numById[secQuestions[secQuestions.length - 1].id];
+            return (
+              <div key={section.id}>
+                <p className="text-[11px] font-semibold text-charcoal truncate">{sectionDisplay(section)}</p>
+                <p className="text-[10px] text-on-muted mb-1.5">Câu {start}–{end}</p>
+                <div className="grid grid-cols-5 gap-1.5">
+                  {secQuestions.map(q => (
+                    <button key={q.id}
+                      onClick={() => document.getElementById(`q-${q.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })}
+                      title={q.is_correct ? 'Đúng' : 'Sai / chưa trả lời'}
+                      className={`aspect-square rounded text-xs font-bold flex items-center justify-center text-white hover:opacity-80 transition-opacity ${q.is_correct ? 'bg-green-500' : 'bg-error'}`}>
+                      {numById[q.id]}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+          <div className="flex items-center gap-3 pt-1 text-[11px] text-on-muted border-t border-outline/20">
+            <span className="flex items-center gap-1 mt-2"><span className="w-2.5 h-2.5 rounded bg-green-500 inline-block" />Đúng</span>
+            <span className="flex items-center gap-1 mt-2"><span className="w-2.5 h-2.5 rounded bg-error inline-block" />Sai</span>
           </div>
         </div>
       </aside>
