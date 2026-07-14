@@ -243,6 +243,7 @@ export default function CourseDetail({ Layout = StudentLayout, backTo = '/course
   // Reviews — tải toàn bộ một lần, phân trang client-side để tối ưu optimistic update.
   const [reviews, setReviews] = useState([]);
   const [reviewPage, setReviewPage] = useState(1);
+  const [ratingFilter, setRatingFilter] = useState(0); // 0 = tất cả; 1-5 = lọc theo số sao
   const [formRating, setFormRating] = useState(0);
   const [formComment, setFormComment] = useState('');
   const [editing, setEditing] = useState(false);
@@ -297,8 +298,11 @@ export default function CourseDetail({ Layout = StudentLayout, backTo = '/course
   const avgRating = reviewTotal ? reviews.reduce((s, r) => s + r.rating, 0) / reviewTotal : 0;
   const dist = [5, 4, 3, 2, 1].map(star => ({ star, count: reviews.filter(r => r.rating === star).length }));
   const myReview = user ? reviews.find(r => r.student_id === user.id) : null;
-  const reviewPages = Math.ceil(reviewTotal / REVIEW_PAGE_SIZE) || 1;
-  const pageReviews = reviews.slice((reviewPage - 1) * REVIEW_PAGE_SIZE, reviewPage * REVIEW_PAGE_SIZE);
+  // Chỉ DANH SÁCH review bị lọc theo sao; tiêu đề/trung bình/biểu đồ vẫn tính trên toàn bộ.
+  const filteredReviews = ratingFilter ? reviews.filter(r => r.rating === ratingFilter) : reviews;
+  const reviewPages = Math.ceil(filteredReviews.length / REVIEW_PAGE_SIZE) || 1;
+  const pageReviews = filteredReviews.slice((reviewPage - 1) * REVIEW_PAGE_SIZE, reviewPage * REVIEW_PAGE_SIZE);
+  const selectRatingFilter = (star) => { setRatingFilter(star); setReviewPage(1); };
 
   const toggleUnit = (uid) => setExpanded(prev => {
     const next = new Set(prev);
@@ -529,9 +533,44 @@ export default function CourseDetail({ Layout = StudentLayout, backTo = '/course
               <p className="text-sm text-on-muted mb-6 italic">Đăng ký khóa học để viết đánh giá.</p>
             )}
 
+            {/* Bộ lọc theo số sao */}
+            {reviewTotal > 0 && (
+              <div className="flex flex-wrap gap-2 mb-5">
+                <button
+                  onClick={() => selectRatingFilter(0)}
+                  className={`px-3.5 py-1.5 rounded-full text-sm font-semibold transition-all ${
+                    ratingFilter === 0
+                      ? 'bg-tsubaki-red text-white shadow-md shadow-tsubaki-red/20'
+                      : 'bg-white border border-outline-variant text-charcoal-text hover:border-tsubaki-red hover:text-tsubaki-red'
+                  }`}
+                >
+                  Tất cả ({reviewTotal})
+                </button>
+                {dist.map(({ star, count }) => (
+                  <button
+                    key={star}
+                    disabled={count === 0}
+                    onClick={() => selectRatingFilter(star)}
+                    className={`px-3.5 py-1.5 rounded-full text-sm font-semibold transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
+                      ratingFilter === star
+                        ? 'bg-tsubaki-red text-white shadow-md shadow-tsubaki-red/20'
+                        : 'bg-white border border-outline-variant text-charcoal-text hover:border-tsubaki-red hover:text-tsubaki-red'
+                    }`}
+                  >
+                    {star}★ ({count})
+                  </button>
+                ))}
+              </div>
+            )}
+
             {/* Danh sách reviews */}
             {reviewTotal === 0 ? (
               <p className="text-sm text-on-muted">Chưa có đánh giá nào. Hãy là người đầu tiên!</p>
+            ) : filteredReviews.length === 0 ? (
+              <div className="text-sm text-on-muted">
+                Không có đánh giá {ratingFilter} sao.{' '}
+                <button onClick={() => selectRatingFilter(0)} className="text-tsubaki-red font-semibold hover:underline">Xem tất cả</button>
+              </div>
             ) : (
               <div className="space-y-4">
                 {pageReviews.map(r => {
@@ -686,14 +725,20 @@ export default function CourseDetail({ Layout = StudentLayout, backTo = '/course
                 </div>
                 <div className="flex-1 space-y-1">
                   {dist.map(({ star, count }) => (
-                    <div key={star} className="flex items-center gap-2">
+                    <button
+                      key={star}
+                      type="button"
+                      disabled={count === 0}
+                      onClick={() => selectRatingFilter(ratingFilter === star ? 0 : star)}
+                      className={`w-full flex items-center gap-2 rounded-lg px-1 py-0.5 transition-colors disabled:cursor-default enabled:hover:bg-surface-container ${ratingFilter === star ? 'bg-surface-container' : ''}`}
+                    >
                       <span className="text-xs text-on-muted w-3 text-right">{star}</span>
                       <span className="material-symbols-outlined text-amber-400 fill text-sm">star</span>
                       <div className="flex-1 h-2 rounded-full bg-surface-container overflow-hidden">
                         <div className="h-full bg-amber-400 rounded-full" style={{ width: `${reviewTotal ? (count / reviewTotal) * 100 : 0}%` }} />
                       </div>
                       <span className="text-xs text-on-muted w-5 text-right">{count}</span>
-                    </div>
+                    </button>
                   ))}
                 </div>
               </div>

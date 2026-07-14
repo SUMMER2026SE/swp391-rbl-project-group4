@@ -35,7 +35,6 @@ export default function Quiz({ Layout = StudentLayout }) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError]       = useState('');
   const [timeLeft, setTimeLeft] = useState(null);
-  const [furigana, setFurigana] = useState(false);
   const [shuffledRights, setShuffledRights] = useState({}); // matching: cột phải đã xáo trộn
   const [lockedUntil, setLockedUntil] = useState(null); // strict fullscreen: bị khóa đến lúc nào
   const [kicked, setKicked]           = useState(false); // bị khóa ngay giữa lúc làm bài
@@ -340,16 +339,8 @@ export default function Quiz({ Layout = StudentLayout }) {
         {/* Question */}
         {q && (
           <div className="glass-card rounded-2xl p-8">
-            <div className="flex justify-between items-start gap-4 mb-6">
-              <FuriganaText text={q.question} enabled={furigana} textClassName="font-display font-bold text-lg" block />
-              <button
-                type="button"
-                onClick={() => setFurigana(v => !v)}
-                title={furigana ? 'Ẩn furigana' : 'Hiển thị furigana'}
-                className={`shrink-0 inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-lg border font-medium transition-all select-none ${furigana ? 'bg-amber-100 border-amber-300 text-amber-700' : 'bg-white border-outline/60 text-on-muted hover:border-amber-300 hover:text-amber-600 hover:bg-amber-50'}`}>
-                <span className="font-bold" style={{ fontFamily: 'serif', fontSize: '13px' }}>あ</span>
-                ふりがな
-              </button>
+            <div className="mb-6">
+              <FuriganaText text={q.question} enabled={false} textClassName="font-display font-bold text-lg" block />
             </div>
             {/* ── Single choice ── */}
             {(!q.question_type || q.question_type === 'single_choice') && (
@@ -362,7 +353,7 @@ export default function Quiz({ Layout = StudentLayout }) {
                         : 'border-outline hover:border-tsubaki-red/50 hover:bg-surface-low'
                     }`}>
                     <span className="font-bold mr-3 text-on-muted">{String.fromCharCode(65 + i)}.</span>
-                    <FuriganaText text={opt} enabled={furigana} />
+                    <FuriganaText text={opt} enabled={false} />
                   </button>
                 ))}
               </div>
@@ -388,7 +379,7 @@ export default function Quiz({ Layout = StudentLayout }) {
                       <span className={`material-symbols-outlined text-lg align-middle mr-3 ${selected ? 'text-tsubaki-red' : 'text-on-muted'}`}>
                         {selected ? 'check_box' : 'check_box_outline_blank'}
                       </span>
-                      <FuriganaText text={opt} enabled={furigana} />
+                      <FuriganaText text={opt} enabled={false} />
                     </button>
                   );
                 })}
@@ -401,7 +392,7 @@ export default function Quiz({ Layout = StudentLayout }) {
                 {(q.options || []).map((pair, i) => (
                   <div key={i} className="flex items-center gap-3">
                     <div className="flex-1 px-4 py-3 rounded-xl border-2 border-outline bg-surface-low/50 text-sm font-medium">
-                      <FuriganaText text={pair.left} enabled={furigana} />
+                      <FuriganaText text={pair.left} enabled={false} />
                     </div>
                     <span className="material-symbols-outlined text-on-muted shrink-0">arrow_forward</span>
                     <select
