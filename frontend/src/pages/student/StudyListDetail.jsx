@@ -56,7 +56,7 @@ function ItemCard({ item, listType, index, type, postId, editable, onRemove }) {
   // grammar — thẻ dùng chung với Mục ngữ pháp của khóa học
   return (
     <GrammarItemCard item={item} index={index} to={`/study-lists/${type}/${postId}/${item.id}`}
-      editable={editable} onRemove={onRemove} />
+      editable={editable} onRemove={onRemove} listRow />
   );
 }
 
@@ -197,9 +197,10 @@ export default function StudyListDetail() {
   const { type, id } = useParams();
   const navigate = useNavigate();
   const { user, isAdmin, isTeacher } = useAuth();
-  const [post, setPost]       = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError]     = useState('');
+  const [post, setPost]         = useState(null);
+  const [loading, setLoading]   = useState(true);
+  const [error, setError]       = useState('');
+  const [grammarQuery, setGrammarQuery] = useState('');
 
   const canEdit = !!user && !!post && (user.id === post.created_by || isAdmin());
 
@@ -309,6 +310,16 @@ export default function StudyListDetail() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
+  const filteredGrammar = (() => {
+    if (!post) return [];
+    const q = grammarQuery.trim().toLowerCase();
+    if (!q) return post.items;
+    return post.items.filter(item =>
+      (item.title || '').toLowerCase().includes(q) ||
+      (item.meaning_vi || '').toLowerCase().includes(q)
+    );
+  })();
+
   return (
     <StudentLayout title="Chi tiết bài đăng">
       {error && <Alert type="error" onClose={() => setError('')}>{error}</Alert>}
@@ -327,14 +338,30 @@ export default function StudyListDetail() {
       ) : (
         <>
           <div className="mb-6">
-            <h1 className="font-display text-2xl font-bold mb-1">{post.title}</h1>
-            {post.description && <p className="text-on-muted mb-2">{post.description}</p>}
-            <div className="flex items-center gap-4 text-sm text-on-muted flex-wrap">
-              {post.level && <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${LEVEL_COLORS[post.level] || 'bg-surface-low text-on-muted'}`}>{post.level}</span>}
-              {post.topic && <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-600">{post.topic}</span>}
-              <span className="flex items-center gap-1"><span className="material-symbols-outlined text-base">person</span>{post.creator_name || '—'}</span>
-              <span className="flex items-center gap-1"><span className="material-symbols-outlined text-base">bookmarks</span>{post.items.length} mục</span>
-              <span className="flex items-center gap-1"><span className="material-symbols-outlined text-base">visibility</span>{post.view_count} lượt xem</span>
+            <div className="flex items-start justify-between gap-4">
+              <div className="min-w-0">
+                <h1 className="font-display text-2xl font-bold mb-1">{post.title}</h1>
+                {post.description && <p className="text-on-muted mb-2">{post.description}</p>}
+                <div className="flex items-center gap-4 text-sm text-on-muted flex-wrap">
+                  {post.level && <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${LEVEL_COLORS[post.level] || 'bg-surface-low text-on-muted'}`}>{post.level}</span>}
+                  {post.topic && <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-600">{post.topic}</span>}
+                  <span className="flex items-center gap-1"><span className="material-symbols-outlined text-base">person</span>{post.creator_name || '—'}</span>
+                  <span className="flex items-center gap-1"><span className="material-symbols-outlined text-base">bookmarks</span>{post.items.length} mục</span>
+                  <span className="flex items-center gap-1"><span className="material-symbols-outlined text-base">visibility</span>{post.view_count} lượt xem</span>
+                </div>
+              </div>
+              {type === 'kanji' && (
+                <div className="flex items-center gap-2 shrink-0">
+                  <Button variant="secondary" onClick={openWriting}>
+                    <span className="material-symbols-outlined text-lg">draw</span>
+                    Luyện viết
+                  </Button>
+                  <Button onClick={() => openPdf(post.items)}>
+                    <span className="material-symbols-outlined text-lg">article</span>
+                    Tải PDF luyện viết
+                  </Button>
+                </div>
+              )}
             </div>
           </div>
 
@@ -372,25 +399,43 @@ export default function StudyListDetail() {
             />
           ) : (
             <>
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                {post.items.map((item, i) => (
-                  <ItemCard key={item.id} item={item} listType={post.list_type} index={i} type={type} postId={id}
-                    editable={canEdit} onRemove={() => handleItemRemoved(item.id)} />
-                ))}
-              </div>
-
-              {type === 'kanji' && (
-                <div className="mt-8 flex justify-center gap-3">
-                  <Button variant="secondary" onClick={openWriting}>
-                    <span className="material-symbols-outlined text-lg">draw</span>
-                    Luyện viết
-                  </Button>
-                  <Button onClick={() => openPdf(post.items)}>
-                    <span className="material-symbols-outlined text-lg">article</span>
-                    Tạo PDF luyện viết
-                  </Button>
+              {post.list_type === 'grammar' ? (
+                <div className="glass-card rounded-2xl overflow-hidden divide-y divide-outline">
+                  <div className="px-4 py-2.5">
+                    <div className="flex items-center gap-2 px-3 py-2 bg-surface-low rounded-xl">
+                      <span className="material-symbols-outlined text-base text-on-muted">search</span>
+                      <input
+                        type="text"
+                        placeholder="Tìm theo cấu trúc hoặc nghĩa tiếng Việt..."
+                        value={grammarQuery}
+                        onChange={e => setGrammarQuery(e.target.value)}
+                        className="flex-1 bg-transparent text-sm outline-none placeholder:text-on-muted"
+                      />
+                      {grammarQuery && (
+                        <button onClick={() => setGrammarQuery('')} className="text-on-muted hover:text-charcoal">
+                          <span className="material-symbols-outlined text-base">close</span>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  {filteredGrammar.length === 0 ? (
+                    <p className="px-4 py-6 text-center text-sm text-on-muted">Không tìm thấy kết quả.</p>
+                  ) : (
+                    filteredGrammar.map((item, i) => (
+                      <ItemCard key={item.id} item={item} listType={post.list_type} index={i} type={type} postId={id}
+                        editable={canEdit} onRemove={() => handleItemRemoved(item.id)} />
+                    ))
+                  )}
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                  {post.items.map((item, i) => (
+                    <ItemCard key={item.id} item={item} listType={post.list_type} index={i} type={type} postId={id}
+                      editable={canEdit} onRemove={() => handleItemRemoved(item.id)} />
+                  ))}
                 </div>
               )}
+
 
               {type === 'kanji' && showPdf && (
                 <div className="mt-6 glass-card rounded-2xl p-6 space-y-5">

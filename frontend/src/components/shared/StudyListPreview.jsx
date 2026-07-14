@@ -26,7 +26,7 @@ function groupByTopic(posts) {
     .map(t => ({ key: t, label: t, icon: TOPIC_ICONS[t], items: posts.filter(p => p.topic === t) }))
     .filter(g => g.items.length > 0);
   const rest = posts.filter(p => !p.topic || !TOPICS.includes(p.topic));
-  if (rest.length > 0) groups.push({ key: '__other', label: 'Khác', icon: 'more_horiz', items: rest });
+  if (rest.length > 0) groups.push({ key: '__other', label: '', icon: '', items: rest });
   return groups;
 }
 
@@ -63,13 +63,15 @@ function PostCard({ post, type, onClick }) {
 function GroupSection({ label, icon, items, type, navigate }) {
   return (
     <div className="mb-5 last:mb-0">
-      <div className="flex items-center gap-2 mb-3">
-        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-bold bg-slate-100 text-slate-700">
-          {icon && <span className="material-symbols-outlined text-base">{icon}</span>}
-          {label}
-        </span>
-        <span className="text-sm text-on-muted">{items.length} bài đăng</span>
-      </div>
+      {label && (
+        <div className="flex items-center gap-2 mb-3">
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-bold bg-slate-100 text-slate-700">
+            {icon && <span className="material-symbols-outlined text-base">{icon}</span>}
+            {label}
+          </span>
+          <span className="text-sm text-on-muted">{items.length} bài đăng</span>
+        </div>
+      )}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
         {items.map(post => (
           <PostCard key={post.id} post={post} type={type} onClick={() => navigate(`/study-lists/${type}/${post.id}`)} />
