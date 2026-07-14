@@ -31,7 +31,33 @@ export function RemoveBadge({ onRemove, title = 'Xóa khỏi bài đăng' }) {
 }
 
 // Thẻ gọn, bấm vào mở trang chi tiết riêng (URL thật, back trình duyệt hoạt động đúng)
-export default function GrammarItemCard({ item, index, to, editable, onRemove, removeTitle }) {
+export default function GrammarItemCard({ item, index, to, editable, onRemove, removeTitle, listRow }) {
+  if (listRow) {
+    return (
+      <div className="relative">
+        {editable && <RemoveBadge onRemove={onRemove} title={removeTitle} />}
+        <Link
+          to={to}
+          className="flex items-center gap-3 px-4 py-3 hover:bg-surface-low transition-colors"
+        >
+          <span className="w-6 h-6 rounded-full bg-charcoal/80 text-white text-xs font-bold flex items-center justify-center shrink-0">
+            {index + 1}
+          </span>
+          <p className="flex-1 font-bold text-tsubaki-red min-w-0 truncate">
+            {item.title}
+            {item.meaning_vi && <span className="font-normal text-on-muted"> — {item.meaning_vi}</span>}
+          </p>
+          {item.level && (
+            <span className={`px-2 py-0.5 rounded-full text-xs font-bold shrink-0 ${LEVEL_COLORS[item.level] || 'bg-surface-low text-on-muted'}`}>
+              {item.level}
+            </span>
+          )}
+          <span className="material-symbols-outlined text-sm text-tsubaki-red shrink-0">arrow_forward</span>
+        </Link>
+      </div>
+    );
+  }
+
   return (
     <div className="relative">
       {editable && <RemoveBadge onRemove={onRemove} title={removeTitle} />}

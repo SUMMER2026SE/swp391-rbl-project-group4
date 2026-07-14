@@ -25,26 +25,32 @@ export default function GrammarItemDetailCard({ item, index, total, onPrev, onNe
         <h1 className="text-3xl font-bold text-tsubaki-red leading-tight">{item.title}</h1>
         {item.title_ja && <p className="text-on-muted mt-1">{item.title_ja}</p>}
 
-        <div className="mt-6">
-          <p className="text-xs font-semibold text-on-muted uppercase tracking-wide mb-1">Nghĩa</p>
-          <p className="text-lg font-bold text-charcoal">{item.meaning_vi}</p>
-        </div>
-
-        {item.explanation && (
-          <div className="mt-6">
-            <p className="text-xs font-semibold text-on-muted uppercase tracking-wide mb-1">Cấu trúc / Cách dùng</p>
-            <p className="text-charcoal whitespace-pre-wrap leading-relaxed">{item.explanation}</p>
-          </div>
-        )}
-
-        {item.example_sentence && (
-          <div className="mt-6 mb-2">
-            <p className="text-xs font-semibold text-on-muted uppercase tracking-wide mb-1">Ví dụ</p>
-            <div className="text-charcoal italic bg-surface-low rounded-xl px-4 py-3">
-              「<FuriganaText text={item.example_sentence} textClassName="italic" />」
+        <div className="mt-6 space-y-4">
+          <div>
+            <p className="text-xs font-semibold text-on-muted uppercase tracking-wide mb-1">Nghĩa</p>
+            <div className="bg-surface-low rounded-xl px-4 py-3">
+              <p className="text-lg font-bold text-charcoal">{item.meaning_vi || '—'}</p>
             </div>
           </div>
-        )}
+
+          <div>
+            <p className="text-xs font-semibold text-on-muted uppercase tracking-wide mb-1">Cấu trúc / Cách dùng</p>
+            <div className="bg-surface-low rounded-xl px-4 py-3">
+              {item.explanation
+                ? <p className="text-charcoal whitespace-pre-wrap leading-relaxed">{item.explanation}</p>
+                : <p className="text-on-muted">—</p>}
+            </div>
+          </div>
+
+          <div>
+            <p className="text-xs font-semibold text-on-muted uppercase tracking-wide mb-1">Ví dụ</p>
+            <div className="bg-surface-low rounded-xl px-4 py-3">
+              {item.example_sentence
+                ? <p className="text-charcoal italic">「<FuriganaText text={item.example_sentence} textClassName="italic" />」</p>
+                : <p className="text-on-muted">—</p>}
+            </div>
+          </div>
+        </div>
       </div>
 
       <div className="px-8 pb-8 pt-6 flex gap-2 border-t border-outline/30 mt-4">

@@ -46,8 +46,10 @@ export default function StudyListItemDetail() {
       ) : !item ? (
         <div className="glass-card rounded-2xl p-8 text-center text-on-muted">Không tìm thấy mục này.</div>
       ) : (
-        <GrammarItemDetailCard item={item} index={index} total={items.length}
-          onPrev={() => goTo(index - 1)} onNext={() => goTo(index + 1)} />
+        <div className="flex justify-center">
+          <GrammarItemDetailCard item={item} index={index} total={items.length}
+            onPrev={() => goTo(index - 1)} onNext={() => goTo(index + 1)} />
+        </div>
       )}
     </StudentLayout>
   );
