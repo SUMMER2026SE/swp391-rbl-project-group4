@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import AdminLayout from '../../components/layout/AdminLayout';
+import Modal from '../../components/ui/Modal';
 import Button from '../../components/ui/Button';
 import Input from '../../components/ui/Input';
 import Alert from '../../components/ui/Alert';
@@ -196,6 +197,10 @@ export default function AdminStudyLists() {
   const [previewBase, setPreviewBase] = useState(null);
   const [saving, setSaving]         = useState(false);
 
+  const [lockTarget, setLockTarget] = useState(null); // post đang chờ khóa (nhập ghi chú)
+  const [lockNote, setLockNote]     = useState('');
+  const [lockSaving, setLockSaving] = useState(false);
+
   const load = useCallback(async () => {
     setLoading(true);
     try {
@@ -241,6 +246,23 @@ export default function AdminStudyLists() {
     catch (e) { setAlert({ type: 'error', msg: e.message }); }
   };
 
+  // Mở khóa: không cần ghi chú, thực hiện ngay. Khóa: mở modal nhập lý do.
+  const handleLockToggle = (post) => {
+    if (post.is_locked) return doLock(post, false, '');
+    setLockNote('');
+    setLockTarget(post);
+  };
+
+  const doLock = async (post, locked, note) => {
+    setLockSaving(true);
+    try {
+      await api.put(`/admin/study-lists/${post.id}/lock`, { locked, note });
+      setLockTarget(null);
+      load();
+    } catch (e) { setAlert({ type: 'error', msg: e.message }); }
+    finally { setLockSaving(false); }
+  };
+
   return (
     <AdminLayout title="Bài đăng của giáo viên">
       {alert.msg && <Alert type={alert.type} onClose={() => setAlert({ type: '', msg: '' })} className="mb-4">{alert.msg}</Alert>}
@@ -260,11 +282,14 @@ export default function AdminStudyLists() {
       <p className="text-sm text-on-muted mb-4">Tổng: <strong>{total}</strong> bài đăng</p>
 
       {loading ? (
-        <div className="glass-card rounded-2xl p-8 text-center text-on-muted animate-pulse">Đang tải...</div>
+        <div className="flex items-center justify-center py-24">
+          <span className="material-symbols-outlined animate-spin text-tsubaki-red text-5xl">progress_activity</span>
+        </div>
       ) : items.length === 0 ? (
-        <div className="glass-card rounded-2xl p-12 text-center">
-          <span className="material-symbols-outlined text-5xl text-on-muted/20 block mb-3">library_books</span>
-          <p className="text-on-muted">Chưa có bài đăng nào.</p>
+        <div className="flex flex-col items-center justify-center py-24 text-on-muted text-center">
+          <span className="material-symbols-outlined text-6xl mb-4 opacity-25">library_books</span>
+          <p className="text-lg font-semibold text-charcoal mb-1">Chưa có bài đăng nào</p>
+          <p className="text-sm">Bấm "Tạo bài đăng" để tự đăng, hoặc chờ giáo viên đăng bài</p>
         </div>
       ) : (
         <div className="glass-card rounded-2xl overflow-hidden divide-y divide-outline/40">
@@ -282,7 +307,14 @@ export default function AdminStudyLists() {
 
                   {/* Info */}
                   <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-charcoal text-sm truncate">{post.title}</p>
+                    <p className="font-semibold text-charcoal text-sm truncate flex items-center gap-1.5">
+                      {post.title}
+                      {post.is_locked && (
+                        <span title={post.lock_note ? `Đã khóa: ${post.lock_note}` : 'Đã khóa'} className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-red-100 text-error text-[10px] font-bold shrink-0">
+                          <span className="material-symbols-outlined text-[12px]">lock</span>KHÓA
+                        </span>
+                      )}
+                    </p>
                     <div className="flex flex-wrap items-center gap-2 mt-1">
                       {post.level && <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${LEVEL_BADGE[post.level]}`}>{post.level}</span>}
                       {post.topic && <span className="px-2 py-0.5 rounded-full text-xs bg-slate-100 text-slate-600">{post.topic}</span>}
@@ -299,6 +331,10 @@ export default function AdminStudyLists() {
 
                   {/* Actions — stopPropagation to not toggle accordion */}
                   <div className="flex items-center gap-1 shrink-0" onClick={e => e.stopPropagation()}>
+                    <button onClick={() => handleLockToggle(post)} title={post.is_locked ? 'Mở khóa' : 'Khóa (yêu cầu sửa)'}
+                      className={`p-1.5 rounded-lg transition-colors ${post.is_locked ? 'text-error hover:bg-red-50' : 'text-on-muted hover:text-amber-600 hover:bg-amber-50'}`}>
+                      <span className="material-symbols-outlined text-lg">{post.is_locked ? 'lock_open' : 'lock'}</span>
+                    </button>
                     <button onClick={() => handleDelete(post)} title="Xóa"
                       className="p-1.5 rounded-lg text-on-muted hover:text-red-500 hover:bg-red-50 transition-colors">
                       <span className="material-symbols-outlined text-lg">delete</span>
@@ -383,6 +419,22 @@ export default function AdminStudyLists() {
           })}
         </div>
       )}
+
+      <Modal open={!!lockTarget} onClose={() => setLockTarget(null)} title="Khóa bài đăng"
+        footer={<><Button variant="secondary" onClick={() => setLockTarget(null)}>Huỷ</Button><Button loading={lockSaving} onClick={() => doLock(lockTarget, true, lockNote)}>Khóa bài đăng</Button></>}>
+        <div className="space-y-3">
+          <p className="text-sm text-on-muted">
+            Bài đăng <strong className="text-charcoal">"{lockTarget?.title}"</strong> sẽ bị ẩn khỏi học viên.
+            Giáo viên vẫn xem và sửa được bình thường để khắc phục theo ghi chú dưới đây.
+          </p>
+          <div>
+            <label className="block text-sm font-medium text-on-muted mb-1">Ghi chú cho giáo viên (lý do cần sửa)</label>
+            <textarea value={lockNote} onChange={e => setLockNote(e.target.value)} rows={3}
+              placeholder="vd: Một số từ vựng thiếu nghĩa tiếng Việt, vui lòng bổ sung."
+              className="w-full px-4 py-3 bg-white border border-outline rounded-xl text-sm outline-none focus:border-tsubaki-red resize-none" />
+          </div>
+        </div>
+      </Modal>
     </AdminLayout>
   );
 }

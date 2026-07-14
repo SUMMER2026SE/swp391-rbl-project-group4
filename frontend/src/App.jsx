@@ -145,9 +145,9 @@ export default function App() {
             <Route path="/lessons/:id" element={<StudentRoute adminRedirectTo="/admin/lessons/preview/:id" teacherRedirectTo="/teacher/lessons/preview/:id"><LessonView /></StudentRoute>} />
             <Route path="/lessons/:id/reading" element={<StudentRoute adminRedirectTo="/admin/lessons/:id/reading-view" teacherRedirectTo="/teacher/lessons/:id/reading-view"><LessonReadingView /></StudentRoute>} />
             <Route path="/lessons/:lessonId/grammar/:itemId" element={<StudentRoute allowAdmin><LessonGrammarItemDetail /></StudentRoute>} />
-            <Route path="/vocabulary" element={<StudentRoute><Vocabulary /></StudentRoute>} />
-            <Route path="/grammar"    element={<StudentRoute><Grammar /></StudentRoute>} />
-            <Route path="/kanji"      element={<StudentRoute><Kanji /></StudentRoute>} />
+            <Route path="/vocabulary" element={<ProtectedRoute><Vocabulary /></ProtectedRoute>} />
+            <Route path="/grammar"    element={<ProtectedRoute><Grammar /></ProtectedRoute>} />
+            <Route path="/kanji"      element={<ProtectedRoute><Kanji /></ProtectedRoute>} />
             <Route path="/kanji/writing" element={<StudentRoute><KanjiWriting /></StudentRoute>} />
             <Route path="/study-lists/:type/:id" element={<ProtectedRoute><StudyListDetail /></ProtectedRoute>} />
             <Route path="/study-lists/:type/:id/:itemId" element={<ProtectedRoute><StudyListItemDetail /></ProtectedRoute>} />
