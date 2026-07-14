@@ -139,45 +139,61 @@ export default function TeacherStudyLists() {
       </div>
 
       {loading ? (
-        <div className="glass-card rounded-2xl p-8 text-center text-on-muted animate-pulse">Đang tải...</div>
+        <div className="flex items-center justify-center py-24">
+          <span className="material-symbols-outlined animate-spin text-tsubaki-red text-5xl">progress_activity</span>
+        </div>
       ) : items.length === 0 ? (
-        <div className="glass-card rounded-2xl p-12 text-center">
-          <span className="material-symbols-outlined text-5xl text-on-muted/20 block mb-3">library_books</span>
-          <p className="text-on-muted">Bạn chưa tạo bài đăng nào cho mục này.</p>
+        <div className="flex flex-col items-center justify-center py-24 text-on-muted text-center">
+          <span className="material-symbols-outlined text-6xl mb-4 opacity-25">library_books</span>
+          <p className="text-lg font-semibold text-charcoal mb-1">Bạn chưa tạo bài đăng nào cho mục này</p>
+          <p className="text-sm">Bấm "Tạo bài đăng" để bắt đầu</p>
         </div>
       ) : (
-        <div className="glass-card rounded-2xl overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-surface-low border-b border-outline/40">
-                <tr>{['Tiêu đề', 'Cấp độ', 'Chủ đề', 'Số mục', 'Lượt xem', ''].map(h =>
-                  <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-on-muted uppercase tracking-wide">{h}</th>)}</tr>
-              </thead>
-              <tbody>
-                {items.map((post, i) => (
-                  <tr key={post.id} className={`border-t border-outline/40 ${i % 2 === 1 ? 'bg-surface-low/30' : ''}`}>
-                    <td className="px-4 py-2.5 font-medium">{post.title}</td>
-                    <td className="px-4 py-2.5">{post.level || '—'}</td>
-                    <td className="px-4 py-2.5">{post.topic || '—'}</td>
-                    <td className="px-4 py-2.5">{post.item_count}</td>
-                    <td className="px-4 py-2.5">{post.view_count}</td>
-                    <td className="px-4 py-2.5">
-                      <div className="flex gap-1.5 justify-end">
-                        <Link to={`/study-lists/${type}/${post.id}`} title="Xem & sửa"
-                          className="p-1.5 rounded-lg text-on-muted hover:text-tsubaki-red hover:bg-tsubaki-red/10 transition-colors">
-                          <span className="material-symbols-outlined text-lg">edit</span>
-                        </Link>
-                        <button onClick={() => handleDelete(post)} title="Xóa"
-                          className="p-1.5 rounded-lg text-on-muted hover:text-red-500 hover:bg-red-50 transition-colors">
-                          <span className="material-symbols-outlined text-lg">delete</span>
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+        <div className="bg-white border border-outline/30 rounded-2xl overflow-hidden divide-y divide-outline/20">
+          {items.map(post => {
+            const headerIcon = post.topic ? (TOPIC_ICONS[post.topic] || TYPE_ICON[type]) : TYPE_ICON[type];
+            return (
+              <div key={post.id} className="flex items-center gap-4 px-4 py-3 hover:bg-surface-low/50 transition-colors">
+                <div className={`w-12 h-12 rounded-lg shrink-0 flex items-center justify-center ${LEVEL_BG[post.level] || 'bg-gradient-to-br from-slate-400 to-slate-600'}`}>
+                  <span className="material-symbols-outlined text-white/90 text-xl">{headerIcon}</span>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-charcoal text-sm truncate flex items-center gap-1.5">
+                    {post.title}
+                    {post.is_locked && (
+                      <span title={post.lock_note ? `Quản trị viên yêu cầu sửa: ${post.lock_note}` : 'Quản trị viên đã khóa bài đăng này'} className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-red-100 text-error text-[10px] font-bold shrink-0">
+                        <span className="material-symbols-outlined text-[12px]">lock</span>CẦN SỬA
+                      </span>
+                    )}
+                  </p>
+                  <p className="text-xs text-on-muted truncate">{[post.topic, `${post.item_count} ${ITEM_UNIT[type]}`].filter(Boolean).join(' · ')}</p>
+                  {post.is_locked && post.lock_note && (
+                    <p className="text-xs text-error truncate mt-0.5">Lý do: {post.lock_note}</p>
+                  )}
+                </div>
+                {post.level && (
+                  <span className={`px-2 py-0.5 text-xs font-bold rounded-full shrink-0 ${LEVEL_BADGE[post.level]}`}>{post.level}</span>
+                )}
+                <span className="text-xs text-on-muted hidden sm:flex items-center gap-1 w-14 justify-end shrink-0" title="Lượt xem">
+                  <span className="material-symbols-outlined text-[15px]">visibility</span>{post.view_count}
+                </span>
+                <div className="flex items-center gap-0.5 shrink-0">
+                  <Link to={`/study-lists/${type}/${post.id}`} target="_blank" rel="noopener noreferrer" title="Xem như học viên"
+                    className="p-1.5 text-on-muted hover:text-sumire-purple hover:bg-sumire-purple/10 rounded-lg transition-colors">
+                    <span className="material-symbols-outlined text-[18px]">visibility</span>
+                  </Link>
+                  <Link to={`/study-lists/${type}/${post.id}`} title="Sửa"
+                    className="p-1.5 text-on-muted hover:text-tsubaki-red hover:bg-tsubaki-red/10 rounded-lg transition-colors">
+                    <span className="material-symbols-outlined text-[18px]">edit</span>
+                  </Link>
+                  <button onClick={() => handleDelete(post)} title="Xóa"
+                    className="p-1.5 text-on-muted hover:text-error hover:bg-red-50 rounded-lg transition-colors">
+                    <span className="material-symbols-outlined text-[18px]">delete</span>
+                  </button>
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
 

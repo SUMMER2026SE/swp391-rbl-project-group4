@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import AdminLayout from '../../components/layout/AdminLayout';
-import DataTable from '../../components/ui/DataTable';
 import Modal from '../../components/ui/Modal';
 import Button from '../../components/ui/Button';
 import Input from '../../components/ui/Input';
@@ -17,6 +17,11 @@ const TOPICS = [
   'Màu sắc','Cơ thể','Động vật','Trường học','Địa điểm',
   'Thời tiết & thiên nhiên','Giao thông','Hành động','Tính từ mô tả',
 ];
+const LEVEL_BADGE = {
+  N5: 'bg-emerald-100 text-emerald-700', N4: 'bg-sky-100 text-sky-700',
+  N3: 'bg-violet-100 text-violet-700',   N2: 'bg-orange-100 text-orange-700',
+  N1: 'bg-red-100 text-red-700',
+};
 
 export default function AdminVocabulary() {
   const { t } = useLang();
@@ -76,15 +81,6 @@ export default function AdminVocabulary() {
 
   const openImport = () => setImportModal(true);
 
-  const COLS = [
-    { key: 'kanji',      label: 'Kanji',  render: v => <span className="text-lg font-bold text-tsubaki-red">{v || '—'}</span> },
-    { key: 'reading',    label: 'Reading' },
-    { key: 'meaning_vi', label: 'Nghĩa' },
-    { key: 'level',      label: 'Level' },
-    { key: 'type',       label: 'Loại' },
-    { key: 'topic',      label: 'Chủ đề', render: v => v ? <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">{v}</span> : '—' },
-  ];
-
   return (
     <AdminLayout title={t('admin.vocabulary')}>
       {alert.msg && <Alert type={alert.type} onClose={() => setAlert({ type: '', msg: '' })} className="mb-4">{alert.msg}</Alert>}
@@ -100,6 +96,11 @@ export default function AdminVocabulary() {
             <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Tìm kiếm..." className="px-3 py-2 border border-outline rounded-xl text-sm outline-none focus:border-tsubaki-red w-36" />
             <button type="submit" className="p-2 bg-tsubaki-red text-white rounded-xl"><span className="material-symbols-outlined text-lg">search</span></button>
           </form>
+          <Link to="/vocabulary" target="_blank" rel="noopener noreferrer">
+            <Button variant="secondary">
+              <span className="material-symbols-outlined text-lg">visibility</span> Xem như học viên
+            </Button>
+          </Link>
           <Button variant="secondary" onClick={openImport}>
             <span className="material-symbols-outlined text-lg">upload_file</span> Nhập file
           </Button>
@@ -107,7 +108,55 @@ export default function AdminVocabulary() {
         </div>
       </div>
 
-      <DataTable columns={COLS} data={data} loading={loading} onEdit={openEdit} onDelete={handleDelete} />
+      {loading ? (
+        <div className="flex items-center justify-center py-24">
+          <span className="material-symbols-outlined animate-spin text-tsubaki-red text-5xl">progress_activity</span>
+        </div>
+      ) : data.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-24 text-on-muted text-center">
+          <span className="material-symbols-outlined text-6xl mb-4 opacity-25">translate</span>
+          <p className="text-lg font-semibold text-charcoal mb-1">{search ? 'Không tìm thấy từ vựng' : 'Chưa có từ vựng nào'}</p>
+          <p className="text-sm">Bấm "{t('admin.create')}" để thêm từ đầu tiên</p>
+        </div>
+      ) : (
+        <div className="bg-white border border-outline/30 rounded-2xl overflow-hidden divide-y divide-outline/20">
+          {data.map(row => (
+            <div key={row.id} className="flex items-center gap-4 px-4 py-3 hover:bg-surface-low/50 transition-colors">
+              <div className="w-12 h-12 rounded-lg bg-surface-low overflow-hidden shrink-0 flex items-center justify-center">
+                {row.image_url
+                  ? <img src={row.image_url} alt="" className="w-full h-full object-cover" onError={e => { e.currentTarget.style.display = 'none'; }} />
+                  : <span className="material-symbols-outlined text-outline/40">image</span>}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="font-semibold text-charcoal text-sm truncate">
+                  <span className="text-tsubaki-red font-bold">{row.kanji || row.reading}</span>
+                  {row.kanji && <span className="ml-2 text-on-muted font-normal text-xs">{row.reading}</span>}
+                </p>
+                <p className="text-xs text-on-muted truncate">{row.meaning_vi}</p>
+              </div>
+              {row.level && (
+                <span className={`px-2 py-0.5 text-xs font-bold rounded-full shrink-0 ${LEVEL_BADGE[row.level] || 'bg-gray-100 text-gray-600'}`}>{row.level}</span>
+              )}
+              {row.type && (
+                <span className="hidden sm:inline-block px-2 py-0.5 text-xs font-semibold rounded-full shrink-0 bg-slate-100 text-slate-600">{row.type}</span>
+              )}
+              {row.topic && (
+                <span className="hidden md:inline-block px-2 py-0.5 text-xs font-medium rounded-full shrink-0 bg-sumire-purple/10 text-sumire-purple">{row.topic}</span>
+              )}
+              <div className="flex items-center gap-0.5 shrink-0">
+                <button onClick={() => openEdit(row)} title="Sửa"
+                  className="p-1.5 text-on-muted hover:text-tsubaki-red hover:bg-tsubaki-red/10 rounded-lg transition-colors">
+                  <span className="material-symbols-outlined text-[18px]">edit</span>
+                </button>
+                <button onClick={() => handleDelete(row)} title="Xóa"
+                  className="p-1.5 text-on-muted hover:text-error hover:bg-red-50 rounded-lg transition-colors">
+                  <span className="material-symbols-outlined text-[18px]">delete</span>
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {total > LIMIT && (
         <div className="flex justify-center gap-2 mt-4">

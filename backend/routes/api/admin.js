@@ -199,6 +199,7 @@ router.post('/grammar-points/import-file', importFileUpload.single('file'), fic.
 const sl = require('../../controllers/studyListController');
 router.get('/study-lists',     c.adminListStudyLists);
 router.put('/study-lists/:id', sl.update);
+router.put('/study-lists/:id/lock', c.lockStudyList);
 router.delete('/study-lists/:id', sl.remove);
 
 // Content submissions

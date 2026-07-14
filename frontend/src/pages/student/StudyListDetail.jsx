@@ -529,6 +529,20 @@ export default function StudyListDetail() {
             </div>
           </div>
 
+          {canEdit && post.is_locked && (
+            <div className="mb-6 rounded-2xl border border-red-200 bg-red-50 p-4 flex items-start gap-3">
+              <span className="material-symbols-outlined text-error text-2xl shrink-0">lock</span>
+              <div>
+                <p className="font-semibold text-error text-sm">Bài đăng đang bị khóa — đã ẩn khỏi học viên</p>
+                <p className="text-sm text-charcoal/80 mt-0.5">
+                  {post.lock_note
+                    ? <>Quản trị viên yêu cầu chỉnh sửa: <span className="font-medium">{post.lock_note}</span></>
+                    : 'Quản trị viên yêu cầu chỉnh sửa nội dung. Bạn vẫn có thể sửa bài đăng bình thường bên dưới; bài sẽ tự hiện lại sau khi quản trị viên mở khóa.'}
+                </p>
+              </div>
+            </div>
+          )}
+
           {canEdit && (
             <>
               <InfoPanel post={post} onSaved={(updated) => setPost(p => ({ ...p, ...updated }))} />
