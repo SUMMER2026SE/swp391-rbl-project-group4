@@ -1,7 +1,8 @@
 'use strict';
 
 const { supabaseAdmin } = require('../config/supabase');
-const { computeJlptScores, SCORE_COLUMNS, PASS_TOTAL, MONDAI_TYPES } = require('../utils/jlptMock');
+const { computeJlptScores, SCORE_COLUMNS, PASS_TOTAL } = require('../utils/jlptMock');
+const { getUserTier } = require('../services/quotaService');
 
 // Grace 10s cho độ trễ mạng khi auto-submit lúc hết giờ
 const GRACE_MS = 10 * 1000;
@@ -121,13 +122,16 @@ exports.listExams = async (req, res) => {
   const offset = (page - 1) * limit;
   try {
     let query = supabaseAdmin.from('mock_exams')
-      .select('id, level, title, description, published_at', { count: 'exact' })
+      .select('id, level, title, description, published_at, is_free', { count: 'exact' })
       .eq('is_published', true)
       .order('published_at', { ascending: false })
       .range(offset, offset + Number(limit) - 1);
     if (level) query = query.eq('level', level);
     const { data: exams, error, count } = await query;
     if (error) throw error;
+
+    // Đề premium bị khóa với tài khoản free (chỉ chặn làm bài mới — xem lại vẫn được)
+    const tier = await getUserTier(req.user.id);
 
     const examIds = (exams || []).map(e => e.id);
     const meta = {};
@@ -165,7 +169,7 @@ exports.listExams = async (req, res) => {
     }
 
     res.json({
-      data: (exams || []).map(e => ({ ...e, ...meta[e.id] })),
+      data: (exams || []).map(e => ({ ...e, ...meta[e.id], locked: !e.is_free && tier !== 'premium' })),
       total: count, page: Number(page), limit: Number(limit),
     });
   } catch (err) { handleError(res, err, 'Không thể tải danh sách đề thi.'); }
@@ -175,8 +179,16 @@ exports.listExams = async (req, res) => {
 exports.getExamMeta = async (req, res) => {
   try {
     const { data: exam } = await supabaseAdmin
-      .from('mock_exams').select('id, level, title, description, is_published').eq('id', req.params.id).single();
+      .from('mock_exams').select('id, level, title, description, is_published, is_free').eq('id', req.params.id).single();
     if (!exam || !exam.is_published) return res.status(404).json({ error: 'Không tìm thấy đề thi.' });
+
+    const tier = await getUserTier(req.user.id);
+    const locked = !exam.is_free && tier !== 'premium';
+
+    // User từng nộp bài đề này chưa (để FE hiện "chỉ xem lại được" khi bị khóa)
+    const { count: submittedCount } = await supabaseAdmin.from('mock_attempts')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', req.user.id).eq('exam_id', exam.id).eq('status', 'submitted');
 
     const { data: sections } = await supabaseAdmin
       .from('mock_exam_sections').select('id, position, section_type, title, time_limit_minutes')
@@ -209,6 +221,8 @@ exports.getExamMeta = async (req, res) => {
 
     res.json({
       ...exam,
+      locked,
+      submitted_attempts: submittedCount || 0,
       pass_total: PASS_TOTAL[exam.level],
       score_columns: SCORE_COLUMNS[exam.level],
       active_attempt_id: active?.id || null,
@@ -234,15 +248,26 @@ async function getOwnedAttempt(attemptId, userId) {
 exports.startAttempt = async (req, res) => {
   try {
     const { data: exam } = await supabaseAdmin
-      .from('mock_exams').select('id, is_published').eq('id', req.params.id).single();
+      .from('mock_exams').select('id, is_published, is_free').eq('id', req.params.id).single();
     if (!exam || !exam.is_published) return res.status(404).json({ error: 'Không tìm thấy đề thi.' });
 
-    // Đang có attempt dở → trả lại (resume tự nhiên)
+    // Đang có attempt dở → trả lại (resume tự nhiên — được phép kể cả khi hết premium)
     const { data: existing } = await supabaseAdmin.from('mock_attempts')
       .select('*').eq('user_id', req.user.id).eq('exam_id', exam.id).eq('status', 'in_progress').maybeSingle();
     let attempt = existing;
 
     if (!attempt) {
+      // Đề premium: tài khoản free không được BẮT ĐẦU attempt mới
+      if (!exam.is_free) {
+        const tier = await getUserTier(req.user.id);
+        if (tier !== 'premium') {
+          return res.status(403).json({
+            error: 'Đề này dành cho tài khoản Premium. Nâng cấp để làm bài, hoặc xem lại kết quả các lần thi trước.',
+            code: 'premium_required',
+          });
+        }
+      }
+
       const { data: firstSection } = await supabaseAdmin
         .from('mock_exam_sections').select('position, time_limit_minutes')
         .eq('exam_id', exam.id).order('position').limit(1).maybeSingle();
@@ -508,62 +533,4 @@ exports.getHistory = async (req, res) => {
       ...a, level: examMap[a.exam_id]?.level || null, exam_title: examMap[a.exam_id]?.title || '(đã xóa)',
     })));
   } catch (err) { handleError(res, err, 'Không thể tải lịch sử.'); }
-};
-
-// GET /api/mock-exams/me/stats — điểm theo thời gian + mạnh/yếu theo mondai_type
-exports.getStats = async (req, res) => {
-  try {
-    // Chuỗi điểm theo thời gian
-    const { data: attempts } = await supabaseAdmin.from('mock_attempts')
-      .select('id, exam_id, scores, total_score, submitted_at')
-      .eq('user_id', req.user.id).eq('status', 'submitted')
-      .order('submitted_at', { ascending: true });
-
-    const examIds = [...new Set((attempts || []).map(a => a.exam_id))];
-    let examMap = {};
-    if (examIds.length) {
-      const { data: exams } = await supabaseAdmin.from('mock_exams').select('id, level').in('id', examIds);
-      (exams || []).forEach(e => { examMap[e.id] = e; });
-    }
-    const timeline = (attempts || []).map(a => ({
-      submitted_at: a.submitted_at, level: examMap[a.exam_id]?.level || null,
-      total_score: a.total_score, scores: a.scores,
-    }));
-
-    // Mạnh/yếu theo mondai_type (join answers → questions → groups)
-    const attemptIds = (attempts || []).map(a => a.id);
-    let byMondai = [];
-    if (attemptIds.length) {
-      const { data: answers } = await supabaseAdmin.from('mock_attempt_answers')
-        .select('question_id, is_correct').in('attempt_id', attemptIds);
-      const questionIds = [...new Set((answers || []).map(a => a.question_id))];
-      if (questionIds.length) {
-        const { data: questions } = await supabaseAdmin.from('mock_questions').select('id, group_id').in('id', questionIds);
-        const qToGroup = {};
-        (questions || []).forEach(q => { qToGroup[q.id] = q.group_id; });
-        const groupIds = [...new Set(Object.values(qToGroup))];
-        const { data: groups } = await supabaseAdmin.from('mock_question_groups').select('id, mondai_type').in('id', groupIds);
-        const groupToType = {};
-        (groups || []).forEach(g => { groupToType[g.id] = g.mondai_type; });
-
-        const agg = {};
-        (answers || []).forEach(a => {
-          const type = groupToType[qToGroup[a.question_id]];
-          if (!type) return;
-          (agg[type] ||= { correct: 0, total: 0 });
-          agg[type].total += 1;
-          if (a.is_correct) agg[type].correct += 1;
-        });
-        byMondai = Object.entries(agg).map(([mondai_type, v]) => ({
-          mondai_type,
-          ja: MONDAI_TYPES[mondai_type]?.ja || mondai_type,
-          vi: MONDAI_TYPES[mondai_type]?.vi || mondai_type,
-          correct: v.correct, total: v.total,
-          pct: Math.round((v.correct / v.total) * 100),
-        })).sort((a, b) => a.pct - b.pct);
-      }
-    }
-
-    res.json({ timeline, by_mondai: byMondai });
-  } catch (err) { handleError(res, err, 'Không thể tải thống kê.'); }
 };

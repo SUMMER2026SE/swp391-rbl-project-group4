@@ -190,6 +190,15 @@ Trả về ĐÚNG mảng JSON ${count} phần tử. KHÔNG thêm text nào khác
   return { questions: enriched, usage: result.usage };
 }
 
+// Model đôi khi trả thẻ HTML (<u>…</u>) để đánh dấu từ — FE render text thô
+// nên phải chuyển về dạng ＿…＿ và loại bỏ mọi thẻ còn sót.
+function stripHtmlMarkup(str) {
+  if (str == null) return str;
+  return String(str)
+    .replace(/<u>([\s\S]*?)<\/u>/gi, '＿$1＿')
+    .replace(/<\/?[a-z][^>]*>/gi, '');
+}
+
 /**
  * Sinh nháp câu hỏi cho MỘT mondai của đề thi thử JLPT (mock test).
  * Chỉ trả nháp để admin duyệt/sửa — KHÔNG ghi DB.
@@ -235,7 +244,8 @@ ${jlptBlock}
 ═══ DẠNG BÀI: 問題「${meta.ja}」 ═══
 • Mô tả dạng bài: ${meta.ai_hint}
 • Chỉ dẫn chuẩn in trên đề: ${meta.instruction}
-• Số lựa chọn: ĐÚNG ${optCount} lựa chọn mỗi câu.${passageRule}${listeningRule}
+• Số lựa chọn: ĐÚNG ${optCount} lựa chọn mỗi câu.
+• Khi cần đánh dấu từ trong câu, bọc từ đó trong dấu gạch dưới full-width ＿ ＿ (ví dụ: きのう＿光る＿星を見た). TUYỆT ĐỐI KHÔNG dùng thẻ HTML như <u>, <b>, <i>.${passageRule}${listeningRule}
 
 ═══ SCHEMA JSON ═══
 {"passage_text": ${needsPassage && !passageText ? '"đoạn văn dùng chung"' : 'null'}, "questions": [{"question_text": "..." hoặc null, "options": [${optCount} chuỗi], "correct_index": số 0-${optCount - 1}, "explanation": "giải thích tiếng Việt ngắn gọn vì sao đáp án đúng"${isListening ? ', "audio_transcript": "script tiếng Nhật"' : ''}}]}`;
@@ -269,15 +279,15 @@ Trả về ĐÚNG object JSON theo schema, "questions" có ${count} phần tử.
   const questions = [];
   let skipped = 0;
   for (const q of rawQuestions) {
-    const options = Array.isArray(q.options) ? q.options.map(o => String(o).trim()).filter(Boolean) : [];
+    const options = Array.isArray(q.options) ? q.options.map(o => stripHtmlMarkup(String(o).trim())).filter(Boolean) : [];
     const ci = Number(q.correct_index);
     if (options.length !== optCount || !Number.isInteger(ci) || ci < 0 || ci >= options.length) { skipped++; continue; }
     questions.push({
-      question_text:    q.question_text ? String(q.question_text).trim() : null,
+      question_text:    q.question_text ? stripHtmlMarkup(String(q.question_text).trim()) : null,
       options,
       correct_index:    ci,
-      explanation:      q.explanation || null,
-      audio_transcript: isListening ? (q.audio_transcript || null) : undefined,
+      explanation:      q.explanation ? stripHtmlMarkup(q.explanation) : null,
+      audio_transcript: isListening ? (q.audio_transcript ? stripHtmlMarkup(q.audio_transcript) : null) : undefined,
     });
   }
   if (!questions.length) {
@@ -289,7 +299,7 @@ Trả về ĐÚNG object JSON theo schema, "questions" có ${count} phần tử.
   return {
     questions,
     skipped,
-    passage_text: (needsPassage && !passageText && parsed.passage_text) ? String(parsed.passage_text) : null,
+    passage_text: (needsPassage && !passageText && parsed.passage_text) ? stripHtmlMarkup(String(parsed.passage_text)) : null,
     usage: result.usage,
   };
 }

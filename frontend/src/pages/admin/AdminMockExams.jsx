@@ -8,7 +8,7 @@ import Input from '../../components/ui/Input';
 import DataTable from '../../components/ui/DataTable';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
 import { JLPT_LEVELS } from '../../lib/mockExamConstants';
-import { adminListExams, adminCreateExam, adminDeleteExam, adminPublishExam } from '../../lib/mockExamApi';
+import { adminListExams, adminCreateExam, adminDeleteExam, adminPublishExam, adminUpdateExam } from '../../lib/mockExamApi';
 
 export default function AdminMockExams() {
   const navigate = useNavigate();
@@ -55,6 +55,13 @@ export default function AdminMockExams() {
     catch (e) { setError(e.message); setToDelete(null); }
   };
 
+  // Đổi cờ miễn phí/premium của đề (được phép cả khi đã publish)
+  const handleToggleFree = async (row) => {
+    setError('');
+    try { await adminUpdateExam(row.id, { is_free: !row.is_free }); load(); }
+    catch (e) { setError(e.message); }
+  };
+
   const columns = [
     { key: 'level', label: 'Cấp', render: (v) => <span className="inline-flex px-2 py-0.5 rounded-md bg-sumire-purple/10 text-sumire-purple font-bold text-xs">{v}</span> },
     { key: 'title', label: 'Tên đề' },
@@ -63,6 +70,15 @@ export default function AdminMockExams() {
     { key: 'is_published', label: 'Trạng thái', render: (v) => v
       ? <span className="inline-flex items-center gap-1 text-green-700 text-xs font-semibold"><span className="w-1.5 h-1.5 rounded-full bg-green-500" />Đã xuất bản</span>
       : <span className="inline-flex items-center gap-1 text-on-muted text-xs font-semibold"><span className="w-1.5 h-1.5 rounded-full bg-outline" />Bản nháp</span> },
+    { key: 'is_free', label: 'Quyền truy cập', render: (v, row) => (
+      <button onClick={() => handleToggleFree(row)} title="Bấm để đổi Miễn phí ↔ Premium"
+        className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-semibold transition-colors ${v
+          ? 'bg-green-50 text-green-700 hover:bg-green-100'
+          : 'bg-amber-50 text-amber-700 hover:bg-amber-100'}`}>
+        <span className="material-symbols-outlined text-sm">{v ? 'lock_open' : 'workspace_premium'}</span>
+        {v ? 'Miễn phí' : 'Premium'}
+      </button>
+    ) },
   ];
 
   return (

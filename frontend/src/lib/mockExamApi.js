@@ -13,7 +13,6 @@ export const getMockResult   = (aid)   => api.get(`/mock-exams/attempts/${aid}/r
 export const getMockReview   = (aid)   => api.get(`/mock-exams/attempts/${aid}/review`).then(r => r.data);
 export const getMockLeaderboard = (id) => api.get(`/mock-exams/${id}/leaderboard`).then(r => r.data);
 export const getMockHistory  = ()      => api.get('/mock-exams/me/history').then(r => r.data);
-export const getMockStats    = ()      => api.get('/mock-exams/me/stats').then(r => r.data);
 
 // ─── Admin ────────────────────────────────────────────────────────────────────
 export const adminListExams  = (params) => api.get('/admin/mock-exams', { params }).then(r => r.data);
