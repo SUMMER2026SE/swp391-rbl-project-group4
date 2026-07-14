@@ -6,11 +6,11 @@ import Button from '../../components/ui/Button';
 import Modal from '../../components/ui/Modal';
 import FuriganaText from '../../components/ui/FuriganaText';
 import FuriganaToggle from '../../components/ui/FuriganaToggle';
-import WorksheetPreview from '../../components/kanji/WorksheetPreview';
+import KanjiWritingPracticeModal from '../../components/kanji/KanjiWritingPracticeModal';
+import KanjiPdfPanel from '../../components/kanji/KanjiPdfPanel';
 import VocabWordViewer from '../../components/shared/VocabWordViewer';
 import GrammarItemCard from '../../components/shared/GrammarItemCard';
 import api from '../../lib/api';
-import { downloadWorksheetPDF } from '../../lib/kanjiWorksheet';
 import { renderMarkdown } from '../../lib/renderPreview';
 
 function toEmbed(url) {
@@ -55,7 +55,8 @@ export default function LessonView({ Layout = StudentLayout, previewBase = '' })
   const [paywall, setPaywall] = useState(null); // body 403 ENROLLMENT_REQUIRED { course_id }
   const [furigana, setFurigana] = useState(false);
   const [working, setWorking] = useState(false);
-  const [downloadingPdf, setDownloadingPdf] = useState(false);
+  const [writingOpen, setWritingOpen] = useState(false); // modal luyện viết kanji
+  const [pdfOpen, setPdfOpen] = useState(false);         // panel tạo PDF luyện viết
 
   // Chọn vocab/kanji để thêm vào flashcard cá nhân. Key: `v-<id>` | `k-<id>`.
   const [selecting, setSelecting] = useState(false); // bật/tắt chế độ chọn (hiện checkbox)
@@ -76,6 +77,8 @@ export default function LessonView({ Layout = StudentLayout, previewBase = '' })
     setSelected({});
     setNotice(null);
     setPaywall(null);
+    setWritingOpen(false);
+    setPdfOpen(false);
     api.get(`/lessons/${id}`)
       .then(r => setLesson(r.data))
       .catch(e => {
@@ -118,7 +121,7 @@ export default function LessonView({ Layout = StudentLayout, previewBase = '' })
   const nav = lesson.nav || {};
   const embed = toEmbed(lesson.content_url);
   // Nút furigana chỉ có nghĩa với mục nhiều văn bản tiếng Nhật dài cần đọc.
-  const showFuriganaToggle = ['reading', 'grammar', 'kanji'].includes(lesson.lesson_type);
+  const showFuriganaToggle = ['reading', 'grammar'].includes(lesson.lesson_type);
 
   // Bộ luyện viết chỉ gồm đúng các kanji của bài học (map `character` → `char` cho worksheet).
   const worksheetList = (lesson.kanji || []).map(k => ({
@@ -128,12 +131,6 @@ export default function LessonView({ Layout = StudentLayout, previewBase = '' })
     meaning_vi: k.meaning_vi,
     han_viet: k.han_viet,
   }));
-
-  const downloadLessonWorksheet = async () => {
-    setDownloadingPdf(true);
-    try { await downloadWorksheetPDF('ws-print', `bo-luyen-viet-${slugify(lesson.title)}.pdf`); }
-    finally { setDownloadingPdf(false); }
-  };
 
   // Đánh dấu hoàn thành rồi đi tiếp (hoặc về khóa học nếu là mục cuối).
   const finishAndContinue = async () => {
@@ -433,8 +430,11 @@ export default function LessonView({ Layout = StudentLayout, previewBase = '' })
                     <span className="material-symbols-outlined text-lg">library_add</span> Thêm vào thẻ ghi nhớ
                   </Button>
                 )}
-                <Button size="sm" variant="secondary" loading={downloadingPdf} onClick={downloadLessonWorksheet}>
-                  <span className="material-symbols-outlined text-lg">download</span> Tải PDF bộ luyện viết
+                <Button size="sm" variant="secondary" onClick={() => setWritingOpen(true)}>
+                  <span className="material-symbols-outlined text-lg">draw</span> Luyện viết
+                </Button>
+                <Button size="sm" onClick={() => setPdfOpen(true)}>
+                  <span className="material-symbols-outlined text-lg">article</span> Tạo PDF luyện viết
                 </Button>
               </div>
             </div>
@@ -465,11 +465,17 @@ export default function LessonView({ Layout = StudentLayout, previewBase = '' })
                 </div>
               ))}
             </div>
-            {/* Nội dung worksheet render ẩn ngoài màn hình để html2canvas chụp khi tải PDF */}
-            <div style={{ position: 'fixed', left: -10000, top: 0, width: 672 }} aria-hidden="true">
-              <WorksheetPreview list={worksheetList} />
-            </div>
           </div>
+        )}
+
+        {/* ── Panel tạo PDF luyện viết (cài đặt + xem trước + tải) ────── */}
+        {pdfOpen && lesson.kanji?.length > 0 && (
+          <KanjiPdfPanel
+            className="mb-6"
+            list={worksheetList}
+            filename={`bo-luyen-viet-${slugify(lesson.title)}.pdf`}
+            onClose={() => setPdfOpen(false)}
+          />
         )}
 
         {/* ── Quiz ───────────────────────────────────────────────────── */}
@@ -550,6 +556,11 @@ export default function LessonView({ Layout = StudentLayout, previewBase = '' })
             <span className="material-symbols-outlined text-lg">close</span>
           </button>
         </div>
+      )}
+
+      {/* ── Modal luyện viết Kanji ──────────────────────────────────── */}
+      {writingOpen && (
+        <KanjiWritingPracticeModal items={lesson.kanji || []} onClose={() => setWritingOpen(false)} />
       )}
 
       {/* ── Modal chọn bộ flashcard ─────────────────────────────────── */}
