@@ -36,6 +36,7 @@ export default function ReadingReader({
   Layout = StudentLayout,
   apiBase = '/reading',
   listPath = '/reading',
+  backLabel = 'Quay lại danh sách',
   preview = false,
 }) {
   const { id } = useParams();
@@ -102,7 +103,7 @@ export default function ReadingReader({
         className="inline-flex items-center gap-1.5 text-sm text-on-muted hover:text-tsubaki-red transition-colors mb-5"
       >
         <span className="material-symbols-outlined text-lg">arrow_back</span>
-        Quay lại danh sách
+        {backLabel}
       </button>
 
       {error && <Alert type="error">{error}</Alert>}

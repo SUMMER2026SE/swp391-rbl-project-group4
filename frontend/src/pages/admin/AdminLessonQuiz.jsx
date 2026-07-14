@@ -1,16 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import AdminLayout from '../../components/layout/AdminLayout';
 import Modal from '../../components/ui/Modal';
 import Button from '../../components/ui/Button';
 import Alert from '../../components/ui/Alert';
 import QuestionTypeForm from '../../components/admin/QuestionTypeForm';
 import ProctoredAttemptsModal from '../../components/admin/ProctoredAttemptsModal';
 import PassThresholdField from '../../components/admin/PassThresholdField';
+import LessonInfoPanel from '../../components/shared/LessonInfoPanel';
 import {
   EMPTY_Q_FORM, QUESTION_TYPES, TYPE_MAP, LEVEL_COLORS, DIFF_COLORS,
   formToPayload, rowToForm,
 } from '../../utils/questionFormHelpers';
+import { useEditorArea } from '../../lib/useEditorArea';
 import api from '../../lib/api';
 
 // ── Type badge ────────────────────────────────────────────────────────────────
@@ -75,26 +76,34 @@ function AnswerPreview({ q }) {
 
 // ── Bank Import Modal ─────────────────────────────────────────────────────────
 
-function BankImportModal({ open, onClose, onImport, saving }) {
+function BankImportModal({ open, onClose, onImport, saving, apiBase }) {
+  const isTeacher = apiBase === '/teacher';
   const [bankItems, setBankItems] = useState([]);
   const [loading, setLoading]     = useState(false);
   const [search, setSearch]       = useState('');
   const [filterType, setFilterType] = useState('');
   const [filterLevel, setFilterLevel] = useState('');
   const [selected, setSelected]   = useState([]);
+  // Nguồn cho GV: ngân hàng riêng ('mine') hoặc ngân hàng chung của admin ('global')
+  const [source, setSource]       = useState('mine');
 
   const fetchBank = useCallback(async () => {
     setLoading(true);
     try {
-      const params = new URLSearchParams({ page: 1, limit: 50, status: 'approved' });
+      const params = new URLSearchParams({ page: 1, limit: 50 });
+      // Ngân hàng chung của admin cần lọc câu đã duyệt; các endpoint của GV tự lọc.
+      if (!isTeacher) params.set('status', 'approved');
       if (filterType)  params.set('question_type', filterType);
       if (filterLevel) params.set('level', filterLevel);
       if (search)      params.set('search', search);
-      const r = await api.get(`/admin/question-bank?${params}`);
+      const endpoint = isTeacher && source === 'global'
+        ? '/teacher/global-question-bank'
+        : `${apiBase}/question-bank`;
+      const r = await api.get(`${endpoint}?${params}`);
       setBankItems(r.data.data || []);
     } catch {}
     finally { setLoading(false); }
-  }, [search, filterType, filterLevel]);
+  }, [search, filterType, filterLevel, apiBase, isTeacher, source]);
 
   useEffect(() => { if (open) { setSelected([]); fetchBank(); } }, [open, fetchBank]);
 
@@ -105,12 +114,27 @@ function BankImportModal({ open, onClose, onImport, saving }) {
       footer={
         <>
           <Button variant="secondary" onClick={onClose}>Đóng</Button>
-          <Button onClick={() => onImport(selected)} loading={saving} disabled={!selected.length}>
+          <Button onClick={() => onImport(selected, source)} loading={saving} disabled={!selected.length}>
             <span className="material-symbols-outlined text-lg">download</span>
             Nhập {selected.length > 0 ? `(${selected.length})` : ''} câu hỏi
           </Button>
         </>
       }>
+      {isTeacher && (
+        <div className="flex gap-2 mb-4">
+          {[
+            { val: 'mine',   icon: 'person',        label: 'Ngân hàng của tôi' },
+            { val: 'global', icon: 'public',        label: 'Ngân hàng chung' },
+          ].map(s => (
+            <button key={s.val} type="button"
+              onClick={() => { setSource(s.val); setSelected([]); }}
+              className={`flex items-center gap-1.5 px-4 py-2 rounded-xl border text-sm font-medium transition-all ${source === s.val ? 'border-sumire-purple bg-sumire-purple/10 text-sumire-purple' : 'border-outline/40 text-on-muted hover:border-sumire-purple/40'}`}>
+              <span className="material-symbols-outlined text-base">{s.icon}</span>
+              {s.label}
+            </button>
+          ))}
+        </div>
+      )}
       <div className="flex flex-wrap gap-2 mb-4">
         <input
           type="text" placeholder="Tìm kiếm câu hỏi..." value={search}
@@ -172,6 +196,8 @@ function BankImportModal({ open, onClose, onImport, saving }) {
 export default function AdminLessonQuiz() {
   const { lessonId } = useParams();
   const navigate     = useNavigate();
+  // Dùng chung giữa admin và giáo viên: URL quyết định apiBase (/admin | /teacher) và layout.
+  const { apiBase, Layout } = useEditorArea();
 
   const [lesson, setLesson]       = useState(null);
   const [quiz, setQuiz]           = useState(null);
@@ -200,17 +226,17 @@ export default function AdminLessonQuiz() {
   // ── Load ────────────────────────────────────────────────────────────────────
 
   const loadLesson = async () => {
-    const r = await api.get(`/admin/lessons/${lessonId}`);
+    const r = await api.get(`${apiBase}/lessons/${lessonId}`);
     return r.data;
   };
 
   const loadQuiz = async () => {
-    const r = await api.get(`/admin/quizzes?lesson_id=${lessonId}`);
+    const r = await api.get(`${apiBase}/quizzes?lesson_id=${lessonId}`);
     return (r.data.data || [])[0] || null;
   };
 
   const loadQuestions = async (quizId) => {
-    const r = await api.get(`/admin/quizzes/${quizId}/questions`);
+    const r = await api.get(`${apiBase}/quizzes/${quizId}/questions`);
     return r.data || [];
   };
 
@@ -234,7 +260,7 @@ export default function AdminLessonQuiz() {
 
   const createQuiz = async () => {
     try {
-      const r = await api.post('/admin/quizzes', {
+      const r = await api.post(`${apiBase}/quizzes`, {
         title: lesson?.title || 'Quiz',
         lesson_id: lessonId,
         type: 'mixed',
@@ -265,7 +291,7 @@ export default function AdminLessonQuiz() {
     }
     setSavingSettings(true);
     try {
-      const r = await api.put(`/admin/quizzes/${quiz.id}`, {
+      const r = await api.put(`${apiBase}/quizzes/${quiz.id}`, {
         title: quizForm.title,
         time_limit: quizForm.time_limit ? Number(quizForm.time_limit) : null,
         is_published: quizForm.is_published,
@@ -295,9 +321,9 @@ export default function AdminLessonQuiz() {
     try {
       const payload = { ...formToPayload(qForm), quiz_id: quiz.id, order_index: questions.length };
       if (editQId) {
-        await api.put(`/admin/questions/${editQId}`, payload);
+        await api.put(`${apiBase}/questions/${editQId}`, payload);
       } else {
-        await api.post('/admin/questions', payload);
+        await api.post(`${apiBase}/questions`, payload);
       }
       setQModal(false);
       setQuestions(await loadQuestions(quiz.id));
@@ -312,7 +338,7 @@ export default function AdminLessonQuiz() {
   const deleteQuestion = async (q) => {
     if (!confirm(`Xóa câu hỏi này?`)) return;
     try {
-      await api.delete(`/admin/questions/${q.id}`);
+      await api.delete(`${apiBase}/questions/${q.id}`);
       setQuestions(qs => qs.filter(x => x.id !== q.id));
       setAlert({ type: 'success', msg: 'Đã xóa câu hỏi.' });
     } catch (e) {
@@ -322,11 +348,11 @@ export default function AdminLessonQuiz() {
 
   // ── Import from bank ────────────────────────────────────────────────────────
 
-  const handleImport = async (ids) => {
+  const handleImport = async (ids, source) => {
     if (!ids.length) return;
     setImportSaving(true);
     try {
-      await api.post(`/admin/quizzes/${quiz.id}/import-from-bank`, { question_ids: ids });
+      await api.post(`${apiBase}/quizzes/${quiz.id}/import-from-bank`, { question_ids: ids, source });
       setBankModal(false);
       setQuestions(await loadQuestions(quiz.id));
       setAlert({ type: 'success', msg: `Đã nhập ${ids.length} câu hỏi.` });
@@ -340,24 +366,24 @@ export default function AdminLessonQuiz() {
   // ── Back ────────────────────────────────────────────────────────────────────
 
   const goBack = () => {
-    if (lesson?.course_id) navigate(`/admin/courses/${lesson.course_id}/edit`);
-    else navigate('/admin/courses');
+    if (lesson?.course_id) navigate(`${apiBase}/courses/${lesson.course_id}/edit`);
+    else navigate(`${apiBase}/courses`);
   };
 
   // ── Render ───────────────────────────────────────────────────────────────────
 
   if (loading) {
     return (
-      <AdminLayout title="Quiz bài học">
+      <Layout title="Quiz bài học">
         <div className="flex items-center justify-center py-24">
           <span className="material-symbols-outlined animate-spin text-tsubaki-red text-5xl">progress_activity</span>
         </div>
-      </AdminLayout>
+      </Layout>
     );
   }
 
   return (
-    <AdminLayout title="Quiz bài học">
+    <Layout title="Quiz bài học">
       {alert.msg && (
         <Alert type={alert.type} onClose={() => setAlert({ type: '', msg: '' })} className="mb-5">
           {alert.msg}
@@ -432,6 +458,8 @@ export default function AdminLessonQuiz() {
           </div>
         )}
       </section>
+
+      <LessonInfoPanel lesson={lesson} apiBase={apiBase} onSaved={u => setLesson(l => ({ ...l, ...u }))} />
 
       {/* No quiz yet */}
       {!quiz ? (
@@ -633,10 +661,11 @@ export default function AdminLessonQuiz() {
         onClose={() => setBankModal(false)}
         onImport={handleImport}
         saving={importSaving}
+        apiBase={apiBase}
       />
 
       {/* Proctored Attempts Modal */}
-      {quiz && <ProctoredAttemptsModal open={attemptsModal} onClose={() => setAttemptsModal(false)} quizId={quiz.id} />}
-    </AdminLayout>
+      {quiz && <ProctoredAttemptsModal open={attemptsModal} onClose={() => setAttemptsModal(false)} quizId={quiz.id} apiBase={apiBase} />}
+    </Layout>
   );
 }

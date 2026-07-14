@@ -1,10 +1,13 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useEditorArea } from '../../lib/useEditorArea';
 import Modal from '../../components/ui/Modal';
 import Button from '../../components/ui/Button';
 import Alert from '../../components/ui/Alert';
 import ImportFileModal from '../../components/admin/ImportFileModal';
+import CollapsibleSection from '../../components/shared/CollapsibleSection';
+import LessonInfoPanel from '../../components/shared/LessonInfoPanel';
+import VocabWordViewer from '../../components/shared/VocabWordViewer';
 import api from '../../lib/api';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -22,150 +25,107 @@ const LEVEL_COLOR = {
 
 const EMPTY_FORM = {
   kanji: '', reading: '', meaning_vi: '', meaning_ja: '',
-  level: '', type: '', example_sentence: '',
+  type: '', example_sentence: '', image_url: '',
 };
 
-// ── Vocabulary Card ───────────────────────────────────────────────────────────
+// ── Vocab Form (popup thêm mới thủ công) ──────────────────────────────────────
+// Nhóm trường theo khối: Từ (kanji + cách đọc) → Nghĩa (VI + JA) → Bổ sung
+// (loại từ + câu ví dụ) → Ảnh minh họa. Không có field cấp độ JLPT trong ngữ
+// cảnh khóa học. Sửa từ đã có thì làm inline ngay trên thẻ xem trước.
 
-function VocabCard({ item, onEdit, onDelete }) {
-  const levelCls = LEVEL_COLOR[item.level] || 'bg-gray-100 text-gray-600';
+const FIELD_CLS = 'w-full px-4 py-2.5 border border-outline rounded-xl outline-none focus:border-tsubaki-red transition-colors';
+const LABEL_CLS = 'block text-sm font-medium text-on-muted mb-1';
+const GROUP_CLS = 'text-xs font-bold text-on-muted uppercase tracking-wider mb-2';
+
+function VocabForm({ form, onChange, uploadImage }) {
+  const set = (key) => (e) => onChange({ ...form, [key]: e.target.value });
+  const fileRef = useRef(null);
+  const [uploading, setUploading] = useState(false);
+
+  const handleFile = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setUploading(true);
+    try {
+      onChange({ ...form, image_url: await uploadImage(file) });
+    } catch (err) { alert(err.message); }
+    finally { setUploading(false); }
+  };
 
   return (
-    <article className="bg-white/75 backdrop-blur-md border border-outline/20 rounded-2xl p-5 flex flex-col h-full shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-200">
-      {/* Top row */}
-      <div className="flex justify-between items-start mb-4">
-        {item.level ? (
-          <span className={`px-3 py-0.5 rounded-full text-xs font-bold ${levelCls}`}>{item.level} Level</span>
-        ) : <span />}
-        {item.type && (
-          <span className="text-xs text-on-muted bg-surface-container px-2 py-0.5 rounded-full">{item.type}</span>
-        )}
-      </div>
-
-      {/* Main word */}
-      <div className="text-center flex-1 mb-4">
-        {item.reading && (
-          <p className="text-xs text-on-muted mb-1 tracking-wider">{item.reading}</p>
-        )}
-        <h2 className="text-3xl font-bold text-on-surface mb-2 leading-tight">
-          {item.kanji || item.reading}
-        </h2>
-        <p className="text-lg font-semibold text-tsubaki-red">{item.meaning_vi}</p>
-        {item.meaning_ja && (
-          <p className="text-xs text-on-muted mt-0.5">{item.meaning_ja}</p>
-        )}
-      </div>
-
-      {/* Example */}
-      {item.example_sentence && (
-        <div className="bg-surface-stone/60 p-3 rounded-xl border border-outline/10 mb-4">
-          <p className="text-xs font-bold text-on-muted uppercase tracking-wider mb-1">VÍ DỤ</p>
-          <p className="text-sm text-charcoal italic leading-relaxed">{item.example_sentence}</p>
-        </div>
-      )}
-
-      {/* Actions */}
-      <div className="flex items-center gap-2 mt-auto pt-3 border-t border-outline/10">
-        <button
-          onClick={() => onEdit(item)}
-          className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl border border-outline/30 text-sm text-on-muted hover:border-tsubaki-red hover:text-tsubaki-red transition-colors"
-        >
-          <span className="material-symbols-outlined text-base">edit</span>
-          Sửa
-        </button>
-        <button
-          onClick={() => onDelete(item)}
-          className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl border border-outline/30 text-sm text-on-muted hover:border-error hover:text-error transition-colors"
-        >
-          <span className="material-symbols-outlined text-base">link_off</span>
-          Gỡ
-        </button>
-      </div>
-    </article>
-  );
-}
-
-// ── Vocab Form ────────────────────────────────────────────────────────────────
-
-function VocabForm({ form, onChange }) {
-  return (
-    <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <label className="block text-sm font-medium text-on-muted mb-1">Kanji / Chữ</label>
-          <input
-            value={form.kanji}
-            onChange={e => onChange({ ...form, kanji: e.target.value })}
-            placeholder="例: 会議"
-            className="w-full px-4 py-3 border border-outline rounded-xl text-lg outline-none focus:border-tsubaki-red transition-colors"
-          />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-on-muted mb-1">Cách đọc (Hiragana) *</label>
-          <input
-            value={form.reading}
-            onChange={e => onChange({ ...form, reading: e.target.value })}
-            placeholder="例: かいぎ"
-            className="w-full px-4 py-3 border border-outline rounded-xl text-lg outline-none focus:border-tsubaki-red transition-colors"
-          />
-        </div>
-      </div>
-
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <label className="block text-sm font-medium text-on-muted mb-1">Nghĩa tiếng Việt *</label>
-          <input
-            value={form.meaning_vi}
-            onChange={e => onChange({ ...form, meaning_vi: e.target.value })}
-            placeholder="Ý nghĩa..."
-            className="w-full px-4 py-3 border border-outline rounded-xl text-sm outline-none focus:border-tsubaki-red transition-colors"
-          />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-on-muted mb-1">Nghĩa tiếng Nhật</label>
-          <input
-            value={form.meaning_ja}
-            onChange={e => onChange({ ...form, meaning_ja: e.target.value })}
-            placeholder="意味..."
-            className="w-full px-4 py-3 border border-outline rounded-xl text-sm outline-none focus:border-tsubaki-red transition-colors"
-          />
-        </div>
-      </div>
-
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <label className="block text-sm font-medium text-on-muted mb-1">Cấp độ JLPT</label>
-          <select
-            value={form.level}
-            onChange={e => onChange({ ...form, level: e.target.value })}
-            className="w-full px-4 py-3 border border-outline rounded-xl text-sm outline-none focus:border-tsubaki-red transition-colors"
-          >
-            <option value="">-- Chọn --</option>
-            {LEVELS.map(l => <option key={l} value={l}>{l}</option>)}
-          </select>
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-on-muted mb-1">Loại từ</label>
-          <select
-            value={form.type}
-            onChange={e => onChange({ ...form, type: e.target.value })}
-            className="w-full px-4 py-3 border border-outline rounded-xl text-sm outline-none focus:border-tsubaki-red transition-colors"
-          >
-            <option value="">-- Chọn --</option>
-            {WORD_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-          </select>
+    <div className="space-y-5">
+      <div>
+        <p className={GROUP_CLS}>Từ vựng</p>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className={LABEL_CLS}>Kanji / Chữ</label>
+            <input value={form.kanji} onChange={set('kanji')} placeholder="例: 会議" className={`${FIELD_CLS} text-lg`} />
+          </div>
+          <div>
+            <label className={LABEL_CLS}>Cách đọc (Hiragana) *</label>
+            <input value={form.reading} onChange={set('reading')} placeholder="例: かいぎ" className={`${FIELD_CLS} text-lg`} />
+          </div>
         </div>
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-on-muted mb-1">Câu ví dụ</label>
-        <textarea
-          value={form.example_sentence}
-          onChange={e => onChange({ ...form, example_sentence: e.target.value })}
-          rows={2}
-          placeholder="例: 明日、10時から会議があります。"
-          className="w-full px-4 py-3 border border-outline rounded-xl text-sm outline-none focus:border-tsubaki-red transition-colors resize-none"
-        />
+        <p className={GROUP_CLS}>Nghĩa</p>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className={LABEL_CLS}>Tiếng Việt *</label>
+            <input value={form.meaning_vi} onChange={set('meaning_vi')} placeholder="Ý nghĩa..." className={`${FIELD_CLS} text-sm`} />
+          </div>
+          <div>
+            <label className={LABEL_CLS}>Tiếng Nhật</label>
+            <input value={form.meaning_ja} onChange={set('meaning_ja')} placeholder="意味..." className={`${FIELD_CLS} text-sm`} />
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <p className={GROUP_CLS}>Bổ sung</p>
+        <div className="space-y-3">
+          <div className="w-1/2 pr-1.5">
+            <label className={LABEL_CLS}>Loại từ</label>
+            <select value={form.type} onChange={set('type')} className={`${FIELD_CLS} text-sm`}>
+              <option value="">-- Chọn --</option>
+              {WORD_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className={LABEL_CLS}>Câu ví dụ</label>
+            <textarea
+              value={form.example_sentence}
+              onChange={set('example_sentence')}
+              rows={2}
+              placeholder="例: 明日、10時から会議があります。"
+              className={`${FIELD_CLS} text-sm resize-none`}
+            />
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <p className={GROUP_CLS}>Ảnh minh họa</p>
+        {form.image_url ? (
+          <div className="relative w-full h-36 rounded-xl overflow-hidden border border-outline">
+            <img src={form.image_url} alt="" className="w-full h-full object-cover" />
+            <button type="button" onClick={() => onChange({ ...form, image_url: '' })} title="Bỏ ảnh"
+              className="absolute top-2 right-2 w-7 h-7 rounded-full bg-black/50 text-white flex items-center justify-center hover:bg-black/70 transition-colors">
+              <span className="material-symbols-outlined text-base">close</span>
+            </button>
+          </div>
+        ) : (
+          <button type="button" onClick={() => fileRef.current?.click()} disabled={uploading}
+            className="w-full h-24 border-2 border-dashed border-outline/40 rounded-xl flex flex-col items-center justify-center gap-1 text-on-muted text-sm hover:border-tsubaki-red/50 hover:text-tsubaki-red transition-colors disabled:opacity-50">
+            <span className={`material-symbols-outlined text-2xl ${uploading ? 'animate-spin' : ''}`}>
+              {uploading ? 'progress_activity' : 'add_photo_alternate'}
+            </span>
+            {uploading ? 'Đang tải lên…' : 'Tải ảnh minh họa (tùy chọn)'}
+          </button>
+        )}
+        <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleFile} />
       </div>
     </div>
   );
@@ -185,8 +145,10 @@ export default function AdminLessonVocabulary() {
 
   const [modal, setModal]     = useState(false);
   const [form, setForm]       = useState(EMPTY_FORM);
-  const [editId, setEditId]   = useState(null);
   const [saving, setSaving]   = useState(false);
+
+  // Panel "Quản lý từ vựng" — mở sẵn vì các nút thêm nằm trong đó
+  const [manageOpen, setManageOpen] = useState(true);
 
   // Modal "Nhập file"
   const [importOpen, setImportOpen] = useState(false);
@@ -226,20 +188,7 @@ export default function AdminLessonVocabulary() {
 
   // ── CRUD ────────────────────────────────────────────────────────────────────
 
-  const openCreate = () => { setForm(EMPTY_FORM); setEditId(null); setModal(true); };
-  const openEdit   = (item) => {
-    setForm({
-      kanji: item.kanji || '',
-      reading: item.reading || '',
-      meaning_vi: item.meaning_vi || '',
-      meaning_ja: item.meaning_ja || '',
-      level: item.level || '',
-      type: item.type || '',
-      example_sentence: item.example_sentence || '',
-    });
-    setEditId(item.id);
-    setModal(true);
-  };
+  const openCreate = () => { setForm(EMPTY_FORM); setModal(true); };
 
   const handleSave = async () => {
     if (!form.reading.trim()) return setAlert({ type: 'error', msg: 'Cách đọc (reading) là bắt buộc.' });
@@ -251,24 +200,33 @@ export default function AdminLessonVocabulary() {
         reading: form.reading.trim(),
         meaning_vi: form.meaning_vi.trim(),
         meaning_ja: form.meaning_ja.trim() || null,
-        level: form.level || null,
         type: form.type || null,
         example_sentence: form.example_sentence.trim() || null,
+        image_url: form.image_url || null,
         lesson_id: lessonId,
       };
-      if (editId) {
-        await api.put(`${apiBase}/vocabulary/${editId}`, payload);
-      } else {
-        await api.post(`${apiBase}/vocabulary`, payload);
-      }
+      await api.post(`${apiBase}/vocabulary`, payload);
       setModal(false);
       await load();
-      setAlert({ type: 'success', msg: editId ? 'Đã cập nhật từ vựng.' : 'Đã thêm từ vựng mới.' });
+      setAlert({ type: 'success', msg: 'Đã thêm từ vựng mới.' });
     } catch (e) {
       setAlert({ type: 'error', msg: e.message });
     } finally {
       setSaving(false);
     }
+  };
+
+  // Sửa inline từ thẻ xem trước — cập nhật kho chung rồi đồng bộ state tại chỗ.
+  const saveVocabItem = async (id, patch) => {
+    await api.put(`${apiBase}/vocabulary/${id}`, patch);
+    setVocab(v => v.map(x => x.id === id ? { ...x, ...patch } : x));
+  };
+
+  const uploadVocabImage = async (file) => {
+    const fd = new FormData();
+    fd.append('image', file);
+    const up = await api.post(`${apiBase}/vocabulary/upload-image`, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+    return up.data.url;
   };
 
   // Gỡ khỏi bài (không xóa từ gốc trong thư viện)
@@ -356,41 +314,50 @@ export default function AdminLessonVocabulary() {
         </Alert>
       )}
 
-      {/* Header */}
-      <section className="mb-8 flex flex-col md:flex-row md:items-end justify-between gap-4">
-        <div>
-          <button
-            onClick={goBack}
-            className="flex items-center gap-1 text-sm text-on-muted hover:text-tsubaki-red transition-colors mb-3"
-          >
-            <span className="material-symbols-outlined text-base">arrow_back</span>
-            Quay lại Course Builder
-          </button>
+      {/* Header khóa/bài */}
+      <section className="mb-6">
+        <button
+          onClick={goBack}
+          className="flex items-center gap-1 text-sm text-on-muted hover:text-tsubaki-red transition-colors mb-3"
+        >
+          <span className="material-symbols-outlined text-base">arrow_back</span>
+          Quay lại Course Builder
+        </button>
 
-          <div className="flex items-center gap-2 mb-2">
-            <span className="bg-green-100 text-green-700 px-3 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider flex items-center gap-1">
-              <span className="material-symbols-outlined text-sm">style</span>
-              Vocabulary
+        <div className="flex items-center gap-2 mb-2">
+          <span className="bg-green-100 text-green-700 px-3 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider flex items-center gap-1">
+            <span className="material-symbols-outlined text-sm">style</span>
+            Vocabulary
+          </span>
+          {lesson?.level && (
+            <span className={`px-3 py-0.5 rounded-full text-xs font-bold ${LEVEL_COLOR[lesson.level] || 'bg-gray-100 text-gray-600'}`}>
+              {lesson.level}
             </span>
-            {lesson?.level && (
-              <span className={`px-3 py-0.5 rounded-full text-xs font-bold ${LEVEL_COLOR[lesson.level] || 'bg-gray-100 text-gray-600'}`}>
-                {lesson.level}
-              </span>
-            )}
-          </div>
-
-          <h1 className="font-display text-2xl font-bold text-on-surface">
-            {loading ? 'Đang tải...' : lesson?.title || 'Bài học từ vựng'}
-          </h1>
-          {lesson?.title_ja && (
-            <p className="text-on-muted text-sm mt-0.5">{lesson.title_ja}</p>
           )}
-          <p className="text-on-muted text-sm mt-1">
-            {vocab.length} từ vựng trong bài học này
-          </p>
         </div>
 
-        <div className="flex gap-2 shrink-0">
+        <h1 className="font-display text-2xl font-bold text-on-surface">
+          {loading ? 'Đang tải...' : lesson?.title || 'Bài học từ vựng'}
+        </h1>
+        {lesson?.title_ja && (
+          <p className="text-on-muted text-sm mt-0.5">{lesson.title_ja}</p>
+        )}
+        <p className="text-on-muted text-sm mt-1">
+          {vocab.length} từ vựng trong bài học này
+        </p>
+      </section>
+
+      <LessonInfoPanel lesson={lesson} apiBase={apiBase} onSaved={u => setLesson(l => ({ ...l, ...u }))} />
+
+      {/* Panel quản lý — thêm từ + tìm/lọc danh sách trong bài */}
+      <CollapsibleSection icon="playlist_add" title="Quản lý từ vựng"
+        subtitle="Thêm thủ công, nhập file, thêm từ thư viện; tìm & lọc danh sách"
+        open={manageOpen} onToggle={() => setManageOpen(o => !o)} className="mb-6">
+        <div className="flex flex-wrap gap-2">
+          <Button onClick={openCreate}>
+            <span className="material-symbols-outlined text-base">add</span>
+            Thêm thủ công
+          </Button>
           <Button variant="secondary" onClick={() => setImportOpen(true)}>
             <span className="material-symbols-outlined text-base">upload_file</span>
             Nhập file
@@ -399,50 +366,32 @@ export default function AdminLessonVocabulary() {
             <span className="material-symbols-outlined text-base">library_add</span>
             Thêm từ thư viện
           </Button>
-          <Button onClick={openCreate}>
-            <span className="material-symbols-outlined text-base">add</span>
-            Thêm thủ công
-          </Button>
         </div>
-      </section>
 
-      {/* Progress bar */}
-      {vocab.length > 0 && (
-        <div className="mb-6 flex items-center gap-4">
-          <div className="flex-1 h-1.5 bg-surface-variant rounded-full overflow-hidden">
-            <div
-              className="h-full bg-gradient-to-r from-tsubaki-red to-sumire-purple rounded-full transition-all"
-              style={{ width: `${Math.min((vocab.length / 10) * 100, 100)}%` }}
-            />
+        {vocab.length > 0 && (
+          <div className="flex flex-col sm:flex-row gap-3">
+            <div className="relative flex-1">
+              <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-muted text-xl">search</span>
+              <input
+                value={filterSearch}
+                onChange={e => setFilterSearch(e.target.value)}
+                placeholder="Tìm theo kanji, cách đọc hoặc nghĩa..."
+                className="w-full pl-11 pr-4 py-2.5 border border-outline rounded-xl text-sm outline-none focus:border-tsubaki-red transition-colors"
+              />
+            </div>
+            <select
+              value={filterLevel}
+              onChange={e => setFilterLevel(e.target.value)}
+              className="px-4 py-2.5 border border-outline rounded-xl text-sm outline-none focus:border-tsubaki-red transition-colors"
+            >
+              <option value="">Tất cả cấp độ</option>
+              {LEVELS.map(l => <option key={l} value={l}>{l}</option>)}
+            </select>
           </div>
-          <span className="text-xs text-on-muted shrink-0">{vocab.length} / 10 từ gợi ý</span>
-        </div>
-      )}
+        )}
+      </CollapsibleSection>
 
-      {/* Filter bar */}
-      {vocab.length > 0 && (
-        <div className="mb-5 flex flex-col sm:flex-row gap-3">
-          <div className="relative flex-1">
-            <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-muted text-xl">search</span>
-            <input
-              value={filterSearch}
-              onChange={e => setFilterSearch(e.target.value)}
-              placeholder="Tìm theo kanji, cách đọc hoặc nghĩa..."
-              className="w-full pl-11 pr-4 py-2.5 border border-outline rounded-xl text-sm outline-none focus:border-tsubaki-red transition-colors"
-            />
-          </div>
-          <select
-            value={filterLevel}
-            onChange={e => setFilterLevel(e.target.value)}
-            className="px-4 py-2.5 border border-outline rounded-xl text-sm outline-none focus:border-tsubaki-red transition-colors"
-          >
-            <option value="">Tất cả cấp độ</option>
-            {LEVELS.map(l => <option key={l} value={l}>{l}</option>)}
-          </select>
-        </div>
-      )}
-
-      {/* Vocab grid */}
+      {/* Danh sách từ bên trái + thẻ xem trước bên phải */}
       {loading ? (
         <div className="flex items-center justify-center py-24">
           <span className="material-symbols-outlined animate-spin text-tsubaki-red text-5xl">progress_activity</span>
@@ -463,35 +412,30 @@ export default function AdminLessonVocabulary() {
           <p className="text-base font-medium">Không có từ phù hợp với bộ lọc</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
-          {displayed.map(item => (
-            <VocabCard
-              key={item.id}
-              item={item}
-              onEdit={openEdit}
-              onDelete={handleDelete}
-            />
-          ))}
-
-          {/* Add card */}
-          <button
-            onClick={openCreate}
-            className="min-h-[200px] border-2 border-dashed border-outline/25 rounded-2xl flex flex-col items-center justify-center gap-2
-              text-on-muted hover:border-tsubaki-red/50 hover:text-tsubaki-red hover:bg-surface-container-low/30 transition-all group"
-          >
-            <div className="w-12 h-12 rounded-full bg-surface-container-highest/50 group-hover:bg-tsubaki-red group-hover:text-white transition-all flex items-center justify-center">
-              <span className="material-symbols-outlined text-2xl">add</span>
-            </div>
-            <span className="text-sm font-medium">Thêm từ mới</span>
-          </button>
-        </div>
+        <VocabWordViewer
+          items={displayed}
+          icon="style"
+          showLevel={false}
+          showDetails
+          furiganaEnabled={false}
+          editable
+          typeOptions={WORD_TYPES}
+          saveItem={saveVocabItem}
+          uploadImage={uploadVocabImage}
+          removeTitle="Gỡ khỏi bài"
+          removeCardLabel="Gỡ từ này khỏi bài"
+          onRemoveItem={(id) => {
+            const item = vocab.find(v => v.id === id);
+            if (item) handleDelete(item);
+          }}
+        />
       )}
 
-      {/* Modal */}
+      {/* Modal thêm mới thủ công (sửa từ đã có: inline ngay trên thẻ xem trước) */}
       <Modal
         open={modal}
         onClose={() => setModal(false)}
-        title={editId ? 'Chỉnh sửa từ vựng' : 'Thêm từ vựng mới'}
+        title="Thêm từ vựng mới"
         size="md"
         footer={
           <>
@@ -500,7 +444,7 @@ export default function AdminLessonVocabulary() {
           </>
         }
       >
-        <VocabForm form={form} onChange={setForm} />
+        <VocabForm form={form} onChange={setForm} uploadImage={uploadVocabImage} />
       </Modal>
 
       {/* Nhập file */}

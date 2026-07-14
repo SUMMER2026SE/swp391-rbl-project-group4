@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useEditorArea } from '../../lib/useEditorArea';
 import Alert from '../../components/ui/Alert';
+import LessonInfoPanel from '../../components/shared/LessonInfoPanel';
 import api from '../../lib/api';
 
 // Chuyển link YouTube thường sang dạng nhúng để xem trước.
@@ -126,6 +127,8 @@ export default function AdminLessonVideo() {
           </button>
         </div>
       </section>
+
+      <LessonInfoPanel lesson={lesson} apiBase={apiBase} onSaved={u => setLesson(l => ({ ...l, ...u }))} />
 
       <div className="bg-white rounded-2xl border border-outline/20 shadow-sm p-6 space-y-5">
         <div>

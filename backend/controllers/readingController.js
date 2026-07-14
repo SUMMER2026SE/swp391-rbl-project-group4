@@ -2,6 +2,7 @@
 
 const { supabaseAdmin } = require('../config/supabase');
 const { chatCompletion } = require('../config/ai');
+const { checkCourseContentAccess } = require('../services/courseAccess');
 const { checkAccess, incrementUsage } = require('../services/quotaService');
 const { logContentUse } = require('../utils/usageTracker');
 const { extractVocabCandidates } = require('../services/jaTokenizer');
@@ -12,6 +13,8 @@ const { attachMeaningPreview } = require('./dictionaryController');
 const readDb = supabaseAdmin.schema('reading_module');
 // Từ điển (dictionary_module) — dùng để khớp từ vựng của bài với từ điển hệ thống
 const dictDb = supabaseAdmin.schema('dictionary_module');
+// Lessons/courses (content_module) — cho bài đọc gắn với Mục của khóa học
+const contentDb = supabaseAdmin.schema('content_module');
 
 // Gắn furigana cho quiz trước khi lưu; lỗi kuroshiro → ghi questions không furigana (fail open)
 async function annotateQuizFurigana(questions) {
@@ -45,6 +48,8 @@ exports.list = async (req, res) => {
     let query = readDb.from('articles')
       .select('id,title,title_vi,summary_vi,level,thumbnail_url,view_count,published_at,created_by', { count: 'exact' })
       .eq('is_published', true)
+      // Bài đọc thuộc khóa học (creator_type='lesson') không lẫn vào kho Luyện đọc chung
+      .neq('creator_type', 'lesson')
       .range(offset, offset + lim - 1);
 
     // Sắp xếp: most_viewed = xem nhiều nhất, mặc định = mới nhất theo ngày đăng
@@ -144,7 +149,8 @@ exports.getOne = async (req, res) => {
 // Server tự load bài từ DB (client không gửi nội dung bài → chống prompt injection).
 // Không lưu session — UI giữ lịch sử cục bộ, mỗi request gửi lại các lượt gần nhất.
 // POST /api/reading/:id/chat   Body: { messages: [{ role: 'user'|'assistant', content }] }
-exports.chatWithArticle = async (req, res) => {
+// requirePublished=false: bài đọc gắn lesson — quyền đã kiểm tra qua enrollment khóa học.
+async function chatCore(req, res, requirePublished) {
   const { messages } = req.body;
   if (!Array.isArray(messages) || messages.length === 0) {
     return res.status(400).json({ error: 'Thiếu nội dung câu hỏi.' });
@@ -159,11 +165,11 @@ exports.chatWithArticle = async (req, res) => {
   }
 
   try {
-    const { data: article, error } = await readDb.from('articles')
+    let query = readDb.from('articles')
       .select('title,title_vi,level,content,segments')
-      .eq('id', req.params.id)
-      .eq('is_published', true)
-      .single();
+      .eq('id', req.params.id);
+    if (requirePublished) query = query.eq('is_published', true);
+    const { data: article, error } = await query.single();
     if (error || !article) return res.status(404).json({ error: 'Không tìm thấy bài đọc.' });
 
     const body = (article.content || (article.segments || []).map(s => s.jp).join('\n')).slice(0, 6000);
@@ -192,7 +198,9 @@ QUY TẮC: trả lời bằng tiếng Việt (trừ khi được yêu cầu khá
     console.error('reading.chatWithArticle:', err);
     res.status(502).json({ error: 'Trợ lý AI đang bận, hãy thử lại sau.' });
   }
-};
+}
+
+exports.chatWithArticle = (req, res) => chatCore(req, res, true);
 
 // ── Admin: AI soạn bài đọc gốc theo chủ đề + level ─────────────────────────────
 // POST /api/admin/reading/generate-article   Body: { topic, level, length }
@@ -512,6 +520,8 @@ exports.adminList = async (req, res) => {
   try {
     let query = readDb.from('articles')
       .select('id,title,title_vi,summary_vi,level,thumbnail_url,view_count,is_published,published_at,created_by,created_at,updated_at', { count: 'exact' })
+      // Bài đọc thuộc khóa học chỉ quản lý qua editor của lesson, không qua trang này
+      .neq('creator_type', 'lesson')
       .range(offset, offset + lim - 1);
 
     // Sắp xếp: giống trang student khi xem thử; mặc định = mới tạo trước (trang quản lý)
@@ -644,6 +654,7 @@ exports.teacherList = async (req, res) => {
     const { data, error } = await readDb.from('articles')
       .select('id,title,title_vi,level,thumbnail_url,view_count,is_published,published_at,created_at,updated_at')
       .eq('created_by', req.user.id)
+      .neq('creator_type', 'lesson')
       .order('created_at', { ascending: false });
     if (error) throw error;
     res.json({ data: data || [] });
@@ -702,4 +713,173 @@ exports.teacherUpdate = async (req, res) => {
 exports.teacherRemove = async (req, res) => {
   if (!(await ownsArticle(req.params.id, req.user))) return res.status(403).json({ error: 'Không có quyền.' });
   return exports.remove(req, res);
+};
+
+// ── Bài đọc gắn với Mục của khóa học (lessons.reading_article_id) ──────────────
+// Mục "Bài đọc" dùng chung cơ chế articles + ReadingReader: quyền đi qua lesson
+// (enrollment/ownership khóa học), KHÔNG qua is_published/quota của Luyện đọc chung.
+// Article trả về với id = lessonId để ReadingReader gọi tiếp các endpoint
+// lesson-scoped (vd .../reading/:lessonId/chat) mà không cần biết article id thật.
+
+const LESSON_ARTICLE_FIELDS = 'id,title,title_vi,summary_vi,level,thumbnail_url,content,segments,questions,vocab,grammar,view_count,published_at,created_by,creator_type';
+
+async function getLessonRow(lessonId) {
+  const { data } = await contentDb.from('lessons')
+    .select('id,course_id,title,title_ja,is_published,reading_article_id')
+    .eq('id', lessonId).maybeSingle();
+  return data;
+}
+
+async function teacherOwnsLesson(lesson, userId) {
+  const { data } = await contentDb.from('courses')
+    .select('created_by').eq('id', lesson.course_id).maybeSingle();
+  return !!data && data.created_by === userId;
+}
+
+async function sendLessonArticle(lesson, res) {
+  if (!lesson.reading_article_id) {
+    return res.status(404).json({ error: 'Mục này chưa có bài đọc.' });
+  }
+  const { data, error } = await readDb.from('articles')
+    .select(LESSON_ARTICLE_FIELDS)
+    .eq('id', lesson.reading_article_id)
+    .single();
+  if (error || !data) return res.status(404).json({ error: 'Không tìm thấy bài đọc.' });
+  const [withAuthor] = await attachAuthorNames([data]);
+  res.json({ ...withAuthor, id: lesson.id, article_id: data.id });
+}
+
+// GET /api/lessons/reading/:id (student, :id = lessonId) — paywall như lessonController
+exports.lessonReadingGet = async (req, res) => {
+  try {
+    const lesson = await getLessonRow(req.params.id);
+    if (!lesson) return res.status(404).json({ error: 'Không tìm thấy mục học.' });
+    const denied = await checkCourseContentAccess(lesson.course_id, req.user);
+    if (denied) return res.status(403).json(denied);
+    return sendLessonArticle(lesson, res);
+  } catch (err) {
+    console.error('reading.lessonReadingGet:', err);
+    res.status(500).json({ error: 'Không thể tải bài đọc.' });
+  }
+};
+
+// POST /api/lessons/reading/:id/chat (student, :id = lessonId)
+exports.lessonReadingChat = async (req, res) => {
+  try {
+    const lesson = await getLessonRow(req.params.id);
+    if (!lesson || !lesson.reading_article_id) {
+      return res.status(404).json({ error: 'Không tìm thấy bài đọc.' });
+    }
+    const denied = await checkCourseContentAccess(lesson.course_id, req.user);
+    if (denied) return res.status(403).json(denied);
+    req.params.id = lesson.reading_article_id;
+    return chatCore(req, res, false);
+  } catch (err) {
+    console.error('reading.lessonReadingChat:', err);
+    res.status(500).json({ error: 'Không thể tải bài đọc.' });
+  }
+};
+
+// GET /api/admin/lessons/reading/:id — editor + preview của admin (xem được cả khóa teacher)
+exports.adminLessonReadingGet = async (req, res) => {
+  try {
+    const lesson = await getLessonRow(req.params.id);
+    if (!lesson) return res.status(404).json({ error: 'Không tìm thấy mục học.' });
+    return sendLessonArticle(lesson, res);
+  } catch (err) {
+    console.error('reading.adminLessonReadingGet:', err);
+    res.status(500).json({ error: 'Không thể tải bài đọc.' });
+  }
+};
+
+// GET /api/teacher/lessons/reading/:id — chỉ trên khóa do chính giáo viên tạo
+exports.teacherLessonReadingGet = async (req, res) => {
+  try {
+    const lesson = await getLessonRow(req.params.id);
+    if (!lesson) return res.status(404).json({ error: 'Không tìm thấy mục học.' });
+    if (!(await teacherOwnsLesson(lesson, req.user.id))) {
+      return res.status(403).json({ error: 'Không có quyền.' });
+    }
+    return sendLessonArticle(lesson, res);
+  } catch (err) {
+    console.error('reading.teacherLessonReadingGet:', err);
+    res.status(500).json({ error: 'Không thể tải bài đọc.' });
+  }
+};
+
+// Upsert: lesson chưa có article → tạo mới (creator_type='lesson') rồi gán vào lesson;
+// đã có → update đúng article đó. Quyền đã kiểm tra qua lesson trước khi gọi.
+async function upsertLessonArticle(req, res, lesson) {
+  const { summary_vi, level, thumbnail_url, content, segments, questions, vocab, grammar } = req.body;
+  const questionsWithFuri = await annotateQuizFurigana(questions);
+  const fields = {
+    // Tiêu đề đồng bộ từ thông tin Mục (title_ja = tiếng Nhật, title = tiếng Việt),
+    // không nhận từ body — editor của lesson không có ô nhập tiêu đề riêng.
+    title:         lesson.title_ja || lesson.title,
+    title_vi:      lesson.title_ja ? lesson.title : null,
+    summary_vi:    summary_vi    || null,
+    level:         level         || null,
+    thumbnail_url: thumbnail_url || null,
+    content:       content       || null,
+    segments:      Array.isArray(segments) ? segments : [],
+    questions:     questionsWithFuri,
+    vocab:         Array.isArray(vocab)    ? vocab    : [],
+    grammar:       Array.isArray(grammar)  ? grammar  : [],
+    updated_at:    new Date().toISOString(),
+  };
+
+  if (lesson.reading_article_id) {
+    const { data, error } = await readDb.from('articles')
+      .update(fields).eq('id', lesson.reading_article_id).select().single();
+    if (error) throw error;
+    return res.json({ ...data, id: lesson.id, article_id: data.id });
+  }
+
+  const { data, error } = await readDb.from('articles')
+    .insert({
+      ...fields,
+      is_published: !!lesson.is_published,
+      created_by:   req.user.id,
+      creator_type: 'lesson',
+    })
+    .select().single();
+  if (error) throw error;
+  const { error: linkErr } = await contentDb.from('lessons')
+    .update({ reading_article_id: data.id, updated_at: new Date().toISOString() })
+    .eq('id', lesson.id);
+  if (linkErr) throw linkErr;
+  res.json({ ...data, id: lesson.id, article_id: data.id });
+}
+
+// PUT /api/admin/lessons/:lessonId/reading
+exports.adminLessonReadingUpsert = async (req, res) => {
+  try {
+    const lesson = await getLessonRow(req.params.lessonId);
+    if (!lesson) return res.status(404).json({ error: 'Không tìm thấy mục học.' });
+    // Đồng bộ quy tắc adminController: khóa do teacher tạo → admin không sửa nội dung
+    const { data: course } = await contentDb.from('courses')
+      .select('creator_type').eq('id', lesson.course_id).maybeSingle();
+    if (course?.creator_type === 'teacher') {
+      return res.status(403).json({ error: 'Khóa học do giáo viên tạo — admin không có quyền chỉnh sửa nội dung.' });
+    }
+    await upsertLessonArticle(req, res, lesson);
+  } catch (err) {
+    console.error('reading.adminLessonReadingUpsert:', err);
+    res.status(500).json({ error: 'Không thể lưu bài đọc.' });
+  }
+};
+
+// PUT /api/teacher/lessons/:lessonId/reading
+exports.teacherLessonReadingUpsert = async (req, res) => {
+  try {
+    const lesson = await getLessonRow(req.params.lessonId);
+    if (!lesson) return res.status(404).json({ error: 'Không tìm thấy mục học.' });
+    if (!(await teacherOwnsLesson(lesson, req.user.id))) {
+      return res.status(403).json({ error: 'Không có quyền.' });
+    }
+    await upsertLessonArticle(req, res, lesson);
+  } catch (err) {
+    console.error('reading.teacherLessonReadingUpsert:', err);
+    res.status(500).json({ error: 'Không thể lưu bài đọc.' });
+  }
 };

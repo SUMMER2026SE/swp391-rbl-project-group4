@@ -10,6 +10,10 @@ const {
 // POST /api/courses/:id/checkout — tạo order SePay cho khóa có phí (mirror /subscription/checkout)
 exports.checkout = async (req, res) => {
   try {
+    // Admin không cần thanh toán — enroll trực tiếp qua POST /courses/:id/enroll.
+    if (req.user.user_metadata?.role === 'admin')
+      return res.status(400).json({ error: 'Admin được miễn phí khóa học — hãy đăng ký học trực tiếp.' });
+
     // Tái dùng order pending còn hạn nếu có
     const existing = await getPendingCourseOrder(req.user.id, req.params.id);
     if (existing) return res.json({ order: existing });

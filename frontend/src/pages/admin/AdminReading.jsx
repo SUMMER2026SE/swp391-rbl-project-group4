@@ -471,11 +471,15 @@ export default function AdminReading() {
 }
 
 // ── Form ──────────────────────────────────────────────────────────────────────
-function ReadingForm({
+// hidePublish/hideTitles: bài đọc gắn với Mục khóa học — trạng thái đăng và tiêu đề
+// (Nhật/Việt) lấy theo thông tin Mục (LessonInfoPanel), không nhập lại ở đây.
+export function ReadingForm({
   form, onChange, onGenerate, generating, onSegmentManual, segmenting, onParseFile, parsingFile,
   onCompose, composing, onGenQuestions, genQuiz, onGenVocabGrammar, genVocab,
   onUpload, uploading, updateSeg, removeSeg, addSeg,
   updateItem, removeItem, addItem, updateOption, updateOptionVi,
+  hidePublish = false,
+  hideTitles = false,
 }) {
   const [topic, setTopic]   = useState('');
   const [length, setLength] = useState('medium');
@@ -516,18 +520,22 @@ function ReadingForm({
       </div>
 
       {/* Metadata */}
-      <Input
-        label="Tiêu đề (Tiếng Nhật) *"
-        value={form.title}
-        onChange={e => onChange({ ...form, title: e.target.value })}
-        placeholder="記事のタイトル..."
-      />
-      <Input
-        label="Tiêu đề (Tiếng Việt)"
-        value={form.title_vi}
-        onChange={e => onChange({ ...form, title_vi: e.target.value })}
-        placeholder="Dịch tiêu đề..."
-      />
+      {!hideTitles && (
+        <>
+          <Input
+            label="Tiêu đề (Tiếng Nhật) *"
+            value={form.title}
+            onChange={e => onChange({ ...form, title: e.target.value })}
+            placeholder="記事のタイトル..."
+          />
+          <Input
+            label="Tiêu đề (Tiếng Việt)"
+            value={form.title_vi}
+            onChange={e => onChange({ ...form, title_vi: e.target.value })}
+            placeholder="Dịch tiêu đề..."
+          />
+        </>
+      )}
 
       <div>
         <label className="block text-sm font-medium text-on-muted mb-1">Mô tả ngắn (hiển thị ở thẻ danh sách)</label>
@@ -552,6 +560,7 @@ function ReadingForm({
             {LEVELS.map(l => <option key={l} value={l}>{l}</option>)}
           </select>
         </div>
+        {!hidePublish && (
         <div className="flex flex-col justify-end">
           <label className="block text-sm font-medium text-on-muted mb-1">Trạng thái</label>
           <button
@@ -567,6 +576,7 @@ function ReadingForm({
             {form.is_published ? 'Đăng cho học viên' : 'Bản nháp'}
           </button>
         </div>
+        )}
       </div>
 
       {/* Thumbnail */}

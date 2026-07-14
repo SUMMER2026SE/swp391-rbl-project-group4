@@ -11,10 +11,11 @@ export const EMPTY = {
   price: '', reference_curriculum: '',
 };
 
-// Form thông tin khóa học dùng chung: tạo mới (TeacherCourses) & sửa (TeacherCourseContent).
+// Form thông tin khóa học dùng chung: tạo mới (TeacherCourses) & sửa (TeacherCourseContent, ManageCourseContent).
 // uploadCover(file) => Promise<url> (tùy chọn): nếu truyền, hiện thêm nút tải ảnh bìa từ máy.
 // onEditPrice + currentPrice (tùy chọn): giá hiển thị chỉ đọc, chỉnh qua popup riêng ở trang cha.
-export default function CourseForm({ form, onChange, editing, uploadCover, onError, onEditPrice, currentPrice }) {
+// hidePrice (tùy chọn): ẩn hoàn toàn khối giá — dùng cho admin (khóa admin luôn miễn phí).
+export default function CourseForm({ form, onChange, editing, uploadCover, onError, onEditPrice, currentPrice, hidePrice }) {
   const fileRef = useRef(null);
   const [uploading, setUploading] = useState(false);
   const validThumb = form.thumbnail_url && /^https?:\/\/.+/.test(form.thumbnail_url);
@@ -60,7 +61,7 @@ export default function CourseForm({ form, onChange, editing, uploadCover, onErr
         </select>
       </div>
 
-      {onEditPrice ? (
+      {hidePrice ? null : onEditPrice ? (
         <div>
           <label className="block text-sm font-medium text-on-muted mb-1">Giá khóa học</label>
           <div className="flex items-center justify-between gap-3 px-4 py-3 bg-surface-low border border-outline rounded-xl">

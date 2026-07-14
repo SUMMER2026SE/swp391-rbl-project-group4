@@ -39,8 +39,12 @@ router.post('/courses/upload-cover', upload.single('image'), ac.uploadCourseCove
 // Course content (Bài học/units + Mục/lessons) — chỉ trên khóa do chính mình tạo
 router.get('/courses/:courseId/builder', c.getCourseBuilder);
 router.post('/units',          c.createUnit);
+router.patch('/units/reorder', c.reorderUnits);
 router.put('/units/:id',       c.updateUnit);
 router.delete('/units/:id',    c.deleteUnit);
+// Bài đọc gắn với Mục (reading_module.articles) — đặt trước '/lessons/:id'
+router.get('/lessons/reading/:id',       nc.teacherLessonReadingGet);
+router.put('/lessons/:lessonId/reading', nc.teacherLessonReadingUpsert);
 router.get('/lessons/:id',     c.getLesson);
 router.post('/lessons',        c.createLesson);
 router.patch('/lessons/reorder', c.reorderLessons);
@@ -104,6 +108,18 @@ router.post('/my-kanji',                   c.createMyKanji);
 router.put('/my-kanji/:id',                c.updateMyKanji);
 router.delete('/my-kanji/:id',             c.deleteMyKanji);
 
+// ── Quiz của Mục (lesson quiz) — sở hữu kiểm tra qua khóa do chính mình tạo ──
+router.get('/quizzes',                            c.listLessonQuizzes);
+router.post('/quizzes',                           c.createLessonQuiz);
+router.put('/quizzes/:id',                        c.updateLessonQuiz);
+router.delete('/quizzes/:id',                     c.deleteLessonQuiz);
+router.get('/quizzes/:quizId/questions',          c.listLessonQuizQuestions);
+router.post('/quizzes/:quizId/import-from-bank',  c.importLessonQuizFromBank);
+router.get('/quizzes/:quizId/attempts',           c.listLessonQuizAttempts);
+router.post('/questions',                         c.createLessonQuizQuestion);
+router.put('/questions/:id',                      c.updateLessonQuizQuestion);
+router.delete('/questions/:id',                   c.deleteLessonQuizQuestion);
+
 // ── Private question bank ─────────────────────────────────────────────────────
 router.get('/question-bank/stats',          qb.questionBankStats);
 router.get('/question-bank',                qb.listQuestionBank);
@@ -136,6 +152,17 @@ router.post('/my-reading/generate-article',    nc.generateArticle);
 router.post('/my-reading/generate-segments',   nc.generateSegments);
 router.post('/my-reading/generate-questions',  nc.generateQuestions);
 router.post('/my-reading/generate-vocab-grammar', nc.generateVocabGrammar);
+router.post('/my-reading/segment-manual',      nc.segmentManual);
+const docUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const name = (file.originalname || '').toLowerCase();
+    (name.endsWith('.txt') || name.endsWith('.docx'))
+      ? cb(null, true) : cb(new Error('Chỉ hỗ trợ file .txt hoặc .docx.'));
+  },
+});
+router.post('/my-reading/parse-file', docUpload.single('file'), nc.parseFile);
 
 // ── Thu nhập từ quỹ chia sẻ doanh thu ─────────────────────────────────────────
 router.get('/earnings',                        rp.teacherEarnings);

@@ -44,7 +44,7 @@ exports.getOne = async (req, res) => {
     const kanjiIds   = (kanjiLinks || []).map(l => l.kanji_id);
     const grammarIds = (grammarLinks || []).map(l => l.grammar_point_id);
 
-    const [{ data: vocab }, { data: kanji }, { data: grammarPoints }, { data: quiz }, order, { data: progress }] = await Promise.all([
+    const [{ data: vocab }, { data: kanji }, { data: grammarPoints }, { data: quiz }, order, { data: progress }, { data: extra }] = await Promise.all([
       vocabIds.length
         ? supabaseAdmin.from('vocabulary')
             .select('id,kanji,reading,meaning_vi,meaning_ja,type,example_sentence')
@@ -68,6 +68,8 @@ exports.getOne = async (req, res) => {
       buildCourseItemOrder(lesson.course_id),
       contentDb.from('lesson_progress')
         .select('status').eq('lesson_id', id).eq('student_id', req.user.id).maybeSingle(),
+      // View compat không có description/reading_article_id — lấy thêm từ bảng gốc.
+      contentDb.from('lessons').select('description,reading_article_id').eq('id', id).single(),
     ]);
 
     const idx = order.findIndex(i => i.id === id);
@@ -81,6 +83,8 @@ exports.getOne = async (req, res) => {
 
     res.json({
       ...lesson,
+      description: extra?.description ?? null,
+      reading_article_id: extra?.reading_article_id ?? null,
       vocabulary: vocab || [],
       kanji: kanji || [],
       grammar_points: grammarPoints || [],

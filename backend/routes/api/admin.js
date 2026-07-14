@@ -130,6 +130,7 @@ router.post('/courses/upload-cover',      upload.single('image'), c.uploadCourse
 router.get('/courses',                    c.listCourses);
 router.post('/courses',                   c.createCourse);
 router.put('/courses/:id',                c.updateCourse);
+router.patch('/courses/:id/publish',      c.publishCourse);
 router.delete('/courses/:id',             c.deleteCourse);
 router.get('/courses/:courseId/builder',  c.getCourseBuilder);
 
@@ -141,6 +142,9 @@ router.patch('/units/reorder',   c.reorderUnits);
 
 // Lessons
 router.get('/lessons',               c.listLessons);
+// Bài đọc gắn với Mục (reading_module.articles) — đặt trước '/lessons/:id'
+router.get('/lessons/reading/:id',        reading.adminLessonReadingGet);
+router.put('/lessons/:lessonId/reading',  reading.adminLessonReadingUpsert);
 router.get('/lessons/:id',           c.getLesson);
 router.post('/lessons',              c.createLesson);
 router.put('/lessons/:id',           c.updateLesson);
@@ -152,6 +156,7 @@ router.post('/lessons/upload-video', videoUpload.single('video'), c.uploadLesson
 router.get('/vocabulary',         c.listVocab);
 router.post('/vocabulary/import', c.importVocab);
 router.post('/vocabulary',        c.createVocab);
+router.post('/vocabulary/upload-image', upload.single('image'), c.uploadVocabImage);
 router.put('/vocabulary/:id',     c.updateVocab);
 router.delete('/vocabulary/:id',  c.deleteVocab);
 
@@ -174,6 +179,8 @@ router.post('/lessons/:lessonId/vocabulary/attach',     c.attachVocab);
 router.delete('/lessons/:lessonId/vocabulary/:vocabId', c.detachVocab);
 router.post('/lessons/:lessonId/kanji/attach',          c.attachKanji);
 router.delete('/lessons/:lessonId/kanji/:kanjiId',      c.detachKanji);
+router.post('/lessons/:lessonId/grammar-points/attach',          c.attachGrammar);
+router.delete('/lessons/:lessonId/grammar-points/:grammarId',    c.detachGrammar);
 
 // Bulk import vào Mục qua file (Word/Excel/CSV/JSON) — chỉ parse + preview, chưa ghi DB.
 // Xác nhận nhập dùng lại /vocabulary/import, /kanji/import, /grammar-points/import
@@ -189,6 +196,7 @@ const importFileUpload = multer({
 });
 router.post('/lessons/:lessonId/vocabulary/import-file', importFileUpload.single('file'), fic.previewVocabFile);
 router.post('/lessons/:lessonId/kanji/import-file',      importFileUpload.single('file'), fic.previewKanjiFile);
+router.post('/lessons/:lessonId/grammar-points/import-file', importFileUpload.single('file'), fic.previewGrammarFile);
 
 // Import file trực tiếp vào ngân hàng chung (không cần lessonId)
 router.post('/vocabulary/import-file',     importFileUpload.single('file'), fic.previewVocabFile);

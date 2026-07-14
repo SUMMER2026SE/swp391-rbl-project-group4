@@ -216,6 +216,7 @@ export default function TeacherCourses() {
               uploadCover={uploadCover}
               onCoverUploaded={(url) => handleCoverUploaded(course, url)}
               onError={(m) => showAlert('error', m)}
+              onView={(c) => navigate(`/teacher/courses/preview/${c.id}`)}
             />
           ))}
         </div>
