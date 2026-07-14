@@ -22,7 +22,9 @@ exports.enroll = async (req, res) => {
 
     // Khóa có phí: enrollment được trigger tự tạo sau khi thanh toán SePay khớp —
     // endpoint này chỉ là đường dự phòng, yêu cầu đã có payment 'completed'.
-    if (!course.is_free && Number(course.price) > 0) {
+    // Admin được miễn thanh toán: enroll thẳng để "vào học" như student thật.
+    const isAdmin = req.user.user_metadata?.role === 'admin';
+    if (!isAdmin && !course.is_free && Number(course.price) > 0) {
       const { data: paid } = await contentDb.from('payments')
         .select('id').eq('course_id', courseId).eq('student_id', studentId)
         .eq('payment_status', 'completed').limit(1).maybeSingle();

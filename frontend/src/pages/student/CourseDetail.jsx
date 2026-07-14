@@ -188,11 +188,11 @@ function CoursePaymentModal({ courseId, onClose, onSuccess }) {
   );
 }
 
-function ItemRow({ item, isCurrent }) {
+function ItemRow({ item, isCurrent, to }) {
   const meta = TYPE_META[item.lesson_type] || TYPE_META.reading;
   return (
     <Link
-      to={`/lessons/${item.id}`}
+      to={to}
       className={`flex items-center gap-3 px-5 py-3 transition-colors group ${isCurrent ? 'bg-sumire-purple/5' : 'hover:bg-surface-container-low'}`}
     >
       {item.completed ? (
@@ -217,10 +217,17 @@ function ItemRow({ item, isCurrent }) {
   );
 }
 
-export default function CourseDetail() {
+// Layout/backTo: mặc định StudentLayout + /courses; trang preview của admin/teacher truyền
+// layout riêng + đường quay lại tương ứng (pattern giống ReadingList/ReadingReader).
+// previewBase ('/admin' | '/teacher'): link vào mục trỏ sang route preview cùng phía
+// (/admin/lessons/preview/:id...) để giữ nguyên khung admin/teacher xuyên suốt.
+export default function CourseDetail({ Layout = StudentLayout, backTo = '/courses', previewBase = '' }) {
   const { id } = useParams();
+  const lessonPath = (lid) => previewBase ? `${previewBase}/lessons/preview/${lid}` : `/lessons/${lid}`;
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, isAdmin: isAdminRole, isTeacher } = useAuth();
+  // Admin (mọi khóa học) và teacher chủ khóa: chỉ xem nội dung, ẩn khối CTA/giá.
+  const adminViewer = isAdminRole();
 
   const [course, setCourse]   = useState(null);
   const [loading, setLoading] = useState(true);
@@ -259,17 +266,17 @@ export default function CourseDetail() {
   }, [id]);
 
   if (loading) return (
-    <StudentLayout title="...">
+    <Layout title="...">
       <div className="flex justify-center py-24">
         <span className="material-symbols-outlined animate-spin text-tsubaki-red text-4xl">progress_activity</span>
       </div>
-    </StudentLayout>
+    </Layout>
   );
 
   if (error || !course) return (
-    <StudentLayout title="Lỗi">
+    <Layout title="Lỗi">
       <Alert type="error">{error || 'Không tìm thấy khóa học.'}</Alert>
-    </StudentLayout>
+    </Layout>
   );
 
   const units = course.units || [];
@@ -279,6 +286,9 @@ export default function CourseDetail() {
   const progressPct = course.progress_pct ?? (totalItems ? Math.round((completedCount / totalItems) * 100) : 0);
   const resumeItem = allItems.find(i => !i.completed) || allItems[0] || null;
   const lvl = course.difficulty_level || course.level;
+  // Teacher xem khóa học do chính mình tạo (qua /teacher/courses/preview/:id).
+  const isOwnerViewer = isTeacher() && !!user && course.created_by === user.id;
+  const viewerOnly = adminViewer || isOwnerViewer;
   const isAdmin = course.creator_type === 'admin';
   const author = course.creator_name || (isAdmin ? 'Kizuna Nihongo' : 'Giáo viên');
 
@@ -305,7 +315,7 @@ export default function CourseDetail() {
       setEnrolled(true);
       setEnrollModal(false);
       showAlert('success', 'Đăng ký thành công! Chúc bạn học tốt.');
-      if (resumeItem) navigate(`/lessons/${resumeItem.id}`);
+      if (resumeItem) navigate(lessonPath(resumeItem.id));
     } catch (e) {
       showAlert('error', e.message);
     } finally {
@@ -318,7 +328,7 @@ export default function CourseDetail() {
     setShowPayment(false);
     setEnrolled(true);
     showAlert('success', 'Thanh toán thành công! Chúc bạn học tốt.');
-    if (resumeItem) navigate(`/lessons/${resumeItem.id}`);
+    if (resumeItem) navigate(lessonPath(resumeItem.id));
   };
 
   const startEdit = () => {
@@ -375,12 +385,12 @@ export default function CourseDetail() {
   };
 
   return (
-    <StudentLayout title={course.title}>
+    <Layout title={course.title}>
       {alert.msg && (
         <div className="mb-4"><Alert type={alert.type} onClose={() => setAlert({ type: '', msg: '' })}>{alert.msg}</Alert></div>
       )}
 
-      <Link to="/courses" className="inline-flex items-center gap-1.5 text-sm text-on-muted hover:text-tsubaki-red transition-colors mb-6 group">
+      <Link to={backTo} className="inline-flex items-center gap-1.5 text-sm text-on-muted hover:text-tsubaki-red transition-colors mb-6 group">
         <span className="material-symbols-outlined text-lg group-hover:-translate-x-0.5 transition-transform">arrow_back</span>
         Danh mục khóa học
       </Link>
@@ -479,7 +489,7 @@ export default function CourseDetail() {
                       </button>
                       {open && (
                         <div className="border-t border-outline-variant/30 divide-y divide-outline-variant/15">
-                          {lessons.map(item => <ItemRow key={item.id} item={item} isCurrent={resumeItem && item.id === resumeItem.id} />)}
+                          {lessons.map(item => <ItemRow key={item.id} item={item} to={lessonPath(item.id)} isCurrent={resumeItem && item.id === resumeItem.id} />)}
                           {lessons.length === 0 && <p className="px-5 py-4 text-sm text-on-muted italic">Chưa có mục nào.</p>}
                         </div>
                       )}
@@ -600,45 +610,49 @@ export default function CourseDetail() {
               )}
             </div>
 
-            {/* Tiến độ + CTA */}
+            {/* Tiến độ + CTA — ẩn hoàn toàn giá & nút hành động khi admin/teacher chủ khóa xem */}
             <div className="bg-white rounded-2xl border border-outline-variant/60 shadow-sm p-5 space-y-4">
-              {enrolled && totalItems > 0 ? (
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm font-medium text-on-surface">Tiến độ của bạn</span>
-                    <span className="text-sm font-bold text-sumire-purple">{progressPct}%</span>
-                  </div>
-                  <div className="h-2 rounded-full bg-surface-container overflow-hidden">
-                    <div className="h-full bg-sumire-purple rounded-full transition-all" style={{ width: `${progressPct}%` }} />
-                  </div>
-                </div>
-              ) : (
-                <div>
-                  {course.is_free ? (
-                    <p className="text-2xl font-display font-bold text-green-600">Miễn phí</p>
+              {!viewerOnly && (
+                <>
+                  {enrolled && totalItems > 0 ? (
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-sm font-medium text-on-surface">Tiến độ của bạn</span>
+                        <span className="text-sm font-bold text-sumire-purple">{progressPct}%</span>
+                      </div>
+                      <div className="h-2 rounded-full bg-surface-container overflow-hidden">
+                        <div className="h-full bg-sumire-purple rounded-full transition-all" style={{ width: `${progressPct}%` }} />
+                      </div>
+                    </div>
                   ) : (
-                    <p className="text-2xl font-display font-bold text-on-surface">{formatVnd(course.price)}</p>
+                    <div>
+                      {course.is_free ? (
+                        <p className="text-2xl font-display font-bold text-green-600">Miễn phí</p>
+                      ) : (
+                        <p className="text-2xl font-display font-bold text-on-surface">{formatVnd(course.price)}</p>
+                      )}
+                    </div>
                   )}
-                </div>
-              )}
 
-              {/* CTA */}
-              {enrolled ? (
-                resumeItem ? (
-                  <Link to={`/lessons/${resumeItem.id}`} className="w-full">
-                    <Button className="w-full">
-                      <span className="material-symbols-outlined text-lg fill">play_arrow</span>
-                      {completedCount > 0 ? 'Tiếp tục học' : 'Vào học'}
+                  {/* CTA */}
+                  {enrolled ? (
+                    resumeItem ? (
+                      <Link to={lessonPath(resumeItem.id)} className="w-full">
+                        <Button className="w-full">
+                          <span className="material-symbols-outlined text-lg fill">play_arrow</span>
+                          {completedCount > 0 ? 'Tiếp tục học' : 'Vào học'}
+                        </Button>
+                      </Link>
+                    ) : (
+                      <p className="text-sm text-on-muted italic text-center py-2">Khóa học chưa có nội dung</p>
+                    )
+                  ) : (
+                    <Button className="w-full" onClick={handleEnrollClick}>
+                      <span className="material-symbols-outlined text-lg">{course.is_free ? 'school' : 'shopping_cart'}</span>
+                      {course.is_free ? 'Đăng ký học miễn phí' : `Mua khóa học - ${formatVnd(course.price)}`}
                     </Button>
-                  </Link>
-                ) : (
-                  <p className="text-sm text-on-muted italic text-center py-2">Khóa học chưa có nội dung</p>
-                )
-              ) : (
-                <Button className="w-full" onClick={handleEnrollClick}>
-                  <span className="material-symbols-outlined text-lg">{course.is_free ? 'school' : 'shopping_cart'}</span>
-                  {course.is_free ? 'Đăng ký học miễn phí' : `Mua khóa học - ${formatVnd(course.price)}`}
-                </Button>
+                  )}
+                </>
               )}
 
               {/* Lượt đăng ký */}
@@ -712,6 +726,6 @@ export default function CourseDetail() {
           onSuccess={handlePaymentSuccess}
         />
       )}
-    </StudentLayout>
+    </Layout>
   );
 }

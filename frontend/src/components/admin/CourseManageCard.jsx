@@ -14,9 +14,12 @@ const LEVEL_COVER = {
 
 // Thẻ quản lý khóa học dùng chung cho Admin & Giáo viên.
 // uploadCover(file) => Promise<url>; onCoverUploaded(url) cập nhật state ở cha.
+// canEditContent=false (khóa của teacher, phía admin): ẩn Sửa/Xóa/upload bìa,
+// chỉ còn Xuất bản + Xem khóa học. showCreator: hiện badge người tạo.
 export default function CourseManageCard({
   course, onManage, onEdit, onTogglePublish, onDelete,
   uploadCover, onCoverUploaded, onError,
+  canEditContent = true, showCreator = false, onView,
 }) {
   const fileRef = useRef(null);
   const [dragOver, setDragOver] = useState(false);
@@ -54,12 +57,12 @@ export default function CourseManageCard({
     <article className="group bg-white rounded-2xl border border-outline/30 shadow-sm hover:shadow-md transition-all duration-200 overflow-hidden flex flex-col">
       {/* Cover — kéo-thả / chọn ảnh bìa */}
       <div
-        onClick={() => fileRef.current?.click()}
-        onDragOver={e => { e.preventDefault(); setDragOver(true); }}
+        onClick={() => canEditContent && fileRef.current?.click()}
+        onDragOver={e => { if (!canEditContent) return; e.preventDefault(); setDragOver(true); }}
         onDragLeave={() => setDragOver(false)}
-        onDrop={onDrop}
-        className={`relative h-44 shrink-0 cursor-pointer bg-gradient-to-br ${cover} overflow-hidden`}
-        title="Nhấp hoặc kéo-thả để đổi ảnh bìa"
+        onDrop={e => { if (!canEditContent) return; onDrop(e); }}
+        className={`relative h-44 shrink-0 ${canEditContent ? 'cursor-pointer' : ''} bg-gradient-to-br ${cover} overflow-hidden`}
+        title={canEditContent ? 'Nhấp hoặc kéo-thả để đổi ảnh bìa' : undefined}
       >
         <input ref={fileRef} type="file" accept="image/*" hidden
           onChange={e => { handleFile(e.target.files?.[0]); e.target.value = ''; }} />
@@ -71,6 +74,7 @@ export default function CourseManageCard({
         )}
 
         {/* Lớp phủ drop-zone (khi chưa có ảnh, hoặc hover/drag để đổi) */}
+        {canEditContent && (
         <div className={`absolute inset-0 flex flex-col items-center justify-center text-white/90 transition-all
           ${course.thumbnail_url ? 'opacity-0 group-hover:opacity-100 bg-black/35' : 'opacity-100'}
           ${dragOver ? 'opacity-100 bg-black/45 ring-2 ring-inset ring-white/70' : ''}`}>
@@ -84,6 +88,7 @@ export default function CourseManageCard({
             </>
           )}
         </div>
+        )}
 
         {/* Badge cấp độ */}
         {course.level && (
@@ -109,12 +114,19 @@ export default function CourseManageCard({
       {/* Body */}
       <div className="flex flex-col flex-1 p-4">
         <h3
-          onClick={() => onManage(course)}
+          onClick={() => canEditContent ? onManage(course) : onView?.(course)}
           className="font-semibold text-charcoal text-base leading-snug line-clamp-2 mb-1 cursor-pointer hover:text-tsubaki-red transition-colors"
-          title="Quản lý nội dung khóa học"
+          title={canEditContent ? 'Quản lý nội dung khóa học' : 'Xem khóa học'}
         >
           {course.title}
         </h3>
+        {showCreator && (
+          <span className={`inline-flex items-center gap-1 self-start px-2 py-0.5 rounded-full text-[11px] font-semibold mb-1 ${
+            course.creator_type === 'teacher' ? 'bg-sumire-purple/10 text-sumire-purple' : 'bg-tsubaki-red/10 text-tsubaki-red'}`}>
+            <span className="material-symbols-outlined text-[13px]">{course.creator_type === 'teacher' ? 'person' : 'verified'}</span>
+            {course.creator_type === 'teacher' ? `GV: ${course.creator_name || 'Giáo viên'}` : 'Hệ thống'}
+          </span>
+        )}
         {course.description && (
           <p className="text-sm text-on-muted line-clamp-2 flex-1">{course.description}</p>
         )}
@@ -139,13 +151,23 @@ export default function CourseManageCard({
 
         {/* Actions */}
         <div className="flex items-center gap-2 mt-4 pt-3 border-t border-outline/20">
-          <button
-            onClick={() => onEdit(course)}
-            className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl border border-outline/40 text-sm font-medium text-on-surface hover:border-tsubaki-red hover:text-tsubaki-red transition-colors"
-          >
-            <span className="material-symbols-outlined text-[18px]">edit</span>
-            Sửa
-          </button>
+          {canEditContent ? (
+            <button
+              onClick={() => onEdit(course)}
+              className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl border border-outline/40 text-sm font-medium text-on-surface hover:border-tsubaki-red hover:text-tsubaki-red transition-colors"
+            >
+              <span className="material-symbols-outlined text-[18px]">edit</span>
+              Sửa
+            </button>
+          ) : onView && (
+            <button
+              onClick={() => onView(course)}
+              className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl border border-outline/40 text-sm font-medium text-on-surface hover:border-sumire-purple hover:text-sumire-purple transition-colors"
+            >
+              <span className="material-symbols-outlined text-[18px]">visibility</span>
+              Xem khóa học
+            </button>
+          )}
           <button
             onClick={togglePublish}
             disabled={publishing}
@@ -160,13 +182,24 @@ export default function CourseManageCard({
             </span>
             {course.is_published ? 'Bỏ xuất bản' : 'Xuất bản'}
           </button>
-          <button
-            onClick={() => onDelete(course)}
-            title="Xóa"
-            className="p-2 rounded-xl text-on-muted hover:text-error hover:bg-red-50 transition-colors shrink-0"
-          >
-            <span className="material-symbols-outlined text-[18px]">delete</span>
-          </button>
+          {canEditContent && onView && (
+            <button
+              onClick={() => onView(course)}
+              title="Xem khóa học"
+              className="p-2 rounded-xl text-on-muted hover:text-sumire-purple hover:bg-sumire-purple/10 transition-colors shrink-0"
+            >
+              <span className="material-symbols-outlined text-[18px]">visibility</span>
+            </button>
+          )}
+          {canEditContent && (
+            <button
+              onClick={() => onDelete(course)}
+              title="Xóa"
+              className="p-2 rounded-xl text-on-muted hover:text-error hover:bg-red-50 transition-colors shrink-0"
+            >
+              <span className="material-symbols-outlined text-[18px]">delete</span>
+            </button>
+          )}
         </div>
       </div>
     </article>

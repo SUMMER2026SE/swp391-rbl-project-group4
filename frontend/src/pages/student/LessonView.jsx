@@ -50,9 +50,15 @@ const QUIZ_TYPE_LABEL = {
   short_answer:    'Trả lời ngắn',
 };
 
-export default function LessonView() {
+// Layout: mặc định StudentLayout; trang preview admin/teacher truyền layout riêng.
+// previewBase ('/admin' | '/teacher'): các link khóa học/mục/quiz trỏ sang route preview
+// cùng phía để giữ nguyên khung admin/teacher xuyên suốt (pattern như CourseDetail).
+export default function LessonView({ Layout = StudentLayout, previewBase = '' }) {
   const { id } = useParams();
   const navigate = useNavigate();
+  const lessonPath = (lid) => previewBase ? `${previewBase}/lessons/preview/${lid}` : `/lessons/${lid}`;
+  const coursePath = (cid) => previewBase ? `${previewBase}/courses/preview/${cid}` : `/courses/${cid}`;
+  const quizPath   = (qid) => previewBase ? `${previewBase}/quizzes/preview/${qid}` : `/quizzes/${qid}`;
   const [lesson, setLesson]   = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState('');
@@ -91,15 +97,15 @@ export default function LessonView() {
   }, [id]);
 
   if (loading) return (
-    <StudentLayout title="...">
+    <Layout title="...">
       <div className="flex justify-center py-16">
         <span className="material-symbols-outlined animate-spin text-tsubaki-red text-4xl">progress_activity</span>
       </div>
-    </StudentLayout>
+    </Layout>
   );
 
   if (paywall) return (
-    <StudentLayout title="Khóa học có phí">
+    <Layout title="Khóa học có phí">
       <div className="max-w-md mx-auto text-center py-16">
         <span className="material-symbols-outlined text-5xl text-amber-400 mb-4 block">lock</span>
         <h2 className="font-display text-xl font-bold text-on-surface mb-2">Nội dung dành cho học viên đã mua khóa học</h2>
@@ -111,13 +117,13 @@ export default function LessonView() {
           </Button>
         </Link>
       </div>
-    </StudentLayout>
+    </Layout>
   );
 
   if (error || !lesson) return (
-    <StudentLayout title="Lỗi">
+    <Layout title="Lỗi">
       <Alert type="error">{error || 'Không tìm thấy mục học.'}</Alert>
-    </StudentLayout>
+    </Layout>
   );
 
   const nav = lesson.nav || {};
@@ -145,8 +151,8 @@ export default function LessonView() {
     setFinishError('');
     try {
       await api.post(`/lessons/${id}/complete`);
-      if (nav.nextId) navigate(`/lessons/${nav.nextId}`);
-      else navigate(`/courses/${lesson.course_id}`);
+      if (nav.nextId) navigate(lessonPath(nav.nextId));
+      else navigate(coursePath(lesson.course_id));
     } catch (e) {
       // Vd: quiz có ngưỡng đạt mà học sinh chưa đạt → hiển thị ngay tại chỗ, giữ nguyên trang để làm lại bài.
       setFinishError(e.message);
@@ -263,9 +269,9 @@ export default function LessonView() {
   };
 
   return (
-    <StudentLayout title={lesson.title}>
+    <Layout title={lesson.title}>
       <div className="max-w-3xl mx-auto">
-        <Link to={`/courses/${lesson.course_id}`} className="inline-flex items-center gap-1 text-sm text-on-muted hover:text-tsubaki-red mb-6 transition-colors">
+        <Link to={coursePath(lesson.course_id)} className="inline-flex items-center gap-1 text-sm text-on-muted hover:text-tsubaki-red mb-6 transition-colors">
           <span className="material-symbols-outlined text-lg">arrow_back</span> Quay lại khoá học
         </Link>
 
@@ -490,7 +496,7 @@ export default function LessonView() {
                   )}
                 </div>
               </div>
-              <Link to={`/quizzes/${lesson.quiz.id}`} className="inline-flex items-center gap-2 bg-sumire-purple text-white px-5 py-2.5 rounded-xl font-semibold text-sm hover:opacity-90 transition-opacity shadow-md shadow-sumire-purple/20 shrink-0">
+              <Link to={quizPath(lesson.quiz.id)} className="inline-flex items-center gap-2 bg-sumire-purple text-white px-5 py-2.5 rounded-xl font-semibold text-sm hover:opacity-90 transition-opacity shadow-md shadow-sumire-purple/20 shrink-0">
                 Làm bài <span className="material-symbols-outlined text-lg">arrow_forward</span>
               </Link>
             </div>
@@ -503,7 +509,7 @@ export default function LessonView() {
             <Alert type="error" onClose={() => setFinishError('')}>
               {finishError}
               {lesson.quiz && (
-                <Link to={`/quizzes/${lesson.quiz.id}`} className="ml-1 font-semibold underline">Làm lại bài kiểm tra</Link>
+                <Link to={quizPath(lesson.quiz.id)} className="ml-1 font-semibold underline">Làm lại bài kiểm tra</Link>
               )}
             </Alert>
           </div>
@@ -512,7 +518,7 @@ export default function LessonView() {
         {/* ── Footer nav ──────────────────────────────────────────────── */}
         <div className="flex items-center justify-between gap-3 mt-8 pt-6 border-t border-outline-variant/30">
           {nav.prevId ? (
-            <Link to={`/lessons/${nav.prevId}`} className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl border border-outline text-sm font-medium text-on-surface hover:bg-surface-low transition-all">
+            <Link to={lessonPath(nav.prevId)} className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl border border-outline text-sm font-medium text-on-surface hover:bg-surface-low transition-all">
               <span className="material-symbols-outlined text-base">arrow_back</span> Mục trước
             </Link>
           ) : <span />}
@@ -628,6 +634,6 @@ export default function LessonView() {
           </div>
         </div>
       </Modal>
-    </StudentLayout>
+    </Layout>
   );
 }

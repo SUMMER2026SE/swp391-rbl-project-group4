@@ -217,10 +217,10 @@ export default function AdminCourses() {
     }
   };
 
-  // Bật/tắt xuất bản nhanh từ thẻ.
+  // Bật/tắt xuất bản nhanh từ thẻ — endpoint riêng, áp dụng được cho cả khóa của teacher.
   const togglePublish = async (course) => {
     try {
-      await api.put(`/admin/courses/${course.id}`, { is_published: !course.is_published });
+      await api.patch(`/admin/courses/${course.id}/publish`, { is_published: !course.is_published });
       setData(d => d.map(c => c.id === course.id ? { ...c, is_published: !course.is_published } : c));
       const delta = course.is_published ? -1 : 1;
       setCounts(c => ({ ...c, published: c.published + delta, draft: c.draft - delta }));
@@ -318,6 +318,9 @@ export default function AdminCourses() {
               uploadCover={uploadCover}
               onCoverUploaded={(url) => handleCoverUploaded(course, url)}
               onError={(m) => showAlert('error', m)}
+              canEditContent={course.creator_type !== 'teacher'}
+              showCreator
+              onView={(c) => navigate(`/admin/courses/preview/${c.id}`)}
             />
           ))}
         </div>

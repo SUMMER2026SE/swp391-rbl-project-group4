@@ -130,6 +130,7 @@ router.post('/courses/upload-cover',      upload.single('image'), c.uploadCourse
 router.get('/courses',                    c.listCourses);
 router.post('/courses',                   c.createCourse);
 router.put('/courses/:id',                c.updateCourse);
+router.patch('/courses/:id/publish',      c.publishCourse);
 router.delete('/courses/:id',             c.deleteCourse);
 router.get('/courses/:courseId/builder',  c.getCourseBuilder);
 
