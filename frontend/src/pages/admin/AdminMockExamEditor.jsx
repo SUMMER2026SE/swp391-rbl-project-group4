@@ -14,7 +14,7 @@ import {
   adminAiGenerate, adminImportFromBank, adminListBankForImport, adminUploadMedia,
 } from '../../lib/mockExamApi';
 
-const blankQuestion = () => ({ question_text: '', options: ['', '', '', ''], correct_index: 0, explanation: '' });
+const blankQuestion = () => ({ question_text: '', options: ['', '', '', ''], correct_index: 0, explanation: '', translation_vi: '' });
 
 export default function AdminMockExamEditor() {
   const { id } = useParams();
@@ -387,6 +387,7 @@ function AiGenerateModal({ group, onClose, onAdded }) {
                     ))}
                   </ul>
                   {d.explanation && <p className="text-xs text-on-muted mt-1">💡 {d.explanation}</p>}
+                  {d.translation_vi && <p className="text-xs text-emerald-700 mt-1 whitespace-pre-wrap">🇻🇳 {d.translation_vi}</p>}
                   {listening && d.audio_transcript && <p className="text-xs text-blue-700 mt-1">🎧 {d.audio_transcript}</p>}
                 </div>
               </label>

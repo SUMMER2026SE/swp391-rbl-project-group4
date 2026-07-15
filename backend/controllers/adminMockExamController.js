@@ -435,6 +435,7 @@ exports.createQuestions = async (req, res) => {
       options:       q.options.map(o => String(o).trim()),
       correct_index: Number(q.correct_index),
       explanation:   q.explanation || null,
+      translation_vi: q.translation_vi || null,
     }));
     const { data, error } = await supabaseAdmin.from('mock_questions').insert(rows).select();
     if (error) throw error;
@@ -451,11 +452,11 @@ exports.updateQuestion = async (req, res) => {
     const { data: exam } = await supabaseAdmin.from('mock_exams').select('id, is_published').eq('id', examId).single();
     // Đề đã publish: chỉ cho sửa giải thích (không đổi nội dung/đáp án)
     const allowed = exam?.is_published
-      ? ['explanation']
-      : ['question_text', 'image_url', 'audio_url', 'options', 'correct_index', 'explanation'];
+      ? ['explanation', 'translation_vi']
+      : ['question_text', 'image_url', 'audio_url', 'options', 'correct_index', 'explanation', 'translation_vi'];
     const updates = Object.fromEntries(Object.entries(req.body).filter(([k]) => allowed.includes(k)));
     if (!Object.keys(updates).length)
-      return res.status(400).json({ error: exam?.is_published ? 'Đề đã xuất bản: chỉ được sửa giải thích.' : 'Không có trường nào để cập nhật.' });
+      return res.status(400).json({ error: exam?.is_published ? 'Đề đã xuất bản: chỉ được sửa giải thích và bản dịch.' : 'Không có trường nào để cập nhật.' });
 
     const merged = { ...q, ...updates };
     const msg = validateQuestionPayload(merged);

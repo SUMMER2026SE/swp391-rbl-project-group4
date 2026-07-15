@@ -85,6 +85,13 @@ export default function QuestionCard({ index, value, onSave, onDelete, listening
         className="w-full px-3 py-2 border border-outline rounded-lg text-sm resize-y min-h-[44px] outline-none focus:border-tsubaki-red"
       />
 
+      <textarea
+        value={q.translation_vi || ''} disabled={disabled}
+        onChange={e => update({ translation_vi: e.target.value })}
+        placeholder="Bản dịch tiếng Việt (không bắt buộc — hiện khi học viên xem lại bài)"
+        className="w-full px-3 py-2 border border-outline rounded-lg text-sm resize-y min-h-[44px] outline-none focus:border-tsubaki-red"
+      />
+
       <div className="flex items-center justify-end gap-2">
         {onDelete && (
           <Button variant="ghost" size="sm" onClick={() => onDelete(q)} disabled={disabled}>

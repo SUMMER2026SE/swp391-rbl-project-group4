@@ -93,6 +93,7 @@ export default function MockExamReview() {
                       </div>
                       {q.selected_index == null && <p className="text-xs text-on-muted mt-1.5 italic">Bạn chưa trả lời câu này.</p>}
                       {q.explanation && <div className="mt-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-sm text-amber-900"><b>Giải thích:</b> {q.explanation}</div>}
+                      {q.translation_vi && <div className="mt-2 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2 text-sm text-emerald-900 whitespace-pre-wrap"><b>Bản dịch:</b> {q.translation_vi}</div>}
                     </div>
                   );
                 })}

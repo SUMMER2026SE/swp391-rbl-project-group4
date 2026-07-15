@@ -236,6 +236,11 @@ async function generateMondaiQuestions({ level, mondaiType, count = 5, passageTe
     ? `\nĐây là câu hỏi NGHE: với mỗi câu, sinh thêm trường "audio_transcript" là script hội thoại/độc thoại tiếng Nhật hoàn chỉnh (kèm câu hỏi đọc trong audio) để admin thu âm.${meta.no_question_text ? ' Dạng bài này KHÔNG in câu hỏi trên giấy — "question_text" để null.' : ''}`
     : '';
 
+  // Bản dịch tiếng Việt hiện ở màn xem đáp án của học viên (không hiện lúc thi).
+  const translationRule = `\nMỗi câu phải có trường "translation_vi": bản dịch tiếng Việt tự nhiên của ${
+    isListening ? 'nội dung audio (tóm tắt script) + câu hỏi' : 'câu hỏi'
+  } và cả ${optCount} lựa chọn (đánh số 1–${optCount}, mỗi lựa chọn một dòng).`;
+
   const SYSTEM = `Bạn là chuyên gia biên soạn đề thi JLPT chính thức. Bạn nắm rõ format từng 大問 (mondai) của đề thi thật.
 
 BẮT BUỘC: Chỉ trả về MỘT object JSON hợp lệ, KHÔNG có văn bản nào khác.
@@ -245,17 +250,18 @@ ${jlptBlock}
 • Mô tả dạng bài: ${meta.ai_hint}
 • Chỉ dẫn chuẩn in trên đề: ${meta.instruction}
 • Số lựa chọn: ĐÚNG ${optCount} lựa chọn mỗi câu.
-• Khi cần đánh dấu từ trong câu, bọc từ đó trong dấu gạch dưới full-width ＿ ＿ (ví dụ: きのう＿光る＿星を見た). TUYỆT ĐỐI KHÔNG dùng thẻ HTML như <u>, <b>, <i>.${passageRule}${listeningRule}
+• Khi cần đánh dấu từ trong câu, bọc từ đó trong dấu gạch dưới full-width ＿ ＿ (ví dụ: きのう＿光る＿星を見た). TUYỆT ĐỐI KHÔNG dùng thẻ HTML như <u>, <b>, <i>.${passageRule}${listeningRule}${translationRule}
 
 ═══ SCHEMA JSON ═══
-{"passage_text": ${needsPassage && !passageText ? '"đoạn văn dùng chung"' : 'null'}, "questions": [{"question_text": "..." hoặc null, "options": [${optCount} chuỗi], "correct_index": số 0-${optCount - 1}, "explanation": "giải thích tiếng Việt ngắn gọn vì sao đáp án đúng"${isListening ? ', "audio_transcript": "script tiếng Nhật"' : ''}}]}`;
+{"passage_text": ${needsPassage && !passageText ? '"đoạn văn dùng chung"' : 'null'}, "questions": [{"question_text": "..." hoặc null, "options": [${optCount} chuỗi], "correct_index": số 0-${optCount - 1}, "explanation": "giải thích tiếng Việt ngắn gọn vì sao đáp án đúng", "translation_vi": "bản dịch tiếng Việt của câu hỏi và các lựa chọn"${isListening ? ', "audio_transcript": "script tiếng Nhật"' : ''}}]}`;
 
   const userMsg = `Tạo ${count} câu hỏi dạng 「${meta.ja}」 cấp độ JLPT ${level}.${topic ? `\nChủ đề: ${topic}` : ''}
 Trả về ĐÚNG object JSON theo schema, "questions" có ${count} phần tử.`;
 
   const result = await chatCompletion(
     [{ role: 'system', content: SYSTEM }, { role: 'user', content: userMsg }],
-    { max_tokens: 4096, temperature: 0.45 }
+    // payload lớn hơn vì kèm bản dịch (nhất là đọc hiểu dài)
+    { max_tokens: 8192, temperature: 0.45 }
   );
 
   const raw = result.choices?.[0]?.message?.content || '';
@@ -287,6 +293,7 @@ Trả về ĐÚNG object JSON theo schema, "questions" có ${count} phần tử.
       options,
       correct_index:    ci,
       explanation:      q.explanation ? stripHtmlMarkup(q.explanation) : null,
+      translation_vi:   q.translation_vi ? stripHtmlMarkup(String(q.translation_vi).trim()) : null,
       audio_transcript: isListening ? (q.audio_transcript ? stripHtmlMarkup(q.audio_transcript) : null) : undefined,
     });
   }
