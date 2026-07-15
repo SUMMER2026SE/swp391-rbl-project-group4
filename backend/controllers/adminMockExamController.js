@@ -570,17 +570,22 @@ exports.aiGenerateDrafts = async (req, res) => {
 
 // ─── Upload media ─────────────────────────────────────────────────────────────
 
+async function uploadBuffer(bucket, buffer, contentType, ext) {
+  const filename = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+  const { error } = await supabaseAdmin.storage
+    .from(bucket)
+    .upload(filename, buffer, { contentType, upsert: false });
+  if (error) throw error;
+  const { data: { publicUrl } } = supabaseAdmin.storage.from(bucket).getPublicUrl(filename);
+  return publicUrl;
+}
+
 async function uploadToBucket(req, res, bucket, fallbackExt, errMsg) {
   if (!req.file) return res.status(400).json({ error: 'Không có file được tải lên.' });
   const ext = (req.file.originalname.split('.').pop() || fallbackExt).toLowerCase();
-  const filename = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
   try {
-    const { error } = await supabaseAdmin.storage
-      .from(bucket)
-      .upload(filename, req.file.buffer, { contentType: req.file.mimetype, upsert: false });
-    if (error) throw error;
-    const { data: { publicUrl } } = supabaseAdmin.storage.from(bucket).getPublicUrl(filename);
-    res.json({ url: publicUrl });
+    const url = await uploadBuffer(bucket, req.file.buffer, req.file.mimetype, ext);
+    res.json({ url });
   } catch (err) { console.error(err); res.status(500).json({ error: errMsg }); }
 }
 
@@ -589,3 +594,29 @@ exports.uploadAudio = (req, res) => uploadToBucket(req, res, 'mock-exam-audio', 
 
 // POST /api/admin/mock-exams/upload-image
 exports.uploadImage = (req, res) => uploadToBucket(req, res, 'passage-images', 'jpg', 'Không thể tải ảnh lên.');
+
+// ─── TTS: sinh audio phần nghe từ transcript ──────────────────────────────────
+
+// POST /api/admin/mock-groups/:id/tts — đọc audio_transcript → mp3 → gán audio_url
+exports.generateGroupAudio = async (req, res) => {
+  try {
+    const { group, examId } = await groupWithExamId(req.params.id);
+    await assertEditableExam(examId);
+
+    const { synthesizeTranscript } = require('../utils/ttsJa');
+    let buffer;
+    try {
+      buffer = await synthesizeTranscript(group.audio_transcript);
+    } catch (err) {
+      // Transcript rỗng/quá dài đã kèm httpStatus 400; còn lại là lỗi dịch vụ TTS
+      if (!err.httpStatus) { err.httpStatus = 502; err.message = 'Dịch vụ tạo giọng đọc không phản hồi. Hãy thử lại hoặc tải file thu âm lên.'; }
+      throw err;
+    }
+
+    const url = await uploadBuffer('mock-exam-audio', buffer, 'audio/mpeg', 'mp3');
+    const { data, error } = await supabaseAdmin.from('mock_question_groups')
+      .update({ audio_url: url }).eq('id', group.id).select().single();
+    if (error) throw error;
+    res.json(data);
+  } catch (err) { handleError(res, err, 'Không thể tạo audio từ transcript.'); }
+};

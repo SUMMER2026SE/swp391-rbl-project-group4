@@ -12,6 +12,7 @@ import {
   adminUpdateGroup,
   adminCreateQuestions, adminUpdateQuestion, adminDeleteQuestion,
   adminAiGenerate, adminImportFromBank, adminListBankForImport, adminUploadMedia,
+  adminGenerateGroupAudio,
 } from '../../lib/mockExamApi';
 
 const blankQuestion = () => ({ question_text: '', options: ['', '', '', ''], correct_index: 0, explanation: '', translation_vi: '' });
@@ -86,6 +87,19 @@ export default function AdminMockExamEditor() {
     () => adminUpdateGroup(selectedGroupId, groupDraft),
     'Đã lưu thông tin mondai.'
   );
+
+  // TTS đọc transcript đã lưu trong DB → lưu bản nháp trước rồi mới sinh audio
+  const [ttsLoading, setTtsLoading] = useState(false);
+  const generateGroupAudio = async () => {
+    setTtsLoading(true); setError(''); setNotice('');
+    try {
+      await adminUpdateGroup(selectedGroupId, groupDraft);
+      await adminGenerateGroupAudio(selectedGroupId);
+      setNotice('Đã tạo audio từ script.');
+      load();
+    } catch (e) { setError(e.message); }
+    finally { setTtsLoading(false); }
+  };
 
   const uploadGroupMedia = async (kind, file) => {
     if (!file) return;
@@ -213,12 +227,23 @@ export default function AdminMockExamEditor() {
                       {groupDraft.audio_url && <audio src={groupDraft.audio_url} controls className="h-8 max-w-[40%]" />}
                     </div>
 
-                    {isListening && (
+                    {isListening && (<>
                       <textarea value={groupDraft.audio_transcript} disabled={published}
                         onChange={e => setGroupDraft(d => ({ ...d, audio_transcript: e.target.value }))}
-                        placeholder="Transcript (chỉ hiện khi học viên xem lại)"
+                        placeholder="Transcript (chỉ hiện khi học viên xem lại) — mỗi lượt thoại một dòng, có nhãn 男：/女："
                         className="w-full px-3 py-2 border border-outline rounded-lg text-sm resize-y min-h-[48px] outline-none focus:border-tsubaki-red" />
-                    )}
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Button size="sm" variant="secondary" loading={ttsLoading}
+                          disabled={published || !groupDraft.audio_transcript.trim()}
+                          onClick={generateGroupAudio}>
+                          <span className="material-symbols-outlined text-base">record_voice_over</span>
+                          Tạo audio từ script (TTS)
+                        </Button>
+                        <span className="text-[11px] text-on-muted">
+                          Giọng máy đọc theo nhãn 男：(nam) / 女：(nữ) — có thể upload file thu âm riêng để thay thế.
+                        </span>
+                      </div>
+                    </>)}
 
                     <div className="flex items-center justify-end">
                       <Button size="sm" onClick={saveGroupMeta} loading={saving}>Lưu thông tin mondai</Button>
