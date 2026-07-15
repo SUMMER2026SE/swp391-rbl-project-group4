@@ -553,7 +553,7 @@ exports.importVocab = async (req, res) => {
   if (rows.length > 500)
     return res.status(400).json({ error: 'Tối đa 500 từ mỗi lần nhập.' });
 
-  const ALLOWED = ['kanji','reading','meaning_vi','meaning_ja','level','type','topic','example_sentence','lesson_id'];
+  const ALLOWED = ['kanji','reading','meaning_vi','meaning_ja','level','type','topic','example_sentence','lesson_id','han_viet'];
   const LEVELS  = new Set(['N5','N4','N3','N2','N1']);
   const TYPES   = new Set(['DANH TỪ','ĐỘNG TỪ','TÍNH TỪ','PHÓ TỪ','LIÊN TỪ']);
   const errors  = [];
@@ -654,11 +654,11 @@ exports.listVocab = async (req, res) => {
 };
 
 exports.createVocab = async (req, res) => {
-  const { kanji, reading, meaning_vi, meaning_ja, level, lesson_id, type, topic, example_sentence, image_url } = req.body;
+  const { kanji, reading, meaning_vi, meaning_ja, level, lesson_id, type, topic, example_sentence, image_url, han_viet } = req.body;
   if (!reading || !meaning_vi) return res.status(400).json({ error: 'Thiếu thông tin bắt buộc.' });
   try {
     const { data, error } = await supabaseAdmin.from('vocabulary')
-      .insert({ kanji, reading, meaning_vi, meaning_ja, level, lesson_id, type, topic, example_sentence, image_url: image_url || null, created_by: req.user?.id || null })
+      .insert({ kanji, reading, meaning_vi, meaning_ja, level, lesson_id, type, topic, example_sentence, image_url: image_url || null, han_viet: han_viet || null, created_by: req.user?.id || null })
       .select().single();
     if (error) throw error;
     // Gắn từ mới vào Mục qua bảng nối để hiển thị trong bài.
@@ -701,7 +701,7 @@ exports.detachVocab = async (req, res) => {
 };
 
 exports.updateVocab = async (req, res) => {
-  const allowed = ['kanji','reading','meaning_vi','meaning_ja','level','lesson_id','type','topic','example_sentence','image_url'];
+  const allowed = ['kanji','reading','meaning_vi','meaning_ja','level','lesson_id','type','topic','example_sentence','image_url','han_viet'];
   const updates = Object.fromEntries(Object.entries(req.body).filter(([k]) => allowed.includes(k)));
   try {
     const { data, error } = await supabaseAdmin.from('vocabulary').update(updates).eq('id', req.params.id).select().single();

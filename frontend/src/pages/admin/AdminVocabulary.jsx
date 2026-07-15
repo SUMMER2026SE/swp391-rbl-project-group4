@@ -9,7 +9,7 @@ import ImportFileModal from '../../components/admin/ImportFileModal';
 import { useLang } from '../../contexts/LangContext';
 import api from '../../lib/api';
 
-const EMPTY  = { kanji: '', reading: '', meaning_vi: '', meaning_ja: '', level: '', type: '', topic: '', example_sentence: '' };
+const EMPTY  = { kanji: '', reading: '', meaning_vi: '', meaning_ja: '', level: '', type: '', topic: '', example_sentence: '', han_viet: '' };
 const LEVELS = ['N5','N4','N3','N2','N1'];
 const TYPES  = ['DANH TỪ','ĐỘNG TỪ','TÍNH TỪ','PHÓ TỪ','LIÊN TỪ'];
 const TOPICS = [
@@ -58,7 +58,7 @@ export default function AdminVocabulary() {
   const openCreate = () => { setForm(EMPTY); setEditId(null); setModal(true); };
   const openEdit   = (row) => {
     setForm({ kanji: row.kanji||'', reading: row.reading||'', meaning_vi: row.meaning_vi||'',
-      meaning_ja: row.meaning_ja||'', level: row.level||'', type: row.type||'', topic: row.topic||'', example_sentence: row.example_sentence||'' });
+      meaning_ja: row.meaning_ja||'', level: row.level||'', type: row.type||'', topic: row.topic||'', example_sentence: row.example_sentence||'', han_viet: row.han_viet||'' });
     setEditId(row.id); setModal(true);
   };
 
@@ -131,6 +131,7 @@ export default function AdminVocabulary() {
                 <p className="font-semibold text-charcoal text-sm truncate">
                   <span className="text-tsubaki-red font-bold">{row.kanji || row.reading}</span>
                   {row.kanji && <span className="ml-2 text-on-muted font-normal text-xs">{row.reading}</span>}
+                  {row.han_viet && <span className="ml-2 text-amber-600 font-normal text-xs">({row.han_viet})</span>}
                 </p>
                 <p className="text-xs text-on-muted truncate">{row.meaning_vi}</p>
               </div>
@@ -178,6 +179,9 @@ export default function AdminVocabulary() {
             <Input label="Nghĩa (VI) *" value={form.meaning_vi} onChange={e => setForm({...form, meaning_vi: e.target.value})} />
             <Input label="Nghĩa (JA)" value={form.meaning_ja} onChange={e => setForm({...form, meaning_ja: e.target.value})} />
           </div>
+          {form.kanji && (
+            <Input label="Hán Việt" value={form.han_viet} onChange={e => setForm({...form, han_viet: e.target.value})} placeholder="vd: an toàn" />
+          )}
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-sm font-medium text-on-muted mb-1">Level</label>

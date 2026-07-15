@@ -74,6 +74,7 @@ export default function VocabWordViewer({
   const [reading, setReading]     = useState(item?.reading || '');
   const [meaning, setMeaning]     = useState(item?.meaning_vi || '');
   const [meaningJa, setMeaningJa] = useState(item?.meaning_ja || '');
+  const [hanViet, setHanViet]     = useState(item?.han_viet || '');
   const [typeVal, setTypeVal]     = useState(item?.type || '');
   const [example, setExample]     = useState(item?.example_sentence || '');
   const [saving, setSaving]       = useState(false);
@@ -86,6 +87,7 @@ export default function VocabWordViewer({
     setReading(item.reading || '');
     setMeaning(item.meaning_vi || '');
     setMeaningJa(item.meaning_ja || '');
+    setHanViet(item.han_viet || '');
     setTypeVal(item.type || '');
     setExample(item.example_sentence || '');
   }, [idx, item?.id]);
@@ -185,6 +187,10 @@ export default function VocabWordViewer({
                 placeholder="Kanji (nếu có)" className={`${editInputClass} text-3xl font-bold text-charcoal py-1`} />
               <input value={reading} onChange={e => setReading(e.target.value)} onBlur={() => reading !== (item.reading || '') && save({ reading })}
                 placeholder="Cách đọc" className={`${editInputClass} text-base text-on-muted mt-1 py-1`} />
+              {kanji && (
+                <input value={hanViet} onChange={e => setHanViet(e.target.value)} onBlur={() => hanViet !== (item.han_viet || '') && save({ han_viet: hanViet || null })}
+                  placeholder="Hán Việt" className={`${editInputClass} text-sm text-amber-600 mt-1 py-1`} />
+              )}
               <input value={meaning} onChange={e => setMeaning(e.target.value)} onBlur={() => meaning !== (item.meaning_vi || '') && save({ meaning_vi: meaning })}
                 placeholder="Nghĩa tiếng Việt" className={`${editInputClass} text-lg font-medium text-tsubaki-red mt-3 py-1`} />
               {showDetails && (
@@ -206,8 +212,9 @@ export default function VocabWordViewer({
             </>
           ) : (
             <>
-              <FuriganaText text={item.kanji || item.reading} {...furiganaProps} textClassName="text-3xl font-bold text-charcoal" />
+              <FuriganaText text={item.kanji || item.reading} enabled={false} textClassName="text-3xl font-bold text-charcoal" />
               {item.kanji && <p className="text-base text-on-muted mt-1">{item.reading}</p>}
+              {item.kanji && item.han_viet && <p className="text-sm text-amber-600 mt-0.5">{item.han_viet}</p>}
               <p className="text-lg font-medium text-tsubaki-red mt-3">{item.meaning_vi}</p>
               {showDetails && item.meaning_ja && <p className="text-sm text-on-muted mt-1">{item.meaning_ja}</p>}
               {showDetails && item.type && <span className="inline-block mt-2 px-2 py-0.5 rounded-full text-xs bg-surface-low text-on-muted">{item.type}</span>}
