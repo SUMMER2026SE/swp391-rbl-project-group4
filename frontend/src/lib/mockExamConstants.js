@@ -96,6 +96,43 @@ export const MONDAI_TYPE_OPTIONS = Object.entries(MONDAI_LABEL).map(([value, l])
 export const mondaiJa = (type) => MONDAI_LABEL[type]?.ja || type;
 export const mondaiVi = (type) => MONDAI_LABEL[type]?.vi || type;
 
+// Số câu chuẩn (目安) mỗi mondai theo blueprint JLPT — mirror BLUEPRINTS ở
+// backend/utils/jlptMock.js. Key = "vị trí phần thi : mondai_type".
+// Dùng để hiển thị "n câu / chuẩn m" trong editor (không chặn, chỉ cảnh báo).
+export const BLUEPRINT_COUNTS = {
+  N5: {
+    '1:kanji_reading': 7, '1:orthography': 5, '1:context': 6, '1:paraphrase': 3,
+    '2:grammar_form': 9, '2:sentence_assembly': 4, '2:text_grammar': 4, '2:reading_short': 2, '2:reading_mid': 2, '2:info_retrieval': 1,
+    '3:task_comprehension': 7, '3:point_comprehension': 6, '3:utterance_expression': 5, '3:quick_response': 6,
+  },
+  N4: {
+    '1:kanji_reading': 7, '1:orthography': 5, '1:context': 8, '1:paraphrase': 4, '1:usage': 4,
+    '2:grammar_form': 13, '2:sentence_assembly': 4, '2:text_grammar': 4, '2:reading_short': 3, '2:reading_mid': 3, '2:info_retrieval': 2,
+    '3:task_comprehension': 8, '3:point_comprehension': 7, '3:utterance_expression': 5, '3:quick_response': 8,
+  },
+  N3: {
+    '1:kanji_reading': 8, '1:orthography': 6, '1:context': 11, '1:paraphrase': 5, '1:usage': 5,
+    '2:grammar_form': 13, '2:sentence_assembly': 5, '2:text_grammar': 5, '2:reading_short': 4, '2:reading_mid': 6, '2:reading_long': 4, '2:info_retrieval': 2,
+    '3:task_comprehension': 6, '3:point_comprehension': 6, '3:summary_comprehension': 3, '3:utterance_expression': 4, '3:quick_response': 9,
+  },
+  N2: {
+    '1:kanji_reading': 5, '1:orthography': 5, '1:word_formation': 4, '1:context': 7, '1:paraphrase': 5, '1:usage': 5,
+    '1:grammar_form': 12, '1:sentence_assembly': 5, '1:text_grammar': 5,
+    '1:reading_short': 5, '1:reading_mid': 9, '1:integrated_reading': 2, '1:thematic_reading': 3, '1:info_retrieval': 2,
+    '2:task_comprehension': 5, '2:point_comprehension': 6, '2:summary_comprehension': 5, '2:quick_response': 12, '2:integrated_listening': 4,
+  },
+  N1: {
+    '1:kanji_reading': 6, '1:context': 7, '1:paraphrase': 6, '1:usage': 6,
+    '1:grammar_form': 10, '1:sentence_assembly': 5, '1:text_grammar': 5,
+    '1:reading_short': 4, '1:reading_mid': 9, '1:reading_long': 4, '1:integrated_reading': 3, '1:thematic_reading': 4, '1:info_retrieval': 2,
+    '2:task_comprehension': 5, '2:point_comprehension': 6, '2:summary_comprehension': 5, '2:quick_response': 11, '2:integrated_listening': 3,
+  },
+};
+
+// Số câu chuẩn cho 1 mondai (theo cấp + vị trí phần thi + loại mondai). null nếu không có.
+export const blueprintCount = (level, sectionPosition, mondaiType) =>
+  BLUEPRINT_COUNTS[level]?.[`${sectionPosition}:${mondaiType}`] ?? null;
+
 // Định dạng mm:ss / hh:mm:ss
 export function formatDuration(seconds) {
   if (seconds == null) return '—';

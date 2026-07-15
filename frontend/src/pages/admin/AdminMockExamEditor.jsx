@@ -6,11 +6,10 @@ import Alert from '../../components/ui/Alert';
 import Modal from '../../components/ui/Modal';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
 import QuestionCard from '../../components/admin/mock/QuestionCard';
-import { MONDAI_TYPE_OPTIONS, mondaiJa, mondaiVi, SECTION_LABEL } from '../../lib/mockExamConstants';
+import { mondaiJa, mondaiVi, SECTION_LABEL, blueprintCount } from '../../lib/mockExamConstants';
 import {
-  adminGetExam, adminPublishExam, adminUpdateExam,
-  adminCreateSection, adminUpdateSection, adminDeleteSection,
-  adminCreateGroup, adminUpdateGroup, adminDeleteGroup,
+  adminGetExam, adminPublishExam, adminUpdateExam, adminUpdateSection,
+  adminUpdateGroup,
   adminCreateQuestions, adminUpdateQuestion, adminDeleteQuestion,
   adminAiGenerate, adminImportFromBank, adminListBankForImport, adminUploadMedia,
 } from '../../lib/mockExamApi';
@@ -24,11 +23,10 @@ export default function AdminMockExamEditor() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const [warning, setWarning] = useState('');
   const [selectedGroupId, setSelectedGroupId] = useState(null);
   const [saving, setSaving] = useState(false);
 
-  const [showAdd, setShowAdd] = useState(false);   // modal thêm mondai cho section nào
-  const [addForm, setAddForm] = useState({ sectionId: null, mondai_type: 'kanji_reading' });
   const [showAi, setShowAi]   = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [confirm, setConfirm] = useState(null);
@@ -58,10 +56,19 @@ export default function AdminMockExamEditor() {
     catch (e) { setError(e.data?.details ? `${e.message} — ${e.data.details.join(' · ')}` : e.message); }
   };
 
-  const handlePublish = () => run(
-    () => adminPublishExam(id, !published),
-    published ? 'Đã gỡ xuất bản.' : 'Đã xuất bản đề thi.'
-  );
+  const handlePublish = async () => {
+    setError(''); setNotice(''); setWarning('');
+    try {
+      const r = await adminPublishExam(id, !published);
+      setNotice(published ? 'Đã gỡ xuất bản.' : 'Đã xuất bản đề thi.');
+      // Publish trả warnings[] (lệch số câu chuẩn); unpublish trả warning (số lượt đã làm)
+      if (r?.warnings?.length) setWarning(`Đã xuất bản, nhưng số câu lệch chuẩn JLPT: ${r.warnings.join(' · ')}`);
+      else if (r?.warning) setWarning(r.warning);
+      load();
+    } catch (e) {
+      setError(e.data?.details ? `${e.message} — ${e.data.details.join(' · ')}` : e.message);
+    }
+  };
 
   // ── Group meta (instruction/passage/media) ──
   const [groupDraft, setGroupDraft] = useState(null);
@@ -119,8 +126,9 @@ export default function AdminMockExamEditor() {
         </div>
 
         {published && <Alert type="warning">Đề đang xuất bản là <b>bất biến</b>. Gỡ xuất bản để sửa nội dung (chỉ giải thích/chỉ dẫn được sửa khi đang xuất bản).</Alert>}
-        {error &&  <Alert type="error" onClose={() => setError('')}>{error}</Alert>}
-        {notice && <Alert type="success" onClose={() => setNotice('')}>{notice}</Alert>}
+        {error &&   <Alert type="error" onClose={() => setError('')}>{error}</Alert>}
+        {warning && <Alert type="warning" onClose={() => setWarning('')}>{warning}</Alert>}
+        {notice &&  <Alert type="success" onClose={() => setNotice('')}>{notice}</Alert>}
 
         <div className="grid grid-cols-1 lg:grid-cols-[300px_1fr] gap-5">
           {/* ── Cây phần thi / mondai ── */}
@@ -128,15 +136,7 @@ export default function AdminMockExamEditor() {
             {(exam.sections || []).map(section => (
               <div key={section.id} className="border border-outline/40 rounded-xl overflow-hidden">
                 <div className="bg-surface-low px-3 py-2.5">
-                  <div className="flex items-center justify-between gap-1">
-                    <span className="text-xs font-bold text-charcoal truncate">{section.title || SECTION_LABEL[section.section_type]}</span>
-                    {!published && (
-                      <button onClick={() => setConfirm({ type: 'section', id: section.id, name: section.title })}
-                        className="text-on-muted hover:text-error shrink-0">
-                        <span className="material-symbols-outlined text-base">delete</span>
-                      </button>
-                    )}
-                  </div>
+                  <span className="text-xs font-bold text-charcoal truncate block">{section.title || SECTION_LABEL[section.section_type]}</span>
                   <div className="flex items-center gap-2 mt-1 text-[11px] text-on-muted">
                     <span className="material-symbols-outlined text-[13px]">timer</span>
                     <input type="number" min="1" value={section.time_limit_minutes} disabled={published}
@@ -146,31 +146,26 @@ export default function AdminMockExamEditor() {
                   </div>
                 </div>
                 <div className="p-2 space-y-1">
-                  {section.groups.map(g => (
+                  {section.groups.map(g => {
+                    const std = blueprintCount(exam.level, section.position, g.mondai_type);
+                    const off = std != null ? g.questions.length !== std : g.questions.length === 0;
+                    return (
                     <button key={g.id} onClick={() => setSelectedGroupId(g.id)}
                       className={`w-full text-left px-2.5 py-2 rounded-lg text-xs transition-colors ${selectedGroupId === g.id ? 'bg-tsubaki-red/10 border border-tsubaki-red/40' : 'hover:bg-surface-low'}`}>
                       <div className="flex items-center justify-between gap-1">
                         <span className="font-bold text-charcoal">問題{g.mondai_number} · {mondaiJa(g.mondai_type)}</span>
-                        <span className={`shrink-0 text-[10px] px-1.5 rounded ${g.questions.length ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>{g.questions.length} câu</span>
+                        <span title={std != null ? `Chuẩn JLPT: ${std} câu` : undefined}
+                          className={`shrink-0 text-[10px] px-1.5 rounded ${off ? 'bg-amber-100 text-amber-700' : 'bg-green-100 text-green-700'}`}>
+                          {g.questions.length}{std != null ? `/${std}` : ''} câu
+                        </span>
                       </div>
                       <span className="text-on-muted">{mondaiVi(g.mondai_type)}</span>
                     </button>
-                  ))}
-                  {!published && (
-                    <button onClick={() => { setAddForm({ sectionId: section.id, mondai_type: 'kanji_reading' }); setShowAdd(true); }}
-                      className="w-full text-xs text-tsubaki-red font-semibold py-1.5 hover:bg-tsubaki-red/5 rounded-lg flex items-center justify-center gap-1">
-                      <span className="material-symbols-outlined text-sm">add</span> Thêm mondai
-                    </button>
-                  )}
+                    );
+                  })}
                 </div>
               </div>
             ))}
-            {!published && (
-              <Button variant="secondary" size="sm" className="w-full"
-                onClick={() => run(() => adminCreateSection(id, { section_type: 'listening', title: 'Phần thi mới', time_limit_minutes: 30 }))}>
-                <span className="material-symbols-outlined text-lg">add</span> Thêm phần thi
-              </Button>
-            )}
           </div>
 
           {/* ── Panel mondai đang chọn ── */}
@@ -233,7 +228,15 @@ export default function AdminMockExamEditor() {
 
                 {/* Câu hỏi */}
                 <div className="flex items-center justify-between">
-                  <h3 className="font-bold text-charcoal">Câu hỏi ({selectedGroup.questions.length})</h3>
+                  <h3 className="font-bold text-charcoal">
+                    Câu hỏi ({selectedGroup.questions.length})
+                    {(() => {
+                      const std = blueprintCount(exam.level, selectedGroup._section?.position, selectedGroup.mondai_type);
+                      if (std == null) return null;
+                      const off = selectedGroup.questions.length !== std;
+                      return <span className={`ml-2 text-xs font-semibold ${off ? 'text-amber-600' : 'text-green-600'}`}>chuẩn JLPT: {std} câu</span>;
+                    })()}
+                  </h3>
                   {!published && (
                     <div className="flex items-center gap-2">
                       <Button variant="secondary" size="sm" onClick={() => setShowImport(true)}>
@@ -262,19 +265,6 @@ export default function AdminMockExamEditor() {
         </div>
       </div>
 
-      {/* Modal thêm mondai */}
-      <Modal open={showAdd} onClose={() => setShowAdd(false)} title="Thêm mondai"
-        footer={<>
-          <Button variant="secondary" onClick={() => setShowAdd(false)}>Hủy</Button>
-          <Button onClick={() => run(() => adminCreateGroup(addForm.sectionId, { mondai_type: addForm.mondai_type }).then(() => setShowAdd(false)))}>Thêm</Button>
-        </>}>
-        <label className="block text-sm font-medium text-on-muted mb-1.5">Loại mondai (大問)</label>
-        <select value={addForm.mondai_type} onChange={e => setAddForm(f => ({ ...f, mondai_type: e.target.value }))}
-          className="w-full px-3 py-2.5 border border-outline rounded-xl text-sm outline-none focus:border-tsubaki-red">
-          {MONDAI_TYPE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-        </select>
-      </Modal>
-
       {/* AI drawer */}
       {showAi && selectedGroup && (
         <AiGenerateModal group={selectedGroup} onClose={() => setShowAi(false)} onAdded={load} />
@@ -286,13 +276,10 @@ export default function AdminMockExamEditor() {
       )}
 
       <ConfirmDialog open={!!confirm} onCancel={() => setConfirm(null)}
-        title={confirm?.type === 'section' ? 'Xóa phần thi?' : confirm?.type === 'question' ? 'Xóa câu hỏi?' : 'Xóa mondai?'}
-        message="Thao tác này không thể hoàn tác."
-        confirmLabel="Xóa"
+        title="Xóa câu hỏi?" message="Thao tác này không thể hoàn tác." confirmLabel="Xóa"
         onConfirm={() => {
           const c = confirm; setConfirm(null);
-          const fn = c.type === 'section' ? adminDeleteSection : c.type === 'question' ? adminDeleteQuestion : adminDeleteGroup;
-          run(() => fn(c.id));
+          run(() => adminDeleteQuestion(c.id));
         }} />
     </AdminLayout>
   );
