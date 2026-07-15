@@ -1,3 +1,4 @@
+import { useLayoutEffect, useRef } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { useLang } from '../../contexts/LangContext';
@@ -7,6 +8,12 @@ export default function Sidebar({ links, brand = 'Kizuna Nihongo', collapsed = f
   const { t } = useLang();
   const location = useLocation();
   const navigate = useNavigate();
+  const navRef = useRef(null);
+
+  useLayoutEffect(() => {
+    const saved = Number(sessionStorage.getItem('sidebar_scroll') || 0);
+    if (navRef.current) navRef.current.scrollTop = saved;
+  }, []);
 
   const handleLogout = async () => {
     await logout();
@@ -43,9 +50,13 @@ export default function Sidebar({ links, brand = 'Kizuna Nihongo', collapsed = f
         </button>
       )}
 
-      <nav className="flex-1 flex flex-col gap-1 overflow-y-auto min-h-0 -mx-2 px-2">
+      <nav ref={navRef}
+        onScroll={() => sessionStorage.setItem('sidebar_scroll', navRef.current?.scrollTop ?? 0)}
+        className="flex-1 flex flex-col gap-1 overflow-y-auto min-h-0 -mx-2 px-2">
         {links.map((link) => {
-          const active = location.pathname === link.to || location.pathname.startsWith(link.to + '/');
+          const active = link.exact
+            ? location.pathname === link.to
+            : (location.pathname === link.to || location.pathname.startsWith(link.to + '/'));
           return (
             <Link key={link.to} to={link.to} title={collapsed ? link.label : undefined}
               className={`flex items-center gap-3 rounded-xl text-sm font-medium transition-all ${

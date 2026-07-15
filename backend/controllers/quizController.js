@@ -4,6 +4,7 @@ const { supabaseAdmin } = require('../config/supabase');
 const { checkCourseContentAccess } = require('../services/courseAccess');
 const { chatCompletion } = require('../config/ai');
 const { computePassed } = require('../services/passThreshold');
+const { markLessonCompleted } = require('../services/lessonProgress');
 
 // Bảng quiz đã chuyển sang schema exam_module (question_bank/users vẫn ở public)
 const examDb = supabaseAdmin.schema('exam_module');
@@ -152,7 +153,7 @@ exports.submitAttempt = async (req, res) => {
 
   try {
     const { data: quiz } = await examDb.from('quizzes')
-      .select('mode,strict_fullscreen,passing_type,passing_value').eq('id', req.params.id).single();
+      .select('mode,strict_fullscreen,passing_type,passing_value,lesson_id').eq('id', req.params.id).single();
 
     // Strict fullscreen: đang bị khóa thì không cho nộp bài
     if (quiz?.strict_fullscreen) {
@@ -214,6 +215,13 @@ exports.submitAttempt = async (req, res) => {
     }).select().single();
 
     if (error) throw error;
+
+    // Quiz có ngưỡng đạt và học sinh đạt → tự động ghi nhận mục học đã hoàn thành.
+    // Quiz "Không yêu cầu" (passing_type = null) không tự động hoàn thành — giữ hành vi thủ công.
+    if (quiz?.passing_type && passed === true && quiz.lesson_id) {
+      await markLessonCompleted(userId, quiz.lesson_id);
+    }
+
     res.json({ score, total: questions.length, attempt_id: attempt.id, passed, ai_feedback: aiFeedback });
   } catch (err) {
     console.error('Submit attempt error:', err);
