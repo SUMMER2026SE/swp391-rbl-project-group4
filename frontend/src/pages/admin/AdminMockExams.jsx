@@ -21,6 +21,10 @@ export default function AdminMockExams() {
   const [form, setForm] = useState({ level: 'N5', title: '', use_blueprint: true });
   const [creating, setCreating] = useState(false);
   const [toDelete, setToDelete] = useState(null);
+  // Popup xác nhận đổi trạng thái: { type: 'publish' | 'free', row }
+  const [confirm, setConfirm] = useState(null);
+  const [confirmBusy, setConfirmBusy] = useState(false);
+  const [notice, setNotice] = useState('');
 
   const load = () => {
     setLoading(true);
@@ -40,26 +44,41 @@ export default function AdminMockExams() {
     } catch (e) { setError(e.message); setCreating(false); }
   };
 
-  const handlePublish = async (row) => {
-    setError('');
-    try {
-      await adminPublishExam(row.id, !row.is_published);
-      load();
-    } catch (e) {
-      setError(e.data?.details ? `${e.message} ${e.data.details.slice(0, 3).join(' · ')}${e.data.details.length > 3 ? '…' : ''}` : e.message);
-    }
-  };
-
   const handleDelete = async () => {
     try { await adminDeleteExam(toDelete.id); setToDelete(null); load(); }
     catch (e) { setError(e.message); setToDelete(null); }
   };
 
-  // Đổi cờ miễn phí/premium của đề (được phép cả khi đã publish)
-  const handleToggleFree = async (row) => {
-    setError('');
-    try { await adminUpdateExam(row.id, { is_free: !row.is_free }); load(); }
-    catch (e) { setError(e.message); }
+  // Nội dung popup xác nhận theo hành động (publish/unpublish, free/premium)
+  const confirmInfo = confirm && (confirm.type === 'publish'
+    ? (confirm.row.is_published
+      ? { title: 'Gỡ xuất bản đề thi?', icon: 'visibility_off', confirmLabel: 'Gỡ xuất bản', variant: 'danger',
+          message: `Đề "${confirm.row.title}" sẽ ẩn khỏi danh sách của học viên. Các lượt đã làm vẫn xem được lịch sử.` }
+      : { title: 'Xuất bản đề thi?', icon: 'publish', confirmLabel: 'Xuất bản', variant: 'primary',
+          message: `Đề "${confirm.row.title}" sẽ hiển thị cho học viên và không thể sửa nội dung câu hỏi sau khi xuất bản.` })
+    : (confirm.row.is_free
+      ? { title: 'Chuyển sang Premium?', icon: 'workspace_premium', confirmLabel: 'Chuyển Premium', variant: 'primary',
+          message: `Đề "${confirm.row.title}" sẽ chỉ dành cho tài khoản Premium — học viên free không bắt đầu được bài làm mới.` }
+      : { title: 'Chuyển sang Miễn phí?', icon: 'lock_open', confirmLabel: 'Chuyển Miễn phí', variant: 'primary',
+          message: `Mọi học viên đều làm được đề "${confirm.row.title}".` }));
+
+  const handleConfirm = async () => {
+    const { type, row } = confirm;
+    setError(''); setNotice(''); setConfirmBusy(true);
+    try {
+      if (type === 'publish') {
+        const r = await adminPublishExam(row.id, !row.is_published);
+        if (r?.warning) setNotice(r.warning);
+      } else {
+        await adminUpdateExam(row.id, { is_free: !row.is_free });
+      }
+      load();
+    } catch (e) {
+      setError(e.data?.details ? `${e.message} ${e.data.details.slice(0, 3).join(' · ')}${e.data.details.length > 3 ? '…' : ''}` : e.message);
+    } finally {
+      setConfirmBusy(false);
+      setConfirm(null);
+    }
   };
 
   const columns = [
@@ -71,7 +90,7 @@ export default function AdminMockExams() {
       ? <span className="inline-flex items-center gap-1 text-green-700 text-xs font-semibold"><span className="w-1.5 h-1.5 rounded-full bg-green-500" />Đã xuất bản</span>
       : <span className="inline-flex items-center gap-1 text-on-muted text-xs font-semibold"><span className="w-1.5 h-1.5 rounded-full bg-outline" />Bản nháp</span> },
     { key: 'is_free', label: 'Quyền truy cập', render: (v, row) => (
-      <button onClick={() => handleToggleFree(row)} title="Bấm để đổi Miễn phí ↔ Premium"
+      <button onClick={() => setConfirm({ type: 'free', row })} title="Bấm để đổi Miễn phí ↔ Premium"
         className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-semibold transition-colors ${v
           ? 'bg-green-50 text-green-700 hover:bg-green-100'
           : 'bg-amber-50 text-amber-700 hover:bg-amber-100'}`}>
@@ -95,6 +114,7 @@ export default function AdminMockExams() {
         </div>
 
         {error && <Alert type="error" onClose={() => setError('')}>{error}</Alert>}
+        {notice && <Alert type="warning" onClose={() => setNotice('')}>{notice}</Alert>}
 
         <div className="flex items-center gap-2">
           <button onClick={() => setLevelFilter('')}
@@ -116,7 +136,7 @@ export default function AdminMockExams() {
           onEdit={(row) => navigate(`/admin/mock-exams/${row.id}`)}
           onDelete={(row) => setToDelete(row)}
           actions={(row) => (
-            <button onClick={() => handlePublish(row)} title={row.is_published ? 'Gỡ xuất bản' : 'Xuất bản'}
+            <button onClick={() => setConfirm({ type: 'publish', row })} title={row.is_published ? 'Gỡ xuất bản' : 'Xuất bản'}
               className="p-1.5 text-on-muted hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors">
               <span className="material-symbols-outlined text-lg">{row.is_published ? 'visibility_off' : 'publish'}</span>
             </button>
@@ -157,6 +177,10 @@ export default function AdminMockExams() {
       <ConfirmDialog open={!!toDelete} onCancel={() => setToDelete(null)} onConfirm={handleDelete}
         title="Xóa đề thi?" message={`Xóa vĩnh viễn đề "${toDelete?.title}" cùng toàn bộ phần thi và câu hỏi. Không thể hoàn tác.`}
         confirmLabel="Xóa" />
+
+      <ConfirmDialog open={!!confirm} onCancel={() => setConfirm(null)} onConfirm={handleConfirm}
+        loading={confirmBusy} title={confirmInfo?.title} message={confirmInfo?.message}
+        icon={confirmInfo?.icon} confirmLabel={confirmInfo?.confirmLabel} variant={confirmInfo?.variant} />
     </AdminLayout>
   );
 }
