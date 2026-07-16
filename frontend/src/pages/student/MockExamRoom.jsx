@@ -153,7 +153,6 @@ export default function MockExamRoom() {
                     )}
                   </div>
                 )}
-                {group.audio_url && <div className="mb-3"><AudioPlayer src={group.audio_url} label={`問題${group.mondai_number} — Audio`} /></div>}
 
                 <div className={hasPassage ? 'grid grid-cols-1 md:grid-cols-2 gap-4' : ''}>
                   {hasPassage && (

@@ -55,15 +55,6 @@ export default function MockExamReview() {
                     <FuriganaText text={group.passage_text} enabled={false} block />
                   </div>
                 )}
-                {group.audio_url && <AudioPlayer src={group.audio_url} label={`問題${group.mondai_number} — Audio`} />}
-                {group.audio_transcript && (
-                  <div className="text-xs">
-                    <button onClick={() => setOpenTranscript(o => ({ ...o, [group.id]: !o[group.id] }))} className="text-tsubaki-red font-semibold">
-                      {openTranscript[group.id] ? 'Ẩn transcript' : 'Xem transcript'}
-                    </button>
-                    {openTranscript[group.id] && <p className="mt-1 bg-blue-50 border border-blue-200 rounded-lg p-2 whitespace-pre-wrap text-blue-900">{group.audio_transcript}</p>}
-                  </div>
-                )}
                 {group.questions.map(q => {
                   const num = numById[q.id];
                   return (
@@ -76,6 +67,14 @@ export default function MockExamReview() {
                         </div>
                       </div>
                       {q.audio_url && <div className="mb-2"><AudioPlayer src={q.audio_url} label={`Câu ${num}`} /></div>}
+                      {q.audio_transcript && (
+                        <div className="text-xs mb-2">
+                          <button onClick={() => setOpenTranscript(o => ({ ...o, [q.id]: !o[q.id] }))} className="text-tsubaki-red font-semibold">
+                            {openTranscript[q.id] ? 'Ẩn transcript' : 'Xem transcript'}
+                          </button>
+                          {openTranscript[q.id] && <p className="mt-1 bg-blue-50 border border-blue-200 rounded-lg p-2 whitespace-pre-wrap text-blue-900">{q.audio_transcript}</p>}
+                        </div>
+                      )}
                       <div className="space-y-1.5">
                         {q.options.map((opt, idx) => {
                           const isCorrect = idx === q.correct_index;

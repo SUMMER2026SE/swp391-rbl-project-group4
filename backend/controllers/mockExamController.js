@@ -9,7 +9,7 @@ const GRACE_MS = 10 * 1000;
 
 // Whitelist cột trả cho student — TUYỆT ĐỐI KHÔNG gồm correct_index/explanation/audio_transcript
 const QUESTION_PUBLIC = 'id, group_id, position, question_text, image_url, audio_url, options';
-const GROUP_PUBLIC = 'id, section_id, position, mondai_number, mondai_type, passage_text, image_url, audio_url, score_category';
+const GROUP_PUBLIC = 'id, section_id, position, mondai_number, mondai_type, passage_text, image_url, score_category';
 
 function handleError(res, err, fallback) {
   console.error(err);

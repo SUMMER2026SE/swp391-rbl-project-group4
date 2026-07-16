@@ -333,12 +333,12 @@ router.delete('/mock-sections/:id',                mock.deleteSection);
 router.post('/mock-sections/:sectionId/groups',    mock.createGroup);
 router.patch('/mock-groups/reorder',               mock.reorderGroups);
 router.put('/mock-groups/:id',                     mock.updateGroup);
-router.post('/mock-groups/:id/tts',                mock.generateGroupAudio);
 router.delete('/mock-groups/:id',                  mock.deleteGroup);
 router.post('/mock-groups/:groupId/questions',           mock.createQuestions);
 router.post('/mock-groups/:groupId/import-from-bank',    mock.importFromBank);
 router.post('/mock-groups/:groupId/ai-generate',         mock.aiGenerateDrafts);
 router.patch('/mock-questions/reorder',            mock.reorderQuestions);
+router.post('/mock-questions/:id/tts',             mock.generateQuestionAudio);
 router.put('/mock-questions/:id',                  mock.updateQuestion);
 router.delete('/mock-questions/:id',               mock.deleteQuestion);
 

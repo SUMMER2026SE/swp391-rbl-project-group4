@@ -32,9 +32,9 @@ export const adminCreateGroup = (sectionId, body) => api.post(`/admin/mock-secti
 export const adminUpdateGroup = (id, body) => api.put(`/admin/mock-groups/${id}`, body).then(r => r.data);
 export const adminDeleteGroup = (id)   => api.delete(`/admin/mock-groups/${id}`).then(r => r.data);
 export const adminReorderGroups = (ids) => api.patch('/admin/mock-groups/reorder', { ids }).then(r => r.data);
-export const adminGenerateGroupAudio = (id) => api.post(`/admin/mock-groups/${id}/tts`).then(r => r.data);
 
 export const adminCreateQuestions = (groupId, questions) => api.post(`/admin/mock-groups/${groupId}/questions`, { questions }).then(r => r.data);
+export const adminGenerateQuestionAudio = (id) => api.post(`/admin/mock-questions/${id}/tts`).then(r => r.data);
 export const adminUpdateQuestion = (id, body) => api.put(`/admin/mock-questions/${id}`, body).then(r => r.data);
 export const adminDeleteQuestion = (id) => api.delete(`/admin/mock-questions/${id}`).then(r => r.data);
 export const adminReorderQuestions = (ids) => api.patch('/admin/mock-questions/reorder', { ids }).then(r => r.data);

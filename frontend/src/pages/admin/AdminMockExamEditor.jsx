@@ -12,7 +12,6 @@ import {
   adminUpdateGroup,
   adminCreateQuestions, adminUpdateQuestion, adminDeleteQuestion,
   adminAiGenerate, adminImportFromBank, adminListBankForImport, adminUploadMedia,
-  adminGenerateGroupAudio,
 } from '../../lib/mockExamApi';
 
 const blankQuestion = () => ({ question_text: '', options: ['', '', '', ''], correct_index: 0, explanation: '', translation_vi: '' });
@@ -71,14 +70,12 @@ export default function AdminMockExamEditor() {
     }
   };
 
-  // ── Group meta (instruction/passage/media) ──
+  // ── Group meta (passage/ảnh) — audio/transcript phần nghe nằm ở từng câu ──
   const [groupDraft, setGroupDraft] = useState(null);
   useEffect(() => {
     if (selectedGroup) setGroupDraft({
       passage_text: selectedGroup.passage_text || '',
       image_url: selectedGroup.image_url || '',
-      audio_url: selectedGroup.audio_url || '',
-      audio_transcript: selectedGroup.audio_transcript || '',
     });
   }, [selectedGroupId, exam]);
 
@@ -87,25 +84,12 @@ export default function AdminMockExamEditor() {
     'Đã lưu thông tin mondai.'
   );
 
-  // TTS đọc transcript đã lưu trong DB → lưu bản nháp trước rồi mới sinh audio
-  const [ttsLoading, setTtsLoading] = useState(false);
-  const generateGroupAudio = async () => {
-    setTtsLoading(true); setError(''); setNotice('');
-    try {
-      await adminUpdateGroup(selectedGroupId, groupDraft);
-      await adminGenerateGroupAudio(selectedGroupId);
-      setNotice('Đã tạo audio từ script.');
-      load();
-    } catch (e) { setError(e.message); }
-    finally { setTtsLoading(false); }
-  };
-
-  const uploadGroupMedia = async (kind, file) => {
+  const uploadGroupImage = async (file) => {
     if (!file) return;
     setSaving(true); setError('');
     try {
-      const { url } = await adminUploadMedia(kind, file);
-      setGroupDraft(d => ({ ...d, [kind === 'audio' ? 'audio_url' : 'image_url']: url }));
+      const { url } = await adminUploadMedia('image', file);
+      setGroupDraft(d => ({ ...d, image_url: url }));
     } catch (e) { setError(e.message); }
     finally { setSaving(false); }
   };
@@ -138,7 +122,7 @@ export default function AdminMockExamEditor() {
             className="font-display text-2xl font-bold text-charcoal bg-transparent outline-none border-b-2 border-transparent focus:border-outline w-full disabled:opacity-100" />
         </div>
 
-        {published && <Alert type="warning">Đề đang xuất bản là <b>bất biến</b>. Gỡ xuất bản để sửa nội dung (chỉ giải thích/chỉ dẫn được sửa khi đang xuất bản).</Alert>}
+        {published && <Alert type="warning">Đề đang xuất bản là <b>bất biến</b>. Gỡ xuất bản để sửa nội dung (chỉ giải thích/bản dịch/transcript được sửa khi đang xuất bản).</Alert>}
         {error &&   <Alert type="error" onClose={() => setError('')}>{error}</Alert>}
         {warning && <Alert type="warning" onClose={() => setWarning('')}>{warning}</Alert>}
         {notice &&  <Alert type="success" onClose={() => setNotice('')}>{notice}</Alert>}
@@ -213,36 +197,10 @@ export default function AdminMockExamEditor() {
                         <span className="material-symbols-outlined text-base">image</span>
                         {groupDraft.image_url ? 'Đổi ảnh' : 'Tải ảnh (発話表現/情報検索)'}
                         <input type="file" accept="image/*" className="hidden" disabled={published}
-                          onChange={e => uploadGroupMedia('image', e.target.files[0])} />
+                          onChange={e => uploadGroupImage(e.target.files[0])} />
                       </label>
                       {groupDraft.image_url && <img src={groupDraft.image_url} className="h-10 rounded border border-outline/40" alt="" />}
-                      {/* Audio nhóm */}
-                      <label className="cursor-pointer text-tsubaki-red font-semibold hover:underline flex items-center gap-1">
-                        <span className="material-symbols-outlined text-base">graphic_eq</span>
-                        {groupDraft.audio_url ? 'Đổi audio mondai' : 'Tải audio mondai'}
-                        <input type="file" accept="audio/*" className="hidden" disabled={published}
-                          onChange={e => uploadGroupMedia('audio', e.target.files[0])} />
-                      </label>
-                      {groupDraft.audio_url && <audio src={groupDraft.audio_url} controls className="h-8 max-w-[40%]" />}
                     </div>
-
-                    {isListening && (<>
-                      <textarea value={groupDraft.audio_transcript} disabled={published}
-                        onChange={e => setGroupDraft(d => ({ ...d, audio_transcript: e.target.value }))}
-                        placeholder="Transcript (chỉ hiện khi học viên xem lại) — mỗi lượt thoại một dòng, có nhãn 男：/女："
-                        className="w-full px-3 py-2 border border-outline rounded-lg text-sm resize-y min-h-[48px] outline-none focus:border-tsubaki-red" />
-                      <div className="flex flex-wrap items-center gap-2">
-                        <Button size="sm" variant="secondary" loading={ttsLoading}
-                          disabled={published || !groupDraft.audio_transcript.trim()}
-                          onClick={generateGroupAudio}>
-                          <span className="material-symbols-outlined text-base">record_voice_over</span>
-                          Tạo audio từ script (TTS)
-                        </Button>
-                        <span className="text-[11px] text-on-muted">
-                          Giọng máy đọc theo nhãn 男：(nam) / 女：(nữ) — có thể upload file thu âm riêng để thay thế.
-                        </span>
-                      </div>
-                    </>)}
 
                     <div className="flex items-center justify-end">
                       <Button size="sm" onClick={saveGroupMeta} loading={saving}>Lưu thông tin mondai</Button>
@@ -356,7 +314,7 @@ function AiGenerateModal({ group, onClose, onAdded }) {
   };
 
   const addPicked = async () => {
-    const picked = drafts.filter(d => d._picked).map(({ _picked, audio_transcript, ...q }) => q);
+    const picked = drafts.filter(d => d._picked).map(({ _picked, ...q }) => q);
     if (!picked.length) { setError('Chọn ít nhất 1 câu.'); return; }
     setSaving(true); setError('');
     try {
