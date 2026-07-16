@@ -4,7 +4,6 @@ import StudentLayout from '../../components/layout/StudentLayout';
 import Alert from '../../components/ui/Alert';
 import Button from '../../components/ui/Button';
 import Input from '../../components/ui/Input';
-import FuriganaText from '../../components/ui/FuriganaText';
 import KanjiWritingPracticeModal from '../../components/kanji/KanjiWritingPracticeModal';
 import KanjiPdfPanel from '../../components/kanji/KanjiPdfPanel';
 import AddCardsToFlashcardModal from '../../components/reading/AddCardsToFlashcardModal';
@@ -27,36 +26,77 @@ const SEARCH_ENDPOINT = { vocabulary: '/vocabulary', kanji: '/kanji', grammar: '
 const ITEM_LABEL = (listType, item) => listType === 'kanji' ? item.character : listType === 'grammar' ? item.title : (item.kanji || item.reading);
 const ITEM_SUB   = (item) => item.meaning_vi;
 
-function ItemCard({ item, listType, index, type, postId, editable, onRemove }) {
-  if (listType === 'vocabulary') {
-    return (
-      <div className="relative glass-card rounded-2xl p-5 pt-8 text-center">
-        <NumberBadge n={index + 1} />
-        {editable && <RemoveBadge onRemove={onRemove} />}
-        <FuriganaText text={item.kanji || item.reading} textClassName="text-2xl font-bold text-tsubaki-red mb-1" />
-        {item.kanji && <p className="text-sm text-on-muted">{item.reading}</p>}
-        <p className="text-sm font-medium mt-2">{item.meaning_vi}</p>
-        {item.level && <span className={`inline-block mt-2 px-2 py-0.5 rounded-full text-xs font-bold ${LEVEL_COLORS[item.level] || 'bg-surface-low text-on-muted'}`}>{item.level}</span>}
-      </div>
-    );
-  }
-  if (listType === 'kanji') {
-    return (
-      <div className="relative glass-card rounded-2xl p-5 pt-8 text-center">
-        <NumberBadge n={index + 1} />
-        {editable && <RemoveBadge onRemove={onRemove} />}
-        <p className="text-4xl font-bold text-tsubaki-red mb-1">{item.character}</p>
-        <p className="text-xs text-on-muted">On: {(item.reading_on || []).join('、') || '—'}</p>
-        <p className="text-xs text-on-muted">Kun: {(item.reading_kun || []).join('、') || '—'}</p>
-        <p className="text-sm font-medium mt-2">{item.meaning_vi}</p>
-        {item.level && <span className={`inline-block mt-2 px-2 py-0.5 rounded-full text-xs font-bold ${LEVEL_COLORS[item.level] || 'bg-surface-low text-on-muted'}`}>{item.level}</span>}
-      </div>
-    );
-  }
-  // grammar — thẻ dùng chung với Mục ngữ pháp của khóa học
+// Thẻ dòng ngữ pháp trong danh sách — dùng chung với Mục ngữ pháp của khóa học.
+function ItemCard({ item, index, type, postId, editable, onRemove }) {
   return (
     <GrammarItemCard item={item} index={index} to={`/study-lists/${type}/${postId}/${item.id}`}
       editable={editable} onRemove={onRemove} listRow />
+  );
+}
+
+// Thẻ kanji sửa được inline (kanji/on/kun/hán việt/nghĩa) — cùng kiểu
+// onBlur-lưu như VocabWordViewer, để đồng bộ với từ vựng.
+const toReadingArr = (s) => s.split(/[,、]\s*/).map(x => x.trim()).filter(Boolean);
+
+function KanjiItemCard({ item, index, editable, onRemove, onSave }) {
+  const [character, setCharacter]   = useState(item.character || '');
+  const [readingOn, setReadingOn]   = useState((item.reading_on || []).join('、'));
+  const [readingKun, setReadingKun] = useState((item.reading_kun || []).join('、'));
+  const [hanViet, setHanViet]       = useState(item.han_viet || '');
+  const [meaning, setMeaning]       = useState(item.meaning_vi || '');
+  const [saving, setSaving]         = useState(false);
+
+  useEffect(() => {
+    setCharacter(item.character || '');
+    setReadingOn((item.reading_on || []).join('、'));
+    setReadingKun((item.reading_kun || []).join('、'));
+    setHanViet(item.han_viet || '');
+    setMeaning(item.meaning_vi || '');
+  }, [item.id]);
+
+  const save = async (patch) => {
+    setSaving(true);
+    try { await onSave(patch); } catch (e) { alert(e.message); } finally { setSaving(false); }
+  };
+
+  if (!editable) {
+    return (
+      <div className="relative glass-card rounded-2xl p-5 pt-8 text-center">
+        <NumberBadge n={index + 1} />
+        <p className="text-4xl font-bold text-tsubaki-red mb-1">{item.character}</p>
+        <p className="text-xs text-on-muted">On: {(item.reading_on || []).join('、') || '—'}</p>
+        <p className="text-xs text-on-muted">Kun: {(item.reading_kun || []).join('、') || '—'}</p>
+        {item.han_viet && <p className="text-xs text-amber-600 font-medium mt-0.5">Hán Việt: {item.han_viet}</p>}
+        <p className="text-sm font-medium mt-2">{item.meaning_vi}</p>
+        {item.level && <span className={`inline-block mt-2 px-2 py-0.5 rounded-full text-xs font-bold ${LEVEL_COLORS[item.level] || 'bg-surface-low text-on-muted'}`}>{item.level}</span>}
+      </div>
+    );
+  }
+
+  const fieldClass = 'w-full text-center bg-transparent border-b border-transparent hover:border-outline focus:border-tsubaki-red outline-none transition-colors';
+
+  return (
+    <div className="relative glass-card rounded-2xl p-5 pt-8 text-center">
+      <NumberBadge n={index + 1} />
+      <RemoveBadge onRemove={onRemove} />
+      <input value={character} onChange={e => setCharacter(e.target.value)}
+        onBlur={() => character !== (item.character || '') && character.trim() && save({ character })}
+        placeholder="漢" className={`${fieldClass} text-4xl font-bold text-charcoal mb-1`} />
+      <input value={readingOn} onChange={e => setReadingOn(e.target.value)}
+        onBlur={() => { const arr = toReadingArr(readingOn); if (arr.join('、') !== (item.reading_on || []).join('、')) save({ reading_on: arr }); }}
+        placeholder="On (phân cách bởi 、)" className={`${fieldClass} text-xs text-on-muted`} />
+      <input value={readingKun} onChange={e => setReadingKun(e.target.value)}
+        onBlur={() => { const arr = toReadingArr(readingKun); if (arr.join('、') !== (item.reading_kun || []).join('、')) save({ reading_kun: arr }); }}
+        placeholder="Kun (phân cách bởi 、)" className={`${fieldClass} text-xs text-on-muted mt-0.5`} />
+      <input value={hanViet} onChange={e => setHanViet(e.target.value)}
+        onBlur={() => hanViet !== (item.han_viet || '') && save({ han_viet: hanViet || null })}
+        placeholder="Hán Việt" className={`${fieldClass} text-xs text-amber-600 font-medium mt-0.5`} />
+      <input value={meaning} onChange={e => setMeaning(e.target.value)}
+        onBlur={() => meaning !== (item.meaning_vi || '') && save({ meaning_vi: meaning })}
+        placeholder="Nghĩa" className={`${fieldClass} text-sm font-medium mt-2`} />
+      {item.level && <span className={`inline-block mt-2 px-2 py-0.5 rounded-full text-xs font-bold ${LEVEL_COLORS[item.level] || 'bg-surface-low text-on-muted'}`}>{item.level}</span>}
+      {saving && <p className="text-[10px] text-on-muted mt-1">Đang lưu…</p>}
+    </div>
   );
 }
 
@@ -221,6 +261,11 @@ export default function StudyListDetail() {
     fd.append('image', file);
     const up = await api.post('/teacher/vocabulary/upload-image', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
     return up.data.url;
+  };
+
+  const saveKanjiItem = async (itemId, patch) => {
+    await api.put(`/teacher/kanji/${itemId}`, patch);
+    handleItemSaved(itemId, patch);
   };
 
   // ── Luyện viết ──────────────────────────────────────────────────────────────
@@ -393,7 +438,7 @@ export default function StudyListDetail() {
                     <p className="px-4 py-6 text-center text-sm text-on-muted">Không tìm thấy kết quả.</p>
                   ) : (
                     filteredGrammar.map((item, i) => (
-                      <ItemCard key={item.id} item={item} listType={post.list_type} index={i} type={type} postId={id}
+                      <ItemCard key={item.id} item={item} index={i} type={type} postId={id}
                         editable={canEdit} onRemove={() => handleItemRemoved(item.id)} />
                     ))
                   )}
@@ -401,8 +446,9 @@ export default function StudyListDetail() {
               ) : (
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                   {post.items.map((item, i) => (
-                    <ItemCard key={item.id} item={item} listType={post.list_type} index={i} type={type} postId={id}
-                      editable={canEdit} onRemove={() => handleItemRemoved(item.id)} />
+                    <KanjiItemCard key={item.id} item={item} index={i}
+                      editable={canEdit} onRemove={() => handleItemRemoved(item.id)}
+                      onSave={(patch) => saveKanjiItem(item.id, patch)} />
                   ))}
                 </div>
               )}
