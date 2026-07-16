@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
 import AdminLayout from '../../components/layout/AdminLayout';
 import Modal from '../../components/ui/Modal';
 import Button from '../../components/ui/Button';
@@ -96,11 +95,6 @@ export default function AdminVocabulary() {
             <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Tìm kiếm..." className="px-3 py-2 border border-outline rounded-xl text-sm outline-none focus:border-tsubaki-red w-36" />
             <button type="submit" className="p-2 bg-tsubaki-red text-white rounded-xl"><span className="material-symbols-outlined text-lg">search</span></button>
           </form>
-          <Link to="/vocabulary" target="_blank" rel="noopener noreferrer">
-            <Button variant="secondary">
-              <span className="material-symbols-outlined text-lg">visibility</span> Xem như học viên
-            </Button>
-          </Link>
           <Button variant="secondary" onClick={openImport}>
             <span className="material-symbols-outlined text-lg">upload_file</span> Nhập file
           </Button>
