@@ -51,6 +51,7 @@ router.patch('/lessons/reorder', c.reorderLessons);
 router.put('/lessons/:id',     c.updateLesson);
 router.delete('/lessons/:id',  c.deleteLesson);
 router.post('/lessons/upload-video', videoUpload.single('video'), ac.uploadLessonVideo);
+router.post('/lessons/:id/transcribe-video', c.transcribeLessonVideo);
 
 // Trình soạn Từ vựng / Kanji của Mục — list/create/update dùng kho chung (admin handler),
 // attach/detach kiểm tra sở hữu khóa (teacher handler).

@@ -1,24 +1,14 @@
 import { useLayoutEffect, useRef } from 'react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { useAuth } from '../../contexts/AuthContext';
-import { useLang } from '../../contexts/LangContext';
+import { Link, useLocation } from 'react-router-dom';
 
 export default function Sidebar({ links, brand = 'Kizuna Nihongo', collapsed = false, onToggle }) {
-  const { logout } = useAuth();
-  const { t } = useLang();
   const location = useLocation();
-  const navigate = useNavigate();
   const navRef = useRef(null);
 
   useLayoutEffect(() => {
     const saved = Number(sessionStorage.getItem('sidebar_scroll') || 0);
     if (navRef.current) navRef.current.scrollTop = saved;
   }, []);
-
-  const handleLogout = async () => {
-    await logout();
-    navigate('/');
-  };
 
   return (
     <aside className={`hidden md:flex flex-col h-screen bg-white border-r border-outline/30 fixed left-0 top-0 z-40 pt-6 pb-4 transition-all duration-200 ${
@@ -72,16 +62,6 @@ export default function Sidebar({ links, brand = 'Kizuna Nihongo', collapsed = f
           );
         })}
       </nav>
-
-      <div className="border-t border-outline/30 pt-4 flex-shrink-0 mt-2">
-        <button onClick={handleLogout} title={collapsed ? t('nav.logout') : undefined}
-          className={`w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-surface-low text-on-surface font-semibold text-sm hover:bg-outline/30 transition-colors ${
-            collapsed ? 'px-2' : 'px-4'
-          }`}>
-          <span className="material-symbols-outlined text-xl">logout</span>
-          {!collapsed && t('nav.logout')}
-        </button>
-      </div>
     </aside>
   );
 }

@@ -131,17 +131,23 @@ exports.create = async (req, res) => {
   }
 };
 
-async function loadOwnedPost(id, user) {
+// allowAdmin=true: admin có quyền như chủ bài (dùng cho xóa cả bài — quyền kiểm
+// duyệt). allowAdmin=false: CHỈ chủ bài mới sửa được nội dung — admin muốn yêu
+// cầu sửa thì dùng khóa bài + ghi chú (adminController.lockStudyList), không
+// tự ý sửa thay giáo viên.
+async function loadOwnedPost(id, user, { allowAdmin = true } = {}) {
   const { data: post } = await supabaseAdmin.from('study_list_posts').select('*').eq('id', id).single();
   if (!post) return { post: null, allowed: false };
-  const allowed = post.created_by === user.id || user.user_metadata?.role === 'admin';
+  const isOwner = post.created_by === user.id;
+  const isAdmin = user.user_metadata?.role === 'admin';
+  const allowed = isOwner || (allowAdmin && isAdmin);
   return { post, allowed };
 }
 
 // PUT /api/study-lists/:id  { title, description }
 exports.update = async (req, res) => {
   try {
-    const { post, allowed } = await loadOwnedPost(req.params.id, req.user);
+    const { post, allowed } = await loadOwnedPost(req.params.id, req.user, { allowAdmin: false });
     if (!post) return res.status(404).json({ error: 'Không tìm thấy.' });
     if (!allowed) return res.status(403).json({ error: 'Bạn không có quyền sửa bài đăng này.' });
 
@@ -178,7 +184,7 @@ exports.addItem = async (req, res) => {
   const { item_id } = req.body;
   if (!item_id) return res.status(400).json({ error: 'item_id là bắt buộc.' });
   try {
-    const { post, allowed } = await loadOwnedPost(req.params.id, req.user);
+    const { post, allowed } = await loadOwnedPost(req.params.id, req.user, { allowAdmin: false });
     if (!post) return res.status(404).json({ error: 'Không tìm thấy.' });
     if (!allowed) return res.status(403).json({ error: 'Bạn không có quyền sửa bài đăng này.' });
 
@@ -206,7 +212,7 @@ exports.addItem = async (req, res) => {
 // Dedup → tạo mới vào bank nếu chưa có → link tất cả vào study_list_items.
 exports.importItems = async (req, res) => {
   try {
-    const { post, allowed } = await loadOwnedPost(req.params.id, req.user);
+    const { post, allowed } = await loadOwnedPost(req.params.id, req.user, { allowAdmin: false });
     if (!post) return res.status(404).json({ error: 'Không tìm thấy bài đăng.' });
     if (!allowed) return res.status(403).json({ error: 'Bạn không có quyền sửa bài đăng này.' });
 
@@ -312,7 +318,7 @@ exports.importItems = async (req, res) => {
 // DELETE /api/study-lists/:id/items/:itemId
 exports.removeItem = async (req, res) => {
   try {
-    const { post, allowed } = await loadOwnedPost(req.params.id, req.user);
+    const { post, allowed } = await loadOwnedPost(req.params.id, req.user, { allowAdmin: false });
     if (!post) return res.status(404).json({ error: 'Không tìm thấy.' });
     if (!allowed) return res.status(403).json({ error: 'Bạn không có quyền sửa bài đăng này.' });
 

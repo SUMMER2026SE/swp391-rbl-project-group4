@@ -151,6 +151,7 @@ router.put('/lessons/:id',           c.updateLesson);
 router.delete('/lessons/:id',        c.deleteLesson);
 router.patch('/lessons/reorder',     c.reorderLessons);
 router.post('/lessons/upload-video', videoUpload.single('video'), c.uploadLessonVideo);
+router.post('/lessons/:id/transcribe-video', c.transcribeLessonVideo);
 
 // Vocabulary
 router.get('/vocabulary',         c.listVocab);
