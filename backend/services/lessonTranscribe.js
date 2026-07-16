@@ -84,11 +84,11 @@ async function translateSegments(rawSegments) {
         const parts = order
           .map(l => ({ lang: l, text: l === srcLang ? seg.text : String(t?.[l] || '').trim() }))
           .filter(p => p.text);
-        out.push({ start: seg.start, end: seg.end, parts });
+        out.push({ start: seg.start, end: seg.end, parts, ...(seg.needsReview ? { needsReview: true } : {}) });
       });
     } catch (e) {
       console.warn('[LessonTranscribe] translate batch', i / TRANSLATE_BATCH, 'failed:', e.message);
-      batch.forEach(seg => out.push({ start: seg.start, end: seg.end, parts: [{ lang: 'ja', text: seg.text }] }));
+      batch.forEach(seg => out.push({ start: seg.start, end: seg.end, parts: [{ lang: 'ja', text: seg.text }], ...(seg.needsReview ? { needsReview: true } : {}) }));
     }
   }
   return out;
@@ -131,18 +131,22 @@ async function runVideoTranscription(contentUrl) {
             if (!text) return false;
             return /(.{2,})\1{4,}/.test(text) || text.length > dur * 18;
           };
+          // needsReview: gợi ý cho giáo viên dòng cần soát kỹ trong editor (không lưu DB).
+          // Chunk cực ngắn (<0.6s) là chỗ Whisper dễ đoán sai nhất.
+          const tooShort = dur < 0.6;
           try {
             const chunk = await extractAudioChunk(tmpFile, g.start, dur);
             const r = await whisperTranscribe(chunk, 'chunk.mp3', 'audio/mpeg', null);
             const text = r.text?.trim();
             if (!isHallucination(text)) {
-              return text ? { start: g.start, end: g.end, text } : null;
+              return text ? { start: g.start, end: g.end, text, ...(tooShort ? { needsReview: true } : {}) } : null;
             }
             const chunk2 = await extractAudioChunk(tmpFile, g.start, dur, true);
             const r2 = await whisperTranscribe(chunk2, 'chunk.mp3', 'audio/mpeg', null);
             const text2 = r2.text?.trim();
             if (!text2 || isHallucination(text2)) return null;
-            return { start: g.start, end: g.end, text: text2 };
+            // Từng nghi hallucination, chỉ đạt sau khi lọc nhiễu — luôn đánh dấu cần soát
+            return { start: g.start, end: g.end, text: text2, needsReview: true };
           } catch (e) {
             console.warn('[LessonTranscribe] chunk', g.start, '-', g.end, 'failed:', e.message);
             return null;

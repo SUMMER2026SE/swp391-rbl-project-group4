@@ -60,8 +60,11 @@ export default function AdminLessonVideo() {
   const [rows, setRows] = useState([]);
   const previewVideoRef = useRef(null);
 
+  // needsReview: cờ tạm từ kết quả AI (dòng AI không chắc chắn) — chỉ sống trong state
+  // rows của phiên soạn, buildSegments không đưa vào payload lưu.
   const segsToRows = (segs) => (segs || []).map(s => ({
     start: fmtTime(s.start), end: fmtTime(s.end),
+    needsReview: !!s.needsReview,
     parts: (s.parts || []).map(p => ({ lang: p.lang || 'ja', text: p.text || '' })),
   }));
 
@@ -443,6 +446,14 @@ function TranscriptSegmentsEditor({ rows, setRows, isYouTube, hasVideo, previewV
           <div key={i} className="p-3 rounded-xl border border-outline/40 bg-white space-y-2">
             <div className="flex items-center gap-2 flex-wrap">
               <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-surface-container text-on-muted">#{i + 1}</span>
+              {row.needsReview && (
+                <span
+                  title="AI không chắc chắn về đoạn này — nghe lại video để xác nhận nội dung"
+                  className="flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700"
+                >
+                  <span className="material-symbols-outlined text-xs">warning</span> Cần kiểm tra
+                </span>
+              )}
               {['start', 'end'].map(field => (
                 <span key={field} className="flex items-center gap-1">
                   <input
