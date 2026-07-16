@@ -29,6 +29,13 @@ export default function QuestionCard({ index, value, onSave, onDelete, listening
     catch (e) { setMediaError(e.message); }
     finally { setUploading(false); }
   };
+  const uploadImage = async (file) => {
+    if (!file) return;
+    setUploading(true); setMediaError('');
+    try { const { url } = await adminUploadMedia('image', file); update({ image_url: url }); }
+    catch (e) { setMediaError(e.message); }
+    finally { setUploading(false); }
+  };
   // TTS đọc transcript ĐÃ LƯU trong DB → cần lưu câu trước khi tạo audio
   const generateAudio = async () => {
     setTts(true); setMediaError('');
@@ -70,6 +77,16 @@ export default function QuestionCard({ index, value, onSave, onDelete, listening
               {uploading ? 'Đang tải…' : (q.audio_url ? 'Đổi audio' : 'Tải audio câu')}
               <input type="file" accept="audio/*" className="hidden" disabled={disabled}
                 onChange={e => uploadAudio(e.target.files[0])} />
+            </label>
+          </div>
+          {/* Ảnh từng câu — dùng cho 発話表現 (mỗi câu 1 tranh) */}
+          <div className="flex items-center gap-2 text-xs">
+            {q.image_url && <img src={q.image_url} className="h-12 rounded border border-outline/40" alt="" />}
+            <label className="cursor-pointer text-tsubaki-red font-semibold hover:underline flex items-center gap-1">
+              <span className="material-symbols-outlined text-base">image</span>
+              {q.image_url ? 'Đổi ảnh' : 'Tải ảnh câu (発話表現)'}
+              <input type="file" accept="image/*" className="hidden" disabled={disabled}
+                onChange={e => uploadImage(e.target.files[0])} />
             </label>
           </div>
           <textarea

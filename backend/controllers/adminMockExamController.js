@@ -251,7 +251,7 @@ exports.publishExam = async (req, res) => {
       const groupIds = groups.map(g => g.id);
       if (groupIds.length) {
         ({ data: questions } = await supabaseAdmin.from('mock_questions')
-          .select('id, group_id, question_text, audio_url, options, correct_index').in('group_id', groupIds));
+          .select('id, group_id, question_text, image_url, audio_url, options, correct_index').in('group_id', groupIds));
         questions = questions || [];
       }
     }
@@ -309,6 +309,13 @@ exports.publishExam = async (req, res) => {
       const actual = questions.filter(q => q.group_id === gr.id).length;
       if (std != null && actual !== std)
         warnings.push(`${sectionLabel[gr.section_id]} › 問題${gr.mondai_number} (${MONDAI_TYPES[gr.mondai_type]?.ja || gr.mondai_type}): ${actual} câu — chuẩn JLPT là ${std} câu.`);
+      // 発話表現: đề thật mỗi câu có 1 tranh — thiếu ảnh chỉ nhắc, không chặn
+      if (gr.mondai_type === 'utterance_expression') {
+        questions.filter(q => q.group_id === gr.id).forEach((q, i) => {
+          if (!q.image_url)
+            warnings.push(`${sectionLabel[gr.section_id]} › 問題${gr.mondai_number} (発話表現) câu ${i + 1}: chưa có ảnh minh họa (đề thật mỗi câu 1 tranh).`);
+        });
+      }
     }
 
     const { data, error } = await supabaseAdmin.from('mock_exams')

@@ -55,6 +55,13 @@ export const MONDAI_LABEL = {
   integrated_listening: { ja: '統合理解（聴解）', vi: 'Nghe tổng hợp' },
 };
 
+// Các dạng mondai có passage/ảnh dùng chung cấp mondai (đọc hiểu) — dạng khác không có.
+// Ảnh cấp CÂU chỉ dùng cho mondai nghe (発話表現 mỗi câu 1 tranh).
+export const PASSAGE_MONDAI_TYPES = new Set([
+  'text_grammar', 'reading_short', 'reading_mid', 'reading_long',
+  'integrated_reading', 'thematic_reading', 'info_retrieval',
+]);
+
 // Tên phần thi hiển thị: "tiêu đề tiếng Nhật · tên tiếng Việt"
 export const sectionDisplay = (section) => {
   const vi = SECTION_LABEL[section.section_type] || '';

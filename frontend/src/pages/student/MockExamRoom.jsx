@@ -173,6 +173,7 @@ export default function MockExamRoom() {
                             </div>
                           </div>
                           {q.audio_url && <div className="mb-3"><AudioPlayer src={q.audio_url} label={`Câu ${num}`} /></div>}
+                          {q.image_url && <img src={q.image_url} className="max-w-sm w-full rounded-lg border border-outline/40 mb-3" alt="" />}
                           <div className="space-y-2">
                             {q.options.map((opt, idx) => (
                               <button key={idx} onClick={() => pick(q.id, idx)}

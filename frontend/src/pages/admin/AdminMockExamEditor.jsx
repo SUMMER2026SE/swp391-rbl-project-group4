@@ -6,7 +6,7 @@ import Alert from '../../components/ui/Alert';
 import Modal from '../../components/ui/Modal';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
 import QuestionCard from '../../components/admin/mock/QuestionCard';
-import { mondaiJa, mondaiVi, mondaiInstruction, SECTION_LABEL, blueprintCount } from '../../lib/mockExamConstants';
+import { mondaiJa, mondaiVi, mondaiInstruction, SECTION_LABEL, blueprintCount, PASSAGE_MONDAI_TYPES } from '../../lib/mockExamConstants';
 import {
   adminGetExam, adminPublishExam, adminUpdateExam, adminUpdateSection,
   adminUpdateGroup,
@@ -49,6 +49,7 @@ export default function AdminMockExamEditor() {
   const allGroups = (exam?.sections || []).flatMap(s => s.groups.map(g => ({ ...g, _section: s })));
   const selectedGroup = allGroups.find(g => g.id === selectedGroupId) || null;
   const isListening = selectedGroup?.score_category === 'listening';
+  const hasPassage = PASSAGE_MONDAI_TYPES.has(selectedGroup?.mondai_type);
 
   const run = async (fn, okMsg) => {
     setError(''); setNotice('');
@@ -184,18 +185,18 @@ export default function AdminMockExamEditor() {
                     <p className="text-charcoal">{mondaiInstruction(exam.level, selectedGroup.mondai_type).ja}</p>
                     <p className="text-xs text-on-muted italic mt-0.5">{mondaiInstruction(exam.level, selectedGroup.mondai_type).vi}</p>
                   </div>
-                  {groupDraft && (<>
-                    {/* Passage cho dạng đọc hiểu */}
+                  {/* Passage/ảnh dùng chung chỉ có ở mondai đọc hiểu; ảnh câu nghe (発話表現) nằm ở từng câu */}
+                  {groupDraft && hasPassage && (<>
                     <textarea value={groupDraft.passage_text} disabled={published}
                       onChange={e => setGroupDraft(d => ({ ...d, passage_text: e.target.value }))}
-                      placeholder="Đoạn văn đọc hiểu (nếu có) — dùng chung cho các câu trong mondai"
+                      placeholder="Đoạn văn đọc hiểu — dùng chung cho các câu trong mondai"
                       className="w-full px-3 py-2 border border-outline rounded-lg text-sm resize-y min-h-[60px] outline-none focus:border-tsubaki-red" />
 
                     <div className="flex flex-wrap items-center gap-3 text-xs">
                       {/* Ảnh */}
                       <label className="cursor-pointer text-tsubaki-red font-semibold hover:underline flex items-center gap-1">
                         <span className="material-symbols-outlined text-base">image</span>
-                        {groupDraft.image_url ? 'Đổi ảnh' : 'Tải ảnh (発話表現/情報検索)'}
+                        {groupDraft.image_url ? 'Đổi ảnh' : 'Tải ảnh minh họa (情報検索…)'}
                         <input type="file" accept="image/*" className="hidden" disabled={published}
                           onChange={e => uploadGroupImage(e.target.files[0])} />
                       </label>

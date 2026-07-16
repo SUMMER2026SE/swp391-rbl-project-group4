@@ -67,6 +67,7 @@ export default function MockExamReview() {
                         </div>
                       </div>
                       {q.audio_url && <div className="mb-2"><AudioPlayer src={q.audio_url} label={`Câu ${num}`} /></div>}
+                      {q.image_url && <img src={q.image_url} className="max-w-sm w-full rounded-lg border border-outline/40 mb-2" alt="" />}
                       {q.audio_transcript && (
                         <div className="text-xs mb-2">
                           <button onClick={() => setOpenTranscript(o => ({ ...o, [q.id]: !o[q.id] }))} className="text-tsubaki-red font-semibold">
