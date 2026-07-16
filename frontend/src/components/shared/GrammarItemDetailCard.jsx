@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import FuriganaText from '../ui/FuriganaText';
 
 const LEVEL_COLORS = {
@@ -8,7 +9,29 @@ const LEVEL_COLORS = {
 
 // Thẻ chi tiết 1 mẫu ngữ pháp có prev/next — tách từ StudyListItemDetail để
 // dùng chung cho bài đăng và Mục ngữ pháp của khóa học. Caller lo data + điều hướng.
-export default function GrammarItemDetailCard({ item, index, total, onPrev, onNext }) {
+// editable=true (chủ bài đăng/admin) cho sửa tiêu đề/nghĩa/giải thích/ví dụ ngay
+// trên thẻ, theo cùng kiểu onBlur-lưu như VocabWordViewer.
+export default function GrammarItemDetailCard({ item, index, total, onPrev, onNext, editable = false, onSave }) {
+  const [title, setTitle]             = useState(item.title || '');
+  const [titleJa, setTitleJa]         = useState(item.title_ja || '');
+  const [meaning, setMeaning]         = useState(item.meaning_vi || '');
+  const [explanation, setExplanation] = useState(item.explanation || '');
+  const [example, setExample]         = useState(item.example_sentence || '');
+  const [saving, setSaving]           = useState(false);
+
+  useEffect(() => {
+    setTitle(item.title || '');
+    setTitleJa(item.title_ja || '');
+    setMeaning(item.meaning_vi || '');
+    setExplanation(item.explanation || '');
+    setExample(item.example_sentence || '');
+  }, [item.id]);
+
+  const save = async (patch) => {
+    setSaving(true);
+    try { await onSave(patch); } catch (e) { alert(e.message); } finally { setSaving(false); }
+  };
+
   return (
     <div className="glass-card rounded-3xl overflow-hidden max-w-2xl">
       <div className="h-1.5 bg-gradient-to-r from-tsubaki-red to-sumire-purple" />
@@ -21,33 +44,68 @@ export default function GrammarItemDetailCard({ item, index, total, onPrev, onNe
             </span>
           )}
           <span className="text-xs text-on-muted">Mục {index + 1}/{total}</span>
+          {editable && saving && <span className="text-xs text-on-muted">Đang lưu…</span>}
         </div>
-        <h1 className="text-3xl font-bold text-tsubaki-red leading-tight">{item.title}</h1>
-        {item.title_ja && <p className="text-on-muted mt-1">{item.title_ja}</p>}
+
+        {editable ? (
+          <>
+            <input value={title} onChange={e => setTitle(e.target.value)}
+              onBlur={() => title !== (item.title || '') && title.trim() && save({ title: title.trim() })}
+              placeholder="Mẫu ngữ pháp" className="w-full text-3xl font-bold text-tsubaki-red leading-tight bg-transparent border-b border-transparent hover:border-outline focus:border-tsubaki-red outline-none transition-colors" />
+            <input value={titleJa} onChange={e => setTitleJa(e.target.value)}
+              onBlur={() => titleJa !== (item.title_ja || '') && save({ title_ja: titleJa || null })}
+              placeholder="Dạng tiếng Nhật (nếu có)" className="w-full text-on-muted mt-1 bg-transparent border-b border-transparent hover:border-outline focus:border-tsubaki-red outline-none transition-colors" />
+          </>
+        ) : (
+          <>
+            <h1 className="text-3xl font-bold text-tsubaki-red leading-tight">{item.title}</h1>
+            {item.title_ja && <p className="text-on-muted mt-1">{item.title_ja}</p>}
+          </>
+        )}
 
         <div className="mt-6 space-y-4">
           <div>
             <p className="text-xs font-semibold text-on-muted uppercase tracking-wide mb-1">Nghĩa</p>
             <div className="bg-surface-low rounded-xl px-4 py-3">
-              <p className="text-lg font-bold text-charcoal">{item.meaning_vi || '—'}</p>
+              {editable ? (
+                <input value={meaning} onChange={e => setMeaning(e.target.value)}
+                  onBlur={() => meaning !== (item.meaning_vi || '') && save({ meaning_vi: meaning })}
+                  placeholder="Nghĩa tiếng Việt" className="w-full text-lg font-bold text-charcoal bg-transparent outline-none" />
+              ) : (
+                <p className="text-lg font-bold text-charcoal">{item.meaning_vi || '—'}</p>
+              )}
             </div>
           </div>
 
           <div>
             <p className="text-xs font-semibold text-on-muted uppercase tracking-wide mb-1">Cấu trúc / Cách dùng</p>
             <div className="bg-surface-low rounded-xl px-4 py-3">
-              {item.explanation
-                ? <p className="text-charcoal whitespace-pre-wrap leading-relaxed">{item.explanation}</p>
-                : <p className="text-on-muted">—</p>}
+              {editable ? (
+                <textarea value={explanation} onChange={e => setExplanation(e.target.value)}
+                  onBlur={() => explanation !== (item.explanation || '') && save({ explanation: explanation || null })}
+                  placeholder="Giải thích cấu trúc / cách dùng..." rows={3}
+                  className="w-full text-charcoal leading-relaxed bg-transparent outline-none resize-none" />
+              ) : item.explanation ? (
+                <p className="text-charcoal whitespace-pre-wrap leading-relaxed">{item.explanation}</p>
+              ) : (
+                <p className="text-on-muted">—</p>
+              )}
             </div>
           </div>
 
           <div>
             <p className="text-xs font-semibold text-on-muted uppercase tracking-wide mb-1">Ví dụ</p>
             <div className="bg-surface-low rounded-xl px-4 py-3">
-              {item.example_sentence
-                ? <p className="text-charcoal italic">「<FuriganaText text={item.example_sentence} textClassName="italic" />」</p>
-                : <p className="text-on-muted">—</p>}
+              {editable ? (
+                <textarea value={example} onChange={e => setExample(e.target.value)}
+                  onBlur={() => example !== (item.example_sentence || '') && save({ example_sentence: example || null })}
+                  placeholder="Câu ví dụ..." rows={2}
+                  className="w-full text-charcoal italic bg-transparent outline-none resize-none" />
+              ) : item.example_sentence ? (
+                <p className="text-charcoal italic">「<FuriganaText text={item.example_sentence} textClassName="italic" />」</p>
+              ) : (
+                <p className="text-on-muted">—</p>
+              )}
             </div>
           </div>
         </div>

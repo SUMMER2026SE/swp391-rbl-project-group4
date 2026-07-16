@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import StudentLayout from '../../components/layout/StudentLayout';
 import Alert from '../../components/ui/Alert';
 import GrammarItemDetailCard from '../../components/shared/GrammarItemDetailCard';
+import { useAuth } from '../../contexts/AuthContext';
 import api from '../../lib/api';
 
 // Trang chi tiết 1 mẫu ngữ pháp trong bài đăng — URL riêng, nút Back trình
@@ -10,6 +11,7 @@ import api from '../../lib/api';
 export default function StudyListItemDetail() {
   const { type, id, itemId } = useParams();
   const navigate = useNavigate();
+  const { user, isAdmin } = useAuth();
   const [post, setPost]       = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState('');
@@ -22,12 +24,18 @@ export default function StudyListItemDetail() {
       .finally(() => setLoading(false));
   }, [id]);
 
+  const canEdit = !!user && !!post && (user.id === post.created_by || isAdmin());
   const items = post?.items || [];
   const index = items.findIndex(i => i.id === itemId);
   const item = index >= 0 ? items[index] : null;
 
   const goTo = (i) => {
     if (i >= 0 && i < items.length) navigate(`/study-lists/${type}/${id}/${items[i].id}`);
+  };
+
+  const saveGrammarItem = async (patch) => {
+    await api.put(`/teacher/grammar-points/${itemId}`, patch);
+    setPost(p => ({ ...p, items: p.items.map(it => it.id === itemId ? { ...it, ...patch } : it) }));
   };
 
   return (
@@ -48,7 +56,8 @@ export default function StudyListItemDetail() {
       ) : (
         <div className="flex justify-center">
           <GrammarItemDetailCard item={item} index={index} total={items.length}
-            onPrev={() => goTo(index - 1)} onNext={() => goTo(index + 1)} />
+            onPrev={() => goTo(index - 1)} onNext={() => goTo(index + 1)}
+            editable={canEdit} onSave={saveGrammarItem} />
         </div>
       )}
     </StudentLayout>

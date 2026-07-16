@@ -219,7 +219,7 @@ exports.importItems = async (req, res) => {
     let toInsert = [];
 
     if (post.list_type === 'vocabulary') {
-      const ALLOWED = ['kanji', 'reading', 'meaning_vi', 'meaning_ja', 'level', 'type', 'topic', 'example_sentence'];
+      const ALLOWED = ['kanji', 'reading', 'meaning_vi', 'meaning_ja', 'level', 'type', 'topic', 'example_sentence', 'han_viet'];
       const cleaned = rows
         .filter(r => r.reading && r.meaning_vi)
         .map(r => Object.fromEntries(ALLOWED.filter(k => r[k] != null).map(k => [k, r[k]])));
