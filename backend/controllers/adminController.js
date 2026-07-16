@@ -1381,10 +1381,11 @@ exports.uploadLessonVideo = async (req, res) => {
   } catch (err) { res.status(500).json({ error: 'Không thể tải file video lên.' }); }
 };
 
-// Chép lời tự động (Whisper + dịch) cho lesson video đã upload. Trả về bản nháp
-// segments cho editor duyệt — KHÔNG ghi DB (giáo viên xem lại rồi lưu qua PUT /lessons/:id).
+// Chép lời tự động (Whisper + dịch) cho lesson video — cả video upload lẫn link
+// YouTube (tải audio qua yt-dlp). Trả về bản nháp segments cho editor duyệt —
+// KHÔNG ghi DB (giáo viên xem lại rồi lưu qua PUT /lessons/:id).
 exports.transcribeLessonVideo = async (req, res) => {
-  const { runVideoTranscription, isYouTubeUrl } = require('../services/lessonTranscribe');
+  const { runVideoTranscription } = require('../services/lessonTranscribe');
   try {
     if (await isTeacherCourse(await courseIdOfLesson(req.params.id)))
       return res.status(403).json({ error: TEACHER_COURSE_MSG });
@@ -1392,8 +1393,6 @@ exports.transcribeLessonVideo = async (req, res) => {
     const { data: lesson } = await contentDb.from('lessons').select('content_url').eq('id', req.params.id).single();
     if (!lesson) return res.status(404).json({ error: 'Không tìm thấy bài học.' });
     if (!lesson.content_url) return res.status(400).json({ error: 'Bài học chưa có video.' });
-    if (isYouTubeUrl(lesson.content_url))
-      return res.status(400).json({ error: 'Chép lời tự động chỉ hỗ trợ video đã tải lên, không hỗ trợ link YouTube.' });
     const { segments, transcript } = await runVideoTranscription(lesson.content_url);
     res.json({ segments, transcript, count: segments.length });
   } catch (err) {

@@ -495,16 +495,15 @@ exports.updateLesson = async (req, res) => {
   } catch (err) { res.status(500).json({ error: 'Không thể cập nhật.' }); }
 };
 
-// Chép lời tự động cho lesson video — chỉ trên khóa của chính mình. Trả về bản nháp
-// segments cho editor duyệt, KHÔNG ghi DB (lưu qua PUT /lessons/:id sau khi xem lại).
+// Chép lời tự động cho lesson video (cả upload lẫn YouTube qua yt-dlp) — chỉ trên khóa
+// của chính mình. Trả về bản nháp segments cho editor duyệt, KHÔNG ghi DB (lưu qua
+// PUT /lessons/:id sau khi xem lại).
 exports.transcribeLessonVideo = async (req, res) => {
-  const { runVideoTranscription, isYouTubeUrl } = require('../services/lessonTranscribe');
+  const { runVideoTranscription } = require('../services/lessonTranscribe');
   try {
     const { data: lesson } = await contentDb.from('lessons').select('course_id, content_url').eq('id', req.params.id).single();
     if (!lesson || !(await ownsCourse(lesson.course_id, req.user.id))) return res.status(403).json({ error: 'Không có quyền.' });
     if (!lesson.content_url) return res.status(400).json({ error: 'Mục chưa có video.' });
-    if (isYouTubeUrl(lesson.content_url))
-      return res.status(400).json({ error: 'Chép lời tự động chỉ hỗ trợ video đã tải lên, không hỗ trợ link YouTube.' });
     const { segments, transcript } = await runVideoTranscription(lesson.content_url);
     res.json({ segments, transcript, count: segments.length });
   } catch (err) {

@@ -411,16 +411,15 @@ function TranscriptSegmentsEditor({ rows, setRows, isYouTube, hasVideo, previewV
         <div className="mb-4 p-4 rounded-xl border border-outline/40 bg-surface-low/50 space-y-3">
           {!hasVideo ? (
             <p className="text-xs text-on-muted">Cần có video trước khi dùng chép lời tự động.</p>
-          ) : isYouTube ? (
-            <p className="text-xs text-on-muted">
-              Chép lời tự động chỉ hỗ trợ video <strong>đã tải lên</strong> (MP4/WebM), không hỗ trợ link YouTube.
-              Với video YouTube, bạn có thể xuất phụ đề từ YouTube Studio rồi dùng chế độ "Dán SRT/VTT".
-            </p>
           ) : (
             <>
               <p className="text-xs text-on-muted">
                 AI sẽ nghe video, tách lời thoại theo thời gian và dịch bổ sung sang các ngôn ngữ còn lại.
                 Kết quả là <strong>bản nháp</strong> — hãy kiểm tra và sửa lại trước khi lưu.
+                {isYouTube && (
+                  <> Với video YouTube: chỉ dùng được video <strong>công khai</strong> (không riêng tư/giới hạn
+                  độ tuổi) và chỉ nên dùng với video bạn có quyền sử dụng cho mục đích giảng dạy.</>
+                )}
               </p>
               <button
                 type="button"

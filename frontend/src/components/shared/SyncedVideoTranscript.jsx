@@ -115,23 +115,57 @@ export default function SyncedVideoTranscript({ videoUrl, segments, title }) {
     return ['ja', 'vi', 'en'].filter(l => set.has(l));
   }, [safeSegments]);
 
+  // Phụ đề to dưới video: câu gần nhất đã bắt đầu (giữ nguyên trong khoảng lặng
+  // giữa 2 câu thay vì để trống như highlight của panel)
+  const captionIdx = (() => {
+    for (let i = safeSegments.length - 1; i >= 0; i--) {
+      if (currentTime >= Number(safeSegments[i].start)) return i;
+    }
+    return -1;
+  })();
+  const captionParts = captionIdx === -1 ? [] :
+    (safeSegments[captionIdx].parts || []).filter(p => langShow[p.lang] !== false);
+
   return (
-    <div className="lg:grid lg:grid-cols-5">
-      {/* ── Video ─────────────────────────────────────────────────────── */}
-      <div className="lg:col-span-3 aspect-video bg-black">
-        {ytId
-          ? <div ref={ytHostRef} className="w-full h-full" title={title} />
-          : <video
-              ref={videoRef}
-              src={videoUrl}
-              controls
-              className="w-full h-full"
-              onTimeUpdate={e => setCurrentTime(e.target.currentTime)}
-            />}
+    <div className="lg:grid lg:grid-cols-3">
+      {/* ── Video + phụ đề câu đang phát ──────────────────────────────── */}
+      <div className="lg:col-span-2 flex flex-col">
+        <div className="aspect-video bg-black">
+          {ytId
+            ? <div ref={ytHostRef} className="w-full h-full" title={title} />
+            : <video
+                ref={videoRef}
+                src={videoUrl}
+                controls
+                className="w-full h-full"
+                onTimeUpdate={e => setCurrentTime(e.target.currentTime)}
+              />}
+        </div>
+        {/* Chỉ hiện ở desktop — mobile danh sách bản chép đã nằm ngay dưới video */}
+        <div
+          onClick={() => captionIdx !== -1 && seekTo(safeSegments[captionIdx].start)}
+          title={captionIdx !== -1 ? 'Bấm để phát lại câu này' : undefined}
+          className={`hidden lg:flex flex-1 flex-col items-center justify-center gap-1.5 px-8 py-5 min-h-[7rem] ${captionIdx !== -1 ? 'cursor-pointer' : ''}`}
+        >
+          {captionIdx === -1 || captionParts.length === 0 ? (
+            <p className="text-sm text-on-muted/50 italic">Phát video để hiện phụ đề tại đây</p>
+          ) : (
+            captionParts.map((p, j) => (
+              p.lang === 'ja'
+                ? <FuriganaText
+                    key={j}
+                    text={p.text}
+                    enabled={furigana}
+                    textClassName="text-2xl font-bold text-on-surface text-center"
+                  />
+                : <p key={j} className={`text-sm text-center ${p.lang === 'vi' ? 'text-on-muted italic' : 'text-on-muted'}`}>{p.text}</p>
+            ))
+          )}
+        </div>
       </div>
 
       {/* ── Panel Bản chép ────────────────────────────────────────────── */}
-      <div className="lg:col-span-2 flex flex-col border-t lg:border-t-0 lg:border-l border-outline/20">
+      <div className="lg:col-span-1 flex flex-col border-t lg:border-t-0 lg:border-l border-outline/20">
         <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-outline/20 flex-wrap">
           <h3 className="font-display font-bold text-sm tracking-wide">BẢN CHÉP</h3>
           <div className="flex items-center gap-1.5">
@@ -165,7 +199,7 @@ export default function SyncedVideoTranscript({ videoUrl, segments, title }) {
           </div>
         </div>
 
-        <div ref={listRef} className="overflow-y-auto p-3 space-y-2 max-h-80 lg:max-h-[420px]">
+        <div ref={listRef} className="overflow-y-auto p-3 space-y-2 max-h-80 lg:max-h-[440px]">
           {safeSegments.map((seg, i) => {
             const isActive = i === activeIdx;
             const parts = (seg.parts || []).filter(p => langShow[p.lang] !== false);

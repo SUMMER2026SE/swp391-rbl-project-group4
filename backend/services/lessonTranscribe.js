@@ -1,13 +1,12 @@
 'use strict';
 
 // ─── Chép lời tự động cho lesson video ─────────────────────────────────────────
-// Pipeline giống transcribeListeningPassage (adminController): tải file từ storage,
+// Pipeline giống transcribeListeningPassage (adminController): lấy nguồn audio/video,
 // VAD/silencedetect tách đoạn nói, Whisper chép lời từng đoạn ≤6s, rồi thêm bước mới:
 // LLM xác định ngôn ngữ gốc của từng câu (bài giảng có thể xen Nhật/Việt/Anh) và dịch
 // bổ sung sang 2 ngôn ngữ còn lại → parts: [{lang, text}] cho bản chép đồng bộ.
-// ffmpeg đọc audio trực tiếp từ container video (mp4/webm) nên analyzeSilence/
-// extractAudioChunk dùng thẳng trên file video — chỉ nhánh fallback (gửi nguyên file
-// cho Whisper) mới cần tách audio riêng qua extractAudioTrack.
+// Nguồn: video upload (fetch từ storage — ffmpeg đọc audio trực tiếp từ container
+// mp4/webm) hoặc link YouTube (tải audio-only qua yt-dlp, xem config/youtube.js).
 // KHÔNG ghi DB ở đây: kết quả là bản nháp, trả về cho editor để giáo viên duyệt rồi
 // mới lưu qua PUT /lessons/:id (khác listening — tránh publish thẳng cho học sinh).
 
@@ -16,6 +15,7 @@ const path = require('path');
 const os = require('os');
 const { whisperTranscribe, chatCompletion } = require('../config/ai');
 const { analyzeSilence, extractAudioChunk, mergeIntoGroups, extractAudioTrack } = require('../config/audio');
+const { downloadYouTubeAudio } = require('../config/youtube');
 
 const TRANSLATE_BATCH = 20;
 
@@ -94,15 +94,24 @@ async function translateSegments(rawSegments) {
   return out;
 }
 
-// contentUrl (video đã upload lên storage) → { segments, transcript }
+// contentUrl (video đã upload lên storage HOẶC link YouTube) → { segments, transcript }
 async function runVideoTranscription(contentUrl) {
-  const videoRes = await fetch(contentUrl);
-  if (!videoRes.ok) throw new Error('Không thể tải file video từ storage.');
-  const videoBuffer = Buffer.from(await videoRes.arrayBuffer());
-  const ext = (contentUrl.split('?')[0].split('.').pop() || 'mp4').toLowerCase();
+  const fromYouTube = isYouTubeUrl(contentUrl);
+  let tmpFile;
+  let ext;
 
-  const tmpFile = path.join(os.tmpdir(), `kn_lesson_${Date.now()}.${ext}`);
-  fs.writeFileSync(tmpFile, videoBuffer);
+  if (fromYouTube) {
+    // yt-dlp tải audio-only về file tạm — đã là audio thuần, không cần tách track
+    tmpFile = await downloadYouTubeAudio(contentUrl);
+    ext = 'mp3';
+  } else {
+    const videoRes = await fetch(contentUrl);
+    if (!videoRes.ok) throw new Error('Không thể tải file video từ storage.');
+    const videoBuffer = Buffer.from(await videoRes.arrayBuffer());
+    ext = (contentUrl.split('?')[0].split('.').pop() || 'mp4').toLowerCase();
+    tmpFile = path.join(os.tmpdir(), `kn_lesson_${Date.now()}.${ext}`);
+    fs.writeFileSync(tmpFile, videoBuffer);
+  }
 
   let rawSegments = [];
   let transcript = '';
@@ -144,9 +153,10 @@ async function runVideoTranscription(contentUrl) {
       rawSegments.sort((a, b) => a.start - b.start);
       transcript = rawSegments.map(s => s.text).join(' ');
     } catch (audioErr) {
-      // Fallback: tách audio khỏi video rồi gửi nguyên file cho Whisper (không timestamp)
+      // Fallback: gửi nguyên file audio cho Whisper (không timestamp).
+      // Nguồn YouTube đã là mp3; video upload cần tách audio khỏi container trước.
       console.warn('[LessonTranscribe] segmented approach failed, falling back:', audioErr.message);
-      const audioTrack = await extractAudioTrack(tmpFile);
+      const audioTrack = fromYouTube ? fs.readFileSync(tmpFile) : await extractAudioTrack(tmpFile);
       const r = await whisperTranscribe(audioTrack, 'audio.mp3', 'audio/mpeg', 'ja');
       transcript = r.text?.trim() || '';
       rawSegments = [];
