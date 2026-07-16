@@ -52,6 +52,7 @@ export default function LessonView({ Layout = StudentLayout, previewBase = '' })
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState('');
   const [finishError, setFinishError] = useState(''); // lỗi khi bấm Hoàn thành (vd: chưa đạt ngưỡng quiz)
+  const [justCompleted, setJustCompleted] = useState(false); // vừa hoàn thành mục này trong phiên hiện tại
   const [paywall, setPaywall] = useState(null); // body 403 ENROLLMENT_REQUIRED { course_id }
   const [furigana, setFurigana] = useState(false);
   const [working, setWorking] = useState(false);
@@ -79,6 +80,8 @@ export default function LessonView({ Layout = StudentLayout, previewBase = '' })
     setPaywall(null);
     setWritingOpen(false);
     setPdfOpen(false);
+    setFinishError('');
+    setJustCompleted(false);
     api.get(`/lessons/${id}`)
       .then(r => setLesson(r.data))
       .catch(e => {
@@ -132,14 +135,19 @@ export default function LessonView({ Layout = StudentLayout, previewBase = '' })
     han_viet: k.han_viet,
   }));
 
-  // Đánh dấu hoàn thành rồi đi tiếp (hoặc về khóa học nếu là mục cuối).
-  const finishAndContinue = async () => {
+  // Nút Trạng thái 2 khi mục đã ghi nhận hoàn thành (từ đầu hoặc vừa bấm xong).
+  const isCompleted = lesson.completed || justCompleted;
+  // Mục quiz có ngưỡng đạt: không có nút "Hoàn thành" thủ công — hệ thống tự đánh dấu khi student
+  // làm quiz đạt ngưỡng (backend). Nút footer luôn là điều hướng, cho phép bỏ qua mà không hoàn thành.
+  const isThresholdQuiz = !!lesson.quiz?.passing_type;
+
+  // Trạng thái 1: gọi API đánh dấu hoàn thành, KHÔNG điều hướng. Thành công → chuyển sang Trạng thái 2.
+  const markComplete = async () => {
     setWorking(true);
     setFinishError('');
     try {
       await api.post(`/lessons/${id}/complete`);
-      if (nav.nextId) navigate(lessonPath(nav.nextId));
-      else navigate(coursePath(lesson.course_id));
+      setJustCompleted(true);
     } catch (e) {
       // Vd: quiz có ngưỡng đạt mà học sinh chưa đạt → hiển thị ngay tại chỗ, giữ nguyên trang để làm lại bài.
       setFinishError(e.message);
@@ -148,9 +156,15 @@ export default function LessonView({ Layout = StudentLayout, previewBase = '' })
     }
   };
 
+  // Trạng thái 2: chỉ điều hướng (đã ghi nhận hoàn thành rồi, không gọi lại API).
+  const goNext = () => {
+    if (nav.nextId) navigate(lessonPath(nav.nextId));
+    else navigate(coursePath(lesson.course_id));
+  };
+
   const nextLabel = !nav.nextId
     ? 'Hoàn thành khóa học'
-    : nav.nextIsNewUnit ? 'Hoàn thành • Bài học tiếp theo' : 'Hoàn thành • Mục tiếp theo';
+    : nav.nextIsNewUnit ? 'Bài học tiếp theo' : 'Mục tiếp theo';
 
   // ── Chọn vocab/kanji → thêm vào flashcard ─────────────────────────
   const vocabList = lesson.vocabulary || [];
@@ -527,14 +541,23 @@ export default function LessonView({ Layout = StudentLayout, previewBase = '' })
             </Link>
           ) : <span />}
 
-          <button
-            onClick={finishAndContinue}
-            disabled={working}
-            className="inline-flex items-center gap-2 bg-tsubaki-red text-white px-6 py-2.5 rounded-xl font-semibold text-sm hover:bg-primary transition-colors shadow-md shadow-tsubaki-red/20 disabled:opacity-60"
-          >
-            {working ? 'Đang lưu...' : nextLabel}
-            <span className="material-symbols-outlined text-lg">{nav.nextId ? 'arrow_forward' : 'task_alt'}</span>
-          </button>
+          {/* Quiz có ngưỡng: luôn là nút điều hướng (bỏ qua được), hệ thống tự đánh dấu hoàn thành khi đạt.
+              Mục thường / quiz "Không yêu cầu": nút thủ công "Hoàn thành" → sau khi hoàn thành mới điều hướng. */}
+          {(() => {
+            const showNext = isCompleted || isThresholdQuiz;
+            return (
+              <button
+                onClick={showNext ? goNext : markComplete}
+                disabled={working}
+                className="inline-flex items-center gap-2 bg-tsubaki-red text-white px-6 py-2.5 rounded-xl font-semibold text-sm hover:bg-primary transition-colors shadow-md shadow-tsubaki-red/20 disabled:opacity-60"
+              >
+                {working ? 'Đang lưu...' : showNext ? nextLabel : 'Hoàn thành'}
+                <span className="material-symbols-outlined text-lg">
+                  {!showNext ? 'check' : nav.nextId ? 'arrow_forward' : 'task_alt'}
+                </span>
+              </button>
+            );
+          })()}
         </div>
       </div>
 

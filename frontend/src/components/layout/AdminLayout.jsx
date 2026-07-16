@@ -1,9 +1,10 @@
 ﻿import Sidebar from './Sidebar';
+import MobileNav from './MobileNav';
 import { useLang } from '../../contexts/LangContext';
 import { useAuth } from '../../contexts/AuthContext';
 
 const ADMIN_LINKS = (t) => [
-  { to: '/admin',             icon: 'dashboard',     label: t('admin.dashboard') },
+  { to: '/admin',             icon: 'dashboard',     label: t('admin.dashboard'), exact: true },
   { to: '/admin/users',       icon: 'group',         label: t('admin.users') },
   { to: '/admin/courses',     icon: 'menu_book',     label: t('admin.courses') },
   { to: '/admin/vocabulary',  icon: 'translate',     label: t('admin.vocabulary') },
@@ -44,10 +45,12 @@ export default function AdminLayout({ children, title }) {
           <span className="text-sm text-on-muted hidden md:block">{user?.email}</span>
         </header>
 
-        <main className="flex-1 p-6 md:p-8 max-w-7xl mx-auto w-full">
+        <main className="flex-1 p-6 md:p-8 max-w-7xl mx-auto w-full pb-24 md:pb-8">
           {children}
         </main>
       </div>
+
+      <MobileNav links={ADMIN_LINKS(t)} />
     </div>
   );
 }
