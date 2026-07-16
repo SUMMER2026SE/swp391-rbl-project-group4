@@ -112,11 +112,19 @@ export function AuthProvider({ children }) {
     setUser(null);
   };
 
+  // Re-fetch the current user from Supabase so context reflects server-side
+  // metadata changes (e.g. avatar_url updated after uploading a new avatar).
+  const refreshUser = async () => {
+    const { data: { user: fresh } } = await supabase.auth.getUser();
+    if (fresh) setUser(fresh);
+    return fresh;
+  };
+
   const isAdmin   = () => user?.user_metadata?.role === 'admin';
   const isTeacher = () => user?.user_metadata?.role === 'teacher';
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, verifyOtp, resendOtp, loginWithGoogle, forgotPassword, resetPasswordOtp, logout, isAdmin, isTeacher }}>
+    <AuthContext.Provider value={{ user, loading, login, register, verifyOtp, resendOtp, loginWithGoogle, forgotPassword, resetPasswordOtp, logout, refreshUser, isAdmin, isTeacher }}>
       {children}
     </AuthContext.Provider>
   );
