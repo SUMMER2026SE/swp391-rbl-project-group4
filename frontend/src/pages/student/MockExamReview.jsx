@@ -5,7 +5,7 @@ import Button from '../../components/ui/Button';
 import Alert from '../../components/ui/Alert';
 import FuriganaText from '../../components/ui/FuriganaText';
 import AudioPlayer from '../../components/mockexam/AudioPlayer';
-import { sectionDisplay, MONDAI_INSTRUCTION_VI } from '../../lib/mockExamConstants';
+import { sectionDisplay, mondaiInstruction } from '../../lib/mockExamConstants';
 import { getMockReview } from '../../lib/mockExamApi';
 
 export default function MockExamReview() {
@@ -42,26 +42,17 @@ export default function MockExamReview() {
             <h2 className="font-display font-bold text-charcoal border-b border-outline/30 pb-1">{sectionDisplay(section)}</h2>
             {section.groups.map(group => (
               <div key={group.id} className="space-y-3">
-                {group.instruction_text && (
+                {mondaiInstruction(data.level, group.mondai_type).ja && (
                   <div>
-                    <p className="text-xs font-semibold text-on-muted">問題{group.mondai_number} · {group.instruction_text}</p>
-                    {MONDAI_INSTRUCTION_VI[group.mondai_type] && (
-                      <p className="text-xs text-on-muted italic mt-0.5">{MONDAI_INSTRUCTION_VI[group.mondai_type]}</p>
+                    <p className="text-xs font-semibold text-on-muted">問題{group.mondai_number} · {mondaiInstruction(data.level, group.mondai_type).ja}</p>
+                    {mondaiInstruction(data.level, group.mondai_type).vi && (
+                      <p className="text-xs text-on-muted italic mt-0.5">{mondaiInstruction(data.level, group.mondai_type).vi}</p>
                     )}
                   </div>
                 )}
                 {group.passage_text && (
                   <div className="bg-surface-low border border-outline/30 rounded-xl p-3 text-sm leading-relaxed whitespace-pre-wrap">
                     <FuriganaText text={group.passage_text} enabled={false} block />
-                  </div>
-                )}
-                {group.audio_url && <AudioPlayer src={group.audio_url} label={`問題${group.mondai_number} — Audio`} />}
-                {group.audio_transcript && (
-                  <div className="text-xs">
-                    <button onClick={() => setOpenTranscript(o => ({ ...o, [group.id]: !o[group.id] }))} className="text-tsubaki-red font-semibold">
-                      {openTranscript[group.id] ? 'Ẩn transcript' : 'Xem transcript'}
-                    </button>
-                    {openTranscript[group.id] && <p className="mt-1 bg-blue-50 border border-blue-200 rounded-lg p-2 whitespace-pre-wrap text-blue-900">{group.audio_transcript}</p>}
                   </div>
                 )}
                 {group.questions.map(q => {
@@ -76,6 +67,16 @@ export default function MockExamReview() {
                         </div>
                       </div>
                       {q.audio_url && <div className="mb-2"><AudioPlayer src={q.audio_url} label={`Câu ${num}`} /></div>}
+                      {q.image_url && <img src={q.image_url} className="max-w-sm w-full rounded-lg border border-outline/40 mb-2" alt="" />}
+                      {q.audio_transcript && (
+                        <div className="text-xs mb-2">
+                          <button onClick={() => setOpenTranscript(o => ({ ...o, [q.id]: !o[q.id] }))} className="text-tsubaki-red font-semibold">
+                            {openTranscript[q.id] ? 'Ẩn transcript' : 'Xem transcript'}
+                          </button>
+                          {openTranscript[q.id] && <p className="mt-1 bg-blue-50 border border-blue-200 rounded-lg p-2 whitespace-pre-wrap text-blue-900">{q.audio_transcript}</p>}
+                        </div>
+                      )}
+                      {q.translation_vi && <p className="text-xs italic text-on-muted mb-2 whitespace-pre-wrap">🇻🇳 {q.translation_vi}</p>}
                       <div className="space-y-1.5">
                         {q.options.map((opt, idx) => {
                           const isCorrect = idx === q.correct_index;
@@ -84,7 +85,10 @@ export default function MockExamReview() {
                             <div key={idx} className={`px-3 py-2 rounded-lg border text-sm flex items-center gap-2 ${
                               isCorrect ? 'border-green-400 bg-green-100/60' : isPicked ? 'border-error/50 bg-error-bg/40' : 'border-outline/40'}`}>
                               <span className={`w-5 h-5 shrink-0 rounded-full text-[11px] font-bold flex items-center justify-center border ${isCorrect ? 'bg-green-500 border-green-500 text-white' : isPicked ? 'bg-error border-error text-white' : 'border-outline text-on-muted'}`}>{idx + 1}</span>
-                              <FuriganaText text={opt} enabled={false} />
+                              <div className="flex-1">
+                                <FuriganaText text={opt} enabled={false} />
+                                {q.option_translations?.[idx] && <p className="text-[11px] italic text-on-muted">{q.option_translations[idx]}</p>}
+                              </div>
                               {isCorrect && <span className="ml-auto text-xs text-green-700 font-semibold">Đáp án đúng</span>}
                               {isPicked && !isCorrect && <span className="ml-auto text-xs text-error font-semibold">Bạn chọn</span>}
                             </div>

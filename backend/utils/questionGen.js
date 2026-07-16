@@ -199,6 +199,32 @@ function stripHtmlMarkup(str) {
     .replace(/<\/?[a-z][^>]*>/gi, '');
 }
 
+// ── Chuẩn hóa prompt cho đề thi thử (mock) ───────────────────────────────────
+// Độ dài bài đọc (số chữ tiếng Nhật) theo dạng bài × cấp — bám đề JLPT thật.
+// Dạng bài không có ở một cấp thì không cần key (blueprint không sinh ra).
+const MOCK_PASSAGE_LENGTHS = {
+  text_grammar:       { N5: 150, N4: 200, N3: 350, N2: 450, N1: 500 },
+  reading_short:      { N5: 80,  N4: 120, N3: 180, N2: 200, N1: 220 },
+  reading_mid:        { N5: 180, N4: 250, N3: 350, N2: 500, N1: 500 },
+  reading_long:       { N5: 300, N4: 400, N3: 550, N2: 700, N1: 1000 },
+  integrated_reading: { N2: 600, N1: 600 },
+  thematic_reading:   { N2: 900, N1: 1000 },
+  info_retrieval:     { N5: 200, N4: 300, N3: 400, N2: 600, N1: 600 },
+};
+
+// Độ dài script hội thoại/độc thoại (số chữ) theo cấp.
+const MOCK_TRANSCRIPT_LENGTHS = { N5: '40–80', N4: '80–130', N3: '130–220', N2: '220–350', N1: '300–500' };
+
+// Trình tự script riêng của từng dạng nghe (đề thật đọc gì trước/sau).
+const MOCK_TRANSCRIPT_FORMATS = {
+  task_comprehension:    'Đọc câu hỏi TRƯỚC hội thoại, rồi hội thoại, rồi LẶP LẠI đúng câu hỏi đó ở cuối.',
+  point_comprehension:   'Đọc câu hỏi TRƯỚC hội thoại (thí sinh có thời gian đọc lựa chọn in trên giấy), rồi hội thoại, rồi LẶP LẠI câu hỏi ở cuối.',
+  summary_comprehension: 'KHÔNG có câu hỏi trước. Độc thoại/hội thoại trước, sau đó mới đọc câu hỏi rồi đọc lần lượt cả 4 lựa chọn (đánh số １　２　３　４ mỗi lựa chọn một dòng) — lựa chọn KHÔNG in trên giấy.',
+  utterance_expression:  'Một câu mô tả tình huống (khớp với tranh) + câu hỏi 「何と言いますか」, rồi đọc 3 lựa chọn (１　２　３ mỗi lựa chọn một dòng).',
+  quick_response:        'Một câu mở lời ngắn của người nói thứ nhất, rồi 3 câu đáp của người nói thứ hai (１　２　３ mỗi câu một dòng). Không có câu hỏi.',
+  integrated_listening:  'Hội thoại/độc thoại dài (thường 2–3 người hoặc phần giới thiệu + trao đổi), câu hỏi chỉ đọc Ở CUỐI.',
+};
+
 /**
  * Sinh nháp câu hỏi cho MỘT mondai của đề thi thử JLPT (mock test).
  * Chỉ trả nháp để admin duyệt/sửa — KHÔNG ghi DB.
@@ -226,36 +252,55 @@ async function generateMondaiQuestions({ level, mondaiType, count = 5, passageTe
 ⚠️  TUYỆT ĐỐI KHÔNG dùng kanji hoặc từ vựng ngoài phạm vi JLPT ${level}.`
     : '';
 
+  const passageChars = MOCK_PASSAGE_LENGTHS[mondaiType]?.[level] || null;
   const passageRule = needsPassage
     ? (passageText
       ? `\nBài đọc đã có sẵn (bên dưới) — TẤT CẢ câu hỏi phải dựa trên bài đọc này, KHÔNG sinh passage mới:\n${passageText.slice(0, 4000)}`
-      : `\nMondai này cần bài đọc: hãy sinh MỘT đoạn văn duy nhất đúng độ dài/độ khó của dạng bài và cấp ${level}, đặt vào trường "passage_text"; mọi câu hỏi đều dựa trên đoạn văn đó.`)
+      : `\nMondai này cần bài đọc: hãy sinh MỘT đoạn văn duy nhất đặt vào trường "passage_text"; mọi câu hỏi đều dựa trên đoạn văn đó.${
+        passageChars ? `\n• ĐỘ DÀI BẮT BUỘC: khoảng ${passageChars} chữ tiếng Nhật (cho phép lệch ±20%). Không viết ngắn hơn — đề JLPT ${level} dạng này luôn dài cỡ đó.` : ''
+      }`)
     : '';
 
   const listeningRule = isListening
-    ? `\nĐây là câu hỏi NGHE: với mỗi câu, sinh thêm trường "audio_transcript" là script hội thoại/độc thoại tiếng Nhật hoàn chỉnh (kèm câu hỏi đọc trong audio) để admin thu âm.${meta.no_question_text ? ' Dạng bài này KHÔNG in câu hỏi trên giấy — "question_text" để null.' : ''}`
+    ? `\nĐây là câu hỏi NGHE: với mỗi câu, sinh thêm trường "audio_transcript" là script tiếng Nhật hoàn chỉnh để thu âm/đọc bằng máy.
+• TRÌNH TỰ SCRIPT: ${MOCK_TRANSCRIPT_FORMATS[mondaiType] || 'Đọc câu hỏi trước, rồi nội dung, rồi lặp lại câu hỏi ở cuối.'}
+• ĐỊNH DẠNG BẮT BUỘC: mỗi lượt thoại một dòng, mở đầu bằng nhãn người nói 「男：」(nam) hoặc 「女：」(nữ) — nếu có 2 người cùng giới thì dùng 「男１：」「男２：」. Dòng câu hỏi và các dòng đánh số lựa chọn KHÔNG có nhãn.
+• ĐỘ DÀI hội thoại/độc thoại: khoảng ${MOCK_TRANSCRIPT_LENGTHS[level] || '100–200'} chữ.${meta.no_question_text ? '\n• Dạng bài này KHÔNG in câu hỏi trên giấy — "question_text" để null.' : ''}`
     : '';
+
+  const exampleRule = meta.example
+    ? `\n\n═══ VÍ DỤ MẪU 1 CÂU ĐÚNG FORMAT (bám sát cấu trúc này, KHÔNG chép lại nội dung) ═══\n${meta.example}`
+    : '';
+
+  // Bản dịch tiếng Việt hiện ở màn xem đáp án của học viên (không hiện lúc thi).
+  // Tách 2 trường: translation_vi = dịch câu hỏi/script; option_translations = dịch từng lựa chọn.
+  const translationRule = `\nMỗi câu phải có trường "translation_vi": bản dịch tiếng Việt tự nhiên của ${
+    isListening ? 'nội dung audio (tóm tắt script) + câu hỏi' : 'câu hỏi'
+  } — KHÔNG kèm bản dịch các lựa chọn ở đây.
+Mỗi câu phải có thêm trường "option_translations": mảng ĐÚNG ${optCount} chuỗi, là bản dịch tiếng Việt của từng lựa chọn theo đúng thứ tự.`;
 
   const SYSTEM = `Bạn là chuyên gia biên soạn đề thi JLPT chính thức. Bạn nắm rõ format từng 大問 (mondai) của đề thi thật.
 
 BẮT BUỘC: Chỉ trả về MỘT object JSON hợp lệ, KHÔNG có văn bản nào khác.
+Độ khó phải ở mức TRUNG BÌNH của đề thi JLPT ${level} thật — không lấy từ/ngữ pháp dễ nhất cấp, cũng không vượt cấp.
 ${jlptBlock}
 
 ═══ DẠNG BÀI: 問題「${meta.ja}」 ═══
 • Mô tả dạng bài: ${meta.ai_hint}
 • Chỉ dẫn chuẩn in trên đề: ${meta.instruction}
 • Số lựa chọn: ĐÚNG ${optCount} lựa chọn mỗi câu.
-• Khi cần đánh dấu từ trong câu, bọc từ đó trong dấu gạch dưới full-width ＿ ＿ (ví dụ: きのう＿光る＿星を見た). TUYỆT ĐỐI KHÔNG dùng thẻ HTML như <u>, <b>, <i>.${passageRule}${listeningRule}
+• Khi cần đánh dấu từ trong câu, bọc từ đó trong dấu gạch dưới full-width ＿ ＿ (ví dụ: きのう＿光る＿星を見た). TUYỆT ĐỐI KHÔNG dùng thẻ HTML như <u>, <b>, <i>.${passageRule}${listeningRule}${translationRule}
 
 ═══ SCHEMA JSON ═══
-{"passage_text": ${needsPassage && !passageText ? '"đoạn văn dùng chung"' : 'null'}, "questions": [{"question_text": "..." hoặc null, "options": [${optCount} chuỗi], "correct_index": số 0-${optCount - 1}, "explanation": "giải thích tiếng Việt ngắn gọn vì sao đáp án đúng"${isListening ? ', "audio_transcript": "script tiếng Nhật"' : ''}}]}`;
+{"passage_text": ${needsPassage && !passageText ? '"đoạn văn dùng chung"' : 'null'}, "questions": [{"question_text": "..." hoặc null, "options": [${optCount} chuỗi], "correct_index": số 0-${optCount - 1}, "explanation": "giải thích tiếng Việt ngắn gọn vì sao đáp án đúng", "translation_vi": "bản dịch tiếng Việt của ${isListening ? 'tóm tắt script + câu hỏi' : 'câu hỏi'}", "option_translations": [${optCount} chuỗi dịch tiếng Việt của từng lựa chọn]${isListening ? ', "audio_transcript": "script tiếng Nhật"' : ''}}]}${exampleRule}`;
 
   const userMsg = `Tạo ${count} câu hỏi dạng 「${meta.ja}」 cấp độ JLPT ${level}.${topic ? `\nChủ đề: ${topic}` : ''}
 Trả về ĐÚNG object JSON theo schema, "questions" có ${count} phần tử.`;
 
   const result = await chatCompletion(
     [{ role: 'system', content: SYSTEM }, { role: 'user', content: userMsg }],
-    { max_tokens: 4096, temperature: 0.45 }
+    // payload lớn hơn vì kèm bản dịch (nhất là đọc hiểu dài)
+    { max_tokens: 8192, temperature: 0.45 }
   );
 
   const raw = result.choices?.[0]?.message?.content || '';
@@ -282,11 +327,17 @@ Trả về ĐÚNG object JSON theo schema, "questions" có ${count} phần tử.
     const options = Array.isArray(q.options) ? q.options.map(o => stripHtmlMarkup(String(o).trim())).filter(Boolean) : [];
     const ci = Number(q.correct_index);
     if (options.length !== optCount || !Number.isInteger(ci) || ci < 0 || ci >= options.length) { skipped++; continue; }
+    // Bản dịch lựa chọn: chỉ nhận khi đủ đúng số phần tử (lệch → null, admin tự bổ sung)
+    const optTrans = Array.isArray(q.option_translations) && q.option_translations.length === options.length
+      ? q.option_translations.map(t => stripHtmlMarkup(String(t).trim()))
+      : null;
     questions.push({
       question_text:    q.question_text ? stripHtmlMarkup(String(q.question_text).trim()) : null,
       options,
       correct_index:    ci,
       explanation:      q.explanation ? stripHtmlMarkup(q.explanation) : null,
+      translation_vi:   q.translation_vi ? stripHtmlMarkup(String(q.translation_vi).trim()) : null,
+      option_translations: optTrans,
       audio_transcript: isListening ? (q.audio_transcript ? stripHtmlMarkup(q.audio_transcript) : null) : undefined,
     });
   }

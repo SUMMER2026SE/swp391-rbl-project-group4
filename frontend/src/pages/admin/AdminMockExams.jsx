@@ -18,7 +18,7 @@ export default function AdminMockExams() {
   const [levelFilter, setLevelFilter] = useState('');
 
   const [showCreate, setShowCreate] = useState(false);
-  const [form, setForm] = useState({ level: 'N5', title: '', use_blueprint: true });
+  const [form, setForm] = useState({ level: 'N5', title: '' });
   const [creating, setCreating] = useState(false);
   const [toDelete, setToDelete] = useState(null);
   // Popup xác nhận đổi trạng thái: { type: 'publish' | 'free', row }
@@ -68,7 +68,9 @@ export default function AdminMockExams() {
     try {
       if (type === 'publish') {
         const r = await adminPublishExam(row.id, !row.is_published);
-        if (r?.warning) setNotice(r.warning);
+        // Publish trả warnings[] (lệch số câu chuẩn); unpublish trả warning (số lượt đã làm)
+        if (r?.warnings?.length) setNotice(`Đã xuất bản, nhưng số câu lệch chuẩn JLPT: ${r.warnings.join(' · ')}`);
+        else if (r?.warning) setNotice(r.warning);
       } else {
         await adminUpdateExam(row.id, { is_free: !row.is_free });
       }
@@ -108,7 +110,7 @@ export default function AdminMockExams() {
             <h1 className="font-display text-2xl font-bold text-charcoal">Đề thi thử JLPT</h1>
             <p className="text-sm text-on-muted mt-1">Soạn đề mô phỏng kỳ thi JLPT thật theo từng cấp độ. Chỉ admin quản lý.</p>
           </div>
-          <Button onClick={() => { setForm({ level: 'N5', title: '', use_blueprint: true }); setShowCreate(true); }}>
+          <Button onClick={() => { setForm({ level: 'N5', title: '' }); setShowCreate(true); }}>
             <span className="material-symbols-outlined text-lg">add</span> Tạo đề mới
           </Button>
         </div>
@@ -163,14 +165,13 @@ export default function AdminMockExams() {
           </div>
           <Input label="Tên đề thi" placeholder={`VD: Đề thi thử ${form.level} số 1`}
             value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} />
-          <label className="flex items-start gap-3 p-3 bg-surface-low rounded-xl cursor-pointer">
-            <input type="checkbox" checked={form.use_blueprint} className="mt-0.5"
-              onChange={e => setForm(f => ({ ...f, use_blueprint: e.target.checked }))} />
+          <div className="flex items-start gap-3 p-3 bg-surface-low rounded-xl">
+            <span className="material-symbols-outlined text-sumire-purple mt-0.5">auto_awesome</span>
             <span className="text-sm">
               <span className="font-semibold text-charcoal">Tạo khung đề chuẩn {form.level}</span>
-              <span className="block text-on-muted mt-0.5">Tự động tạo các phần thi + mondai đúng format thật (chỉ cần đổ câu hỏi vào).</span>
+              <span className="block text-on-muted mt-0.5">Đề tự động tạo đủ các phần thi + mondai đúng format JLPT thật (chỉ cần đổ câu hỏi vào). Cấu trúc cố định, không thêm/xóa phần thi.</span>
             </span>
-          </label>
+          </div>
         </div>
       </Modal>
 

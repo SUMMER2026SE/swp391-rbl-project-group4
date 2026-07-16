@@ -9,7 +9,7 @@ const GRACE_MS = 10 * 1000;
 
 // Whitelist cột trả cho student — TUYỆT ĐỐI KHÔNG gồm correct_index/explanation/audio_transcript
 const QUESTION_PUBLIC = 'id, group_id, position, question_text, image_url, audio_url, options';
-const GROUP_PUBLIC = 'id, section_id, position, mondai_number, mondai_type, instruction_text, passage_text, image_url, audio_url, score_category';
+const GROUP_PUBLIC = 'id, section_id, position, mondai_number, mondai_type, passage_text, image_url, score_category';
 
 function handleError(res, err, fallback) {
   console.error(err);
@@ -248,7 +248,7 @@ async function getOwnedAttempt(attemptId, userId) {
 exports.startAttempt = async (req, res) => {
   try {
     const { data: exam } = await supabaseAdmin
-      .from('mock_exams').select('id, is_published, is_free').eq('id', req.params.id).single();
+      .from('mock_exams').select('id, level, is_published, is_free').eq('id', req.params.id).single();
     if (!exam || !exam.is_published) return res.status(404).json({ error: 'Không tìm thấy đề thi.' });
 
     // Đang có attempt dở → trả lại (resume tự nhiên — được phép kể cả khi hết premium)
@@ -297,7 +297,7 @@ exports.startAttempt = async (req, res) => {
     if (attempt.status === 'submitted') return res.json({ attempt, finished: true });
 
     const section = await loadSectionForAttempt(attempt.exam_id, attempt.current_section_position);
-    res.json({ attempt, section, remaining_seconds: remainingSeconds(attempt) });
+    res.json({ attempt, section, level: exam.level, remaining_seconds: remainingSeconds(attempt) });
   } catch (err) { handleError(res, err, 'Không thể bắt đầu bài làm.'); }
 };
 
@@ -320,7 +320,9 @@ exports.getCurrent = async (req, res) => {
         .select('question_id, selected_index').eq('attempt_id', attempt.id).in('question_id', questionIds);
       (ans || []).forEach(a => { savedAnswers[a.question_id] = a.selected_index; });
     }
-    res.json({ attempt, section, saved_answers: savedAnswers, remaining_seconds: remainingSeconds(attempt) });
+    const { data: exam } = await supabaseAdmin
+      .from('mock_exams').select('level').eq('id', attempt.exam_id).single();
+    res.json({ attempt, section, level: exam?.level || null, saved_answers: savedAnswers, remaining_seconds: remainingSeconds(attempt) });
   } catch (err) { handleError(res, err, 'Không thể tải bài làm.'); }
 };
 
