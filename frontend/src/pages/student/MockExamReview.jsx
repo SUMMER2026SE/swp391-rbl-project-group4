@@ -76,6 +76,7 @@ export default function MockExamReview() {
                           {openTranscript[q.id] && <p className="mt-1 bg-blue-50 border border-blue-200 rounded-lg p-2 whitespace-pre-wrap text-blue-900">{q.audio_transcript}</p>}
                         </div>
                       )}
+                      {q.translation_vi && <p className="text-xs italic text-on-muted mb-2 whitespace-pre-wrap">🇻🇳 {q.translation_vi}</p>}
                       <div className="space-y-1.5">
                         {q.options.map((opt, idx) => {
                           const isCorrect = idx === q.correct_index;
@@ -84,7 +85,10 @@ export default function MockExamReview() {
                             <div key={idx} className={`px-3 py-2 rounded-lg border text-sm flex items-center gap-2 ${
                               isCorrect ? 'border-green-400 bg-green-100/60' : isPicked ? 'border-error/50 bg-error-bg/40' : 'border-outline/40'}`}>
                               <span className={`w-5 h-5 shrink-0 rounded-full text-[11px] font-bold flex items-center justify-center border ${isCorrect ? 'bg-green-500 border-green-500 text-white' : isPicked ? 'bg-error border-error text-white' : 'border-outline text-on-muted'}`}>{idx + 1}</span>
-                              <FuriganaText text={opt} enabled={false} />
+                              <div className="flex-1">
+                                <FuriganaText text={opt} enabled={false} />
+                                {q.option_translations?.[idx] && <p className="text-[11px] italic text-on-muted">{q.option_translations[idx]}</p>}
+                              </div>
                               {isCorrect && <span className="ml-auto text-xs text-green-700 font-semibold">Đáp án đúng</span>}
                               {isPicked && !isCorrect && <span className="ml-auto text-xs text-error font-semibold">Bạn chọn</span>}
                             </div>
@@ -93,7 +97,6 @@ export default function MockExamReview() {
                       </div>
                       {q.selected_index == null && <p className="text-xs text-on-muted mt-1.5 italic">Bạn chưa trả lời câu này.</p>}
                       {q.explanation && <div className="mt-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-sm text-amber-900"><b>Giải thích:</b> {q.explanation}</div>}
-                      {q.translation_vi && <div className="mt-2 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2 text-sm text-emerald-900 whitespace-pre-wrap"><b>Bản dịch:</b> {q.translation_vi}</div>}
                     </div>
                   );
                 })}

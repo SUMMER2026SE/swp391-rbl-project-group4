@@ -20,7 +20,19 @@ export default function QuestionCard({ index, value, onSave, onDelete, listening
     let options = [...q.options];
     while (options.length < n) options.push('');
     options = options.slice(0, n);
-    update({ options, correct_index: Math.min(q.correct_index, n - 1) });
+    // Bản dịch lựa chọn phải luôn cùng độ dài options (BE validate)
+    let option_translations = q.option_translations;
+    if (Array.isArray(option_translations)) {
+      option_translations = [...option_translations];
+      while (option_translations.length < n) option_translations.push('');
+      option_translations = option_translations.slice(0, n);
+    }
+    update({ options, correct_index: Math.min(q.correct_index, n - 1), option_translations });
+  };
+  const setOptionTranslation = (i, val) => {
+    const option_translations = [...(q.option_translations || q.options.map(() => ''))];
+    option_translations[i] = val;
+    update({ option_translations });
   };
   const uploadAudio = async (file) => {
     if (!file) return;
@@ -114,17 +126,23 @@ export default function QuestionCard({ index, value, onSave, onDelete, listening
 
       <div className="space-y-1.5">
         {q.options.map((opt, i) => (
-          <div key={i} className="flex items-center gap-2">
-            <button onClick={() => update({ correct_index: i })} disabled={disabled}
-              title="Đánh dấu đáp án đúng"
-              className={`w-6 h-6 shrink-0 rounded-full text-xs font-bold flex items-center justify-center border-2 ${
-                q.correct_index === i ? 'bg-green-500 border-green-500 text-white' : 'border-outline text-on-muted'}`}>
-              {i + 1}
-            </button>
-            <input value={opt} disabled={disabled}
-              onChange={e => setOption(i, e.target.value)}
-              placeholder={`Lựa chọn ${i + 1}`}
-              className={`flex-1 px-3 py-1.5 border rounded-lg text-sm outline-none focus:border-tsubaki-red ${q.correct_index === i ? 'border-green-400 bg-green-50' : 'border-outline'}`} />
+          <div key={i} className="space-y-1">
+            <div className="flex items-center gap-2">
+              <button onClick={() => update({ correct_index: i })} disabled={disabled}
+                title="Đánh dấu đáp án đúng"
+                className={`w-6 h-6 shrink-0 rounded-full text-xs font-bold flex items-center justify-center border-2 ${
+                  q.correct_index === i ? 'bg-green-500 border-green-500 text-white' : 'border-outline text-on-muted'}`}>
+                {i + 1}
+              </button>
+              <input value={opt} disabled={disabled}
+                onChange={e => setOption(i, e.target.value)}
+                placeholder={`Lựa chọn ${i + 1}`}
+                className={`flex-1 px-3 py-1.5 border rounded-lg text-sm outline-none focus:border-tsubaki-red ${q.correct_index === i ? 'border-green-400 bg-green-50' : 'border-outline'}`} />
+            </div>
+            <input value={(q.option_translations || [])[i] || ''} disabled={disabled}
+              onChange={e => setOptionTranslation(i, e.target.value)}
+              placeholder={`Dịch lựa chọn ${i + 1} (tiếng Việt — hiện khi xem lại)`}
+              className="ml-8 w-[calc(100%-2rem)] px-3 py-1 border border-outline/50 rounded-lg text-xs italic outline-none focus:border-tsubaki-red" />
           </div>
         ))}
       </div>
@@ -139,7 +157,9 @@ export default function QuestionCard({ index, value, onSave, onDelete, listening
       <textarea
         value={q.translation_vi || ''} disabled={disabled}
         onChange={e => update({ translation_vi: e.target.value })}
-        placeholder="Bản dịch tiếng Việt (không bắt buộc — hiện khi học viên xem lại bài)"
+        placeholder={listening
+          ? 'Bản dịch câu hỏi + tóm tắt nội dung audio (tiếng Việt — hiện khi học viên xem lại bài)'
+          : 'Bản dịch câu hỏi (tiếng Việt — hiện khi học viên xem lại bài)'}
         className="w-full px-3 py-2 border border-outline rounded-lg text-sm resize-y min-h-[44px] outline-none focus:border-tsubaki-red"
       />
 

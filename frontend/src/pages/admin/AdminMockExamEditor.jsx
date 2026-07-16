@@ -366,6 +366,7 @@ function AiGenerateModal({ group, onClose, onAdded }) {
                     {d.options.map((o, k) => (
                       <li key={k} className={k === d.correct_index ? 'text-green-700 font-semibold' : 'text-on-muted'}>
                         {k + 1}. {o} {k === d.correct_index && '✓'}
+                        {d.option_translations?.[k] && <span className="block pl-4 text-[11px] italic font-normal text-on-muted">{d.option_translations[k]}</span>}
                       </li>
                     ))}
                   </ul>
