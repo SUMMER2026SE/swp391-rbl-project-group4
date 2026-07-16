@@ -112,10 +112,12 @@ export function AuthProvider({ children }) {
     setUser(null);
   };
 
-  // Re-fetch the current user from Supabase so context reflects server-side
-  // metadata changes (e.g. avatar_url updated after uploading a new avatar).
+  // Sync server-side user_metadata changes (full_name, avatar_url) into the app.
+  // refreshSession mints a new JWT carrying the updated metadata and replaces the
+  // persisted session, so a later auth event cannot revert us to stale data —
+  // getUser() would only patch local state and leave the stored session stale.
   const refreshUser = async () => {
-    const { data: { user: fresh } } = await supabase.auth.getUser();
+    const { data: { user: fresh } } = await supabase.auth.refreshSession();
     if (fresh) setUser(fresh);
     return fresh;
   };

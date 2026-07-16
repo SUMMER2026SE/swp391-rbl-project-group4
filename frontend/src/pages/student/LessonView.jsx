@@ -10,6 +10,7 @@ import KanjiWritingPracticeModal from '../../components/kanji/KanjiWritingPracti
 import KanjiPdfPanel from '../../components/kanji/KanjiPdfPanel';
 import VocabWordViewer from '../../components/shared/VocabWordViewer';
 import GrammarItemCard from '../../components/shared/GrammarItemCard';
+import SyncedVideoTranscript from '../../components/shared/SyncedVideoTranscript';
 import api from '../../lib/api';
 import { renderMarkdown } from '../../lib/renderPreview';
 
@@ -319,15 +320,26 @@ export default function LessonView({ Layout = StudentLayout, previewBase = '' })
         {/* ── Video ───────────────────────────────────────────────────── */}
         {lesson.content_url && (
           <div className="glass-card rounded-2xl overflow-hidden mb-6">
-            <div className="aspect-video bg-black">
-              {embed
-                ? <iframe src={embed} title={lesson.title} className="w-full h-full" allowFullScreen />
-                : <video src={lesson.content_url} controls className="w-full h-full" />}
-            </div>
-            {lesson.transcript && (
-              <div className="p-5 text-sm text-on-surface whitespace-pre-wrap leading-relaxed border-t border-outline/20">
-                {lesson.transcript}
-              </div>
+            {lesson.transcript_segments?.length > 0 ? (
+              /* Bản chép đồng bộ thời gian (click dòng để tua, dòng đang phát tự highlight) */
+              <SyncedVideoTranscript
+                videoUrl={lesson.content_url}
+                segments={lesson.transcript_segments}
+                title={lesson.title}
+              />
+            ) : (
+              <>
+                <div className="aspect-video bg-black">
+                  {embed
+                    ? <iframe src={embed} title={lesson.title} className="w-full h-full" allowFullScreen />
+                    : <video src={lesson.content_url} controls className="w-full h-full" />}
+                </div>
+                {lesson.transcript && (
+                  <div className="p-5 text-sm text-on-surface whitespace-pre-wrap leading-relaxed border-t border-outline/20">
+                    {lesson.transcript}
+                  </div>
+                )}
+              </>
             )}
           </div>
         )}

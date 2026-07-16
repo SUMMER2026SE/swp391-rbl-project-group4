@@ -51,6 +51,7 @@ export default function Profile() {
     setAlert({ type: '', msg: '' });
     try {
       await api.put('/users/profile', form);
+      await refreshUser(); // để header đổi tên ngay, không cần reload
       setAlert({ type: 'success', msg: t('success.profile_saved') });
     } catch (err) {
       setAlert({ type: 'error', msg: err.message });

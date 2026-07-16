@@ -462,9 +462,9 @@ exports.getLesson = async (req, res) => {
   try {
     const { data, error } = await supabaseAdmin.from('lessons').select('*').eq('id', req.params.id).single();
     if (error || !data) return res.status(404).json({ error: 'Không tìm thấy bài học.' });
-    // View compat không có description — lấy thêm từ bảng gốc (như price của course).
-    const { data: extra } = await contentDb.from('lessons').select('description').eq('id', req.params.id).single();
-    res.json({ ...data, description: extra?.description ?? null });
+    // View compat không có description/transcript_segments — lấy thêm từ bảng gốc (như price của course).
+    const { data: extra } = await contentDb.from('lessons').select('description,transcript_segments').eq('id', req.params.id).single();
+    res.json({ ...data, description: extra?.description ?? null, transcript_segments: extra?.transcript_segments ?? null });
   } catch (err) { res.status(500).json({ error: 'Lỗi.' }); }
 };
 
@@ -494,14 +494,14 @@ exports.listLessons = async (req, res) => {
 };
 
 exports.createLesson = async (req, res) => {
-  const { course_id, unit_id, title, title_ja, lesson_type, content, grammar_notes, content_url, transcript, order_index, duration_minutes, question_count, is_published } = req.body;
+  const { course_id, unit_id, title, title_ja, lesson_type, content, grammar_notes, content_url, transcript, transcript_segments, order_index, duration_minutes, question_count, is_published } = req.body;
   if (!course_id || !unit_id || !title) return res.status(400).json({ error: 'Thiếu thông tin bắt buộc.' });
   try {
     if (await isTeacherCourse(course_id))
       return res.status(403).json({ error: TEACHER_COURSE_MSG });
     const contentDb = supabaseAdmin.schema('content_module');
     const { data, error } = await contentDb.from('lessons')
-      .insert({ course_id, unit_id: unit_id || null, title, title_ja, content_body: content, content_type: lesson_type || 'reading', grammar_notes, content_url, transcript, sort_order: order_index || 0, duration_minutes: duration_minutes || 0, question_count: question_count || 0, is_published: is_published ?? false })
+      .insert({ course_id, unit_id: unit_id || null, title, title_ja, content_body: content, content_type: lesson_type || 'reading', grammar_notes, content_url, transcript, transcript_segments: transcript_segments || null, sort_order: order_index || 0, duration_minutes: duration_minutes || 0, question_count: question_count || 0, is_published: is_published ?? false })
       .select().single();
     if (error) throw error;
     res.status(201).json(data);
@@ -513,7 +513,7 @@ exports.createLesson = async (req, res) => {
 
 exports.updateLesson = async (req, res) => {
   const FIELD_MAP = { content: 'content_body', lesson_type: 'content_type', order_index: 'sort_order', module_id: 'unit_id' };
-  const allowed = ['title','title_ja','content','order_index','is_published','course_id','module_id','unit_id','lesson_type','duration_minutes','question_count','grammar_notes','content_url','transcript','description'];
+  const allowed = ['title','title_ja','content','order_index','is_published','course_id','module_id','unit_id','lesson_type','duration_minutes','question_count','grammar_notes','content_url','transcript','transcript_segments','description'];
   const raw = Object.fromEntries(Object.entries(req.body).filter(([k]) => allowed.includes(k)));
   const updates = Object.fromEntries(Object.entries(raw).map(([k, v]) => [FIELD_MAP[k] || k, v]));
 
@@ -1379,6 +1379,27 @@ exports.uploadLessonVideo = async (req, res) => {
     const { data: { publicUrl } } = supabaseAdmin.storage.from('lesson-videos').getPublicUrl(filename);
     res.json({ url: publicUrl });
   } catch (err) { res.status(500).json({ error: 'Không thể tải file video lên.' }); }
+};
+
+// Chép lời tự động (Whisper + dịch) cho lesson video đã upload. Trả về bản nháp
+// segments cho editor duyệt — KHÔNG ghi DB (giáo viên xem lại rồi lưu qua PUT /lessons/:id).
+exports.transcribeLessonVideo = async (req, res) => {
+  const { runVideoTranscription, isYouTubeUrl } = require('../services/lessonTranscribe');
+  try {
+    if (await isTeacherCourse(await courseIdOfLesson(req.params.id)))
+      return res.status(403).json({ error: TEACHER_COURSE_MSG });
+    const contentDb = supabaseAdmin.schema('content_module');
+    const { data: lesson } = await contentDb.from('lessons').select('content_url').eq('id', req.params.id).single();
+    if (!lesson) return res.status(404).json({ error: 'Không tìm thấy bài học.' });
+    if (!lesson.content_url) return res.status(400).json({ error: 'Bài học chưa có video.' });
+    if (isYouTubeUrl(lesson.content_url))
+      return res.status(400).json({ error: 'Chép lời tự động chỉ hỗ trợ video đã tải lên, không hỗ trợ link YouTube.' });
+    const { segments, transcript } = await runVideoTranscription(lesson.content_url);
+    res.json({ segments, transcript, count: segments.length });
+  } catch (err) {
+    console.error('transcribeLessonVideo error:', err);
+    res.status(500).json({ error: 'Không thể chép lời tự động: ' + err.message });
+  }
 };
 
 // ── Listening Passages ────────────────────────────────────────────────────────
