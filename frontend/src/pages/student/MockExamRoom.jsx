@@ -4,13 +4,14 @@ import Button from '../../components/ui/Button';
 import Alert from '../../components/ui/Alert';
 import Modal from '../../components/ui/Modal';
 import AudioPlayer from '../../components/mockexam/AudioPlayer';
-import { sectionDisplay, MONDAI_INSTRUCTION_VI, formatDuration } from '../../lib/mockExamConstants';
+import { sectionDisplay, mondaiInstruction, formatDuration } from '../../lib/mockExamConstants';
 import { getMockCurrent, saveMockAnswers, submitMockSection } from '../../lib/mockExamApi';
 
 export default function MockExamRoom() {
   const { attemptId } = useParams();
   const navigate = useNavigate();
   const [section, setSection] = useState(null);
+  const [level, setLevel] = useState(null);          // cấp JLPT — chọn bản instruction kana/kanji
   const [answers, setAnswers] = useState({});        // { question_id: selected_index }
   const [remaining, setRemaining] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -29,6 +30,7 @@ export default function MockExamRoom() {
       .then(r => {
         if (r.finished) { navigate(`/mock-exams/attempt/${attemptId}/result`, { replace: true }); return; }
         setSection(r.section);
+        setLevel(r.level);
         setAnswers(r.saved_answers || {});
         setRemaining(r.remaining_seconds);
       })
@@ -142,12 +144,12 @@ export default function MockExamRoom() {
             const hasPassage = !!group.passage_text || !!group.image_url;
             return (
               <div key={group.id} className="scroll-mt-20" id={`group-${group.id}`}>
-                {group.instruction_text && (
+                {mondaiInstruction(level, group.mondai_type).ja && (
                   <div className="bg-charcoal/5 rounded-lg px-3 py-2 text-sm mb-3">
                     <span className="font-semibold text-charcoal">問題{group.mondai_number} · </span>
-                    <span className="text-on-muted">{group.instruction_text}</span>
-                    {MONDAI_INSTRUCTION_VI[group.mondai_type] && (
-                      <p className="text-xs text-on-muted italic mt-1">{MONDAI_INSTRUCTION_VI[group.mondai_type]}</p>
+                    <span className="text-on-muted">{mondaiInstruction(level, group.mondai_type).ja}</span>
+                    {mondaiInstruction(level, group.mondai_type).vi && (
+                      <p className="text-xs text-on-muted italic mt-1">{mondaiInstruction(level, group.mondai_type).vi}</p>
                     )}
                   </div>
                 )}

@@ -6,7 +6,7 @@ import Alert from '../../components/ui/Alert';
 import Modal from '../../components/ui/Modal';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
 import QuestionCard from '../../components/admin/mock/QuestionCard';
-import { mondaiJa, mondaiVi, SECTION_LABEL, blueprintCount } from '../../lib/mockExamConstants';
+import { mondaiJa, mondaiVi, mondaiInstruction, SECTION_LABEL, blueprintCount } from '../../lib/mockExamConstants';
 import {
   adminGetExam, adminPublishExam, adminUpdateExam, adminUpdateSection,
   adminUpdateGroup,
@@ -75,7 +75,6 @@ export default function AdminMockExamEditor() {
   const [groupDraft, setGroupDraft] = useState(null);
   useEffect(() => {
     if (selectedGroup) setGroupDraft({
-      instruction_text: selectedGroup.instruction_text || '',
       passage_text: selectedGroup.passage_text || '',
       image_url: selectedGroup.image_url || '',
       audio_url: selectedGroup.audio_url || '',
@@ -196,12 +195,12 @@ export default function AdminMockExamEditor() {
                     <h2 className="font-display text-lg font-bold text-charcoal">問題{selectedGroup.mondai_number} · {mondaiJa(selectedGroup.mondai_type)}</h2>
                     <p className="text-sm text-on-muted">{mondaiVi(selectedGroup.mondai_type)} · Cột điểm: {selectedGroup.score_category}</p>
                   </div>
+                  {/* Câu chỉ dẫn chuẩn JLPT — hằng số theo cấp độ + loại mondai, không sửa được */}
+                  <div className="bg-surface-low border border-outline/30 rounded-lg px-3 py-2 text-sm">
+                    <p className="text-charcoal">{mondaiInstruction(exam.level, selectedGroup.mondai_type).ja}</p>
+                    <p className="text-xs text-on-muted italic mt-0.5">{mondaiInstruction(exam.level, selectedGroup.mondai_type).vi}</p>
+                  </div>
                   {groupDraft && (<>
-                    <textarea value={groupDraft.instruction_text} disabled={published}
-                      onChange={e => setGroupDraft(d => ({ ...d, instruction_text: e.target.value }))}
-                      placeholder="Chỉ dẫn chung của mondai (tiếng Nhật)"
-                      className="w-full px-3 py-2 border border-outline rounded-lg text-sm resize-y min-h-[48px] outline-none focus:border-tsubaki-red" />
-
                     {/* Passage cho dạng đọc hiểu */}
                     <textarea value={groupDraft.passage_text} disabled={published}
                       onChange={e => setGroupDraft(d => ({ ...d, passage_text: e.target.value }))}

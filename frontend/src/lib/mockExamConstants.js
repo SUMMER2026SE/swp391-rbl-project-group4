@@ -62,6 +62,62 @@ export const sectionDisplay = (section) => {
   return vi ? `${section.title} · ${vi}` : section.title;
 };
 
+// Câu chỉ dẫn chuẩn tiếng Nhật từng loại mondai — hằng số tĩnh, KHÔNG lưu DB.
+// Bản kana (dùng cho N3・N4・N5, mirror MONDAI_TYPES[type].instruction ở backend/utils/jlptMock.js).
+export const MONDAI_INSTRUCTION_JA = {
+  kanji_reading:        '＿＿＿のことばの読み方として最もよいものを、１・２・３・４から一つえらびなさい。',
+  orthography:          '＿＿＿のことばを漢字（または正しい表記）で書くとき、最もよいものを１・２・３・４から一つえらびなさい。',
+  word_formation:       '（　　）に入れるのに最もよいものを、１・２・３・４から一つ選びなさい。',
+  context:              '（　　）に入れるのに最もよいものを、１・２・３・４から一つえらびなさい。',
+  paraphrase:           '＿＿＿のことばに意味が最も近いものを、１・２・３・４から一つえらびなさい。',
+  usage:                'つぎのことばの使い方として最もよいものを、１・２・３・４から一つえらびなさい。',
+  grammar_form:         '（　　）に入れるのに最もよいものを、１・２・３・４から一つえらびなさい。',
+  sentence_assembly:    'つぎの文の　＿★＿　に入る最もよいものを、１・２・３・４から一つえらびなさい。',
+  text_grammar:         'つぎの文章を読んで、文章全体の内容を考えて、（　　）に入る最もよいものを、１・２・３・４から一つえらびなさい。',
+  reading_short:        'つぎの文章を読んで、質問に答えなさい。答えは、１・２・３・４から最もよいものを一つえらびなさい。',
+  reading_mid:          'つぎの文章を読んで、質問に答えなさい。答えは、１・２・３・４から最もよいものを一つえらびなさい。',
+  reading_long:         'つぎの文章を読んで、質問に答えなさい。答えは、１・２・３・４から最もよいものを一つえらびなさい。',
+  integrated_reading:   'つぎのＡとＢの文章を読んで、質問に答えなさい。答えは、１・２・３・４から最もよいものを一つえらびなさい。',
+  thematic_reading:     'つぎの文章を読んで、質問に答えなさい。答えは、１・２・３・４から最もよいものを一つえらびなさい。',
+  info_retrieval:       'つぎのページを見て、下の質問に答えなさい。答えは、１・２・３・４から最もよいものを一つえらびなさい。',
+  task_comprehension:   'まず質問を聞いてください。それから話を聞いて、問題用紙の１から４の中から、最もよいものを一つえらんでください。',
+  point_comprehension:  'まず質問を聞いてください。そのあと、問題用紙のせんたくしを読んでください。それから話を聞いて、１から４の中から、最もよいものを一つえらんでください。',
+  summary_comprehension:'問題用紙に何もいんさつされていません。この問題は、ぜんたいとしてどんなないようかを聞く問題です。話の前に質問はありません。',
+  utterance_expression: 'えを見ながら質問を聞いてください。やじるし（→）の人は何と言いますか。１から３の中から、最もよいものを一つえらんでください。',
+  quick_response:       'ぶんを聞いて、１から３の中から、最もよいものを一つえらんでください。',
+  integrated_listening: '長めの話を聞いて、質問に答えてください。１から４の中から、最もよいものを一つえらんでください。',
+};
+
+// Bản kanji cho N1・N2 (đề thật cấp cao dùng 言葉/選びなさい/次の…). Chỉ ghi các dạng có ở N1/N2.
+const INSTRUCTION_JA_KANJI = {
+  kanji_reading:        '＿＿＿の言葉の読み方として最もよいものを、１・２・３・４から一つ選びなさい。',
+  orthography:          '＿＿＿の言葉を漢字で書くとき、最もよいものを１・２・３・４から一つ選びなさい。',
+  word_formation:       '（　　）に入れるのに最もよいものを、１・２・３・４から一つ選びなさい。',
+  context:              '（　　）に入れるのに最もよいものを、１・２・３・４から一つ選びなさい。',
+  paraphrase:           '＿＿＿の言葉に意味が最も近いものを、１・２・３・４から一つ選びなさい。',
+  usage:                '次の言葉の使い方として最もよいものを、１・２・３・４から一つ選びなさい。',
+  grammar_form:         '次の文の（　　）に入れるのに最もよいものを、１・２・３・４から一つ選びなさい。',
+  sentence_assembly:    '次の文の　＿★＿　に入る最もよいものを、１・２・３・４から一つ選びなさい。',
+  text_grammar:         '次の文章を読んで、文章全体の内容を考えて、（　　）に入る最もよいものを、１・２・３・４から一つ選びなさい。',
+  reading_short:        '次の文章を読んで、後の問いに対する答えとして最もよいものを、１・２・３・４から一つ選びなさい。',
+  reading_mid:          '次の文章を読んで、後の問いに対する答えとして最もよいものを、１・２・３・４から一つ選びなさい。',
+  reading_long:         '次の文章を読んで、後の問いに対する答えとして最もよいものを、１・２・３・４から一つ選びなさい。',
+  integrated_reading:   '次のＡとＢの文章を読んで、後の問いに対する答えとして最もよいものを、１・２・３・４から一つ選びなさい。',
+  thematic_reading:     '次の文章を読んで、後の問いに対する答えとして最もよいものを、１・２・３・４から一つ選びなさい。',
+  info_retrieval:       '次のページを見て、下の問いに対する答えとして最もよいものを、１・２・３・４から一つ選びなさい。',
+  task_comprehension:   'まず質問を聞いてください。それから話を聞いて、問題用紙の１から４の中から、最もよいものを一つ選んでください。',
+  point_comprehension:  'まず質問を聞いてください。そのあと、問題用紙の選択肢を読んでください。それから話を聞いて、１から４の中から、最もよいものを一つ選んでください。',
+  summary_comprehension:'問題用紙に何も印刷されていません。この問題は、全体としてどんな内容かを聞く問題です。話の前に質問はありません。',
+  quick_response:       '文を聞いて、１から３の中から、最もよいものを一つ選んでください。',
+  integrated_listening: '長めの話を聞いて、質問に答えてください。１から４の中から、最もよいものを一つ選んでください。',
+};
+
+// Câu chỉ dẫn hiển thị theo cấp độ: N1/N2 dạng kanji, N3–N5 dạng kana.
+export const mondaiInstruction = (level, mondaiType) => ({
+  ja: ((level === 'N1' || level === 'N2') && INSTRUCTION_JA_KANJI[mondaiType]) || MONDAI_INSTRUCTION_JA[mondaiType] || '',
+  vi: MONDAI_INSTRUCTION_VI[mondaiType] || '',
+});
+
 // Bản dịch tiếng Việt của câu chỉ dẫn chuẩn từng loại mondai
 // (mirror MONDAI_TYPES[type].instruction ở backend/utils/jlptMock.js)
 export const MONDAI_INSTRUCTION_VI = {

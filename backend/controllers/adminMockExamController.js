@@ -134,13 +134,13 @@ exports.createExam = async (req, res) => {
         .insert({ exam_id: exam.id, position: si + 1, section_type: s.section_type, title: s.title, time_limit_minutes: s.time_limit_minutes })
         .select('id').single();
       if (sErr) throw sErr;
+      // Câu chỉ dẫn (instruction) KHÔNG lưu DB — là hằng số chuẩn JLPT, FE render từ mockExamConstants.
       const groupRows = s.groups.map((g, gi) => ({
         section_id:       section.id,
         position:         gi + 1,
         mondai_number:    gi + 1,
         mondai_type:      g.mondai_type,
         score_category:   g.score_category,
-        instruction_text: MONDAI_TYPES[g.mondai_type]?.instruction || null,
       }));
       const { error: gErr } = await supabaseAdmin.from('mock_question_groups').insert(groupRows);
       if (gErr) throw gErr;
@@ -388,13 +388,13 @@ exports.updateGroup = async (req, res) => {
   try {
     const { group, examId } = await groupWithExamId(req.params.id);
     const { data: exam } = await supabaseAdmin.from('mock_exams').select('id, is_published').eq('id', examId).single();
-    // Đề đã publish: chỉ cho sửa typo phần chỉ dẫn/transcript (không đổi nội dung thi)
+    // Đề đã publish: chỉ cho sửa typo transcript (không đổi nội dung thi)
     const allowed = exam?.is_published
-      ? ['instruction_text', 'audio_transcript']
-      : ['instruction_text', 'passage_text', 'image_url', 'audio_url', 'audio_transcript'];
+      ? ['audio_transcript']
+      : ['passage_text', 'image_url', 'audio_url', 'audio_transcript'];
     const updates = Object.fromEntries(Object.entries(req.body).filter(([k]) => allowed.includes(k)));
     if (!Object.keys(updates).length)
-      return res.status(400).json({ error: exam?.is_published ? 'Đề đã xuất bản: chỉ được sửa chỉ dẫn/transcript.' : 'Không có trường nào để cập nhật.' });
+      return res.status(400).json({ error: exam?.is_published ? 'Đề đã xuất bản: chỉ được sửa transcript.' : 'Không có trường nào để cập nhật.' });
 
     const { data, error } = await supabaseAdmin.from('mock_question_groups')
       .update(updates).eq('id', group.id).select().single();
