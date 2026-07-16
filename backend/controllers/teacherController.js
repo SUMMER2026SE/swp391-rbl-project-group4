@@ -455,14 +455,14 @@ exports.getLesson = async (req, res) => {
     const { data: lesson } = await supabaseAdmin.from('lessons').select('*').eq('id', req.params.id).single();
     if (!lesson) return res.status(404).json({ error: 'Không tìm thấy mục.' });
     if (!(await ownsCourse(lesson.course_id, req.user.id))) return res.status(403).json({ error: 'Không có quyền.' });
-    // View compat không có description — lấy thêm từ bảng gốc (như price của course).
-    const { data: extra } = await contentDb.from('lessons').select('description').eq('id', req.params.id).single();
-    res.json({ ...lesson, description: extra?.description ?? null });
+    // View compat không có description/transcript_segments — lấy thêm từ bảng gốc (như price của course).
+    const { data: extra } = await contentDb.from('lessons').select('description,transcript_segments').eq('id', req.params.id).single();
+    res.json({ ...lesson, description: extra?.description ?? null, transcript_segments: extra?.transcript_segments ?? null });
   } catch (err) { res.status(500).json({ error: 'Lỗi.' }); }
 };
 
 exports.createLesson = async (req, res) => {
-  const { course_id, unit_id, title, title_ja, lesson_type, content, content_url, transcript, grammar_notes, order_index, duration_minutes, question_count } = req.body;
+  const { course_id, unit_id, title, title_ja, lesson_type, content, content_url, transcript, transcript_segments, grammar_notes, order_index, duration_minutes, question_count } = req.body;
   if (!course_id || !unit_id || !title) return res.status(400).json({ error: 'Thiếu thông tin bắt buộc.' });
   if (!(await ownsCourse(course_id, req.user.id))) return res.status(403).json({ error: 'Không có quyền.' });
   try {
@@ -470,7 +470,7 @@ exports.createLesson = async (req, res) => {
       .insert({
         course_id, unit_id, title, title_ja: title_ja || null,
         content_body: content || null, content_type: lesson_type || 'reading',
-        content_url: content_url || null, transcript: transcript || null, grammar_notes: grammar_notes || null,
+        content_url: content_url || null, transcript: transcript || null, transcript_segments: transcript_segments || null, grammar_notes: grammar_notes || null,
         sort_order: order_index || 0, duration_minutes: duration_minutes || 0, question_count: question_count || 0,
         is_published: true,
       })
@@ -485,7 +485,7 @@ exports.updateLesson = async (req, res) => {
     const { data: lesson } = await contentDb.from('lessons').select('course_id').eq('id', req.params.id).single();
     if (!lesson || !(await ownsCourse(lesson.course_id, req.user.id))) return res.status(403).json({ error: 'Không có quyền.' });
     const FIELD_MAP = { content: 'content_body', lesson_type: 'content_type', order_index: 'sort_order', module_id: 'unit_id' };
-    const allowed = ['title', 'title_ja', 'content', 'order_index', 'is_published', 'unit_id', 'lesson_type', 'duration_minutes', 'question_count', 'grammar_notes', 'content_url', 'transcript', 'description'];
+    const allowed = ['title', 'title_ja', 'content', 'order_index', 'is_published', 'unit_id', 'lesson_type', 'duration_minutes', 'question_count', 'grammar_notes', 'content_url', 'transcript', 'transcript_segments', 'description'];
     const raw = Object.fromEntries(Object.entries(req.body).filter(([k]) => allowed.includes(k)));
     const updates = Object.fromEntries(Object.entries(raw).map(([k, v]) => [FIELD_MAP[k] || k, v]));
     updates.updated_at = new Date().toISOString();
@@ -493,6 +493,23 @@ exports.updateLesson = async (req, res) => {
     if (error) throw error;
     res.json(data);
   } catch (err) { res.status(500).json({ error: 'Không thể cập nhật.' }); }
+};
+
+// Chép lời tự động cho lesson video (cả upload lẫn YouTube qua yt-dlp) — chỉ trên khóa
+// của chính mình. Trả về bản nháp segments cho editor duyệt, KHÔNG ghi DB (lưu qua
+// PUT /lessons/:id sau khi xem lại).
+exports.transcribeLessonVideo = async (req, res) => {
+  const { runVideoTranscription } = require('../services/lessonTranscribe');
+  try {
+    const { data: lesson } = await contentDb.from('lessons').select('course_id, content_url').eq('id', req.params.id).single();
+    if (!lesson || !(await ownsCourse(lesson.course_id, req.user.id))) return res.status(403).json({ error: 'Không có quyền.' });
+    if (!lesson.content_url) return res.status(400).json({ error: 'Mục chưa có video.' });
+    const { segments, transcript } = await runVideoTranscription(lesson.content_url);
+    res.json({ segments, transcript, count: segments.length });
+  } catch (err) {
+    console.error('transcribeLessonVideo (teacher) error:', err);
+    res.status(500).json({ error: 'Không thể chép lời tự động: ' + err.message });
+  }
 };
 
 exports.deleteLesson = async (req, res) => {

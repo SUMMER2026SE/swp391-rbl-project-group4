@@ -12,7 +12,7 @@ import api from '../../lib/api';
 const JLPT_LEVELS = ['N5', 'N4', 'N3', 'N2', 'N1'];
 
 export default function Profile() {
-  const { user, isAdmin, isTeacher } = useAuth();
+  const { user, isAdmin, isTeacher, refreshUser } = useAuth();
   // Mỗi role thấy layout riêng của mình khi vào hồ sơ
   const Layout = isAdmin() ? AdminLayout : isTeacher() ? TeacherLayout : StudentLayout;
   const isStudent = !isAdmin() && !isTeacher();
@@ -51,6 +51,7 @@ export default function Profile() {
     setAlert({ type: '', msg: '' });
     try {
       await api.put('/users/profile', form);
+      await refreshUser(); // để header đổi tên ngay, không cần reload
       setAlert({ type: 'success', msg: t('success.profile_saved') });
     } catch (err) {
       setAlert({ type: 'error', msg: err.message });
@@ -72,9 +73,13 @@ export default function Profile() {
     try {
       const fd = new FormData();
       fd.append('avatar', avatarFile);
-      await api.post('/users/avatar', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+      const { data } = await api.post('/users/avatar', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+      // Cập nhật avatar cục bộ + làm mới user trong AuthContext để header đổi ảnh ngay
+      if (data?.avatar_url) setUserData(prev => ({ ...prev, avatar_url: data.avatar_url }));
+      await refreshUser();
       setAlert({ type: 'success', msg: t('success.avatar_saved') });
       setAvatarFile(null);
+      setAvatarPreview(null);
     } catch (err) {
       setAlert({ type: 'error', msg: err.message });
     } finally {

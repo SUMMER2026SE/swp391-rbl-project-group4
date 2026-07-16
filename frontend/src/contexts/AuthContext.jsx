@@ -112,11 +112,21 @@ export function AuthProvider({ children }) {
     setUser(null);
   };
 
+  // Sync server-side user_metadata changes (full_name, avatar_url) into the app.
+  // refreshSession mints a new JWT carrying the updated metadata and replaces the
+  // persisted session, so a later auth event cannot revert us to stale data —
+  // getUser() would only patch local state and leave the stored session stale.
+  const refreshUser = async () => {
+    const { data: { user: fresh } } = await supabase.auth.refreshSession();
+    if (fresh) setUser(fresh);
+    return fresh;
+  };
+
   const isAdmin   = () => user?.user_metadata?.role === 'admin';
   const isTeacher = () => user?.user_metadata?.role === 'teacher';
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, verifyOtp, resendOtp, loginWithGoogle, forgotPassword, resetPasswordOtp, logout, isAdmin, isTeacher }}>
+    <AuthContext.Provider value={{ user, loading, login, register, verifyOtp, resendOtp, loginWithGoogle, forgotPassword, resetPasswordOtp, logout, refreshUser, isAdmin, isTeacher }}>
       {children}
     </AuthContext.Provider>
   );
