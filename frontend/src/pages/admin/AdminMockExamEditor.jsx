@@ -25,7 +25,6 @@ export default function AdminMockExamEditor() {
   const [notice, setNotice] = useState('');
   const [warning, setWarning] = useState('');
   const [selectedGroupId, setSelectedGroupId] = useState(null);
-  const [saving, setSaving] = useState(false);
 
   const [showAi, setShowAi]   = useState(false);
   const [showImport, setShowImport] = useState(false);
@@ -60,6 +59,9 @@ export default function AdminMockExamEditor() {
   const handlePublish = async () => {
     setError(''); setNotice(''); setWarning('');
     try {
+      // Flush draft passage chưa lưu (blur chưa kịp chạy khi bấm thẳng nút Xuất bản)
+      if (!published && groupDraftDirty)
+        await adminUpdateGroup(selectedGroupId, { passage_text: groupDraft.passage_text });
       const r = await adminPublishExam(id, !published);
       setNotice(published ? 'Đã gỡ xuất bản.' : 'Đã xuất bản đề thi.');
       // Publish trả warnings[] (lệch số câu chuẩn); unpublish trả warning (số lượt đã làm)
@@ -71,28 +73,47 @@ export default function AdminMockExamEditor() {
     }
   };
 
-  // ── Group meta (passage/ảnh) — audio/transcript phần nghe nằm ở từng câu ──
+  // ── Group meta (passage/ảnh) — autosave onBlur, không có nút Lưu riêng ──
   const [groupDraft, setGroupDraft] = useState(null);
+  const [groupSaveState, setGroupSaveState] = useState(''); // '' | 'saving' | 'saved'
   useEffect(() => {
-    if (selectedGroup) setGroupDraft({
-      passage_text: selectedGroup.passage_text || '',
-      image_url: selectedGroup.image_url || '',
-    });
+    if (selectedGroup) {
+      setGroupDraft({
+        passage_text: selectedGroup.passage_text || '',
+        image_url: selectedGroup.image_url || '',
+      });
+      setGroupSaveState('');
+    }
   }, [selectedGroupId, exam]);
 
-  const saveGroupMeta = () => run(
-    () => adminUpdateGroup(selectedGroupId, groupDraft),
-    'Đã lưu thông tin mondai.'
-  );
+  // Chỉ passage có thể dirty (ảnh lưu ngay sau upload)
+  const groupDraftDirty = !!(selectedGroup && groupDraft
+    && groupDraft.passage_text !== (selectedGroup.passage_text || ''));
+
+  // Lưu 1 phần group + cập nhật exam state tại chỗ (không load() lại để tránh nháy trang)
+  const saveGroupMeta = async (patch) => {
+    setGroupSaveState('saving'); setError('');
+    try {
+      await adminUpdateGroup(selectedGroupId, patch);
+      setExam(x => ({
+        ...x,
+        sections: x.sections.map(s => ({
+          ...s,
+          groups: s.groups.map(g => (g.id === selectedGroupId ? { ...g, ...patch } : g)),
+        })),
+      }));
+      setGroupSaveState('saved');
+    } catch (e) { setGroupSaveState(''); setError(e.message); }
+  };
 
   const uploadGroupImage = async (file) => {
     if (!file) return;
-    setSaving(true); setError('');
+    setGroupSaveState('saving'); setError('');
     try {
       const { url } = await adminUploadMedia('image', file);
       setGroupDraft(d => ({ ...d, image_url: url }));
-    } catch (e) { setError(e.message); }
-    finally { setSaving(false); }
+      await saveGroupMeta({ image_url: url });
+    } catch (e) { setGroupSaveState(''); setError(e.message); }
   };
 
   if (loading) return <AdminLayout title="Soạn đề"><div className="flex justify-center py-20"><span className="material-symbols-outlined animate-spin text-tsubaki-red text-4xl">progress_activity</span></div></AdminLayout>;
@@ -176,9 +197,13 @@ export default function AdminMockExamEditor() {
             ) : (
               <div className="space-y-4">
                 <div className="bg-white border border-outline/40 rounded-2xl p-5 space-y-3">
-                  <div>
-                    <h2 className="font-display text-lg font-bold text-charcoal">問題{selectedGroup.mondai_number} · {mondaiJa(selectedGroup.mondai_type)}</h2>
-                    <p className="text-sm text-on-muted">{mondaiVi(selectedGroup.mondai_type)} · Cột điểm: {selectedGroup.score_category}</p>
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <h2 className="font-display text-lg font-bold text-charcoal">問題{selectedGroup.mondai_number} · {mondaiJa(selectedGroup.mondai_type)}</h2>
+                      <p className="text-sm text-on-muted">{mondaiVi(selectedGroup.mondai_type)} · Cột điểm: {selectedGroup.score_category}</p>
+                    </div>
+                    {groupSaveState === 'saving' && <span className="shrink-0 text-xs text-on-muted flex items-center gap-1"><span className="material-symbols-outlined text-sm animate-spin">progress_activity</span>Đang lưu…</span>}
+                    {groupSaveState === 'saved' && <span className="shrink-0 text-xs text-green-600 flex items-center gap-1"><span className="material-symbols-outlined text-sm">check</span>Đã lưu</span>}
                   </div>
                   {/* Câu chỉ dẫn chuẩn JLPT — hằng số theo cấp độ + loại mondai, không sửa được */}
                   <div className="bg-surface-low border border-outline/30 rounded-lg px-3 py-2 text-sm">
@@ -189,11 +214,12 @@ export default function AdminMockExamEditor() {
                   {groupDraft && hasPassage && (<>
                     <textarea value={groupDraft.passage_text} disabled={published}
                       onChange={e => setGroupDraft(d => ({ ...d, passage_text: e.target.value }))}
-                      placeholder="Đoạn văn đọc hiểu — dùng chung cho các câu trong mondai"
+                      onBlur={() => { if (groupDraftDirty) saveGroupMeta({ passage_text: groupDraft.passage_text }); }}
+                      placeholder="Đoạn văn đọc hiểu — dùng chung cho các câu trong mondai (tự lưu khi rời ô)"
                       className="w-full px-3 py-2 border border-outline rounded-lg text-sm resize-y min-h-[60px] outline-none focus:border-tsubaki-red" />
 
                     <div className="flex flex-wrap items-center gap-3 text-xs">
-                      {/* Ảnh */}
+                      {/* Ảnh — lưu ngay sau khi upload */}
                       <label className="cursor-pointer text-tsubaki-red font-semibold hover:underline flex items-center gap-1">
                         <span className="material-symbols-outlined text-base">image</span>
                         {groupDraft.image_url ? 'Đổi ảnh' : 'Tải ảnh minh họa (情報検索…)'}
@@ -201,10 +227,6 @@ export default function AdminMockExamEditor() {
                           onChange={e => uploadGroupImage(e.target.files[0])} />
                       </label>
                       {groupDraft.image_url && <img src={groupDraft.image_url} className="h-10 rounded border border-outline/40" alt="" />}
-                    </div>
-
-                    <div className="flex items-center justify-end">
-                      <Button size="sm" onClick={saveGroupMeta} loading={saving}>Lưu thông tin mondai</Button>
                     </div>
                   </>)}
                 </div>
