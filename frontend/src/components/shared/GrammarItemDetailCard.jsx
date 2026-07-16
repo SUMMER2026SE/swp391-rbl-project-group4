@@ -1,5 +1,17 @@
 import { useEffect, useState } from 'react';
 import FuriganaText from '../ui/FuriganaText';
+import FuriganaToggle from '../ui/FuriganaToggle';
+
+// Dữ liệu nhập từ Mazii đôi khi chứa <br/> (xuống dòng) và <s>...</s> (đánh dấu
+// phần biến cách tùy chọn) — chỉ cho qua 2 thẻ này, strip mọi thứ khác để tránh
+// XSS, rồi render bằng dangerouslySetInnerHTML thay vì hiện thẻ thô dạng text.
+function sanitizeStructureHtml(html) {
+  return html
+    .replace(/<script[\s\S]*?<\/script>/gi, '')
+    .replace(/<(?!\/?(?:br|s)\b)[^>]*>/gi, '')
+    .replace(/<(br|s)\b[^>]*>/gi, '<$1>');
+}
+const hasStructureTags = (t) => /<(br|s)\b/i.test(t || '');
 
 const LEVEL_COLORS = {
   N5: 'bg-emerald-100 text-emerald-700', N4: 'bg-sky-100 text-sky-700',
@@ -18,6 +30,7 @@ export default function GrammarItemDetailCard({ item, index, total, onPrev, onNe
   const [explanation, setExplanation] = useState(item.explanation || '');
   const [example, setExample]         = useState(item.example_sentence || '');
   const [saving, setSaving]           = useState(false);
+  const [furigana, setFurigana]       = useState(false);
 
   useEffect(() => {
     setTitle(item.title || '');
@@ -33,7 +46,7 @@ export default function GrammarItemDetailCard({ item, index, total, onPrev, onNe
   };
 
   return (
-    <div className="glass-card rounded-3xl overflow-hidden max-w-2xl">
+    <div className="glass-card rounded-3xl overflow-hidden w-full max-w-3xl mx-auto">
       <div className="h-1.5 bg-gradient-to-r from-tsubaki-red to-sumire-purple" />
 
       <div className="px-8 pt-8 pb-2">
@@ -59,7 +72,11 @@ export default function GrammarItemDetailCard({ item, index, total, onPrev, onNe
         ) : (
           <>
             <h1 className="text-3xl font-bold text-tsubaki-red leading-tight">{item.title}</h1>
-            {item.title_ja && <p className="text-on-muted mt-1">{item.title_ja}</p>}
+            {item.title_ja && (
+              hasStructureTags(item.title_ja)
+                ? <p className="text-on-muted mt-1 leading-relaxed" dangerouslySetInnerHTML={{ __html: sanitizeStructureHtml(item.title_ja) }} />
+                : <p className="text-on-muted mt-1">{item.title_ja}</p>
+            )}
           </>
         )}
 
@@ -86,7 +103,9 @@ export default function GrammarItemDetailCard({ item, index, total, onPrev, onNe
                   placeholder="Giải thích cấu trúc / cách dùng..." rows={3}
                   className="w-full text-charcoal leading-relaxed bg-transparent outline-none resize-none" />
               ) : item.explanation ? (
-                <p className="text-charcoal whitespace-pre-wrap leading-relaxed">{item.explanation}</p>
+                hasStructureTags(item.explanation)
+                  ? <p className="text-charcoal leading-relaxed" dangerouslySetInnerHTML={{ __html: sanitizeStructureHtml(item.explanation) }} />
+                  : <p className="text-charcoal whitespace-pre-wrap leading-relaxed">{item.explanation}</p>
               ) : (
                 <p className="text-on-muted">—</p>
               )}
@@ -94,7 +113,12 @@ export default function GrammarItemDetailCard({ item, index, total, onPrev, onNe
           </div>
 
           <div>
-            <p className="text-xs font-semibold text-on-muted uppercase tracking-wide mb-1">Ví dụ</p>
+            <div className="flex items-center justify-between mb-1">
+              <p className="text-xs font-semibold text-on-muted uppercase tracking-wide">Ví dụ</p>
+              {!editable && item.example_sentence && (
+                <FuriganaToggle active={furigana} onToggle={() => setFurigana(v => !v)} />
+              )}
+            </div>
             <div className="bg-surface-low rounded-xl px-4 py-3">
               {editable ? (
                 <textarea value={example} onChange={e => setExample(e.target.value)}
@@ -102,7 +126,7 @@ export default function GrammarItemDetailCard({ item, index, total, onPrev, onNe
                   placeholder="Câu ví dụ..." rows={2}
                   className="w-full text-charcoal italic bg-transparent outline-none resize-none" />
               ) : item.example_sentence ? (
-                <p className="text-charcoal italic">「<FuriganaText text={item.example_sentence} textClassName="italic" />」</p>
+                <p className="text-charcoal italic">「<FuriganaText text={item.example_sentence} enabled={furigana} textClassName="italic" />」</p>
               ) : (
                 <p className="text-on-muted">—</p>
               )}
