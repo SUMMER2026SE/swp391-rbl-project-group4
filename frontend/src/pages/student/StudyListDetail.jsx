@@ -7,6 +7,7 @@ import Input from '../../components/ui/Input';
 import FuriganaText from '../../components/ui/FuriganaText';
 import KanjiWritingPracticeModal from '../../components/kanji/KanjiWritingPracticeModal';
 import KanjiPdfPanel from '../../components/kanji/KanjiPdfPanel';
+import AddCardsToFlashcardModal from '../../components/reading/AddCardsToFlashcardModal';
 import ImportFileModal from '../../components/admin/ImportFileModal';
 import CollapsibleSection from '../../components/shared/CollapsibleSection';
 import GrammarItemCard, { NumberBadge, RemoveBadge } from '../../components/shared/GrammarItemCard';
@@ -235,6 +236,30 @@ export default function StudyListDetail() {
 
   const [showPdf, setShowPdf] = useState(false);
 
+  // ── Thêm vào Flashcard (giống mục Luyện đọc) ─────────────────────────────────
+  const [fcSelected, setFcSelected] = useState({});
+  const [fcModalOpen, setFcModalOpen] = useState(false);
+
+  useEffect(() => {
+    if (post?.list_type === 'vocabulary') {
+      setFcSelected(Object.fromEntries(post.items.map(it => [it.id, true])));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [post?.id, post?.items?.length]);
+
+  const allVocabSelected = !!post?.items?.length && post.items.every(it => fcSelected[it.id]);
+  const toggleAllVocabSelected = () => setFcSelected(
+    allVocabSelected ? {} : Object.fromEntries((post?.items || []).map(it => [it.id, true]))
+  );
+  const toggleVocabSelected = (id) => setFcSelected(s => ({ ...s, [id]: !s[id] }));
+  const vocabFlashcards = (post?.items || [])
+    .filter(it => fcSelected[it.id])
+    .map(it => ({
+      term: it.kanji || it.reading,
+      definition: it.kanji ? [it.reading, it.meaning_vi].filter(Boolean).join(' — ') : (it.meaning_vi || ''),
+    }))
+    .filter(c => c.term && c.definition);
+
   useEffect(() => {
     setLoading(true);
     loadPost().catch(e => setError(e.message)).finally(() => setLoading(false));
@@ -293,6 +318,17 @@ export default function StudyListDetail() {
                   </Button>
                 </div>
               )}
+              {type === 'vocabulary' && post.items.length > 0 && (
+                <div className="flex items-center gap-3 shrink-0">
+                  <button onClick={toggleAllVocabSelected} className="text-xs font-semibold text-on-muted hover:text-tsubaki-red transition-colors">
+                    {allVocabSelected ? 'Bỏ chọn tất cả' : 'Chọn tất cả'}
+                  </button>
+                  <Button size="sm" disabled={vocabFlashcards.length === 0} onClick={() => setFcModalOpen(true)}>
+                    <span className="material-symbols-outlined text-[18px]">style</span>
+                    Thêm vào Flashcard ({vocabFlashcards.length})
+                  </Button>
+                </div>
+              )}
             </div>
           </div>
 
@@ -327,6 +363,10 @@ export default function StudyListDetail() {
               saveItem={saveVocabItem}
               uploadImage={uploadVocabImage}
               onRemoveItem={canEdit ? handleItemRemoved : undefined}
+              renderItemExtra={(it) => (
+                <input type="checkbox" checked={!!fcSelected[it.id]}
+                  onChange={() => toggleVocabSelected(it.id)} className="w-4 h-4 accent-tsubaki-red cursor-pointer" />
+              )}
             />
           ) : (
             <>
@@ -390,6 +430,14 @@ export default function StudyListDetail() {
       {writingOpen && (
         <KanjiWritingPracticeModal items={post?.items || []} onClose={() => setWritingOpen(false)} />
       )}
+
+      {/* ── Modal thêm từ vựng đã chọn vào Flashcard ─────────────────────────── */}
+      <AddCardsToFlashcardModal
+        open={fcModalOpen}
+        onClose={() => setFcModalOpen(false)}
+        cards={vocabFlashcards}
+        suggestedTitle={`Từ vựng bài đăng "${post?.title || ''}"`.slice(0, 100)}
+      />
     </StudentLayout>
   );
 }
