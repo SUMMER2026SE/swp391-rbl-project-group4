@@ -1,8 +1,9 @@
 import Sidebar from './Sidebar';
+import MobileNav from './MobileNav';
 import { useAuth } from '../../contexts/AuthContext';
 
 const TEACHER_LINKS = [
-  { to: '/teacher',               icon: 'dashboard',     label: 'Dashboard' },
+  { to: '/teacher',               icon: 'dashboard',     label: 'Dashboard', exact: true },
   { to: '/teacher/courses',       icon: 'menu_book',     label: 'Khóa học' },
   // Ẩn khỏi sidebar theo yêu cầu (giữ nguyên route/API/component để bật lại sau)
   // { to: '/teacher/vocab',         icon: 'translate',     label: 'Từ vựng' },
@@ -39,10 +40,12 @@ export default function TeacherLayout({ children, title }) {
           <span className="text-sm text-on-muted hidden md:block">{name}</span>
         </header>
 
-        <main className="flex-1 p-6 md:p-8 max-w-7xl mx-auto w-full">
+        <main className="flex-1 p-6 md:p-8 max-w-7xl mx-auto w-full pb-24 md:pb-8">
           {children}
         </main>
       </div>
+
+      <MobileNav links={TEACHER_LINKS} />
     </div>
   );
 }

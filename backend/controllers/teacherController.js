@@ -27,11 +27,11 @@ exports.listMyVocab = async (req, res) => {
 };
 
 exports.createMyVocab = async (req, res) => {
-  const { kanji, reading, meaning_vi, meaning_ja, level, type, example_sentence } = req.body;
+  const { kanji, reading, meaning_vi, meaning_ja, level, type, example_sentence, han_viet } = req.body;
   if (!reading || !meaning_vi) return res.status(400).json({ error: 'Reading và nghĩa là bắt buộc.' });
   try {
     const { data, error } = await supabaseAdmin.from('vocabulary')
-      .insert({ kanji, reading, meaning_vi, meaning_ja, level, type, example_sentence, created_by: req.user.id, is_public: true })
+      .insert({ kanji, reading, meaning_vi, meaning_ja, level, type, example_sentence, han_viet: han_viet || null, created_by: req.user.id, is_public: true })
       .select().single();
     if (error) throw error;
     res.status(201).json(data);
@@ -42,7 +42,7 @@ exports.updateMyVocab = async (req, res) => {
   try {
     const { data: row } = await supabaseAdmin.from('vocabulary').select('created_by').eq('id', req.params.id).single();
     if (!row || row.created_by !== req.user.id) return res.status(403).json({ error: 'Không có quyền.' });
-    const allowed = ['kanji','reading','meaning_vi','meaning_ja','level','type','example_sentence'];
+    const allowed = ['kanji','reading','meaning_vi','meaning_ja','level','type','example_sentence','han_viet'];
     const updates = Object.fromEntries(Object.entries(req.body).filter(([k]) => allowed.includes(k)));
     const { data, error } = await supabaseAdmin.from('vocabulary').update(updates).eq('id', req.params.id).select().single();
     if (error) throw error;

@@ -3,6 +3,7 @@
 const { supabaseAdmin } = require('../config/supabase');
 const { checkCourseContentAccess } = require('../services/courseAccess');
 const { describeThreshold } = require('../services/passThreshold');
+const { markLessonCompleted } = require('../services/lessonProgress');
 
 // Bảng quiz nằm ở exam_module; tiến độ (lesson_progress) + units nằm ở content_module
 const examDb = supabaseAdmin.schema('exam_module');
@@ -61,7 +62,7 @@ exports.getOne = async (req, res) => {
             .in('id', grammarIds).order('created_at')
         : Promise.resolve({ data: [] }),
       examDb.from('quizzes')
-        .select('id,title,time_limit,type')
+        .select('id,title,time_limit,type,passing_type')
         .eq('lesson_id', id)
         .limit(1)
         .maybeSingle(),
@@ -116,19 +117,7 @@ exports.complete = async (req, res) => {
         });
     }
 
-    const { data: existing } = await contentDb.from('lesson_progress')
-      .select('id').eq('lesson_id', id).eq('student_id', studentId).maybeSingle();
-    if (existing) {
-      await contentDb.from('lesson_progress')
-        .update({ status: 'completed', progress_pct: 100, completed_at: new Date().toISOString() })
-        .eq('id', existing.id);
-    } else {
-      await contentDb.from('lesson_progress').insert({
-        student_id: studentId, lesson_id: id,
-        status: 'completed', progress_pct: 100, last_position: 0, time_spent_sec: 0,
-        completed_at: new Date().toISOString(),
-      });
-    }
+    await markLessonCompleted(studentId, id);
     res.json({ message: 'Đã lưu tiến độ.' });
   } catch (err) {
     console.error('Complete lesson error:', err);

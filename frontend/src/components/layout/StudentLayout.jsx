@@ -1,6 +1,7 @@
 ﻿import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import Sidebar from './Sidebar';
+import MobileNav from './MobileNav';
 import { useAuth } from '../../contexts/AuthContext';
 import { useLang } from '../../contexts/LangContext';
 import { useSubscription } from '../../hooks/useSubscription';
@@ -117,14 +118,7 @@ export default function StudentLayout({ children, title }) {
       </div>
 
       {/* Mobile bottom nav */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-lg border-t border-outline/30 h-16 flex justify-around items-center z-50">
-        {STUDENT_LINKS(t).map(link => (
-          <Link key={link.to} to={link.to} className="flex flex-col items-center gap-0.5 text-on-muted hover:text-tsubaki-red transition-colors">
-            <span className="material-symbols-outlined text-xl">{link.icon}</span>
-            <span className="text-[10px] font-bold">{link.label.split(' ')[0]}</span>
-          </Link>
-        ))}
-      </nav>
+      <MobileNav links={STUDENT_LINKS(t)} />
     </div>
   );
 }
