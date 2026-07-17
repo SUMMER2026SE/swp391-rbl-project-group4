@@ -1,10 +1,10 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Button from '../../ui/Button';
 import { adminUploadMedia, adminGenerateQuestionAudio } from '../../../lib/mockExamApi';
 
 // Card soạn/sửa 1 câu hỏi trắc nghiệm (3–4 lựa chọn). Dùng cho câu đã lưu (editable inline).
 // value: { id?, question_text, options[], correct_index, explanation, audio_url, image_url, audio_transcript }
-export default function QuestionCard({ index, value, onSave, onDelete, listening, saving, disabled }) {
+export default function QuestionCard({ index, value, onSave, onDelete, listening, saving, disabled, onRegister }) {
   const [q, setQ] = useState(value);
   const [dirty, setDirty] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -59,6 +59,12 @@ export default function QuestionCard({ index, value, onSave, onDelete, listening
   };
 
   const canSave = q.options.every(o => o.trim()) && q.options.length >= 3;
+
+  // Báo trạng thái + dữ liệu hiện tại lên parent — phục vụ nút "Lưu bản nháp" flush mọi câu đang sửa dở
+  useEffect(() => {
+    onRegister?.({ id: q.id, dirty, valid: canSave, question: q, markSaved: () => setDirty(false) });
+  });
+  useEffect(() => () => onRegister?.(null), []);
 
   return (
     <div className="border border-outline/40 rounded-xl p-4 space-y-3 bg-white">

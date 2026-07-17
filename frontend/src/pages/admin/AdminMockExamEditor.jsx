@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import AdminLayout from '../../components/layout/AdminLayout';
 import Button from '../../components/ui/Button';
@@ -56,12 +56,54 @@ export default function AdminMockExamEditor() {
     catch (e) { setError(e.data?.details ? `${e.message} — ${e.data.details.join(' · ')}` : e.message); }
   };
 
+  // ── Registry câu hỏi đang sửa dở (QuestionCard tự đăng ký qua onRegister) ──
+  const cardsRef = useRef(new Map());
+  const [dirtyCount, setDirtyCount] = useState(0);
+  const [savingDraft, setSavingDraft] = useState(false);
+  const registerCard = (key) => (api) => {
+    if (api) cardsRef.current.set(key, api); else cardsRef.current.delete(key);
+    const n = [...cardsRef.current.values()].filter(a => a.dirty).length;
+    setDirtyCount(prev => (prev === n ? prev : n));
+  };
+
+  // Lưu mọi thứ đang sửa dở: passage + các câu dirty hợp lệ. Trả về số câu không lưu được
+  // (câu mới chưa bấm Lưu hoặc câu thiếu nội dung lựa chọn).
+  const flushDrafts = async () => {
+    if (groupDraftDirty) await saveGroupMetaCore({ passage_text: groupDraft.passage_text });
+    let invalid = 0;
+    for (const api of cardsRef.current.values()) {
+      if (!api.dirty) continue;
+      if (api.id && api.valid) { await adminUpdateQuestion(api.id, api.question); api.markSaved(); }
+      else invalid++;
+    }
+    return invalid;
+  };
+
+  const handleSaveDraft = async () => {
+    setError(''); setNotice(''); setWarning(''); setSavingDraft(true);
+    try {
+      const invalid = await flushDrafts();
+      setNotice('Đã lưu bản nháp.');
+      if (invalid) setWarning(`Còn ${invalid} câu chưa lưu được (câu mới chưa bấm Lưu hoặc thiếu nội dung lựa chọn).`);
+    } catch (e) { setError(e.message); }
+    finally { setSavingDraft(false); }
+  };
+
+  // Chuyển mondai: tự lưu các câu dirty hợp lệ; nếu còn câu không lưu được → hỏi trước khi chuyển
+  const selectGroup = async (gid) => {
+    if (gid === selectedGroupId) return;
+    try {
+      const invalid = await flushDrafts();
+      if (invalid) { setConfirm({ type: 'switch-group', id: gid, count: invalid }); return; }
+    } catch (e) { setError(e.message); return; }
+    setSelectedGroupId(gid);
+  };
+
   const handlePublish = async () => {
     setError(''); setNotice(''); setWarning('');
     try {
-      // Flush draft passage chưa lưu (blur chưa kịp chạy khi bấm thẳng nút Xuất bản)
-      if (!published && groupDraftDirty)
-        await adminUpdateGroup(selectedGroupId, { passage_text: groupDraft.passage_text });
+      // Flush mọi thứ đang sửa dở (passage + câu hỏi) trước khi xuất bản
+      if (!published) await flushDrafts();
       const r = await adminPublishExam(id, !published);
       setNotice(published ? 'Đã gỡ xuất bản.' : 'Đã xuất bản đề thi.');
       // Publish trả warnings[] (lệch số câu chuẩn); unpublish trả warning (số lượt đã làm)
@@ -90,18 +132,30 @@ export default function AdminMockExamEditor() {
   const groupDraftDirty = !!(selectedGroup && groupDraft
     && groupDraft.passage_text !== (selectedGroup.passage_text || ''));
 
+  // Cảnh báo khi đóng tab/reload còn thay đổi chưa lưu
+  const anyDirty = dirtyCount > 0 || groupDraftDirty;
+  useEffect(() => {
+    if (!anyDirty) return;
+    const h = (e) => { e.preventDefault(); e.returnValue = ''; };
+    window.addEventListener('beforeunload', h);
+    return () => window.removeEventListener('beforeunload', h);
+  }, [anyDirty]);
+
   // Lưu 1 phần group + cập nhật exam state tại chỗ (không load() lại để tránh nháy trang)
+  const saveGroupMetaCore = async (patch) => {
+    await adminUpdateGroup(selectedGroupId, patch);
+    setExam(x => ({
+      ...x,
+      sections: x.sections.map(s => ({
+        ...s,
+        groups: s.groups.map(g => (g.id === selectedGroupId ? { ...g, ...patch } : g)),
+      })),
+    }));
+  };
   const saveGroupMeta = async (patch) => {
     setGroupSaveState('saving'); setError('');
     try {
-      await adminUpdateGroup(selectedGroupId, patch);
-      setExam(x => ({
-        ...x,
-        sections: x.sections.map(s => ({
-          ...s,
-          groups: s.groups.map(g => (g.id === selectedGroupId ? { ...g, ...patch } : g)),
-        })),
-      }));
+      await saveGroupMetaCore(patch);
       setGroupSaveState('saved');
     } catch (e) { setGroupSaveState(''); setError(e.message); }
   };
@@ -129,6 +183,15 @@ export default function AdminMockExamEditor() {
           </button>
           <div className="flex items-center gap-2">
             <span className="inline-flex px-2 py-0.5 rounded-md bg-sumire-purple/10 text-sumire-purple font-bold text-xs">{exam.level}</span>
+            <span className={`inline-flex px-2 py-0.5 rounded-md font-bold text-xs ${published ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
+              {published ? 'Đã xuất bản' : 'Bản nháp'}
+            </span>
+            {!published && (
+              <Button variant="secondary" loading={savingDraft} onClick={handleSaveDraft}>
+                <span className="material-symbols-outlined text-lg">save</span>
+                Lưu bản nháp{dirtyCount > 0 ? ` (${dirtyCount})` : ''}
+              </Button>
+            )}
             <Button variant={published ? 'secondary' : 'primary'} onClick={handlePublish}>
               <span className="material-symbols-outlined text-lg">{published ? 'visibility_off' : 'publish'}</span>
               {published ? 'Gỡ xuất bản' : 'Xuất bản'}
@@ -169,7 +232,7 @@ export default function AdminMockExamEditor() {
                     const std = blueprintCount(exam.level, section.position, g.mondai_type);
                     const off = std != null ? g.questions.length !== std : g.questions.length === 0;
                     return (
-                    <button key={g.id} onClick={() => setSelectedGroupId(g.id)}
+                    <button key={g.id} onClick={() => selectGroup(g.id)}
                       className={`w-full text-left px-2.5 py-2 rounded-lg text-xs transition-colors ${selectedGroupId === g.id ? 'bg-tsubaki-red/10 border border-tsubaki-red/40' : 'hover:bg-surface-low'}`}>
                       <div className="flex items-center justify-between gap-1">
                         <span className="font-bold text-charcoal">問題{g.mondai_number} · {mondaiJa(g.mondai_type)}</span>
@@ -257,11 +320,13 @@ export default function AdminMockExamEditor() {
                 <div className="space-y-3">
                   {selectedGroup.questions.map((q, i) => (
                     <QuestionCard key={q.id} index={i} value={q} listening={isListening} disabled={published}
+                      onRegister={registerCard(q.id)}
                       onSave={(val) => run(() => adminUpdateQuestion(q.id, val), 'Đã lưu câu hỏi.')}
                       onDelete={() => setConfirm({ type: 'question', id: q.id })} />
                   ))}
                   {!published && (
-                    <NewQuestionInline groupId={selectedGroupId} listening={isListening} onAdded={load} setError={setError} />
+                    <NewQuestionInline key={selectedGroupId} groupId={selectedGroupId} listening={isListening} onAdded={load} setError={setError}
+                      onRegister={registerCard('new')} />
                   )}
                 </div>
               </div>
@@ -281,17 +346,22 @@ export default function AdminMockExamEditor() {
       )}
 
       <ConfirmDialog open={!!confirm} onCancel={() => setConfirm(null)}
-        title="Xóa câu hỏi?" message="Thao tác này không thể hoàn tác." confirmLabel="Xóa"
+        title={confirm?.type === 'switch-group' ? 'Có câu chưa lưu được' : 'Xóa câu hỏi?'}
+        message={confirm?.type === 'switch-group'
+          ? `Có ${confirm.count} câu chưa lưu được (câu mới chưa bấm Lưu hoặc thiếu nội dung lựa chọn). Chuyển mondai sẽ mất thay đổi của các câu đó.`
+          : 'Thao tác này không thể hoàn tác.'}
+        confirmLabel={confirm?.type === 'switch-group' ? 'Vẫn chuyển' : 'Xóa'}
         onConfirm={() => {
           const c = confirm; setConfirm(null);
-          run(() => adminDeleteQuestion(c.id));
+          if (c.type === 'switch-group') setSelectedGroupId(c.id);
+          else run(() => adminDeleteQuestion(c.id));
         }} />
     </AdminLayout>
   );
 }
 
 // ── Form thêm 1 câu hỏi mới ──
-function NewQuestionInline({ groupId, listening, onAdded, setError }) {
+function NewQuestionInline({ groupId, listening, onAdded, setError, onRegister }) {
   const [adding, setAdding] = useState(false);
   const [draft, setDraft]   = useState(null);
   const [saving, setSaving] = useState(false);
@@ -304,7 +374,7 @@ function NewQuestionInline({ groupId, listening, onAdded, setError }) {
   );
 
   return (
-    <QuestionCard index={-1} value={draft} listening={listening} saving={saving}
+    <QuestionCard index={-1} value={draft} listening={listening} saving={saving} onRegister={onRegister}
       onSave={async (val) => {
         setSaving(true); setError('');
         try { await adminCreateQuestions(groupId, [val]); setAdding(false); onAdded(); }
