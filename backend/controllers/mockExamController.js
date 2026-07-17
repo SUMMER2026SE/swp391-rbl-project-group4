@@ -4,6 +4,9 @@ const { supabaseAdmin } = require('../config/supabase');
 const { computeJlptScores, SCORE_COLUMNS, PASS_TOTAL } = require('../utils/jlptMock');
 const { getUserTier } = require('../services/quotaService');
 
+// Toàn bộ bảng mock_* nằm trong schema jlpt_module (migration 024)
+const jlptDb = supabaseAdmin.schema('jlpt_module');
+
 // Grace 10s cho độ trễ mạng khi auto-submit lúc hết giờ
 const GRACE_MS = 10 * 1000;
 
@@ -18,34 +21,34 @@ function handleError(res, err, fallback) {
 
 // Nạp toàn bộ câu hỏi (kèm đáp án — server-side) để chấm điểm
 async function loadExamQuestionsForScoring(examId) {
-  const { data: sections } = await supabaseAdmin
+  const { data: sections } = await jlptDb
     .from('mock_exam_sections').select('id').eq('exam_id', examId);
   const sectionIds = (sections || []).map(s => s.id);
   if (!sectionIds.length) return [];
-  const { data: groups } = await supabaseAdmin
+  const { data: groups } = await jlptDb
     .from('mock_question_groups').select('id, score_category').in('section_id', sectionIds);
   const groupCat = {};
   (groups || []).forEach(g => { groupCat[g.id] = g.score_category; });
   const groupIds = Object.keys(groupCat);
   if (!groupIds.length) return [];
-  const { data: questions } = await supabaseAdmin
+  const { data: questions } = await jlptDb
     .from('mock_questions').select('id, group_id, correct_index').in('group_id', groupIds);
   return (questions || []).map(q => ({ id: q.id, correct_index: q.correct_index, score_category: groupCat[q.group_id] }));
 }
 
 // Lấy các câu hỏi (sanitized) của 1 section theo position
 async function loadSectionForAttempt(examId, position) {
-  const { data: section } = await supabaseAdmin
+  const { data: section } = await jlptDb
     .from('mock_exam_sections').select('id, position, section_type, title, time_limit_minutes')
     .eq('exam_id', examId).eq('position', position).single();
   if (!section) return null;
 
-  const { data: groups } = await supabaseAdmin
+  const { data: groups } = await jlptDb
     .from('mock_question_groups').select(GROUP_PUBLIC).eq('section_id', section.id).order('position');
   const groupIds = (groups || []).map(g => g.id);
   let questions = [];
   if (groupIds.length) {
-    const { data: q } = await supabaseAdmin
+    const { data: q } = await jlptDb
       .from('mock_questions').select(QUESTION_PUBLIC).in('group_id', groupIds).order('position');
     questions = q || [];
   }
@@ -57,9 +60,9 @@ async function loadSectionForAttempt(examId, position) {
 
 // Chốt điểm toàn bài + đánh dấu is_correct cho từng câu đã trả lời
 async function finalizeAttempt(attempt) {
-  const { data: exam } = await supabaseAdmin.from('mock_exams').select('id, level').eq('id', attempt.exam_id).single();
+  const { data: exam } = await jlptDb.from('mock_exams').select('id, level').eq('id', attempt.exam_id).single();
   const questions = await loadExamQuestionsForScoring(attempt.exam_id);
-  const { data: answers } = await supabaseAdmin
+  const { data: answers } = await jlptDb
     .from('mock_attempt_answers').select('question_id, selected_index').eq('attempt_id', attempt.id);
   const answersMap = {};
   (answers || []).forEach(a => { answersMap[a.question_id] = a.selected_index; });
@@ -70,13 +73,13 @@ async function finalizeAttempt(attempt) {
   const correctById = {};
   perQuestion.forEach(p => { correctById[p.question_id] = p.is_correct; });
   for (const a of answers || []) {
-    await supabaseAdmin.from('mock_attempt_answers')
+    await jlptDb.from('mock_attempt_answers')
       .update({ is_correct: !!correctById[a.question_id] })
       .eq('attempt_id', attempt.id).eq('question_id', a.question_id);
   }
 
   const duration = Math.max(0, Math.round((Date.now() - new Date(attempt.started_at).getTime()) / 1000));
-  const { data: updated } = await supabaseAdmin.from('mock_attempts')
+  const { data: updated } = await jlptDb.from('mock_attempts')
     .update({
       status: 'submitted', scores, total_score, passed,
       duration_seconds: duration, submitted_at: new Date().toISOString(),
@@ -93,13 +96,13 @@ async function advanceIfExpired(attempt) {
   if (Date.now() <= new Date(attempt.section_deadline_at).getTime() + GRACE_MS) return attempt;
 
   // Hết giờ: có section kế tiếp?
-  const { data: nextSection } = await supabaseAdmin
+  const { data: nextSection } = await jlptDb
     .from('mock_exam_sections').select('position, time_limit_minutes')
     .eq('exam_id', attempt.exam_id).eq('position', attempt.current_section_position + 1).single();
 
   if (nextSection) {
     const deadline = new Date(Date.now() + nextSection.time_limit_minutes * 60 * 1000).toISOString();
-    const { data: updated } = await supabaseAdmin.from('mock_attempts')
+    const { data: updated } = await jlptDb.from('mock_attempts')
       .update({ current_section_position: nextSection.position, section_deadline_at: deadline })
       .eq('id', attempt.id).select().single();
     return advanceIfExpired(updated); // section kế cũng có thể đã quá hạn (attempt bỏ lâu)
@@ -121,7 +124,7 @@ exports.listExams = async (req, res) => {
   const { level, page = 1, limit = 12 } = req.query;
   const offset = (page - 1) * limit;
   try {
-    let query = supabaseAdmin.from('mock_exams')
+    let query = jlptDb.from('mock_exams')
       .select('id, level, title, description, published_at, is_free', { count: 'exact' })
       .eq('is_published', true)
       .order('published_at', { ascending: false })
@@ -139,23 +142,23 @@ exports.listExams = async (req, res) => {
 
     if (examIds.length) {
       // thời gian + số câu
-      const { data: sections } = await supabaseAdmin
+      const { data: sections } = await jlptDb
         .from('mock_exam_sections').select('id, exam_id, time_limit_minutes').in('exam_id', examIds);
       const sectionToExam = {};
       (sections || []).forEach(s => { sectionToExam[s.id] = s.exam_id; meta[s.exam_id].total_minutes += s.time_limit_minutes; });
       const sectionIds = Object.keys(sectionToExam);
       if (sectionIds.length) {
-        const { data: groups } = await supabaseAdmin.from('mock_question_groups').select('id, section_id').in('section_id', sectionIds);
+        const { data: groups } = await jlptDb.from('mock_question_groups').select('id, section_id').in('section_id', sectionIds);
         const groupToExam = {};
         (groups || []).forEach(g => { groupToExam[g.id] = sectionToExam[g.section_id]; });
         const groupIds = Object.keys(groupToExam);
         if (groupIds.length) {
-          const { data: qs } = await supabaseAdmin.from('mock_questions').select('group_id').in('group_id', groupIds);
+          const { data: qs } = await jlptDb.from('mock_questions').select('group_id').in('group_id', groupIds);
           (qs || []).forEach(q => { meta[groupToExam[q.group_id]].question_count += 1; });
         }
       }
       // lượt làm + best score + attempt đang dở của user
-      const { data: myAttempts } = await supabaseAdmin.from('mock_attempts')
+      const { data: myAttempts } = await jlptDb.from('mock_attempts')
         .select('id, exam_id, status, total_score').eq('user_id', req.user.id).in('exam_id', examIds);
       (myAttempts || []).forEach(a => {
         if (a.status === 'submitted' && a.total_score != null)
@@ -163,7 +166,7 @@ exports.listExams = async (req, res) => {
         if (a.status === 'in_progress') meta[a.exam_id].active_attempt_id = a.id;
       });
       // tổng lượt làm (mọi user) — đếm số attempt submitted
-      const { data: allAttempts } = await supabaseAdmin.from('mock_attempts')
+      const { data: allAttempts } = await jlptDb.from('mock_attempts')
         .select('exam_id').eq('status', 'submitted').in('exam_id', examIds);
       (allAttempts || []).forEach(a => { meta[a.exam_id].attempt_count += 1; });
     }
@@ -178,7 +181,7 @@ exports.listExams = async (req, res) => {
 // GET /api/mock-exams/:id — meta + cấu trúc phần thi (không câu hỏi)
 exports.getExamMeta = async (req, res) => {
   try {
-    const { data: exam } = await supabaseAdmin
+    const { data: exam } = await jlptDb
       .from('mock_exams').select('id, level, title, description, is_published, is_free').eq('id', req.params.id).single();
     if (!exam || !exam.is_published) return res.status(404).json({ error: 'Không tìm thấy đề thi.' });
 
@@ -186,11 +189,11 @@ exports.getExamMeta = async (req, res) => {
     const locked = !exam.is_free && tier !== 'premium';
 
     // User từng nộp bài đề này chưa (để FE hiện "chỉ xem lại được" khi bị khóa)
-    const { count: submittedCount } = await supabaseAdmin.from('mock_attempts')
+    const { count: submittedCount } = await jlptDb.from('mock_attempts')
       .select('id', { count: 'exact', head: true })
       .eq('user_id', req.user.id).eq('exam_id', exam.id).eq('status', 'submitted');
 
-    const { data: sections } = await supabaseAdmin
+    const { data: sections } = await jlptDb
       .from('mock_exam_sections').select('id, position, section_type, title, time_limit_minutes')
       .eq('exam_id', exam.id).order('position');
 
@@ -198,7 +201,7 @@ exports.getExamMeta = async (req, res) => {
     const groupsBySection = {};
     let questionCountBySection = {};
     if (sectionIds.length) {
-      const { data: groups } = await supabaseAdmin
+      const { data: groups } = await jlptDb
         .from('mock_question_groups').select('id, section_id, mondai_number, mondai_type').in('section_id', sectionIds).order('position');
       (groups || []).forEach(g => {
         (groupsBySection[g.section_id] ||= []).push({ mondai_number: g.mondai_number, mondai_type: g.mondai_type });
@@ -207,7 +210,7 @@ exports.getExamMeta = async (req, res) => {
       const groupToSection = {};
       (groups || []).forEach(g => { groupToSection[g.id] = g.section_id; });
       if (groupIds.length) {
-        const { data: qs } = await supabaseAdmin.from('mock_questions').select('group_id').in('group_id', groupIds);
+        const { data: qs } = await jlptDb.from('mock_questions').select('group_id').in('group_id', groupIds);
         (qs || []).forEach(q => {
           const sid = groupToSection[q.group_id];
           questionCountBySection[sid] = (questionCountBySection[sid] || 0) + 1;
@@ -216,7 +219,7 @@ exports.getExamMeta = async (req, res) => {
     }
 
     // attempt đang dở
-    const { data: active } = await supabaseAdmin.from('mock_attempts')
+    const { data: active } = await jlptDb.from('mock_attempts')
       .select('id').eq('user_id', req.user.id).eq('exam_id', exam.id).eq('status', 'in_progress').maybeSingle();
 
     res.json({
@@ -238,7 +241,7 @@ exports.getExamMeta = async (req, res) => {
 // ─── Làm bài ──────────────────────────────────────────────────────────────────
 
 async function getOwnedAttempt(attemptId, userId) {
-  const { data: attempt } = await supabaseAdmin.from('mock_attempts').select('*').eq('id', attemptId).single();
+  const { data: attempt } = await jlptDb.from('mock_attempts').select('*').eq('id', attemptId).single();
   if (!attempt) { const e = new Error('Không tìm thấy bài làm.'); e.httpStatus = 404; throw e; }
   if (attempt.user_id !== userId) { const e = new Error('Bạn không có quyền truy cập bài làm này.'); e.httpStatus = 403; throw e; }
   return attempt;
@@ -247,12 +250,12 @@ async function getOwnedAttempt(attemptId, userId) {
 // POST /api/mock-exams/:id/attempts — bắt đầu (hoặc trả lại attempt đang dở)
 exports.startAttempt = async (req, res) => {
   try {
-    const { data: exam } = await supabaseAdmin
+    const { data: exam } = await jlptDb
       .from('mock_exams').select('id, level, is_published, is_free').eq('id', req.params.id).single();
     if (!exam || !exam.is_published) return res.status(404).json({ error: 'Không tìm thấy đề thi.' });
 
     // Đang có attempt dở → trả lại (resume tự nhiên — được phép kể cả khi hết premium)
-    const { data: existing } = await supabaseAdmin.from('mock_attempts')
+    const { data: existing } = await jlptDb.from('mock_attempts')
       .select('*').eq('user_id', req.user.id).eq('exam_id', exam.id).eq('status', 'in_progress').maybeSingle();
     let attempt = existing;
 
@@ -268,15 +271,15 @@ exports.startAttempt = async (req, res) => {
         }
       }
 
-      const { data: firstSection } = await supabaseAdmin
+      const { data: firstSection } = await jlptDb
         .from('mock_exam_sections').select('position, time_limit_minutes')
         .eq('exam_id', exam.id).order('position').limit(1).maybeSingle();
       if (!firstSection) return res.status(400).json({ error: 'Đề thi chưa có phần thi nào.' });
 
-      const { count } = await supabaseAdmin.from('mock_attempts')
+      const { count } = await jlptDb.from('mock_attempts')
         .select('id', { count: 'exact', head: true }).eq('user_id', req.user.id).eq('exam_id', exam.id);
       const deadline = new Date(Date.now() + firstSection.time_limit_minutes * 60 * 1000).toISOString();
-      const { data: created, error } = await supabaseAdmin.from('mock_attempts')
+      const { data: created, error } = await jlptDb.from('mock_attempts')
         .insert({
           exam_id: exam.id, user_id: req.user.id, attempt_number: (count || 0) + 1,
           current_section_position: firstSection.position, section_deadline_at: deadline,
@@ -284,7 +287,7 @@ exports.startAttempt = async (req, res) => {
         .select().single();
       // Race double-click: partial unique index → lấy lại attempt dở
       if (error) {
-        const { data: retry } = await supabaseAdmin.from('mock_attempts')
+        const { data: retry } = await jlptDb.from('mock_attempts')
           .select('*').eq('user_id', req.user.id).eq('exam_id', exam.id).eq('status', 'in_progress').maybeSingle();
         if (!retry) throw error;
         attempt = retry;
@@ -316,11 +319,11 @@ exports.getCurrent = async (req, res) => {
     const questionIds = (section?.groups || []).flatMap(g => g.questions.map(q => q.id));
     let savedAnswers = {};
     if (questionIds.length) {
-      const { data: ans } = await supabaseAdmin.from('mock_attempt_answers')
+      const { data: ans } = await jlptDb.from('mock_attempt_answers')
         .select('question_id, selected_index').eq('attempt_id', attempt.id).in('question_id', questionIds);
       (ans || []).forEach(a => { savedAnswers[a.question_id] = a.selected_index; });
     }
-    const { data: exam } = await supabaseAdmin
+    const { data: exam } = await jlptDb
       .from('mock_exams').select('level').eq('id', attempt.exam_id).single();
     res.json({ attempt, section, level: exam?.level || null, saved_answers: savedAnswers, remaining_seconds: remainingSeconds(attempt) });
   } catch (err) { handleError(res, err, 'Không thể tải bài làm.'); }
@@ -338,18 +341,18 @@ exports.saveAnswers = async (req, res) => {
       return res.status(403).json({ error: 'Đã hết thời gian phần thi này.' });
 
     // Chỉ nhận câu thuộc section hiện tại
-    const { data: section } = await supabaseAdmin
+    const { data: section } = await jlptDb
       .from('mock_exam_sections').select('id').eq('exam_id', attempt.exam_id).eq('position', attempt.current_section_position).single();
-    const { data: groups } = await supabaseAdmin.from('mock_question_groups').select('id').eq('section_id', section.id);
+    const { data: groups } = await jlptDb.from('mock_question_groups').select('id').eq('section_id', section.id);
     const groupIds = (groups || []).map(g => g.id);
-    const { data: validQs } = await supabaseAdmin.from('mock_questions').select('id').in('group_id', groupIds);
+    const { data: validQs } = await jlptDb.from('mock_questions').select('id').in('group_id', groupIds);
     const validSet = new Set((validQs || []).map(q => q.id));
 
     const rows = answers
       .filter(a => validSet.has(a.question_id) && a.selected_index != null)
       .map(a => ({ attempt_id: attempt.id, question_id: a.question_id, selected_index: Number(a.selected_index) }));
     if (rows.length) {
-      const { error } = await supabaseAdmin.from('mock_attempt_answers').upsert(rows, { onConflict: 'attempt_id,question_id' });
+      const { error } = await jlptDb.from('mock_attempt_answers').upsert(rows, { onConflict: 'attempt_id,question_id' });
       if (error) throw error;
     }
     res.json({ saved: rows.length });
@@ -371,26 +374,26 @@ exports.submitSection = async (req, res) => {
     // Lưu nốt đáp án gửi kèm (nếu chưa quá hạn)
     const answers = req.body.answers;
     if (!expired && Array.isArray(answers) && answers.length) {
-      const { data: section } = await supabaseAdmin
+      const { data: section } = await jlptDb
         .from('mock_exam_sections').select('id').eq('exam_id', attempt.exam_id).eq('position', position).single();
-      const { data: groups } = await supabaseAdmin.from('mock_question_groups').select('id').eq('section_id', section.id);
+      const { data: groups } = await jlptDb.from('mock_question_groups').select('id').eq('section_id', section.id);
       const groupIds = (groups || []).map(g => g.id);
-      const { data: validQs } = await supabaseAdmin.from('mock_questions').select('id').in('group_id', groupIds);
+      const { data: validQs } = await jlptDb.from('mock_questions').select('id').in('group_id', groupIds);
       const validSet = new Set((validQs || []).map(q => q.id));
       const rows = answers
         .filter(a => validSet.has(a.question_id) && a.selected_index != null)
         .map(a => ({ attempt_id: attempt.id, question_id: a.question_id, selected_index: Number(a.selected_index) }));
-      if (rows.length) await supabaseAdmin.from('mock_attempt_answers').upsert(rows, { onConflict: 'attempt_id,question_id' });
+      if (rows.length) await jlptDb.from('mock_attempt_answers').upsert(rows, { onConflict: 'attempt_id,question_id' });
     }
 
     // Có section kế tiếp?
-    const { data: nextSection } = await supabaseAdmin
+    const { data: nextSection } = await jlptDb
       .from('mock_exam_sections').select('position, time_limit_minutes')
       .eq('exam_id', attempt.exam_id).eq('position', position + 1).maybeSingle();
 
     if (nextSection) {
       const deadline = new Date(Date.now() + nextSection.time_limit_minutes * 60 * 1000).toISOString();
-      const { data: updated } = await supabaseAdmin.from('mock_attempts')
+      const { data: updated } = await jlptDb.from('mock_attempts')
         .update({ current_section_position: nextSection.position, section_deadline_at: deadline })
         .eq('id', attempt.id).select().single();
       const section = await loadSectionForAttempt(updated.exam_id, updated.current_section_position);
@@ -408,7 +411,7 @@ exports.getResult = async (req, res) => {
   try {
     const attempt = await getOwnedAttempt(req.params.attemptId, req.user.id);
     if (attempt.status !== 'submitted') return res.status(400).json({ error: 'Bài làm chưa được nộp.' });
-    const { data: exam } = await supabaseAdmin.from('mock_exams').select('id, level, title').eq('id', attempt.exam_id).single();
+    const { data: exam } = await jlptDb.from('mock_exams').select('id, level, title').eq('id', attempt.exam_id).single();
     res.json({
       attempt_id: attempt.id, exam_id: exam.id, exam_title: exam.title, level: exam.level,
       scores: attempt.scores, total_score: attempt.total_score, passed: attempt.passed,
@@ -424,21 +427,21 @@ exports.getReview = async (req, res) => {
     const attempt = await getOwnedAttempt(req.params.attemptId, req.user.id);
     if (attempt.status !== 'submitted') return res.status(400).json({ error: 'Bài làm chưa được nộp.' });
 
-    const { data: exam } = await supabaseAdmin.from('mock_exams').select('id, level, title').eq('id', attempt.exam_id).single();
-    const { data: sections } = await supabaseAdmin
+    const { data: exam } = await jlptDb.from('mock_exams').select('id, level, title').eq('id', attempt.exam_id).single();
+    const { data: sections } = await jlptDb
       .from('mock_exam_sections').select('*').eq('exam_id', exam.id).order('position');
     const sectionIds = (sections || []).map(s => s.id);
     let groups = [], questions = [];
     if (sectionIds.length) {
-      ({ data: groups } = await supabaseAdmin.from('mock_question_groups').select('*').in('section_id', sectionIds).order('position'));
+      ({ data: groups } = await jlptDb.from('mock_question_groups').select('*').in('section_id', sectionIds).order('position'));
       groups = groups || [];
       const groupIds = groups.map(g => g.id);
       if (groupIds.length) {
-        ({ data: questions } = await supabaseAdmin.from('mock_questions').select('*').in('group_id', groupIds).order('position'));
+        ({ data: questions } = await jlptDb.from('mock_questions').select('*').in('group_id', groupIds).order('position'));
         questions = questions || [];
       }
     }
-    const { data: ans } = await supabaseAdmin
+    const { data: ans } = await jlptDb
       .from('mock_attempt_answers').select('question_id, selected_index, is_correct').eq('attempt_id', attempt.id);
     const answerMap = {};
     (ans || []).forEach(a => { answerMap[a.question_id] = a; });
@@ -467,7 +470,7 @@ exports.getReview = async (req, res) => {
 // GET /api/mock-exams/:id/leaderboard — chỉ lần làm đầu, điểm↓ thời gian↑
 exports.getLeaderboard = async (req, res) => {
   try {
-    const { data: rows, error } = await supabaseAdmin.from('mock_attempts')
+    const { data: rows, error } = await jlptDb.from('mock_attempts')
       .select('id, user_id, total_score, duration_seconds, submitted_at, scores')
       .eq('exam_id', req.params.id).eq('status', 'submitted').eq('attempt_number', 1)
       .order('total_score', { ascending: false })
@@ -497,12 +500,12 @@ exports.getLeaderboard = async (req, res) => {
     // Hạng của user nếu ngoài top 50
     let myRank = board.find(b => b.is_me) || null;
     if (!myRank) {
-      const { data: mine } = await supabaseAdmin.from('mock_attempts')
+      const { data: mine } = await jlptDb.from('mock_attempts')
         .select('total_score, duration_seconds').eq('exam_id', req.params.id)
         .eq('user_id', req.user.id).eq('status', 'submitted').eq('attempt_number', 1).maybeSingle();
       if (mine) {
         // đếm số người xếp trên
-        const { count: better } = await supabaseAdmin.from('mock_attempts')
+        const { count: better } = await jlptDb.from('mock_attempts')
           .select('id', { count: 'exact', head: true })
           .eq('exam_id', req.params.id).eq('status', 'submitted').eq('attempt_number', 1)
           .or(`total_score.gt.${mine.total_score},and(total_score.eq.${mine.total_score},duration_seconds.lt.${mine.duration_seconds})`);
@@ -519,7 +522,7 @@ exports.getLeaderboard = async (req, res) => {
 // GET /api/mock-exams/me/history
 exports.getHistory = async (req, res) => {
   try {
-    const { data: attempts, error } = await supabaseAdmin.from('mock_attempts')
+    const { data: attempts, error } = await jlptDb.from('mock_attempts')
       .select('id, exam_id, attempt_number, status, scores, total_score, passed, duration_seconds, started_at, submitted_at')
       .eq('user_id', req.user.id).eq('status', 'submitted')
       .order('submitted_at', { ascending: false });
@@ -528,7 +531,7 @@ exports.getHistory = async (req, res) => {
     const examIds = [...new Set((attempts || []).map(a => a.exam_id))];
     let examMap = {};
     if (examIds.length) {
-      const { data: exams } = await supabaseAdmin.from('mock_exams').select('id, level, title').in('id', examIds);
+      const { data: exams } = await jlptDb.from('mock_exams').select('id, level, title').in('id', examIds);
       (exams || []).forEach(e => { examMap[e.id] = e; });
     }
     res.json((attempts || []).map(a => ({
