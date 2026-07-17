@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import StudentLayout from '../../components/layout/StudentLayout';
 import Button from '../../components/ui/Button';
 import api from '../../lib/api';
+import { usePageContext } from '../../contexts/PageContext';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const LEVELS = ['N5','N4','N3','N2','N1'];
@@ -570,6 +571,19 @@ export default function Listening() {
   const [loading, setLoading]         = useState(false);
   const [selected, setSelected]       = useState(null);
   const [tab, setTab]                 = useState('listen');
+
+  // Cho trợ lý AI biết đang nghe bài nào / đang lọc cấp độ nào
+  usePageContext({
+    tab: 'Luyện nghe',
+    title: selected?.title_vi || selected?.title,
+    data: {
+      capDoDangLoc: levelFilter,
+      dangMo: selected ? {
+        id: selected.id, level: selected.level,
+        title: selected.title, title_vi: selected.title_vi,
+      } : null,
+    },
+  }, [selected, levelFilter]);
 
   useEffect(() => {
     if (levelFilter === 'user') return;

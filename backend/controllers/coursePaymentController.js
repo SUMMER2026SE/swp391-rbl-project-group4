@@ -5,7 +5,19 @@ const {
   getCourseOrder,
   cancelCourseOrder,
   getPendingCourseOrder,
+  listMyCoursePurchases,
 } = require('../services/coursePaymentService');
+
+// GET /api/courses/my-purchases — lịch sử khóa học đã mua của học viên (để tải lại biên lai)
+exports.myPurchases = async (req, res) => {
+  try {
+    const orders = await listMyCoursePurchases(req.user.id);
+    res.json({ orders });
+  } catch (err) {
+    console.error('myPurchases error:', err.message);
+    res.status(500).json({ error: 'Không thể tải lịch sử mua khóa học.' });
+  }
+};
 
 // POST /api/courses/:id/checkout — tạo order SePay cho khóa có phí (mirror /subscription/checkout)
 exports.checkout = async (req, res) => {

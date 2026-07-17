@@ -9,6 +9,7 @@ import WorksheetPreview from '../../components/kanji/WorksheetPreview';
 import api from '../../lib/api';
 import { downloadWorksheetPDF } from '../../lib/kanjiWorksheet';
 import { renderMarkdown, renderReadingText } from '../../lib/renderPreview';
+import { usePageContext } from '../../contexts/PageContext';
 
 // Reading lưu trong `content` dạng JSON { text, imageUrl } (hoặc chuỗi thuần — legacy).
 function getReadingHtml(content) {
@@ -59,6 +60,16 @@ export default function LessonView() {
   const [furigana, setFurigana] = useState(false);
   const [working, setWorking] = useState(false);
   const [downloadingPdf, setDownloadingPdf] = useState(false);
+
+  // Cho trợ lý AI biết đang học bài nào
+  usePageContext({
+    tab: 'Bài học',
+    title: lesson?.title,
+    data: lesson ? {
+      lessonId: lesson.id, courseId: lesson.course_id, lesson_type: lesson.lesson_type,
+      completed: lesson.completed, hasQuiz: !!lesson.quiz,
+    } : null,
+  }, [lesson]);
 
   // Chọn vocab/kanji để thêm vào flashcard cá nhân. Key: `v-<id>` | `k-<id>`.
   const [selecting, setSelecting] = useState(false); // bật/tắt chế độ chọn (hiện checkbox)

@@ -2,6 +2,7 @@
 
 const { supabaseAdmin } = require('../config/supabase');
 const { BLUEPRINTS, MONDAI_TYPES, SCORE_COLUMNS } = require('../utils/jlptMock');
+const { snapshotsForBankRows } = require('../utils/passageSnapshot');
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -568,9 +569,12 @@ exports.importFromBank = async (req, res) => {
     await assertEditableExam(examId);
 
     const { data: bankQs, error } = await supabaseAdmin.from('question_bank')
-      .select('id, question_text, question_type, options, correct_answer, explanation')
+      .select('id, question_text, question_type, options, correct_answer, explanation, passage_id, listening_passage_id')
       .in('id', question_ids);
     if (error) throw error;
+
+    // Đóng băng bài đọc/nghe của câu hỏi.
+    const getSnap = await snapshotsForBankRows(bankQs || []);
 
     const skipped = [];
     const rows = [];
@@ -586,10 +590,11 @@ exports.importFromBank = async (req, res) => {
         continue;
       }
       rows.push({
-        question_text: bq.question_text,
+        question_text:    bq.question_text,
         options,
-        correct_index: correctIndex,
-        explanation:   bq.explanation || null,
+        correct_index:    correctIndex,
+        explanation:      bq.explanation || null,
+        passage_snapshot: getSnap(bq),
       });
     }
     (question_ids.filter(id => !(bankQs || []).some(b => b.id === id)))
@@ -604,6 +609,18 @@ exports.importFromBank = async (req, res) => {
         .insert(rows.map((r, i) => ({ ...r, group_id: group.id, position: base + i + 1 }))).select();
       if (insErr) throw insErr;
       saved = data;
+
+      // Best-effort: nếu nhóm mondai chưa có bài và các câu nhập chung ĐÚNG 1 bài → set bài của nhóm.
+      const groupEmpty = !group.passage_text && !group.image_url && !group.audio_url && !group.audio_transcript;
+      const snaps = rows.map(r => r.passage_snapshot).filter(Boolean);
+      const distinct = [...new Map(snaps.map(s => [JSON.stringify(s), s])).values()];
+      if (groupEmpty && distinct.length === 1) {
+        const s = distinct[0];
+        const upd = s.kind === 'listening'
+          ? { audio_url: s.audio_url || null, audio_transcript: s.transcript || null }
+          : { passage_text: s.content || null, image_url: s.image_url || null };
+        await supabaseAdmin.from('mock_question_groups').update(upd).eq('id', group.id);
+      }
     }
     res.json({ saved: saved.length, skipped, data: saved });
   } catch (err) { handleError(res, err, 'Không thể import câu hỏi.'); }

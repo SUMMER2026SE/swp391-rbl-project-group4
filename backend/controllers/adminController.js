@@ -2,6 +2,7 @@
 
 const { supabaseAdmin } = require('../config/supabase');
 const { validateThreshold } = require('../services/passThreshold');
+const { snapshotsForBankRows } = require('../utils/passageSnapshot');
 
 // Bảng quiz đã chuyển sang schema exam_module (question_bank/users vẫn ở public)
 const examDb = supabaseAdmin.schema('exam_module');
@@ -30,6 +31,31 @@ exports.getStats = async (req, res) => {
     });
   } catch (err) {
     res.status(500).json({ error: 'Không thể tải thống kê.' });
+  }
+};
+
+// POST /api/admin/test-receipt-email — gửi biên lai mẫu tới email của chính admin
+// (dùng ở tab "Hoạt động hệ thống" để kiểm tra SMTP + mẫu biên lai)
+exports.testReceiptEmail = async (req, res) => {
+  const type = req.body?.type === 'subscription' ? 'subscription' : 'course';
+  const to = req.user.email;
+  if (!to) return res.status(400).json({ error: 'Tài khoản admin không có email.' });
+  try {
+    const { sendReceiptEmail } = require('../config/mailer');
+    await sendReceiptEmail(to, {
+      typeLabel:   type === 'course' ? 'Khóa học' : 'Gói',
+      itemName:    type === 'course' ? 'Khóa học tiếng Nhật N5 cơ bản (mẫu)' : 'Premium 1 tháng (mẫu)',
+      amount:      type === 'course' ? 499000 : 100000,
+      currency:    'VND',
+      orderCode:   type === 'course' ? 'CRS-TEST-000001' : 'SUB-TEST-000001',
+      paymentCode: type === 'course' ? 'COURSETEST01' : 'PREMTEST01',
+      paidAt:      new Date().toISOString(),
+      buyerName:   req.user.user_metadata?.full_name || to,
+    });
+    res.json({ message: `Đã gửi biên lai thử tới ${to}.` });
+  } catch (err) {
+    console.error('testReceiptEmail error:', err.message);
+    res.status(500).json({ error: err.message || 'Không gửi được email. Kiểm tra cấu hình SMTP.' });
   }
 };
 
@@ -1563,7 +1589,7 @@ exports.listQuizQuestions = async (req, res) => {
   try {
     const { data, error } = await examDb
       .from('quiz_questions')
-      .select('id,question,options,correct_answer,correct_answer_data,question_type,bank_question_id,explanation,order_index')
+      .select('id,question,options,correct_answer,correct_answer_data,question_type,bank_question_id,explanation,passage_snapshot,order_index')
       .eq('quiz_id', req.params.quizId)
       .order('order_index');
     if (error) throw error;
@@ -1637,6 +1663,9 @@ exports.importFromBank = async (req, res) => {
       .from('question_bank').select('*').in('id', question_ids);
     if (fetchErr) throw fetchErr;
 
+    // Đóng băng bài đọc/nghe của câu hỏi để mang theo khi nhập vào quiz.
+    const getSnap = await snapshotsForBankRows(bankRows);
+
     const rows = bankRows.map((bq, i) => ({
       quiz_id:            quizId,
       bank_question_id:   bq.id,
@@ -1646,6 +1675,7 @@ exports.importFromBank = async (req, res) => {
       correct_answer:     typeof bq.correct_answer === 'string' ? bq.correct_answer : null,
       correct_answer_data: typeof bq.correct_answer !== 'string' ? bq.correct_answer : null,
       explanation:        bq.explanation || null,
+      passage_snapshot:   getSnap(bq),
       order_index:        nextIdx + i,
     }));
 

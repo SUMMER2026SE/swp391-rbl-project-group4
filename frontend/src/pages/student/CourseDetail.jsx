@@ -7,6 +7,8 @@ import Button from '../../components/ui/Button';
 import Stars from '../../components/ui/Stars';
 import { useAuth } from '../../contexts/AuthContext';
 import { formatVnd, formatCount } from '../../lib/format';
+import { ReceiptButton } from '../../components/receipt/Receipt';
+import { usePageContext } from '../../contexts/PageContext';
 import api, { enrollCourse, getCourseReviews, createReview, updateReview, deleteReview } from '../../lib/api';
 
 const LEVEL_BADGE = {
@@ -48,8 +50,9 @@ const REVIEW_PAGE_SIZE = 5;
 
 // Modal thanh toán SePay cho khóa có phí — mirror CheckoutModal của premium
 // (SubscriptionStatus.jsx): tạo order → hiện QR → polling trạng thái → paid thì vào học.
-function CoursePaymentModal({ courseId, onClose, onSuccess }) {
+function CoursePaymentModal({ courseId, courseTitle, buyer, onClose, onSuccess }) {
   const [order, setOrder]       = useState(null);
+  const [paidOrder, setPaidOrder] = useState(null);
   const [loading, setLoading]   = useState(true);
   const [error, setError]       = useState(null);
   const [status, setStatus]     = useState('pending'); // pending | paid | expired
@@ -81,7 +84,7 @@ function CoursePaymentModal({ courseId, onClose, onSuccess }) {
         if (s && s !== 'pending') {
           clearInterval(pollRef.current);
           setStatus(s);
-          if (s === 'paid') setTimeout(onSuccess, 1500);
+          if (s === 'paid') setPaidOrder(r.data.order);
         }
       } catch (_) {}
     }, 5000);
@@ -168,10 +171,30 @@ function CoursePaymentModal({ courseId, onClose, onSuccess }) {
         )}
 
         {status === 'paid' && (
-          <div className="text-center py-8">
-            <span className="material-symbols-outlined text-6xl text-emerald-500 mb-4 block">check_circle</span>
-            <h3 className="font-display text-2xl font-bold mb-2">Thanh toán thành công!</h3>
-            <p className="text-on-muted">Bạn đã sở hữu khóa học. Chúc bạn học tốt!</p>
+          <div className="text-center py-6">
+            <span className="material-symbols-outlined text-6xl text-emerald-500 mb-3 block">check_circle</span>
+            <h3 className="font-display text-2xl font-bold mb-1">Thanh toán thành công!</h3>
+            <p className="text-on-muted mb-5">Bạn đã sở hữu khóa học. Chúc bạn học tốt!</p>
+            <div className="flex flex-col gap-2 items-center">
+              <ReceiptButton
+                data={{
+                  type: 'course', typeLabel: 'Khóa học',
+                  buyerName: buyer?.name, buyerEmail: buyer?.email,
+                  itemName: courseTitle,
+                  amount: paidOrder?.amount ?? order?.amount,
+                  currency: paidOrder?.currency || 'VND',
+                  orderCode: paidOrder?.order_code || order?.order_code,
+                  paymentCode: paidOrder?.payment_code || order?.payment_code,
+                  paidAt: paidOrder?.paid_at || new Date().toISOString(),
+                }}
+                filename={`bien-lai-${paidOrder?.order_code || order?.order_code || 'khoahoc'}.pdf`}
+                className="w-full"
+              />
+              <button onClick={onSuccess}
+                className="w-full px-6 py-3 bg-amber-400 hover:bg-amber-500 text-white rounded-xl font-semibold transition-colors">
+                Vào học ngay
+              </button>
+            </div>
           </div>
         )}
 
@@ -231,6 +254,17 @@ export default function CourseDetail() {
   const [enrollModal, setEnrollModal] = useState(false); // modal xác nhận khóa miễn phí
   const [showPayment, setShowPayment] = useState(false); // modal QR SePay khóa có phí
   const [enrolling, setEnrolling]     = useState(false);
+
+  // Cho trợ lý AI biết đang xem khoá học nào
+  usePageContext({
+    tab: 'Chi tiết khóa học',
+    title: course?.title,
+    data: course ? {
+      courseId: course.id, level: course.level, is_free: course.is_free,
+      price: course.price, enrolled, progress_pct: course.progress_pct,
+      units: (course.units || []).length,
+    } : null,
+  }, [course, enrolled]);
   const [expanded, setExpanded]       = useState(() => new Set());
 
   // Reviews — tải toàn bộ một lần, phân trang client-side để tối ưu optimistic update.
@@ -708,6 +742,8 @@ export default function CourseDetail() {
       {showPayment && (
         <CoursePaymentModal
           courseId={id}
+          courseTitle={course?.title}
+          buyer={{ name: user?.user_metadata?.full_name || user?.email, email: user?.email }}
           onClose={() => setShowPayment(false)}
           onSuccess={handlePaymentSuccess}
         />

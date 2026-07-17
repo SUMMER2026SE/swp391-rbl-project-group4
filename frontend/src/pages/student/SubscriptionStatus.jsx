@@ -3,6 +3,8 @@ import { Link } from 'react-router-dom';
 import StudentLayout from '../../components/layout/StudentLayout';
 import api from '../../lib/api';
 import { useSubscription } from '../../hooks/useSubscription';
+import { useAuth } from '../../contexts/AuthContext';
+import { ReceiptButton } from '../../components/receipt/Receipt';
 
 const FEATURE_LABELS = {
   placement_test_monthly:     'Kiểm tra năng lực',
@@ -41,8 +43,9 @@ function QuotaBar({ used, limit, label, periodType }) {
 
 // ── Checkout / QR modal ──────────────────────────────────────────────────────
 
-function CheckoutModal({ plan, onClose, onSuccess }) {
+function CheckoutModal({ plan, buyer, onClose, onSuccess }) {
   const [order, setOrder]       = useState(null);
+  const [paidOrder, setPaidOrder] = useState(null);
   const [loading, setLoading]   = useState(true);
   const [error, setError]       = useState(null);
   const [status, setStatus]     = useState('pending'); // pending | paid | expired
@@ -74,7 +77,7 @@ function CheckoutModal({ plan, onClose, onSuccess }) {
         if (s && s !== 'pending') {
           clearInterval(pollRef.current);
           setStatus(s);
-          if (s === 'paid') setTimeout(onSuccess, 1500);
+          if (s === 'paid') setPaidOrder(r.data.order);
         }
       } catch (_) {}
     }, 5000);
@@ -161,10 +164,30 @@ function CheckoutModal({ plan, onClose, onSuccess }) {
         )}
 
         {status === 'paid' && (
-          <div className="text-center py-8">
-            <span className="material-symbols-outlined text-6xl text-emerald-500 mb-4 block">check_circle</span>
-            <h3 className="font-display text-2xl font-bold mb-2">Thanh toán thành công!</h3>
-            <p className="text-on-muted">Tài khoản của bạn đã được nâng cấp lên Premium.</p>
+          <div className="text-center py-6">
+            <span className="material-symbols-outlined text-6xl text-emerald-500 mb-3 block">check_circle</span>
+            <h3 className="font-display text-2xl font-bold mb-1">Thanh toán thành công!</h3>
+            <p className="text-on-muted mb-5">Tài khoản của bạn đã được nâng cấp lên Premium.</p>
+            <div className="flex flex-col gap-2 items-center">
+              <ReceiptButton
+                data={{
+                  type: 'subscription', typeLabel: 'Gói',
+                  buyerName: buyer?.name, buyerEmail: buyer?.email,
+                  itemName: plan?.name || 'Premium',
+                  amount: paidOrder?.amount ?? order?.amount,
+                  currency: paidOrder?.currency || 'VND',
+                  orderCode: paidOrder?.order_code || order?.order_code,
+                  paymentCode: paidOrder?.payment_code || order?.payment_code,
+                  paidAt: paidOrder?.paid_at || new Date().toISOString(),
+                }}
+                filename={`bien-lai-${paidOrder?.order_code || order?.order_code || 'premium'}.pdf`}
+                className="w-full"
+              />
+              <button onClick={onSuccess}
+                className="w-full px-6 py-3 bg-amber-400 hover:bg-amber-500 text-white rounded-xl font-semibold transition-colors">
+                Hoàn tất
+              </button>
+            </div>
           </div>
         )}
 
@@ -185,6 +208,7 @@ function CheckoutModal({ plan, onClose, onSuccess }) {
 
 export default function SubscriptionStatus() {
   const { data, loading, refetch } = useSubscription();
+  const { user } = useAuth();
   const [showCheckout, setShowCheckout] = useState(false);
   const [premiumPlan, setPremiumPlan]   = useState(null);
 
@@ -285,6 +309,7 @@ export default function SubscriptionStatus() {
       {showCheckout && premiumPlan && (
         <CheckoutModal
           plan={premiumPlan}
+          buyer={{ name: user?.user_metadata?.full_name || user?.email, email: user?.email }}
           onClose={() => setShowCheckout(false)}
           onSuccess={handleUpgradeSuccess}
         />

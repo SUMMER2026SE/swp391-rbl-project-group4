@@ -11,6 +11,7 @@ import ImportFileModal from '../../components/admin/ImportFileModal';
 import { downloadWorksheetPDF } from '../../lib/kanjiWorksheet';
 import { TOPICS, TOPIC_ICONS } from '../../lib/studyListTopics';
 import { useAuth } from '../../contexts/AuthContext';
+import { usePageContext } from '../../contexts/PageContext';
 import api from '../../lib/api';
 
 const LEVELS = ['N5', 'N4', 'N3', 'N2', 'N1'];
@@ -463,6 +464,16 @@ export default function StudyListDetail() {
   const [error, setError]     = useState('');
 
   const canEdit = !!user && !!post && (user.id === post.created_by || isAdmin());
+
+  // Cho trợ lý AI biết đang xem bài đăng nào
+  usePageContext({
+    tab: 'Bài đăng danh sách',
+    title: post?.title,
+    data: post ? {
+      postId: post.id, list_type: post.list_type, level: post.level,
+      items: (post.items || []).length, creator: post.creator_name,
+    } : null,
+  }, [post]);
 
   const loadPost = () => api.get(`/study-lists/${id}`).then(r => { setPost(r.data); return r.data; });
 

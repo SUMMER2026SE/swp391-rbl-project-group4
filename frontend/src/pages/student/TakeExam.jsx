@@ -4,6 +4,7 @@ import StudentLayout from '../../components/layout/StudentLayout';
 import Button from '../../components/ui/Button';
 import Alert from '../../components/ui/Alert';
 import FuriganaText from '../../components/ui/FuriganaText';
+import PassageBlock from '../../components/question/PassageBlock';
 import api from '../../lib/api';
 import { useProctoring } from '../../lib/useProctoring';
 
@@ -227,6 +228,7 @@ export default function TakeExam() {
                 {/* Question */}
                 {q && (
                     <div className="glass-card rounded-2xl p-8">
+                        {q.passage_snapshot && <PassageBlock snapshot={q.passage_snapshot} furigana={furigana} className="mb-5" />}
                         <div className="flex justify-between items-start gap-4 mb-6">
                             <FuriganaText text={q.question} enabled={furigana} textClassName="font-display font-bold text-lg" block />
                             <button

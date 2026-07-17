@@ -5,6 +5,7 @@ import Alert from '../../components/ui/Alert';
 import SpeakButton from '../../components/dictionary/SpeakButton';
 import FlashcardModeTabs from '../../components/flashcards/FlashcardModeTabs';
 import api from '../../lib/api';
+import { usePageContext } from '../../contexts/PageContext';
 
 const FRONT_KEY = 'flashcard.frontSide';
 const TRACK_KEY = 'flashcard.trackProgress';
@@ -53,6 +54,17 @@ export default function FlashcardStudy() {
   const [frontSide, setFrontSide] = useState(() => localStorage.getItem(FRONT_KEY) || 'term');
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [noAnim, setNoAnim] = useState(false);
+
+  // Cho trợ lý AI biết đang học bộ nào / thẻ nào
+  usePageContext({
+    tab: 'Học flashcard',
+    title: set?.title,
+    data: set ? {
+      setId: set.id, setTitle: set.title, tongSoThe: deck.length,
+      viTri: deck.length ? `${pos + 1}/${deck.length}` : null,
+      theHienTai: deck[pos] ? { term: deck[pos].term, definition: deck[pos].definition } : null,
+    } : null,
+  }, [set, deck, pos]);
 
   // Đổi thẻ: đưa về mặt trước tức thời (tắt transition 1 nhịp để không xoay ngược thô)
   const resetFlip = () => {

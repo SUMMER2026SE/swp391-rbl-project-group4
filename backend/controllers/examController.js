@@ -4,6 +4,7 @@ const { supabaseAdmin } = require('../config/supabase');
 const { chatCompletion } = require('../config/ai');
 const { isCorrect } = require('./quizController');
 const { computePassed, validateThreshold } = require('../services/passThreshold');
+const { snapshotsForBankRows } = require('../utils/passageSnapshot');
 
 // Sau khi DB tách schema: quiz ở exam_module, exam_assignments ở classroom_module.
 // (classes / class_enrollments / users / teacher_question_bank vẫn ở public)
@@ -79,7 +80,7 @@ exports.getExam = async (req, res) => {
         const exam = await getOwnedExam(req.params.id, req.user.id);
         if (!exam) return res.status(404).json({ error: 'Không tìm thấy đề thi.' });
         const { data: questions } = await examDb.from('quiz_questions')
-            .select('id,question,options,correct_answer,correct_answer_data,question_type,bank_question_id,explanation,order_index')
+            .select('id,question,options,correct_answer,correct_answer_data,question_type,bank_question_id,explanation,passage_snapshot,order_index')
             .eq('quiz_id', req.params.id).order('order_index');
         res.json({ ...exam, questions: questions || [] });
     } catch (err) {
@@ -220,6 +221,12 @@ exports.importFromBank = async (req, res) => {
         const { data: bankRows, error: fetchErr } = await q;
         if (fetchErr) throw fetchErr;
 
+        // Đóng băng bài đọc/nghe. Ngân hàng chung → passages ở public; ngân hàng
+        // riêng → teacher_reading_passages (exam_module) hoặc snapshot đã có sẵn.
+        const getSnap = source === 'global'
+            ? await snapshotsForBankRows(bankRows || [])
+            : await snapshotsForBankRows(bankRows || [], { readingClient: examDb, readingTable: 'teacher_reading_passages' });
+
         const rows = (bankRows || []).map((bq, i) => ({
             quiz_id:             quizId,
             bank_question_id:    bq.id,
@@ -229,6 +236,7 @@ exports.importFromBank = async (req, res) => {
             correct_answer:      typeof bq.correct_answer === 'string' ? bq.correct_answer : null,
             correct_answer_data: typeof bq.correct_answer !== 'string' ? bq.correct_answer : null,
             explanation:         bq.explanation || null,
+            passage_snapshot:    bq.passage_snapshot || getSnap(bq),
             order_index:         nextIdx + i,
         }));
 
@@ -380,7 +388,7 @@ exports.getAttempt = async (req, res) => {
         if (!exam) return res.status(403).json({ error: 'Không có quyền với bài làm này.' });
 
         const { data: questions } = await examDb.from('quiz_questions')
-            .select('id,question,options,correct_answer,correct_answer_data,question_type,explanation,order_index')
+            .select('id,question,options,correct_answer,correct_answer_data,question_type,explanation,passage_snapshot,order_index')
             .eq('quiz_id', attempt.quiz_id).order('order_index');
         const { data: student } = await supabaseAdmin.from('users').select('id,full_name,email').eq('id', attempt.user_id).single();
 
@@ -558,7 +566,7 @@ exports.getAssignedExam = async (req, res) => {
 
         // Không gửi đáp án đúng cho học sinh
         const { data: questions } = await examDb.from('quiz_questions')
-            .select('id,question,options,question_type,order_index')
+            .select('id,question,options,question_type,passage_snapshot,order_index')
             .eq('quiz_id', assignment.exam_id).order('order_index');
 
         res.json({

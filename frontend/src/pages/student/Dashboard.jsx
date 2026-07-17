@@ -5,6 +5,7 @@ import Alert from '../../components/ui/Alert';
 import { useAuth } from '../../contexts/AuthContext';
 import { useLang } from '../../contexts/LangContext';
 import api, { getLearningPath } from '../../lib/api';
+import { usePageContext } from '../../contexts/PageContext';
 
 function StatCard({ label, value, icon, color = 'text-tsubaki-red', loading }) {
   return (
@@ -60,6 +61,17 @@ export default function Dashboard() {
   const dash    = dashData?.dashboard || {};
   const profile = dashData?.profile   || {};
   const streak  = dash.current_streak ?? 0;
+
+  // Cho trợ lý AI biết tổng quan đang hiển thị
+  usePageContext({
+    tab: 'Bảng điều khiển học viên',
+    title: 'Tổng quan học tập',
+    data: dashData ? {
+      streak, current_level: profile.current_level, jlpt_target: profile.jlpt_target_level,
+      vocab_learned: dash.total_vocab_learned, kanji_learned: dash.total_kanji_learned,
+      grammar_learned: dash.total_grammar_learned, study_minutes: dash.total_study_minutes,
+    } : null,
+  }, [dashData]);
   const recentActivity = dashData?.recentActivity || [];
   const myClasses      = dashData?.myClasses || [];
   return (

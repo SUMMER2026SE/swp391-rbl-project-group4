@@ -6,6 +6,7 @@ import Button from '../../components/ui/Button';
 import Input from '../../components/ui/Input';
 import Alert from '../../components/ui/Alert';
 import PassThresholdField from '../../components/admin/PassThresholdField';
+import PassageBlock, { sameSnapshot } from '../../components/question/PassageBlock';
 import api from '../../lib/api';
 
 const TYPE_LABELS = {
@@ -121,9 +122,19 @@ function AddFromBankModal({ open, onClose, examId, existingBankIds, onAdded }) {
                                 <input type="checkbox" className="mt-1" checked={selected.has(q.id)} onChange={() => toggle(q.id)} />
                                 <div className="min-w-0 flex-1">
                                     <p className="text-sm font-medium">{q.question_text}</p>
-                                    <div className="flex items-center gap-2 mt-1">
+                                    <div className="flex items-center gap-2 mt-1 flex-wrap">
                                         <span className="text-xs px-2 py-0.5 rounded-full bg-surface-low text-on-muted">{TYPE_LABELS[q.question_type] || q.question_type}</span>
                                         {q.level && <span className="text-xs px-2 py-0.5 rounded-full bg-sumire-purple/10 text-sumire-purple font-bold">{q.level}</span>}
+                                        {q.reading_passages && (
+                                            <span className="inline-flex items-center gap-0.5 text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 font-semibold">
+                                                <span className="material-symbols-outlined text-[13px]">menu_book</span>Bài đọc
+                                            </span>
+                                        )}
+                                        {q.listening_passages && (
+                                            <span className="inline-flex items-center gap-0.5 text-xs px-2 py-0.5 rounded-full bg-sky-100 text-sky-700 font-semibold">
+                                                <span className="material-symbols-outlined text-[13px]">headphones</span>Bài nghe
+                                            </span>
+                                        )}
                                     </div>
                                 </div>
                             </label>
@@ -171,16 +182,21 @@ function QuestionsTab({ exam, onChanged }) {
             ) : (
                 <div className="space-y-2">
                     {questions.map((q, i) => (
-                        <div key={q.id} className="glass-card rounded-xl p-4 flex items-start gap-3">
-                            <span className="shrink-0 w-7 h-7 rounded-full bg-surface-low flex items-center justify-center text-xs font-bold text-on-muted">{i + 1}</span>
-                            <div className="min-w-0 flex-1">
-                                <p className="text-sm font-medium">{q.question}</p>
-                                <span className="inline-block mt-1 text-xs px-2 py-0.5 rounded-full bg-surface-low text-on-muted">{TYPE_LABELS[q.question_type] || q.question_type}</span>
+                        <div key={q.id} className="space-y-2">
+                            {q.passage_snapshot && !sameSnapshot(q.passage_snapshot, questions[i - 1]?.passage_snapshot) && (
+                                <PassageBlock snapshot={q.passage_snapshot} />
+                            )}
+                            <div className="glass-card rounded-xl p-4 flex items-start gap-3">
+                                <span className="shrink-0 w-7 h-7 rounded-full bg-surface-low flex items-center justify-center text-xs font-bold text-on-muted">{i + 1}</span>
+                                <div className="min-w-0 flex-1">
+                                    <p className="text-sm font-medium">{q.question}</p>
+                                    <span className="inline-block mt-1 text-xs px-2 py-0.5 rounded-full bg-surface-low text-on-muted">{TYPE_LABELS[q.question_type] || q.question_type}</span>
+                                </div>
+                                <button onClick={() => handleDelete(q)} disabled={deleting === q.id}
+                                        className="shrink-0 p-2 rounded-lg text-on-muted hover:text-red-500 hover:bg-red-50 transition-colors">
+                                    <span className="material-symbols-outlined text-lg">{deleting === q.id ? 'progress_activity' : 'delete'}</span>
+                                </button>
                             </div>
-                            <button onClick={() => handleDelete(q)} disabled={deleting === q.id}
-                                    className="shrink-0 p-2 rounded-lg text-on-muted hover:text-red-500 hover:bg-red-50 transition-colors">
-                                <span className="material-symbols-outlined text-lg">{deleting === q.id ? 'progress_activity' : 'delete'}</span>
-                            </button>
                         </div>
                     ))}
                 </div>

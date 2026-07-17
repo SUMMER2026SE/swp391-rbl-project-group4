@@ -67,7 +67,7 @@ exports.getOne = async (req, res) => {
 
     const { data: questions } = await examDb
       .from('quiz_questions')
-      .select('id,question,options,correct_answer,correct_answer_data,question_type,bank_question_id,explanation,order_index')
+      .select('id,question,options,correct_answer,correct_answer_data,question_type,bank_question_id,explanation,passage_snapshot,order_index')
       .eq('quiz_id', req.params.id).order('order_index');
 
     res.json({ ...quiz, questions: questions || [] });
