@@ -99,8 +99,11 @@ async function callAndParse(SYSTEM, userMsg, meta) {
   const result = await chatCompletion(
     [{ role: 'system', content: SYSTEM }, { role: 'user', content: userMsg }],
     // payload lớn hơn vì kèm bản dịch (nhất là đọc hiểu dài);
-    // temperature cao hơn bank khóa học để tăng đa dạng, giảm trùng lặp
-    { max_tokens: 8192, temperature: 0.7 }
+    // temperature cao hơn bank khóa học để tăng đa dạng, giảm trùng lặp.
+    // Model riêng cho sinh đề JLPT (FPT_AI_JLPT_MODEL) — KHÔNG đổi FPT_AI_MODEL toàn cục
+    // vì AI Sensei chat cần model đọc được ảnh (gemma); sinh đề thuần text nên
+    // dùng được model mạnh hơn (vd gpt-oss-120b). Không set → rơi về FPT_AI_MODEL.
+    { max_tokens: 8192, temperature: 0.7, model: process.env.FPT_AI_JLPT_MODEL || undefined }
   );
 
   const raw = result.choices?.[0]?.message?.content || '';
