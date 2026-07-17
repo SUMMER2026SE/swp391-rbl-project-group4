@@ -105,6 +105,8 @@ async function callAndParse(SYSTEM, userMsg, meta) {
     // dùng được model mạnh hơn (vd gpt-oss-120b). Không set → rơi về FPT_AI_MODEL.
     { max_tokens: 8192, temperature: 0.7, model: process.env.FPT_AI_JLPT_MODEL || undefined }
   );
+  // Log model thực tế phục vụ request — để biết chắc env FPT_AI_JLPT_MODEL đã được nạp
+  console.log('[JLPT-AI] model:', result.model || process.env.FPT_AI_JLPT_MODEL || process.env.FPT_AI_MODEL || '(mặc định)');
 
   const raw = result.choices?.[0]?.message?.content || '';
   const cleaned = raw.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
