@@ -68,7 +68,11 @@ app.use((_req, res) => res.status(404).json({ error: 'Not found' }));
 // ── Global error handler ──────────────────────────────────────────────────────
 app.use((err, _req, res, _next) => {
   console.error(err);
-  res.status(500).json({ error: err.message || 'Internal server error' });
+  // Production: không lộ message gốc (Supabase/Postgres) ra client; dev giữ nguyên để debug.
+  const message = process.env.NODE_ENV === 'production'
+    ? 'Đã có lỗi xảy ra.'
+    : (err.message || 'Internal server error');
+  res.status(500).json({ error: message });
 });
 
 module.exports = app;
