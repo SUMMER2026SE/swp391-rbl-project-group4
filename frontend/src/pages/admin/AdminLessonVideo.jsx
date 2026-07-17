@@ -35,6 +35,24 @@ function parseTime(str) {
   return null;
 }
 
+// ── Đọc file phụ đề ───────────────────────────────────────────────────────────
+// Phụ đề tiếng Nhật hay được lưu Shift-JIS: thử UTF-8 nghiêm ngặt trước, byte không
+// hợp lệ UTF-8 thì gần như chắc là Shift-JIS. Trả về { text, usedShiftJis } vì đây là
+// suy đoán — người soạn cần tự xác nhận chữ hiển thị đúng.
+const MAX_SUBTITLE_MB = 2;
+async function decodeSubtitleFile(file) {
+  const buf = await file.arrayBuffer();
+  let text;
+  let usedShiftJis = false;
+  try {
+    text = new TextDecoder('utf-8', { fatal: true }).decode(buf);
+  } catch {
+    text = new TextDecoder('shift_jis').decode(buf);
+    usedShiftJis = true;
+  }
+  return { text: text.replace(/^\uFEFF/, '').replace(/\r\n/g, '\n'), usedShiftJis };
+}
+
 const LANGS = [
   { value: 'ja', label: '日 Nhật' },
   { value: 'vi', label: 'VI Việt' },
@@ -293,6 +311,7 @@ function TranscriptSegmentsEditor({ rows, setRows, isYouTube, hasVideo, previewV
   const [inputMode, setInputMode] = useState('manual'); // 'manual' | 'paste' | 'ai'
   const [pasteText, setPasteText] = useState('');
   const [pasteLang, setPasteLang] = useState('ja');
+  const [pasteFileName, setPasteFileName] = useState('');
   const [transcribing, setTranscribing] = useState(false);
 
   const updateRow = (i, patch) => setRows(rs => rs.map((r, idx) => idx === i ? { ...r, ...patch } : r));
@@ -329,6 +348,30 @@ function TranscriptSegmentsEditor({ rows, setRows, isYouTube, hasVideo, previewV
   };
   const canGrabTime = hasVideo && !isYouTube;
 
+  const handleSubtitleFile = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // cho phép chọn lại đúng file vừa chọn
+    if (!file) return;
+    if (!/\.(srt|vtt)$/i.test(file.name)) {
+      onAlert({ type: 'error', msg: 'Chỉ nhận file phụ đề .srt hoặc .vtt.' });
+      return;
+    }
+    if (file.size > MAX_SUBTITLE_MB * 1024 * 1024) {
+      onAlert({ type: 'error', msg: `File quá lớn, tối đa ${MAX_SUBTITLE_MB}MB.` });
+      return;
+    }
+    try {
+      const { text, usedShiftJis } = await decodeSubtitleFile(file);
+      setPasteText(text);
+      setPasteFileName(file.name);
+      if (usedShiftJis) {
+        onAlert({ type: 'success', msg: 'Đã đọc file với bảng mã Shift-JIS. Kiểm tra lại tiếng Nhật có hiển thị đúng không trước khi phân tích.' });
+      }
+    } catch {
+      onAlert({ type: 'error', msg: 'Không đọc được nội dung file — bảng mã không được hỗ trợ. Hãy lưu lại file dưới dạng UTF-8 rồi thử lại.' });
+    }
+  };
+
   const handleParse = () => {
     const cues = parseSubtitles(pasteText);
     if (!cues.length) {
@@ -341,6 +384,7 @@ function TranscriptSegmentsEditor({ rows, setRows, isYouTube, hasVideo, previewV
       parts: [{ lang: pasteLang, text: c.text }],
     })));
     setPasteText('');
+    setPasteFileName('');
     setInputMode('manual');
     onAlert({ type: 'success', msg: `Đã phân tích ${cues.length} dòng. Kiểm tra lại rồi nhấn "Lưu nội dung".` });
   };
@@ -384,6 +428,22 @@ function TranscriptSegmentsEditor({ rows, setRows, isYouTube, hasVideo, previewV
 
       {inputMode === 'paste' && (
         <div className="mb-4 p-4 rounded-xl border border-outline/40 bg-surface-low/50 space-y-3">
+          <div>
+            <label className="flex items-center justify-center gap-2 w-full px-4 py-6 border-2 border-dashed border-outline rounded-xl text-sm text-on-muted cursor-pointer hover:border-tsubaki-red hover:text-tsubaki-red transition-colors">
+              <span className="material-symbols-outlined text-base">upload_file</span>
+              Chọn file phụ đề (.srt/.vtt)
+              <input
+                type="file"
+                accept=".srt,.vtt,text/vtt"
+                onChange={handleSubtitleFile}
+                className="hidden"
+              />
+            </label>
+            {pasteFileName && (
+              <p className="text-xs text-on-muted mt-1">Đã chọn: {pasteFileName}</p>
+            )}
+          </div>
+          <p className="text-xs text-on-muted">hoặc dán trực tiếp nội dung bên dưới</p>
           <textarea
             value={pasteText}
             onChange={e => setPasteText(e.target.value)}
