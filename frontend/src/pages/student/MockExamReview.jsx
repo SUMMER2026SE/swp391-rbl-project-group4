@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import StudentLayout from '../../components/layout/StudentLayout';
+import MockExamShell from '../../components/mockexam/MockExamShell';
 import Button from '../../components/ui/Button';
 import Alert from '../../components/ui/Alert';
 import FuriganaText from '../../components/ui/FuriganaText';
@@ -20,8 +20,8 @@ export default function MockExamReview() {
     getMockReview(attemptId).then(setData).catch(e => setError(e.message)).finally(() => setLoading(false));
   }, [attemptId]);
 
-  if (loading) return <StudentLayout title="Xem lại"><div className="flex justify-center py-20"><span className="material-symbols-outlined animate-spin text-tsubaki-red text-4xl">progress_activity</span></div></StudentLayout>;
-  if (!data) return <StudentLayout title="Xem lại"><Alert type="error">{error}</Alert></StudentLayout>;
+  if (loading) return <MockExamShell title="Xem lại"><div className="flex justify-center py-20"><span className="material-symbols-outlined animate-spin text-tsubaki-red text-4xl">progress_activity</span></div></MockExamShell>;
+  if (!data) return <MockExamShell title="Xem lại"><Alert type="error">{error}</Alert></MockExamShell>;
 
   // Danh sách phẳng toàn bộ câu hỏi (đúng thứ tự hiển thị) cho đánh số + nav grid
   const allQuestions = data.sections.flatMap(s => s.groups.flatMap(g => g.questions));
@@ -30,7 +30,7 @@ export default function MockExamReview() {
   const correctCount = allQuestions.filter(q => q.is_correct).length;
 
   return (
-    <StudentLayout title="Xem lại bài làm">
+    <MockExamShell title="Xem lại bài làm">
       <div className="max-w-5xl mx-auto grid grid-cols-1 lg:grid-cols-[1fr_200px] gap-5">
       <div className="space-y-5 min-w-0">
         <button onClick={() => navigate(`/mock-exams/attempt/${attemptId}/result`)} className="text-sm text-on-muted hover:text-tsubaki-red flex items-center gap-1">
@@ -139,6 +139,6 @@ export default function MockExamReview() {
         </div>
       </aside>
       </div>
-    </StudentLayout>
+    </MockExamShell>
   );
 }

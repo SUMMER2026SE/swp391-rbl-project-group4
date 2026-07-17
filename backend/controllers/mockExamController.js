@@ -133,8 +133,10 @@ exports.listExams = async (req, res) => {
     const { data: exams, error, count } = await query;
     if (error) throw error;
 
-    // Đề premium bị khóa với tài khoản free (chỉ chặn làm bài mới — xem lại vẫn được)
-    const tier = await getUserTier(req.user.id);
+    // Đề premium bị khóa với tài khoản free (chỉ chặn làm bài mới — xem lại vẫn được).
+    // Teacher không mua được gói premium → luôn coi như free (chỉ thi đề miễn phí).
+    const role = req.user.user_metadata?.role || 'student';
+    const tier = role === 'teacher' ? 'free' : await getUserTier(req.user.id);
 
     const examIds = (exams || []).map(e => e.id);
     const meta = {};
@@ -185,7 +187,8 @@ exports.getExamMeta = async (req, res) => {
       .from('mock_exams').select('id, level, title, description, is_published, is_free').eq('id', req.params.id).single();
     if (!exam || !exam.is_published) return res.status(404).json({ error: 'Không tìm thấy đề thi.' });
 
-    const tier = await getUserTier(req.user.id);
+    const role = req.user.user_metadata?.role || 'student';
+    const tier = role === 'teacher' ? 'free' : await getUserTier(req.user.id);
     const locked = !exam.is_free && tier !== 'premium';
 
     // User từng nộp bài đề này chưa (để FE hiện "chỉ xem lại được" khi bị khóa)
@@ -250,6 +253,10 @@ async function getOwnedAttempt(attemptId, userId) {
 // POST /api/mock-exams/:id/attempts — bắt đầu (hoặc trả lại attempt đang dở)
 exports.startAttempt = async (req, res) => {
   try {
+    // Admin quản lý đề, không tham gia thi; teacher chỉ được thi đề miễn phí
+    const role = req.user.user_metadata?.role || 'student';
+    if (role === 'admin') return res.status(403).json({ error: 'Admin quản lý đề, không tham gia thi.' });
+
     const { data: exam } = await jlptDb
       .from('mock_exams').select('id, level, is_published, is_free').eq('id', req.params.id).single();
     if (!exam || !exam.is_published) return res.status(404).json({ error: 'Không tìm thấy đề thi.' });
@@ -262,6 +269,10 @@ exports.startAttempt = async (req, res) => {
     if (!attempt) {
       // Đề premium: tài khoản free không được BẮT ĐẦU attempt mới
       if (!exam.is_free) {
+        // Teacher không mua được gói → 403 KHÔNG kèm code premium_required (FE không hiện CTA mua gói)
+        if (role === 'teacher') {
+          return res.status(403).json({ error: 'Đề premium chỉ dành cho học viên.' });
+        }
         const tier = await getUserTier(req.user.id);
         if (tier !== 'premium') {
           return res.status(403).json({
@@ -281,7 +292,7 @@ exports.startAttempt = async (req, res) => {
       const deadline = new Date(Date.now() + firstSection.time_limit_minutes * 60 * 1000).toISOString();
       const { data: created, error } = await jlptDb.from('mock_attempts')
         .insert({
-          exam_id: exam.id, user_id: req.user.id, attempt_number: (count || 0) + 1,
+          exam_id: exam.id, user_id: req.user.id, attempt_number: (count || 0) + 1, user_role: role,
           current_section_position: firstSection.position, section_deadline_at: deadline,
         })
         .select().single();
@@ -470,9 +481,10 @@ exports.getReview = async (req, res) => {
 // GET /api/mock-exams/:id/leaderboard — chỉ lần làm đầu, điểm↓ thời gian↑
 exports.getLeaderboard = async (req, res) => {
   try {
+    // Chỉ xếp hạng student — attempt của teacher không lên bảng
     const { data: rows, error } = await jlptDb.from('mock_attempts')
       .select('id, user_id, total_score, duration_seconds, submitted_at, scores')
-      .eq('exam_id', req.params.id).eq('status', 'submitted').eq('attempt_number', 1)
+      .eq('exam_id', req.params.id).eq('status', 'submitted').eq('attempt_number', 1).eq('user_role', 'student')
       .order('total_score', { ascending: false })
       .order('duration_seconds', { ascending: true })
       .limit(50);
@@ -502,12 +514,13 @@ exports.getLeaderboard = async (req, res) => {
     if (!myRank) {
       const { data: mine } = await jlptDb.from('mock_attempts')
         .select('total_score, duration_seconds').eq('exam_id', req.params.id)
-        .eq('user_id', req.user.id).eq('status', 'submitted').eq('attempt_number', 1).maybeSingle();
+        .eq('user_id', req.user.id).eq('status', 'submitted').eq('attempt_number', 1)
+        .eq('user_role', 'student').maybeSingle();
       if (mine) {
         // đếm số người xếp trên
         const { count: better } = await jlptDb.from('mock_attempts')
           .select('id', { count: 'exact', head: true })
-          .eq('exam_id', req.params.id).eq('status', 'submitted').eq('attempt_number', 1)
+          .eq('exam_id', req.params.id).eq('status', 'submitted').eq('attempt_number', 1).eq('user_role', 'student')
           .or(`total_score.gt.${mine.total_score},and(total_score.eq.${mine.total_score},duration_seconds.lt.${mine.duration_seconds})`);
         myRank = { rank: (better || 0) + 1, is_me: true, total_score: mine.total_score, duration_seconds: mine.duration_seconds, out_of_top: true };
       }

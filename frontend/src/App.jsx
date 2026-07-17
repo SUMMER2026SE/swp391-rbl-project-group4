@@ -165,12 +165,12 @@ export default function App() {
             <Route path="/reading/:id" element={<StudentRoute><ReadingReader /></StudentRoute>} />
             <Route path="/exams"      element={<StudentRoute><Exams /></StudentRoute>} />
             <Route path="/exams/:assignmentId" element={<StudentRoute><TakeExam /></StudentRoute>} />
-            <Route path="/mock-exams"          element={<StudentRoute><MockExamList /></StudentRoute>} />
-            <Route path="/mock-exams/history"  element={<StudentRoute><MockExamHistory /></StudentRoute>} />
-            <Route path="/mock-exams/:id"      element={<StudentRoute><MockExamDetail /></StudentRoute>} />
-            <Route path="/mock-exams/attempt/:attemptId"        element={<StudentRoute><MockExamRoom /></StudentRoute>} />
-            <Route path="/mock-exams/attempt/:attemptId/result" element={<StudentRoute><MockExamResult /></StudentRoute>} />
-            <Route path="/mock-exams/attempt/:attemptId/review" element={<StudentRoute><MockExamReview /></StudentRoute>} />
+            <Route path="/mock-exams"          element={<StudentRoute allowTeacher><MockExamList /></StudentRoute>} />
+            <Route path="/mock-exams/history"  element={<StudentRoute allowTeacher><MockExamHistory /></StudentRoute>} />
+            <Route path="/mock-exams/:id"      element={<StudentRoute allowTeacher><MockExamDetail /></StudentRoute>} />
+            <Route path="/mock-exams/attempt/:attemptId"        element={<StudentRoute allowTeacher><MockExamRoom /></StudentRoute>} />
+            <Route path="/mock-exams/attempt/:attemptId/result" element={<StudentRoute allowTeacher><MockExamResult /></StudentRoute>} />
+            <Route path="/mock-exams/attempt/:attemptId/review" element={<StudentRoute allowTeacher><MockExamReview /></StudentRoute>} />
             <Route path="/flashcards"             element={<StudentRoute><Flashcards /></StudentRoute>} />
             <Route path="/flashcards/new"         element={<StudentRoute><FlashcardSetForm /></StudentRoute>} />
             <Route path="/flashcards/folders/:id" element={<StudentRoute><FlashcardFolderDetail /></StudentRoute>} />
