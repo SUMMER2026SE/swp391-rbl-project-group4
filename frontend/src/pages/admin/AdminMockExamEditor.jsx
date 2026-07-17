@@ -384,6 +384,7 @@ function AiGenerateModal({ group, onClose, onAdded }) {
                   onChange={e => setDrafts(ds => ds.map((x, j) => j === i ? { ...x, _picked: e.target.checked } : x))} />
                 <div className="flex-1 text-sm">
                   <p className="font-semibold text-charcoal">{d.question_text || <em className="text-on-muted">(không có đề chữ — nghe)</em>}</p>
+                  {d.translation_vi && <p className="text-xs text-emerald-700 mt-0.5 whitespace-pre-wrap">🇻🇳 {d.translation_vi}</p>}
                   <ul className="mt-1 space-y-0.5">
                     {d.options.map((o, k) => (
                       <li key={k} className={k === d.correct_index ? 'text-green-700 font-semibold' : 'text-on-muted'}>
@@ -393,7 +394,6 @@ function AiGenerateModal({ group, onClose, onAdded }) {
                     ))}
                   </ul>
                   {d.explanation && <p className="text-xs text-on-muted mt-1">💡 {d.explanation}</p>}
-                  {d.translation_vi && <p className="text-xs text-emerald-700 mt-1 whitespace-pre-wrap">🇻🇳 {d.translation_vi}</p>}
                   {listening && d.audio_transcript && <p className="text-xs text-blue-700 mt-1">🎧 {d.audio_transcript}</p>}
                 </div>
               </label>

@@ -79,6 +79,15 @@ export default function QuestionCard({ index, value, onSave, onDelete, listening
         className="w-full px-3 py-2 border border-outline rounded-lg text-sm resize-y min-h-[52px] outline-none focus:border-tsubaki-red"
       />
 
+      <textarea
+        value={q.translation_vi || ''} disabled={disabled}
+        onChange={e => update({ translation_vi: e.target.value })}
+        placeholder={listening
+          ? 'Bản dịch câu hỏi + tóm tắt nội dung audio (tiếng Việt — hiện khi học viên xem lại bài)'
+          : 'Bản dịch câu hỏi (tiếng Việt — hiện khi học viên xem lại bài)'}
+        className="w-full px-3 py-2 border border-outline rounded-lg text-sm resize-y min-h-[44px] outline-none focus:border-tsubaki-red"
+      />
+
       {listening && (
         <div className="space-y-2">
           <div className="flex items-center gap-2 text-xs">
@@ -151,15 +160,6 @@ export default function QuestionCard({ index, value, onSave, onDelete, listening
         value={q.explanation || ''} disabled={disabled}
         onChange={e => update({ explanation: e.target.value })}
         placeholder="Giải thích (hiện khi học viên xem lại bài)"
-        className="w-full px-3 py-2 border border-outline rounded-lg text-sm resize-y min-h-[44px] outline-none focus:border-tsubaki-red"
-      />
-
-      <textarea
-        value={q.translation_vi || ''} disabled={disabled}
-        onChange={e => update({ translation_vi: e.target.value })}
-        placeholder={listening
-          ? 'Bản dịch câu hỏi + tóm tắt nội dung audio (tiếng Việt — hiện khi học viên xem lại bài)'
-          : 'Bản dịch câu hỏi (tiếng Việt — hiện khi học viên xem lại bài)'}
         className="w-full px-3 py-2 border border-outline rounded-lg text-sm resize-y min-h-[44px] outline-none focus:border-tsubaki-red"
       />
 
