@@ -1,10 +1,10 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Button from '../../ui/Button';
 import { adminUploadMedia, adminGenerateQuestionAudio } from '../../../lib/mockExamApi';
 
 // Card soạn/sửa 1 câu hỏi trắc nghiệm (3–4 lựa chọn). Dùng cho câu đã lưu (editable inline).
 // value: { id?, question_text, options[], correct_index, explanation, audio_url, image_url, audio_transcript }
-export default function QuestionCard({ index, value, onSave, onDelete, listening, saving, disabled }) {
+export default function QuestionCard({ index, value, onSave, onDelete, listening, saving, disabled, onRegister }) {
   const [q, setQ] = useState(value);
   const [dirty, setDirty] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -60,6 +60,12 @@ export default function QuestionCard({ index, value, onSave, onDelete, listening
 
   const canSave = q.options.every(o => o.trim()) && q.options.length >= 3;
 
+  // Báo trạng thái + dữ liệu hiện tại lên parent — phục vụ nút "Lưu bản nháp" flush mọi câu đang sửa dở
+  useEffect(() => {
+    onRegister?.({ id: q.id, dirty, valid: canSave, question: q, markSaved: () => setDirty(false) });
+  });
+  useEffect(() => () => onRegister?.(null), []);
+
   return (
     <div className="border border-outline/40 rounded-xl p-4 space-y-3 bg-white">
       <div className="flex items-center justify-between">
@@ -77,6 +83,15 @@ export default function QuestionCard({ index, value, onSave, onDelete, listening
         onChange={e => update({ question_text: e.target.value })}
         placeholder={listening ? 'Nội dung câu hỏi (có thể để trống với 即時応答)' : 'Nội dung câu hỏi (tiếng Nhật)'}
         className="w-full px-3 py-2 border border-outline rounded-lg text-sm resize-y min-h-[52px] outline-none focus:border-tsubaki-red"
+      />
+
+      <textarea
+        value={q.translation_vi || ''} disabled={disabled}
+        onChange={e => update({ translation_vi: e.target.value })}
+        placeholder={listening
+          ? 'Bản dịch câu hỏi + tóm tắt nội dung audio (tiếng Việt — hiện khi học viên xem lại bài)'
+          : 'Bản dịch câu hỏi (tiếng Việt — hiện khi học viên xem lại bài)'}
+        className="w-full px-3 py-2 border border-outline rounded-lg text-sm resize-y min-h-[44px] outline-none focus:border-tsubaki-red"
       />
 
       {listening && (
@@ -151,15 +166,6 @@ export default function QuestionCard({ index, value, onSave, onDelete, listening
         value={q.explanation || ''} disabled={disabled}
         onChange={e => update({ explanation: e.target.value })}
         placeholder="Giải thích (hiện khi học viên xem lại bài)"
-        className="w-full px-3 py-2 border border-outline rounded-lg text-sm resize-y min-h-[44px] outline-none focus:border-tsubaki-red"
-      />
-
-      <textarea
-        value={q.translation_vi || ''} disabled={disabled}
-        onChange={e => update({ translation_vi: e.target.value })}
-        placeholder={listening
-          ? 'Bản dịch câu hỏi + tóm tắt nội dung audio (tiếng Việt — hiện khi học viên xem lại bài)'
-          : 'Bản dịch câu hỏi (tiếng Việt — hiện khi học viên xem lại bài)'}
         className="w-full px-3 py-2 border border-outline rounded-lg text-sm resize-y min-h-[44px] outline-none focus:border-tsubaki-red"
       />
 

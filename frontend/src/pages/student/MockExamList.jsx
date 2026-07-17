@@ -1,12 +1,15 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import StudentLayout from '../../components/layout/StudentLayout';
+import MockExamShell from '../../components/mockexam/MockExamShell';
 import Alert from '../../components/ui/Alert';
 import { JLPT_LEVELS } from '../../lib/mockExamConstants';
 import { listMockExams } from '../../lib/mockExamApi';
+import { useAuth } from '../../contexts/AuthContext';
 
 export default function MockExamList() {
   const navigate = useNavigate();
+  const { isTeacher } = useAuth();
+  const teacher = isTeacher();
   const [exams, setExams] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -21,7 +24,7 @@ export default function MockExamList() {
   }, [level]);
 
   return (
-    <StudentLayout title="Thi thử JLPT">
+    <MockExamShell title="Thi thử JLPT">
       <div className="space-y-5">
         <div className="flex items-start justify-between gap-3">
           <div>
@@ -60,11 +63,18 @@ export default function MockExamList() {
                 <div className="flex items-center justify-between gap-2">
                   <h3 className="font-display font-bold text-charcoal truncate flex-1">{e.title}</h3>
                   {e.locked ? (
-                    <button
-                      onClick={(ev) => { ev.stopPropagation(); navigate('/subscription'); }}
-                      className="shrink-0 inline-flex items-center gap-0.5 px-2 py-0.5 rounded-lg bg-amber-500 text-white font-semibold text-[11px] hover:bg-amber-600 transition-colors">
-                      <span className="material-symbols-outlined text-sm">lock</span>Mở khóa
-                    </button>
+                    // Teacher không mua được gói premium → badge khóa thay vì CTA mua gói
+                    teacher ? (
+                      <span className="shrink-0 inline-flex items-center gap-0.5 px-2 py-0.5 rounded-lg bg-outline/30 text-on-muted font-semibold text-[11px]">
+                        <span className="material-symbols-outlined text-sm">lock</span>Học viên Premium
+                      </span>
+                    ) : (
+                      <button
+                        onClick={(ev) => { ev.stopPropagation(); navigate('/subscription'); }}
+                        className="shrink-0 inline-flex items-center gap-0.5 px-2 py-0.5 rounded-lg bg-amber-500 text-white font-semibold text-[11px] hover:bg-amber-600 transition-colors">
+                        <span className="material-symbols-outlined text-sm">lock</span>Mở khóa
+                      </button>
+                    )
                   ) : (
                     <span className="shrink-0 inline-flex items-center gap-0.5 px-2 py-0.5 rounded-lg bg-green-100 text-green-700 font-semibold text-[11px]">
                       <span className="material-symbols-outlined text-sm">lock_open</span>Miễn phí
@@ -85,13 +95,15 @@ export default function MockExamList() {
                   <p className="text-[11px] text-on-muted mt-2">Đề này bạn chưa làm lần nào</p>
                 )}
                 {e.locked && e.best_score != null && !e.active_attempt_id && (
-                  <p className="text-[11px] text-amber-700 mt-1">Chỉ xem lại được kết quả — nâng cấp Premium để làm lại.</p>
+                  <p className="text-[11px] text-amber-700 mt-1">
+                    {teacher ? 'Chỉ xem lại được kết quả — đề này dành cho học viên Premium.' : 'Chỉ xem lại được kết quả — nâng cấp Premium để làm lại.'}
+                  </p>
                 )}
               </div>
             ))}
           </div>
         )}
       </div>
-    </StudentLayout>
+    </MockExamShell>
   );
 }

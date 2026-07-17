@@ -334,4 +334,4 @@ async function parseImportFile({ buffer, filename, type }) {
   return { items, source: 'ai', warnings };
 }
 
-module.exports = { parseImportFile };
+module.exports = { parseImportFile, rowsFromCsv, sheetsFromXlsx, normalizeHeader };

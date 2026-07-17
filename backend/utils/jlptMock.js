@@ -388,4 +388,22 @@ function computeJlptScores(questions, answersMap, level) {
   return { scores, total_score: totalScore, passed, perQuestion };
 }
 
-module.exports = { SCORE_COLUMNS, PASS_TOTAL, MONDAI_TYPES, BLUEPRINTS, computeJlptScores };
+// ── Validate payload 1 câu hỏi JLPT (trắc nghiệm 3–4 lựa chọn) ───────────────
+// Dùng chung cho đề thi thử (mock_questions) và ngân hàng đề (jlpt_bank_questions).
+function validateQuestionPayload(q) {
+  if (!Array.isArray(q.options) || q.options.length < 3 || q.options.length > 4)
+    return 'Mỗi câu phải có 3 hoặc 4 lựa chọn.';
+  if (q.options.some(o => typeof o !== 'string' || !o.trim()))
+    return 'Lựa chọn không được để trống.';
+  const ci = Number(q.correct_index);
+  if (!Number.isInteger(ci) || ci < 0 || ci >= q.options.length)
+    return 'Đáp án đúng (correct_index) không hợp lệ.';
+  if (q.option_translations != null) {
+    if (!Array.isArray(q.option_translations) || q.option_translations.length !== q.options.length
+        || q.option_translations.some(t => typeof t !== 'string'))
+      return 'Bản dịch lựa chọn (option_translations) phải là mảng chuỗi cùng số lượng với lựa chọn.';
+  }
+  return null;
+}
+
+module.exports = { SCORE_COLUMNS, PASS_TOTAL, MONDAI_TYPES, BLUEPRINTS, computeJlptScores, validateQuestionPayload };
