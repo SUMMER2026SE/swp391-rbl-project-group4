@@ -1,9 +1,15 @@
-import { Navigate } from 'react-router-dom';
+import { Navigate, useParams } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 
-// Chỉ cho student vào — admin/teacher bị chuyển về dashboard riêng của họ
-export default function StudentRoute({ children }) {
+// Chỉ cho student vào — admin/teacher bị chuyển về dashboard riêng của họ.
+// allowAdmin: các route học (bài học/quiz) cho admin vào xem như học sinh thật.
+// adminRedirectTo / teacherRedirectTo: thay vì cho vào, chuyển admin/teacher sang route
+// preview tương ứng (":param" trong chuỗi được thay bằng param của URL hiện tại,
+// vd "/admin/courses/preview/:id"). Không truyền thì giữ hành vi chặn cũ.
+export default function StudentRoute({ children, allowAdmin = false, adminRedirectTo, teacherRedirectTo }) {
   const { user, loading, isAdmin, isTeacher } = useAuth();
+  const params = useParams();
+  const resolve = (tpl) => tpl.replace(/:(\w+)/g, (_, key) => params[key] ?? '');
 
   if (loading) {
     return (
@@ -16,7 +22,13 @@ export default function StudentRoute({ children }) {
   }
 
   if (!user) return <Navigate to="/login" replace />;
-  if (isAdmin())   return <Navigate to="/admin"   replace />;
-  if (isTeacher()) return <Navigate to="/teacher" replace />;
+  if (isAdmin()) {
+    if (adminRedirectTo) return <Navigate to={resolve(adminRedirectTo)} replace />;
+    return allowAdmin ? children : <Navigate to="/admin" replace />;
+  }
+  if (isTeacher()) {
+    if (teacherRedirectTo) return <Navigate to={resolve(teacherRedirectTo)} replace />;
+    return <Navigate to="/teacher" replace />;
+  }
   return children;
 }

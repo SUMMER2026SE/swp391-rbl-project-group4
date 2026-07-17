@@ -51,6 +51,11 @@ function validateQuestionPayload(q) {
   const ci = Number(q.correct_index);
   if (!Number.isInteger(ci) || ci < 0 || ci >= q.options.length)
     return 'Đáp án đúng (correct_index) không hợp lệ.';
+  if (q.option_translations != null) {
+    if (!Array.isArray(q.option_translations) || q.option_translations.length !== q.options.length
+        || q.option_translations.some(t => typeof t !== 'string'))
+      return 'Bản dịch lựa chọn (option_translations) phải là mảng chuỗi cùng số lượng với lựa chọn.';
+  }
   return null;
 }
 
@@ -58,6 +63,10 @@ function handleError(res, err, fallback) {
   console.error(err);
   res.status(err.httpStatus || 500).json({ error: err.httpStatus ? err.message : fallback });
 }
+
+// Cấu trúc đề (phần thi + mondai) cố định theo blueprint JLPT chuẩn — chặn mọi
+// thao tác thêm/xóa/sắp xếp lại. Chỉ số câu trong mỗi mondai là linh hoạt.
+const STRUCTURE_LOCKED = 'Cấu trúc đề cố định theo format JLPT chuẩn, không thể thêm/xóa phần thi hoặc mondai.';
 
 // ─── Đề thi (mock_exams) ──────────────────────────────────────────────────────
 
@@ -67,7 +76,7 @@ exports.listExams = async (req, res) => {
   const offset = (page - 1) * limit;
   try {
     let query = supabaseAdmin.from('mock_exams')
-      .select('id, level, title, description, is_published, created_at, published_at', { count: 'exact' })
+      .select('id, level, title, description, is_published, is_free, created_at, published_at', { count: 'exact' })
       .order('created_at', { ascending: false })
       .range(offset, offset + Number(limit) - 1);
     if (level)                      query = query.eq('level', level);
@@ -112,8 +121,9 @@ exports.listExams = async (req, res) => {
 };
 
 // POST /api/admin/mock-exams
+// Đề luôn tạo từ blueprint chuẩn JLPT — cấu trúc phần thi/mondai cố định.
 exports.createExam = async (req, res) => {
-  const { level, title, description, use_blueprint = true } = req.body;
+  const { level, title, description } = req.body;
   if (!level || !BLUEPRINTS[level]) return res.status(400).json({ error: 'Cấp độ JLPT không hợp lệ.' });
   if (!title?.trim())               return res.status(400).json({ error: 'Tên đề thi là bắt buộc.' });
   try {
@@ -122,26 +132,24 @@ exports.createExam = async (req, res) => {
       .select().single();
     if (error) throw error;
 
-    if (use_blueprint) {
-      // Tạo khung đề chuẩn: sections + groups (chưa có câu hỏi)
-      const bp = BLUEPRINTS[level];
-      for (let si = 0; si < bp.sections.length; si++) {
-        const s = bp.sections[si];
-        const { data: section, error: sErr } = await supabaseAdmin.from('mock_exam_sections')
-          .insert({ exam_id: exam.id, position: si + 1, section_type: s.section_type, title: s.title, time_limit_minutes: s.time_limit_minutes })
-          .select('id').single();
-        if (sErr) throw sErr;
-        const groupRows = s.groups.map((g, gi) => ({
-          section_id:       section.id,
-          position:         gi + 1,
-          mondai_number:    gi + 1,
-          mondai_type:      g.mondai_type,
-          score_category:   g.score_category,
-          instruction_text: MONDAI_TYPES[g.mondai_type]?.instruction || null,
-        }));
-        const { error: gErr } = await supabaseAdmin.from('mock_question_groups').insert(groupRows);
-        if (gErr) throw gErr;
-      }
+    // Tạo khung đề chuẩn: sections + groups (chưa có câu hỏi)
+    const bp = BLUEPRINTS[level];
+    for (let si = 0; si < bp.sections.length; si++) {
+      const s = bp.sections[si];
+      const { data: section, error: sErr } = await supabaseAdmin.from('mock_exam_sections')
+        .insert({ exam_id: exam.id, position: si + 1, section_type: s.section_type, title: s.title, time_limit_minutes: s.time_limit_minutes })
+        .select('id').single();
+      if (sErr) throw sErr;
+      // Câu chỉ dẫn (instruction) KHÔNG lưu DB — là hằng số chuẩn JLPT, FE render từ mockExamConstants.
+      const groupRows = s.groups.map((g, gi) => ({
+        section_id:       section.id,
+        position:         gi + 1,
+        mondai_number:    gi + 1,
+        mondai_type:      g.mondai_type,
+        score_category:   g.score_category,
+      }));
+      const { error: gErr } = await supabaseAdmin.from('mock_question_groups').insert(groupRows);
+      if (gErr) throw gErr;
     }
     res.status(201).json(exam);
   } catch (err) { handleError(res, err, 'Không thể tạo đề thi.'); }
@@ -190,9 +198,10 @@ exports.getExam = async (req, res) => {
 
 // PUT /api/admin/mock-exams/:id — sửa meta (title/description/level)
 exports.updateExam = async (req, res) => {
-  const allowed = ['title', 'description', 'level'];
+  const allowed = ['title', 'description', 'level', 'is_free'];
   const updates = Object.fromEntries(Object.entries(req.body).filter(([k]) => allowed.includes(k)));
   if (!Object.keys(updates).length) return res.status(400).json({ error: 'Không có trường nào để cập nhật.' });
+  if ('is_free' in updates) updates.is_free = !!updates.is_free;
   if (updates.level && !BLUEPRINTS[updates.level]) return res.status(400).json({ error: 'Cấp độ JLPT không hợp lệ.' });
   try {
     const { data: exam } = await supabaseAdmin.from('mock_exams').select('id, is_published, level').eq('id', req.params.id).single();
@@ -238,12 +247,12 @@ exports.publishExam = async (req, res) => {
     let groups = [], questions = [];
     if (sectionIds.length) {
       ({ data: groups } = await supabaseAdmin.from('mock_question_groups')
-        .select('id, section_id, mondai_number, mondai_type, score_category, audio_url').in('section_id', sectionIds));
+        .select('id, section_id, mondai_number, mondai_type, score_category').in('section_id', sectionIds));
       groups = groups || [];
       const groupIds = groups.map(g => g.id);
       if (groupIds.length) {
         ({ data: questions } = await supabaseAdmin.from('mock_questions')
-          .select('id, group_id, question_text, audio_url, options, correct_index').in('group_id', groupIds));
+          .select('id, group_id, question_text, image_url, audio_url, options, correct_index').in('group_id', groupIds));
         questions = questions || [];
       }
     }
@@ -259,11 +268,11 @@ exports.publishExam = async (req, res) => {
       const label = `${sectionLabel[g.section_id]} › 問題${g.mondai_number} (${MONDAI_TYPES[g.mondai_type]?.ja || g.mondai_type})`;
       const gQuestions = questions.filter(q => q.group_id === g.id);
       if (!gQuestions.length) { errors.push(`${label}: chưa có câu hỏi.`); continue; }
-      if (g.score_category === 'listening' && !g.audio_url && !gQuestions.every(q => q.audio_url))
-        errors.push(`${label}: phần nghe phải có audio (cho cả mondai hoặc từng câu).`);
       gQuestions.forEach((q, i) => {
         const msg = validateQuestionPayload(q);
         if (msg) errors.push(`${label} câu ${i + 1}: ${msg}`);
+        if (g.score_category === 'listening' && !q.audio_url)
+          errors.push(`${label} câu ${i + 1}: câu nghe phải có audio riêng.`);
         if (g.score_category !== 'listening' && !q.question_text?.trim())
           errors.push(`${label} câu ${i + 1}: thiếu nội dung câu hỏi.`);
       });
@@ -285,11 +294,36 @@ exports.publishExam = async (req, res) => {
 
     if (errors.length) return res.status(400).json({ error: 'Đề chưa đủ điều kiện xuất bản.', details: errors });
 
+    // ── Cảnh báo (không chặn): số câu mỗi mondai lệch so với chuẩn blueprint ──
+    // Điểm tính theo tỷ lệ đúng nên lệch số câu không phá thang điểm — chỉ nhắc admin.
+    const warnings = [];
+    const bp = BLUEPRINTS[exam.level];
+    const sectionPos = {};
+    (sections || []).forEach(s => { sectionPos[s.id] = s.position; });
+    // Map "vị trí phần : mondai_type" → số câu chuẩn
+    const stdCount = {};
+    (bp?.sections || []).forEach((s, si) => {
+      s.groups.forEach(bg => { stdCount[`${si + 1}:${bg.mondai_type}`] = bg.question_count; });
+    });
+    for (const gr of groups) {
+      const std = stdCount[`${sectionPos[gr.section_id]}:${gr.mondai_type}`];
+      const actual = questions.filter(q => q.group_id === gr.id).length;
+      if (std != null && actual !== std)
+        warnings.push(`${sectionLabel[gr.section_id]} › 問題${gr.mondai_number} (${MONDAI_TYPES[gr.mondai_type]?.ja || gr.mondai_type}): ${actual} câu — chuẩn JLPT là ${std} câu.`);
+      // 発話表現: đề thật mỗi câu có 1 tranh — thiếu ảnh chỉ nhắc, không chặn
+      if (gr.mondai_type === 'utterance_expression') {
+        questions.filter(q => q.group_id === gr.id).forEach((q, i) => {
+          if (!q.image_url)
+            warnings.push(`${sectionLabel[gr.section_id]} › 問題${gr.mondai_number} (発話表現) câu ${i + 1}: chưa có ảnh minh họa (đề thật mỗi câu 1 tranh).`);
+        });
+      }
+    }
+
     const { data, error } = await supabaseAdmin.from('mock_exams')
       .update({ is_published: true, published_at: new Date().toISOString(), updated_at: new Date().toISOString() })
       .eq('id', exam.id).select().single();
     if (error) throw error;
-    res.json(data);
+    res.json({ ...data, warnings: warnings.length ? warnings : undefined });
   } catch (err) { handleError(res, err, 'Không thể xuất bản đề thi.'); }
 };
 
@@ -333,24 +367,12 @@ exports.listExamAttempts = async (req, res) => {
 
 // ─── Phần thi (mock_exam_sections) ────────────────────────────────────────────
 
-// POST /api/admin/mock-exams/:examId/sections
-exports.createSection = async (req, res) => {
-  const { section_type = 'vocab', title = '', time_limit_minutes = 30 } = req.body;
-  try {
-    await assertEditableExam(req.params.examId);
-    const { data: last } = await supabaseAdmin.from('mock_exam_sections')
-      .select('position').eq('exam_id', req.params.examId).order('position', { ascending: false }).limit(1);
-    const { data, error } = await supabaseAdmin.from('mock_exam_sections')
-      .insert({ exam_id: req.params.examId, position: (last?.[0]?.position || 0) + 1, section_type, title, time_limit_minutes })
-      .select().single();
-    if (error) throw error;
-    res.status(201).json(data);
-  } catch (err) { handleError(res, err, 'Không thể tạo phần thi.'); }
-};
+// POST /api/admin/mock-exams/:examId/sections — CHẶN: cấu trúc cố định theo blueprint
+exports.createSection = (_req, res) => res.status(400).json({ error: STRUCTURE_LOCKED });
 
 // PUT /api/admin/mock-sections/:id
 exports.updateSection = async (req, res) => {
-  const allowed = ['title', 'section_type', 'time_limit_minutes'];
+  const allowed = ['title', 'time_limit_minutes'];
   const updates = Object.fromEntries(Object.entries(req.body).filter(([k]) => allowed.includes(k)));
   try {
     const examId = await examIdOfSection(req.params.id);
@@ -362,81 +384,28 @@ exports.updateSection = async (req, res) => {
   } catch (err) { handleError(res, err, 'Không thể cập nhật phần thi.'); }
 };
 
-// DELETE /api/admin/mock-sections/:id
-exports.deleteSection = async (req, res) => {
-  try {
-    const examId = await examIdOfSection(req.params.id);
-    await assertEditableExam(examId);
-    const { error } = await supabaseAdmin.from('mock_exam_sections').delete().eq('id', req.params.id);
-    if (error) throw error;
-    res.json({ message: 'Đã xóa phần thi.' });
-  } catch (err) { handleError(res, err, 'Không thể xóa phần thi.'); }
-};
+// DELETE /api/admin/mock-sections/:id — CHẶN: cấu trúc cố định theo blueprint
+exports.deleteSection = (_req, res) => res.status(400).json({ error: STRUCTURE_LOCKED });
 
-// PATCH /api/admin/mock-sections/reorder — body { ids: [...] } theo thứ tự mới
-exports.reorderSections = async (req, res) => {
-  const { ids } = req.body;
-  if (!Array.isArray(ids) || !ids.length) return res.status(400).json({ error: 'Danh sách ids không hợp lệ.' });
-  try {
-    const examId = await examIdOfSection(ids[0]);
-    await assertEditableExam(examId);
-    for (let i = 0; i < ids.length; i++) {
-      const { error } = await supabaseAdmin.from('mock_exam_sections')
-        .update({ position: i + 1 }).eq('id', ids[i]).eq('exam_id', examId);
-      if (error) throw error;
-    }
-    res.json({ message: 'Đã sắp xếp lại.' });
-  } catch (err) { handleError(res, err, 'Không thể sắp xếp phần thi.'); }
-};
+// PATCH /api/admin/mock-sections/reorder — CHẶN: cấu trúc cố định theo blueprint
+exports.reorderSections = (_req, res) => res.status(400).json({ error: STRUCTURE_LOCKED });
 
 // ─── Mondai (mock_question_groups) ────────────────────────────────────────────
 
-// POST /api/admin/mock-sections/:sectionId/groups
-exports.createGroup = async (req, res) => {
-  const { mondai_type, score_category, instruction_text, passage_text, image_url, audio_url, audio_transcript } = req.body;
-  const meta = MONDAI_TYPES[mondai_type];
-  if (!meta) return res.status(400).json({ error: 'Loại mondai không hợp lệ.' });
-  try {
-    const examId = await examIdOfSection(req.params.sectionId);
-    const exam = await assertEditableExam(examId);
-    // Cấp N4-N5 chấm gộp language_reading; N1-N3 dùng category mặc định của mondai
-    const isMerged = exam.level === 'N4' || exam.level === 'N5';
-    const defaultCat = meta.category === 'listening' ? 'listening' : (isMerged ? 'language_reading' : meta.category);
-    const { data: last } = await supabaseAdmin.from('mock_question_groups')
-      .select('position, mondai_number').eq('section_id', req.params.sectionId).order('position', { ascending: false }).limit(1);
-    const { data, error } = await supabaseAdmin.from('mock_question_groups')
-      .insert({
-        section_id:       req.params.sectionId,
-        position:         (last?.[0]?.position || 0) + 1,
-        mondai_number:    (last?.[0]?.mondai_number || 0) + 1,
-        mondai_type,
-        score_category:   score_category || defaultCat,
-        instruction_text: instruction_text ?? meta.instruction ?? null,
-        passage_text:     passage_text || null,
-        image_url:        image_url || null,
-        audio_url:        audio_url || null,
-        audio_transcript: audio_transcript || null,
-      })
-      .select().single();
-    if (error) throw error;
-    res.status(201).json(data);
-  } catch (err) { handleError(res, err, 'Không thể tạo mondai.'); }
-};
+// POST /api/admin/mock-sections/:sectionId/groups — CHẶN: cấu trúc cố định theo blueprint
+exports.createGroup = (_req, res) => res.status(400).json({ error: STRUCTURE_LOCKED });
 
 // PUT /api/admin/mock-groups/:id
+// Cấu trúc mondai cố định (mondai_number/type/score_category theo blueprint) — chỉ sửa passage/ảnh.
+// Audio/transcript phần nghe nằm ở TỪNG CÂU (mock_questions), không còn ở cấp mondai.
 exports.updateGroup = async (req, res) => {
   try {
     const { group, examId } = await groupWithExamId(req.params.id);
-    const { data: exam } = await supabaseAdmin.from('mock_exams').select('id, is_published').eq('id', examId).single();
-    // Đề đã publish: chỉ cho sửa typo phần chỉ dẫn/transcript (không đổi nội dung thi)
-    const allowed = exam?.is_published
-      ? ['instruction_text', 'audio_transcript']
-      : ['mondai_number', 'mondai_type', 'score_category', 'instruction_text', 'passage_text', 'image_url', 'audio_url', 'audio_transcript'];
+    await assertEditableExam(examId);
+    const allowed = ['passage_text', 'image_url'];
     const updates = Object.fromEntries(Object.entries(req.body).filter(([k]) => allowed.includes(k)));
     if (!Object.keys(updates).length)
-      return res.status(400).json({ error: exam?.is_published ? 'Đề đã xuất bản: chỉ được sửa chỉ dẫn/transcript.' : 'Không có trường nào để cập nhật.' });
-    if (updates.mondai_type && !MONDAI_TYPES[updates.mondai_type])
-      return res.status(400).json({ error: 'Loại mondai không hợp lệ.' });
+      return res.status(400).json({ error: 'Không có trường nào để cập nhật.' });
 
     const { data, error } = await supabaseAdmin.from('mock_question_groups')
       .update(updates).eq('id', group.id).select().single();
@@ -445,32 +414,11 @@ exports.updateGroup = async (req, res) => {
   } catch (err) { handleError(res, err, 'Không thể cập nhật mondai.'); }
 };
 
-// DELETE /api/admin/mock-groups/:id
-exports.deleteGroup = async (req, res) => {
-  try {
-    const { group, examId } = await groupWithExamId(req.params.id);
-    await assertEditableExam(examId);
-    const { error } = await supabaseAdmin.from('mock_question_groups').delete().eq('id', group.id);
-    if (error) throw error;
-    res.json({ message: 'Đã xóa mondai.' });
-  } catch (err) { handleError(res, err, 'Không thể xóa mondai.'); }
-};
+// DELETE /api/admin/mock-groups/:id — CHẶN: cấu trúc cố định theo blueprint
+exports.deleteGroup = (_req, res) => res.status(400).json({ error: STRUCTURE_LOCKED });
 
-// PATCH /api/admin/mock-groups/reorder — body { ids: [...] }
-exports.reorderGroups = async (req, res) => {
-  const { ids } = req.body;
-  if (!Array.isArray(ids) || !ids.length) return res.status(400).json({ error: 'Danh sách ids không hợp lệ.' });
-  try {
-    const { examId } = await groupWithExamId(ids[0]);
-    await assertEditableExam(examId);
-    for (let i = 0; i < ids.length; i++) {
-      const { error } = await supabaseAdmin.from('mock_question_groups')
-        .update({ position: i + 1, mondai_number: i + 1 }).eq('id', ids[i]);
-      if (error) throw error;
-    }
-    res.json({ message: 'Đã sắp xếp lại.' });
-  } catch (err) { handleError(res, err, 'Không thể sắp xếp mondai.'); }
-};
+// PATCH /api/admin/mock-groups/reorder — CHẶN: cấu trúc cố định theo blueprint
+exports.reorderGroups = (_req, res) => res.status(400).json({ error: STRUCTURE_LOCKED });
 
 // ─── Câu hỏi (mock_questions) ─────────────────────────────────────────────────
 
@@ -498,6 +446,9 @@ exports.createQuestions = async (req, res) => {
       options:       q.options.map(o => String(o).trim()),
       correct_index: Number(q.correct_index),
       explanation:   q.explanation || null,
+      translation_vi: q.translation_vi || null,
+      audio_transcript:    q.audio_transcript?.trim() || null,
+      option_translations: q.option_translations || null,
     }));
     const { data, error } = await supabaseAdmin.from('mock_questions').insert(rows).select();
     if (error) throw error;
@@ -512,13 +463,13 @@ exports.updateQuestion = async (req, res) => {
     if (!q) return res.status(404).json({ error: 'Không tìm thấy câu hỏi.' });
     const { examId } = await groupWithExamId(q.group_id);
     const { data: exam } = await supabaseAdmin.from('mock_exams').select('id, is_published').eq('id', examId).single();
-    // Đề đã publish: chỉ cho sửa giải thích (không đổi nội dung/đáp án)
+    // Đề đã publish: chỉ cho sửa giải thích/bản dịch/transcript (không đổi nội dung/đáp án)
     const allowed = exam?.is_published
-      ? ['explanation']
-      : ['question_text', 'image_url', 'audio_url', 'options', 'correct_index', 'explanation'];
+      ? ['explanation', 'translation_vi', 'option_translations', 'audio_transcript']
+      : ['question_text', 'image_url', 'audio_url', 'options', 'correct_index', 'explanation', 'translation_vi', 'option_translations', 'audio_transcript'];
     const updates = Object.fromEntries(Object.entries(req.body).filter(([k]) => allowed.includes(k)));
     if (!Object.keys(updates).length)
-      return res.status(400).json({ error: exam?.is_published ? 'Đề đã xuất bản: chỉ được sửa giải thích.' : 'Không có trường nào để cập nhật.' });
+      return res.status(400).json({ error: exam?.is_published ? 'Đề đã xuất bản: chỉ được sửa giải thích, bản dịch và transcript.' : 'Không có trường nào để cập nhật.' });
 
     const merged = { ...q, ...updates };
     const msg = validateQuestionPayload(merged);
@@ -648,17 +599,22 @@ exports.aiGenerateDrafts = async (req, res) => {
 
 // ─── Upload media ─────────────────────────────────────────────────────────────
 
+async function uploadBuffer(bucket, buffer, contentType, ext) {
+  const filename = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+  const { error } = await supabaseAdmin.storage
+    .from(bucket)
+    .upload(filename, buffer, { contentType, upsert: false });
+  if (error) throw error;
+  const { data: { publicUrl } } = supabaseAdmin.storage.from(bucket).getPublicUrl(filename);
+  return publicUrl;
+}
+
 async function uploadToBucket(req, res, bucket, fallbackExt, errMsg) {
   if (!req.file) return res.status(400).json({ error: 'Không có file được tải lên.' });
   const ext = (req.file.originalname.split('.').pop() || fallbackExt).toLowerCase();
-  const filename = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
   try {
-    const { error } = await supabaseAdmin.storage
-      .from(bucket)
-      .upload(filename, req.file.buffer, { contentType: req.file.mimetype, upsert: false });
-    if (error) throw error;
-    const { data: { publicUrl } } = supabaseAdmin.storage.from(bucket).getPublicUrl(filename);
-    res.json({ url: publicUrl });
+    const url = await uploadBuffer(bucket, req.file.buffer, req.file.mimetype, ext);
+    res.json({ url });
   } catch (err) { console.error(err); res.status(500).json({ error: errMsg }); }
 }
 
@@ -667,3 +623,32 @@ exports.uploadAudio = (req, res) => uploadToBucket(req, res, 'mock-exam-audio', 
 
 // POST /api/admin/mock-exams/upload-image
 exports.uploadImage = (req, res) => uploadToBucket(req, res, 'passage-images', 'jpg', 'Không thể tải ảnh lên.');
+
+// ─── TTS: sinh audio phần nghe từ transcript ──────────────────────────────────
+
+// POST /api/admin/mock-questions/:id/tts — đọc audio_transcript của câu → mp3 → gán audio_url
+exports.generateQuestionAudio = async (req, res) => {
+  try {
+    const { data: q } = await supabaseAdmin.from('mock_questions')
+      .select('id, group_id, audio_transcript').eq('id', req.params.id).single();
+    if (!q) return res.status(404).json({ error: 'Không tìm thấy câu hỏi.' });
+    const { examId } = await groupWithExamId(q.group_id);
+    await assertEditableExam(examId);
+
+    const { synthesizeTranscript } = require('../utils/ttsJa');
+    let buffer;
+    try {
+      buffer = await synthesizeTranscript(q.audio_transcript);
+    } catch (err) {
+      // Transcript rỗng/quá dài đã kèm httpStatus 400; còn lại là lỗi dịch vụ TTS
+      if (!err.httpStatus) { err.httpStatus = 502; err.message = 'Dịch vụ tạo giọng đọc không phản hồi. Hãy thử lại hoặc tải file thu âm lên.'; }
+      throw err;
+    }
+
+    const url = await uploadBuffer('mock-exam-audio', buffer, 'audio/mpeg', 'mp3');
+    const { data, error } = await supabaseAdmin.from('mock_questions')
+      .update({ audio_url: url }).eq('id', q.id).select().single();
+    if (error) throw error;
+    res.json(data);
+  } catch (err) { handleError(res, err, 'Không thể tạo audio từ transcript.'); }
+};

@@ -1,8 +1,11 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import StudentLayout from '../../components/layout/StudentLayout';
+import TeacherLayout from '../../components/layout/TeacherLayout';
+import AdminLayout from '../../components/layout/AdminLayout';
 import Alert from '../../components/ui/Alert';
-import FuriganaText from '../../components/ui/FuriganaText';
+import GrammarItemDetailCard from '../../components/shared/GrammarItemDetailCard';
+import { useAuth } from '../../contexts/AuthContext';
 import { usePageContext } from '../../contexts/PageContext';
 import api from '../../lib/api';
 
@@ -17,9 +20,14 @@ const LEVEL_COLORS = {
 export default function StudyListItemDetail() {
   const { type, id, itemId } = useParams();
   const navigate = useNavigate();
+  const { user, isAdmin, isTeacher } = useAuth();
   const [post, setPost]       = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState('');
+
+  // Dùng layout theo đúng vai trò người xem — teacher/admin xem không bị đổi
+  // sang giao diện học viên.
+  const Layout = isAdmin() ? AdminLayout : isTeacher() ? TeacherLayout : StudentLayout;
 
   useEffect(() => {
     setLoading(true);
@@ -29,6 +37,8 @@ export default function StudyListItemDetail() {
       .finally(() => setLoading(false));
   }, [id]);
 
+  // Chỉ chủ bài đăng mới sửa được nội dung — xem lý do ở StudyListDetail.jsx.
+  const canEdit = !!user && !!post && user.id === post.created_by;
   const items = post?.items || [];
   const index = items.findIndex(i => i.id === itemId);
   const item = index >= 0 ? items[index] : null;
@@ -50,8 +60,13 @@ export default function StudyListItemDetail() {
     } : null,
   }, [item, post]);
 
+  const saveGrammarItem = async (patch) => {
+    await api.put(`/teacher/grammar-points/${itemId}`, patch);
+    setPost(p => ({ ...p, items: p.items.map(it => it.id === itemId ? { ...it, ...patch } : it) }));
+  };
+
   return (
-    <StudentLayout title={post?.title || 'Chi tiết ngữ pháp'}>
+    <Layout title={post?.title || 'Chi tiết ngữ pháp'}>
       {error && <Alert type="error" onClose={() => setError('')}>{error}</Alert>}
 
       <button
@@ -66,61 +81,34 @@ export default function StudyListItemDetail() {
       ) : !item ? (
         <div className="glass-card rounded-2xl p-8 text-center text-on-muted">Không tìm thấy mục này.</div>
       ) : (
-        <div className="glass-card rounded-3xl overflow-hidden max-w-2xl">
-          <div className="h-1.5 bg-gradient-to-r from-tsubaki-red to-sumire-purple" />
-
-          <div className="px-8 pt-8 pb-2">
-            <div className="flex items-center gap-2 mb-3">
-              {item.level && (
-                <span className={`px-3 py-1 rounded-full text-xs font-bold ${LEVEL_COLORS[item.level] || 'bg-surface-low text-on-muted'}`}>
-                  {item.level}
-                </span>
-              )}
-              <span className="text-xs text-on-muted">Mục {index + 1}/{items.length}</span>
-            </div>
-            <h1 className="text-3xl font-bold text-tsubaki-red leading-tight">{item.title}</h1>
-            {item.title_ja && <p className="text-on-muted mt-1">{item.title_ja}</p>}
-
-            <div className="mt-6">
-              <p className="text-xs font-semibold text-on-muted uppercase tracking-wide mb-1">Nghĩa</p>
-              <p className="text-lg font-bold text-charcoal">{item.meaning_vi}</p>
-            </div>
-
-            {item.explanation && (
-              <div className="mt-6">
-                <p className="text-xs font-semibold text-on-muted uppercase tracking-wide mb-1">Cấu trúc / Cách dùng</p>
-                <p className="text-charcoal whitespace-pre-wrap leading-relaxed">{item.explanation}</p>
+        <div className="flex flex-col lg:flex-row gap-6">
+          {/* Danh sách mẫu ngữ pháp bên trái — bấm để nhảy tới mục đó */}
+          <aside className="lg:w-64 shrink-0">
+            <div className="glass-card rounded-2xl p-3 lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto scrollbar-thin">
+              <p className="px-2 py-1.5 text-xs font-semibold text-on-muted uppercase tracking-wide">Danh sách mẫu ({items.length})</p>
+              <div className="space-y-0.5">
+                {items.map((it, i) => (
+                  <button
+                    key={it.id}
+                    onClick={() => goTo(i)}
+                    className={`w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-sm text-left transition-colors ${i === index ? 'bg-tsubaki-red/10 text-tsubaki-red font-semibold' : 'text-on-muted hover:bg-surface-low'}`}
+                  >
+                    <span className="shrink-0 w-5 text-[11px] text-on-muted/70">{i + 1}.</span>
+                    <span className="flex-1 min-w-0 truncate">{it.title}</span>
+                    {it.level && <span className={`shrink-0 px-1.5 py-0.5 rounded-full text-[10px] font-bold ${LEVEL_COLORS[it.level] || 'bg-surface-low text-on-muted'}`}>{it.level}</span>}
+                  </button>
+                ))}
               </div>
-            )}
+            </div>
+          </aside>
 
-            {item.example_sentence && (
-              <div className="mt-6 mb-2">
-                <p className="text-xs font-semibold text-on-muted uppercase tracking-wide mb-1">Ví dụ</p>
-                <div className="text-charcoal italic bg-surface-low rounded-xl px-4 py-3">
-                  「<FuriganaText text={item.example_sentence} textClassName="italic" />」
-                </div>
-              </div>
-            )}
-          </div>
-
-          <div className="px-8 pb-8 pt-6 flex gap-2 border-t border-outline/30 mt-4">
-            <button
-              onClick={() => goTo(index - 1)}
-              disabled={index === 0}
-              className="flex-1 flex items-center justify-center gap-1 py-2.5 rounded-xl border border-outline text-sm text-on-muted hover:border-tsubaki-red hover:text-tsubaki-red disabled:opacity-30 transition-colors"
-            >
-              <span className="material-symbols-outlined text-lg">arrow_back</span> Trước
-            </button>
-            <button
-              onClick={() => goTo(index + 1)}
-              disabled={index === items.length - 1}
-              className="flex-1 flex items-center justify-center gap-1 py-2.5 rounded-xl border border-outline text-sm text-on-muted hover:border-tsubaki-red hover:text-tsubaki-red disabled:opacity-30 transition-colors"
-            >
-              Tiếp <span className="material-symbols-outlined text-lg">arrow_forward</span>
-            </button>
+          <div className="flex-1 min-w-0">
+            <GrammarItemDetailCard item={item} index={index} total={items.length}
+              onPrev={() => goTo(index - 1)} onNext={() => goTo(index + 1)}
+              editable={canEdit} onSave={saveGrammarItem} />
           </div>
         </div>
       )}
-    </StudentLayout>
+    </Layout>
   );
 }

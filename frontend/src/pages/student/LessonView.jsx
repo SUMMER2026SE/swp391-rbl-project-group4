@@ -5,26 +5,16 @@ import Alert from '../../components/ui/Alert';
 import Button from '../../components/ui/Button';
 import Modal from '../../components/ui/Modal';
 import FuriganaText from '../../components/ui/FuriganaText';
-import WorksheetPreview from '../../components/kanji/WorksheetPreview';
+import FuriganaToggle from '../../components/ui/FuriganaToggle';
+import KanjiWritingPracticeModal from '../../components/kanji/KanjiWritingPracticeModal';
+import KanjiPdfPanel from '../../components/kanji/KanjiPdfPanel';
+import VocabWordViewer from '../../components/shared/VocabWordViewer';
+import GrammarItemCard from '../../components/shared/GrammarItemCard';
+import SyncedVideoTranscript from '../../components/shared/SyncedVideoTranscript';
 import api from '../../lib/api';
-import { downloadWorksheetPDF } from '../../lib/kanjiWorksheet';
-import { renderMarkdown, renderReadingText } from '../../lib/renderPreview';
+import { renderMarkdown } from '../../lib/renderPreview';
 import { usePageContext } from '../../contexts/PageContext';
 
-// Reading lưu trong `content` dạng JSON { text, imageUrl } (hoặc chuỗi thuần — legacy).
-function getReadingHtml(content) {
-  if (!content) return '';
-  try {
-    const parsed = JSON.parse(content);
-    return `<p class="mb-4">${renderReadingText(parsed.text || '')}</p>`;
-  } catch {
-    return `<p class="mb-4">${renderReadingText(content)}</p>`;
-  }
-}
-function getReadingImage(content) {
-  if (!content) return null;
-  try { return JSON.parse(content).imageUrl || null; } catch { return null; }
-}
 function toEmbed(url) {
   if (!url) return null;
   const yt = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([\w-]{11})/);
@@ -49,17 +39,27 @@ const QUIZ_TYPE_LABEL = {
   short_answer:    'Trả lời ngắn',
 };
 
-export default function LessonView() {
+// Layout: mặc định StudentLayout; trang preview admin/teacher truyền layout riêng.
+// previewBase ('/admin' | '/teacher'): các link khóa học/mục/quiz trỏ sang route preview
+// cùng phía để giữ nguyên khung admin/teacher xuyên suốt (pattern như CourseDetail).
+export default function LessonView({ Layout = StudentLayout, previewBase = '' }) {
   const { id } = useParams();
   const navigate = useNavigate();
+  const lessonPath = (lid) => previewBase ? `${previewBase}/lessons/preview/${lid}` : `/lessons/${lid}`;
+  const coursePath = (cid) => previewBase ? `${previewBase}/courses/preview/${cid}` : `/courses/${cid}`;
+  const quizPath   = (qid) => previewBase ? `${previewBase}/quizzes/preview/${qid}` : `/quizzes/${qid}`;
+  // Bài đọc của Mục mở bằng ReadingReader; preview admin/teacher giữ nguyên layout riêng
+  const readingPath = (lid) => previewBase ? `${previewBase}/lessons/${lid}/reading-view` : `/lessons/${lid}/reading`;
   const [lesson, setLesson]   = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState('');
   const [finishError, setFinishError] = useState(''); // lỗi khi bấm Hoàn thành (vd: chưa đạt ngưỡng quiz)
+  const [justCompleted, setJustCompleted] = useState(false); // vừa hoàn thành mục này trong phiên hiện tại
   const [paywall, setPaywall] = useState(null); // body 403 ENROLLMENT_REQUIRED { course_id }
   const [furigana, setFurigana] = useState(false);
   const [working, setWorking] = useState(false);
-  const [downloadingPdf, setDownloadingPdf] = useState(false);
+  const [writingOpen, setWritingOpen] = useState(false); // modal luyện viết kanji
+  const [pdfOpen, setPdfOpen] = useState(false);         // panel tạo PDF luyện viết
 
   // Cho trợ lý AI biết đang học bài nào
   usePageContext({
@@ -90,6 +90,10 @@ export default function LessonView() {
     setSelected({});
     setNotice(null);
     setPaywall(null);
+    setWritingOpen(false);
+    setPdfOpen(false);
+    setFinishError('');
+    setJustCompleted(false);
     api.get(`/lessons/${id}`)
       .then(r => setLesson(r.data))
       .catch(e => {
@@ -100,15 +104,15 @@ export default function LessonView() {
   }, [id]);
 
   if (loading) return (
-    <StudentLayout title="...">
+    <Layout title="...">
       <div className="flex justify-center py-16">
         <span className="material-symbols-outlined animate-spin text-tsubaki-red text-4xl">progress_activity</span>
       </div>
-    </StudentLayout>
+    </Layout>
   );
 
   if (paywall) return (
-    <StudentLayout title="Khóa học có phí">
+    <Layout title="Khóa học có phí">
       <div className="max-w-md mx-auto text-center py-16">
         <span className="material-symbols-outlined text-5xl text-amber-400 mb-4 block">lock</span>
         <h2 className="font-display text-xl font-bold text-on-surface mb-2">Nội dung dành cho học viên đã mua khóa học</h2>
@@ -120,18 +124,19 @@ export default function LessonView() {
           </Button>
         </Link>
       </div>
-    </StudentLayout>
+    </Layout>
   );
 
   if (error || !lesson) return (
-    <StudentLayout title="Lỗi">
+    <Layout title="Lỗi">
       <Alert type="error">{error || 'Không tìm thấy mục học.'}</Alert>
-    </StudentLayout>
+    </Layout>
   );
 
   const nav = lesson.nav || {};
-  const readingImage = getReadingImage(lesson.content);
   const embed = toEmbed(lesson.content_url);
+  // Nút furigana chỉ có nghĩa với mục nhiều văn bản tiếng Nhật dài cần đọc.
+  const showFuriganaToggle = ['reading', 'grammar'].includes(lesson.lesson_type);
 
   // Bộ luyện viết chỉ gồm đúng các kanji của bài học (map `character` → `char` cho worksheet).
   const worksheetList = (lesson.kanji || []).map(k => ({
@@ -142,20 +147,19 @@ export default function LessonView() {
     han_viet: k.han_viet,
   }));
 
-  const downloadLessonWorksheet = async () => {
-    setDownloadingPdf(true);
-    try { await downloadWorksheetPDF('ws-print', `bo-luyen-viet-${slugify(lesson.title)}.pdf`); }
-    finally { setDownloadingPdf(false); }
-  };
+  // Nút Trạng thái 2 khi mục đã ghi nhận hoàn thành (từ đầu hoặc vừa bấm xong).
+  const isCompleted = lesson.completed || justCompleted;
+  // Mục quiz có ngưỡng đạt: không có nút "Hoàn thành" thủ công — hệ thống tự đánh dấu khi student
+  // làm quiz đạt ngưỡng (backend). Nút footer luôn là điều hướng, cho phép bỏ qua mà không hoàn thành.
+  const isThresholdQuiz = !!lesson.quiz?.passing_type;
 
-  // Đánh dấu hoàn thành rồi đi tiếp (hoặc về khóa học nếu là mục cuối).
-  const finishAndContinue = async () => {
+  // Trạng thái 1: gọi API đánh dấu hoàn thành, KHÔNG điều hướng. Thành công → chuyển sang Trạng thái 2.
+  const markComplete = async () => {
     setWorking(true);
     setFinishError('');
     try {
       await api.post(`/lessons/${id}/complete`);
-      if (nav.nextId) navigate(`/lessons/${nav.nextId}`);
-      else navigate(`/courses/${lesson.course_id}`);
+      setJustCompleted(true);
     } catch (e) {
       // Vd: quiz có ngưỡng đạt mà học sinh chưa đạt → hiển thị ngay tại chỗ, giữ nguyên trang để làm lại bài.
       setFinishError(e.message);
@@ -164,9 +168,15 @@ export default function LessonView() {
     }
   };
 
+  // Trạng thái 2: chỉ điều hướng (đã ghi nhận hoàn thành rồi, không gọi lại API).
+  const goNext = () => {
+    if (nav.nextId) navigate(lessonPath(nav.nextId));
+    else navigate(coursePath(lesson.course_id));
+  };
+
   const nextLabel = !nav.nextId
     ? 'Hoàn thành khóa học'
-    : nav.nextIsNewUnit ? 'Hoàn thành • Bài học tiếp theo' : 'Hoàn thành • Mục tiếp theo';
+    : nav.nextIsNewUnit ? 'Bài học tiếp theo' : 'Mục tiếp theo';
 
   // ── Chọn vocab/kanji → thêm vào flashcard ─────────────────────────
   const vocabList = lesson.vocabulary || [];
@@ -271,10 +281,13 @@ export default function LessonView() {
     }
   };
 
+  // Trang có bản chép đồng bộ cần khung rộng hơn để video đủ lớn cạnh panel bản chép.
+  const hasSyncedTranscript = !!(lesson.content_url && lesson.transcript_segments?.length > 0);
+
   return (
-    <StudentLayout title={lesson.title}>
-      <div className="max-w-3xl mx-auto">
-        <Link to={`/courses/${lesson.course_id}`} className="inline-flex items-center gap-1 text-sm text-on-muted hover:text-tsubaki-red mb-6 transition-colors">
+    <Layout title={lesson.title}>
+      <div className={`${hasSyncedTranscript ? 'max-w-6xl' : 'max-w-3xl'} mx-auto`}>
+        <Link to={coursePath(lesson.course_id)} className="inline-flex items-center gap-1 text-sm text-on-muted hover:text-tsubaki-red mb-6 transition-colors">
           <span className="material-symbols-outlined text-lg">arrow_back</span> Quay lại khoá học
         </Link>
 
@@ -294,14 +307,9 @@ export default function LessonView() {
                   <span className="material-symbols-outlined text-base">check_circle</span> Đã hoàn thành
                 </span>
               )}
-              <button
-                type="button"
-                onClick={() => setFurigana(v => !v)}
-                title={furigana ? 'Ẩn furigana' : 'Hiển thị furigana'}
-                className={`inline-flex items-center gap-1 text-[11px] px-2.5 py-1.5 rounded-lg border font-medium transition-all select-none ${furigana ? 'bg-amber-100 border-amber-300 text-amber-700' : 'bg-white border-outline/60 text-on-muted hover:border-amber-300 hover:text-amber-600 hover:bg-amber-50'}`}>
-                <span className="font-bold" style={{ fontFamily: 'serif', fontSize: '13px' }}>あ</span>
-                ふりがな
-              </button>
+              {showFuriganaToggle && (
+                <FuriganaToggle active={furigana} onToggle={() => setFurigana(v => !v)} />
+              )}
             </div>
           </div>
           {lesson.title_ja && (
@@ -309,49 +317,57 @@ export default function LessonView() {
           )}
         </div>
 
+        {/* ── Mô tả (teacher/admin ghi cho học sinh, tùy chọn) ─────────── */}
+        {lesson.description && (
+          <div className="glass-card rounded-2xl overflow-hidden mb-6">
+            <div className="p-5 border-b border-outline/30">
+              <h2 className="font-display font-bold text-lg flex items-center gap-2">
+                <span className="material-symbols-outlined text-tsubaki-red">info</span> Mô tả
+              </h2>
+            </div>
+            <div className="p-6 text-sm text-on-surface whitespace-pre-wrap leading-relaxed">
+              {lesson.description}
+            </div>
+          </div>
+        )}
+
         {/* ── Video ───────────────────────────────────────────────────── */}
         {lesson.content_url && (
           <div className="glass-card rounded-2xl overflow-hidden mb-6">
-            <div className="aspect-video bg-black">
-              {embed
-                ? <iframe src={embed} title={lesson.title} className="w-full h-full" allowFullScreen />
-                : <video src={lesson.content_url} controls className="w-full h-full" />}
-            </div>
-            {lesson.transcript && (
-              <div className="p-5 text-sm text-on-surface whitespace-pre-wrap leading-relaxed border-t border-outline/20">
-                {lesson.transcript}
-              </div>
+            {hasSyncedTranscript ? (
+              /* Bản chép đồng bộ thời gian (click dòng để tua, dòng đang phát tự highlight) */
+              <SyncedVideoTranscript
+                videoUrl={lesson.content_url}
+                segments={lesson.transcript_segments}
+                title={lesson.title}
+              />
+            ) : (
+              <>
+                <div className="aspect-video bg-black">
+                  {embed
+                    ? <iframe src={embed} title={lesson.title} className="w-full h-full" allowFullScreen />
+                    : <video src={lesson.content_url} controls className="w-full h-full" />}
+                </div>
+                {lesson.transcript && (
+                  <div className="p-5 text-sm text-on-surface whitespace-pre-wrap leading-relaxed border-t border-outline/20">
+                    {lesson.transcript}
+                  </div>
+                )}
+              </>
             )}
           </div>
         )}
 
-        {/* ── Grammar points (item rời, gắn qua lesson_grammar_points) ── */}
+        {/* ── Grammar points — thẻ dùng chung với Study List, bấm mở trang chi tiết ── */}
         {lesson.grammar_points?.length > 0 && (
-          <div className="glass-card rounded-2xl overflow-hidden mb-6">
-            <div className="p-5 border-b border-outline/30">
-              <h2 className="font-display font-bold text-lg flex items-center gap-2">
-                <span className="material-symbols-outlined text-amber-600">spellcheck</span>
-                Ngữ pháp trong bài ({lesson.grammar_points.length})
-              </h2>
-            </div>
-            <div className="divide-y divide-outline/20">
-              {lesson.grammar_points.map(g => (
-                <div key={g.id} className="p-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="font-bold text-base text-on-surface">{g.title}</p>
-                      {g.title_ja && <p className="text-xs text-on-muted">{g.title_ja}</p>}
-                      <p className="text-sm text-tsubaki-red font-semibold mt-0.5">{g.meaning_vi}</p>
-                    </div>
-                    {g.level && <span className="text-xs px-2 py-0.5 rounded-full bg-surface-low text-on-muted shrink-0 font-bold">{g.level}</span>}
-                  </div>
-                  {g.explanation && (
-                    <p className="text-xs text-on-muted mt-1.5 leading-relaxed whitespace-pre-wrap">{g.explanation}</p>
-                  )}
-                  {g.example_sentence && (
-                    <p className="text-xs text-on-muted italic mt-1.5 border-l-2 border-amber-400/40 pl-2">{g.example_sentence}</p>
-                  )}
-                </div>
+          <div className="mb-6">
+            <h2 className="font-display font-bold text-lg flex items-center gap-2 mb-4">
+              <span className="material-symbols-outlined text-amber-600">spellcheck</span>
+              Ngữ pháp trong bài ({lesson.grammar_points.length})
+            </h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {lesson.grammar_points.map((g, i) => (
+                <GrammarItemCard key={g.id} item={g} index={i} to={`/lessons/${id}/grammar/${g.id}`} />
               ))}
             </div>
           </div>
@@ -370,8 +386,8 @@ export default function LessonView() {
           </div>
         )}
 
-        {/* ── Reading ─────────────────────────────────────────────────── */}
-        {lesson.content && (
+        {/* ── Reading — mở trải nghiệm đọc đầy đủ (ReadingReader) qua route riêng ── */}
+        {lesson.lesson_type === 'reading' && (
           <div className="glass-card rounded-2xl overflow-hidden mb-6">
             <div className="p-5 border-b border-outline/30">
               <h2 className="font-display font-bold text-lg flex items-center gap-2">
@@ -379,17 +395,30 @@ export default function LessonView() {
               </h2>
             </div>
             <div className="p-6">
-              {readingImage && <img src={readingImage} alt="" className="w-full rounded-xl mb-5 object-cover max-h-72" />}
-              <div className="prose prose-sm max-w-none text-on-surface leading-relaxed"
-                dangerouslySetInnerHTML={{ __html: getReadingHtml(lesson.content) }} />
+              {lesson.reading_article_id ? (
+                <div className="flex items-center justify-between gap-4 flex-wrap">
+                  <p className="text-sm text-on-muted">
+                    Đọc bài với furigana, bản dịch từng câu, tra từ nhanh, quiz đọc hiểu và từ vựng/ngữ pháp trong bài.
+                  </p>
+                  <Link
+                    to={readingPath(id)}
+                    className="inline-flex items-center gap-2 bg-tsubaki-red text-white px-5 py-2.5 rounded-xl font-semibold text-sm hover:bg-primary transition-colors shadow-md shadow-tsubaki-red/20 shrink-0"
+                  >
+                    <span className="material-symbols-outlined text-lg">auto_stories</span>
+                    Đọc bài
+                  </Link>
+                </div>
+              ) : (
+                <p className="text-sm text-on-muted italic">Mục này chưa có bài đọc.</p>
+              )}
             </div>
           </div>
         )}
 
-        {/* ── Vocabulary ─────────────────────────────────────────────── */}
+        {/* ── Vocabulary — flashcard viewer dùng chung với bài đăng ───── */}
         {lesson.vocabulary?.length > 0 && (
-          <div className="glass-card rounded-2xl overflow-hidden mb-6">
-            <div className="p-5 border-b border-outline/30 flex items-center justify-between gap-3 flex-wrap">
+          <div className="mb-6">
+            <div className="flex items-center justify-between gap-3 flex-wrap mb-4">
               <h2 className="font-display font-bold text-lg flex items-center gap-2">
                 <span className="material-symbols-outlined text-tsubaki-red">translate</span>
                 Từ vựng trong bài ({lesson.vocabulary.length})
@@ -405,32 +434,20 @@ export default function LessonView() {
                 </Button>
               )}
             </div>
-            <div className="divide-y divide-outline/20">
-              {lesson.vocabulary.map(v => (
-                <div key={v.id} className="flex items-start gap-4 p-4">
-                  {selecting && (
-                    <input
-                      type="checkbox"
-                      checked={!!selected[`v-${v.id}`]}
-                      onChange={() => toggleSelect(`v-${v.id}`)}
-                      className="w-4 h-4 accent-tsubaki-red shrink-0 mt-2.5"
-                    />
-                  )}
-                  <div className="text-2xl font-bold text-tsubaki-red w-16 shrink-0 text-center pt-1">
-                    <FuriganaText text={v.kanji || v.reading} enabled={furigana} textClassName="text-2xl font-bold text-tsubaki-red" />
-                  </div>
-                  <div className="flex-1">
-                    <p className="font-semibold text-sm">{v.reading}</p>
-                    <p className="text-xs text-on-muted">{v.meaning_vi}</p>
-                    {v.meaning_ja && <p className="text-xs text-on-muted/70">{v.meaning_ja}</p>}
-                    {v.example_sentence && (
-                      <p className="text-xs text-on-muted italic mt-1.5 border-l-2 border-tsubaki-red/30 pl-2">{v.example_sentence}</p>
-                    )}
-                  </div>
-                  {v.type && <span className="text-xs px-2 py-0.5 rounded-full bg-surface-low text-on-muted shrink-0">{v.type}</span>}
-                </div>
-              ))}
-            </div>
+            <VocabWordViewer
+              items={vocabList}
+              showLevel={false}
+              showDetails
+              furiganaEnabled={false}
+              renderItemExtra={selecting ? (v) => (
+                <input
+                  type="checkbox"
+                  checked={!!selected[`v-${v.id}`]}
+                  onChange={() => toggleSelect(`v-${v.id}`)}
+                  className="w-4 h-4 accent-tsubaki-red"
+                />
+              ) : undefined}
+            />
           </div>
         )}
 
@@ -453,8 +470,11 @@ export default function LessonView() {
                     <span className="material-symbols-outlined text-lg">library_add</span> Thêm vào thẻ ghi nhớ
                   </Button>
                 )}
-                <Button size="sm" variant="secondary" loading={downloadingPdf} onClick={downloadLessonWorksheet}>
-                  <span className="material-symbols-outlined text-lg">download</span> Tải PDF bộ luyện viết
+                <Button size="sm" variant="secondary" onClick={() => setWritingOpen(true)}>
+                  <span className="material-symbols-outlined text-lg">draw</span> Luyện viết
+                </Button>
+                <Button size="sm" onClick={() => setPdfOpen(true)}>
+                  <span className="material-symbols-outlined text-lg">article</span> Tạo PDF luyện viết
                 </Button>
               </div>
             </div>
@@ -485,11 +505,17 @@ export default function LessonView() {
                 </div>
               ))}
             </div>
-            {/* Nội dung worksheet render ẩn ngoài màn hình để html2canvas chụp khi tải PDF */}
-            <div style={{ position: 'fixed', left: -10000, top: 0, width: 672 }} aria-hidden="true">
-              <WorksheetPreview list={worksheetList} />
-            </div>
           </div>
+        )}
+
+        {/* ── Panel tạo PDF luyện viết (cài đặt + xem trước + tải) ────── */}
+        {pdfOpen && lesson.kanji?.length > 0 && (
+          <KanjiPdfPanel
+            className="mb-6"
+            list={worksheetList}
+            filename={`bo-luyen-viet-${slugify(lesson.title)}.pdf`}
+            onClose={() => setPdfOpen(false)}
+          />
         )}
 
         {/* ── Quiz ───────────────────────────────────────────────────── */}
@@ -514,7 +540,7 @@ export default function LessonView() {
                   )}
                 </div>
               </div>
-              <Link to={`/quizzes/${lesson.quiz.id}`} className="inline-flex items-center gap-2 bg-sumire-purple text-white px-5 py-2.5 rounded-xl font-semibold text-sm hover:opacity-90 transition-opacity shadow-md shadow-sumire-purple/20 shrink-0">
+              <Link to={quizPath(lesson.quiz.id)} className="inline-flex items-center gap-2 bg-sumire-purple text-white px-5 py-2.5 rounded-xl font-semibold text-sm hover:opacity-90 transition-opacity shadow-md shadow-sumire-purple/20 shrink-0">
                 Làm bài <span className="material-symbols-outlined text-lg">arrow_forward</span>
               </Link>
             </div>
@@ -527,7 +553,7 @@ export default function LessonView() {
             <Alert type="error" onClose={() => setFinishError('')}>
               {finishError}
               {lesson.quiz && (
-                <Link to={`/quizzes/${lesson.quiz.id}`} className="ml-1 font-semibold underline">Làm lại bài kiểm tra</Link>
+                <Link to={quizPath(lesson.quiz.id)} className="ml-1 font-semibold underline">Làm lại bài kiểm tra</Link>
               )}
             </Alert>
           </div>
@@ -536,19 +562,28 @@ export default function LessonView() {
         {/* ── Footer nav ──────────────────────────────────────────────── */}
         <div className="flex items-center justify-between gap-3 mt-8 pt-6 border-t border-outline-variant/30">
           {nav.prevId ? (
-            <Link to={`/lessons/${nav.prevId}`} className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl border border-outline text-sm font-medium text-on-surface hover:bg-surface-low transition-all">
+            <Link to={lessonPath(nav.prevId)} className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl border border-outline text-sm font-medium text-on-surface hover:bg-surface-low transition-all">
               <span className="material-symbols-outlined text-base">arrow_back</span> Mục trước
             </Link>
           ) : <span />}
 
-          <button
-            onClick={finishAndContinue}
-            disabled={working}
-            className="inline-flex items-center gap-2 bg-tsubaki-red text-white px-6 py-2.5 rounded-xl font-semibold text-sm hover:bg-primary transition-colors shadow-md shadow-tsubaki-red/20 disabled:opacity-60"
-          >
-            {working ? 'Đang lưu...' : nextLabel}
-            <span className="material-symbols-outlined text-lg">{nav.nextId ? 'arrow_forward' : 'task_alt'}</span>
-          </button>
+          {/* Quiz có ngưỡng: luôn là nút điều hướng (bỏ qua được), hệ thống tự đánh dấu hoàn thành khi đạt.
+              Mục thường / quiz "Không yêu cầu": nút thủ công "Hoàn thành" → sau khi hoàn thành mới điều hướng. */}
+          {(() => {
+            const showNext = isCompleted || isThresholdQuiz;
+            return (
+              <button
+                onClick={showNext ? goNext : markComplete}
+                disabled={working}
+                className="inline-flex items-center gap-2 bg-tsubaki-red text-white px-6 py-2.5 rounded-xl font-semibold text-sm hover:bg-primary transition-colors shadow-md shadow-tsubaki-red/20 disabled:opacity-60"
+              >
+                {working ? 'Đang lưu...' : showNext ? nextLabel : 'Hoàn thành'}
+                <span className="material-symbols-outlined text-lg">
+                  {!showNext ? 'check' : nav.nextId ? 'arrow_forward' : 'task_alt'}
+                </span>
+              </button>
+            );
+          })()}
         </div>
       </div>
 
@@ -570,6 +605,11 @@ export default function LessonView() {
             <span className="material-symbols-outlined text-lg">close</span>
           </button>
         </div>
+      )}
+
+      {/* ── Modal luyện viết Kanji ──────────────────────────────────── */}
+      {writingOpen && (
+        <KanjiWritingPracticeModal items={lesson.kanji || []} onClose={() => setWritingOpen(false)} />
       )}
 
       {/* ── Modal chọn bộ flashcard ─────────────────────────────────── */}
@@ -652,6 +692,6 @@ export default function LessonView() {
           </div>
         </div>
       </Modal>
-    </StudentLayout>
+    </Layout>
   );
 }

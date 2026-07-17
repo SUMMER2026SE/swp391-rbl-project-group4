@@ -9,7 +9,7 @@ import api from '../../lib/api';
 
 const LEVELS = ['N5','N4','N3','N2','N1'];
 const TYPES  = ['DANH TỪ','ĐỘNG TỪ','TÍNH TỪ','PHÓ TỪ','LIÊN TỪ'];
-const EMPTY  = { kanji:'', reading:'', meaning_vi:'', meaning_ja:'', level:'', type:'', example_sentence:'' };
+const EMPTY  = { kanji:'', reading:'', meaning_vi:'', meaning_ja:'', level:'', type:'', example_sentence:'', han_viet:'' };
 
 const TYPE_COLORS = {
   'DANH TỪ':'bg-blue-100 text-blue-700','ĐỘNG TỪ':'bg-green-100 text-green-700',
@@ -68,17 +68,18 @@ function SystemTab() {
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-surface-low border-b border-outline/40">
-              <tr>{['Kanji','Reading','Nghĩa VI','Nghĩa JA','Level','Loại','Ví dụ'].map(h =>
+              <tr>{['Kanji','Hán Việt','Reading','Nghĩa VI','Nghĩa JA','Level','Loại','Ví dụ'].map(h =>
                 <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-on-muted uppercase tracking-wide">{h}</th>)}</tr>
             </thead>
             <tbody>
               {loading ? Array.from({length:8}).map((_,i) => (
                 <tr key={i} className="border-t border-outline/40 animate-pulse">
-                  {[40,60,80,60,40,56,100].map((w,j) => <td key={j} className="px-4 py-3"><div className="h-3 bg-surface-low rounded" style={{width:w}}/></td>)}
+                  {[40,50,60,80,60,40,56,100].map((w,j) => <td key={j} className="px-4 py-3"><div className="h-3 bg-surface-low rounded" style={{width:w}}/></td>)}
                 </tr>
               )) : items.map((v,i) => (
                 <tr key={v.id} className={`border-t border-outline/40 hover:bg-tsubaki-red/5 transition-colors ${i%2===1?'bg-surface-low/30':''}`}>
                   <td className="px-4 py-2.5 text-xl font-bold text-tsubaki-red">{v.kanji||'—'}</td>
+                  <td className="px-4 py-2.5 text-amber-600">{v.han_viet||'—'}</td>
                   <td className="px-4 py-2.5 font-medium">{v.reading}</td>
                   <td className="px-4 py-2.5">{v.meaning_vi}</td>
                   <td className="px-4 py-2.5 text-xs text-on-muted">{v.meaning_ja||'—'}</td>
@@ -88,7 +89,7 @@ function SystemTab() {
                 </tr>
               ))}
               {!loading && items.length === 0 && (
-                <tr><td colSpan={7} className="px-4 py-12 text-center text-on-muted">Không có dữ liệu</td></tr>
+                <tr><td colSpan={8} className="px-4 py-12 text-center text-on-muted">Không có dữ liệu</td></tr>
               )}
             </tbody>
           </table>
@@ -128,7 +129,7 @@ function MyTab() {
   const openCreate = () => { setForm(EMPTY); setEditId(null); setModal(true); };
   const openEdit = (row) => {
     setForm({ kanji:row.kanji||'', reading:row.reading||'', meaning_vi:row.meaning_vi||'',
-      meaning_ja:row.meaning_ja||'', level:row.level||'', type:row.type||'', example_sentence:row.example_sentence||'' });
+      meaning_ja:row.meaning_ja||'', level:row.level||'', type:row.type||'', example_sentence:row.example_sentence||'', han_viet:row.han_viet||'' });
     setEditId(row.id); setModal(true);
   };
 
@@ -174,13 +175,14 @@ function MyTab() {
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="bg-surface-low border-b border-outline/40">
-                <tr>{['Kanji','Reading','Nghĩa VI','Level','Loại',''].map(h =>
+                <tr>{['Kanji','Hán Việt','Reading','Nghĩa VI','Level','Loại',''].map(h =>
                   <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-on-muted uppercase tracking-wide">{h}</th>)}</tr>
               </thead>
               <tbody>
                 {items.map((v,i) => (
                   <tr key={v.id} className={`border-t border-outline/40 hover:bg-surface-low/50 transition-colors ${i%2===1?'bg-surface-low/30':''}`}>
                     <td className="px-4 py-2.5 text-xl font-bold text-tsubaki-red">{v.kanji||'—'}</td>
+                    <td className="px-4 py-2.5 text-amber-600">{v.han_viet||'—'}</td>
                     <td className="px-4 py-2.5 font-medium">{v.reading}</td>
                     <td className="px-4 py-2.5">{v.meaning_vi}</td>
                     <td className="px-4 py-2.5">{v.level ? <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${LEVEL_COLORS[v.level]}`}>{v.level}</span> : '—'}</td>
@@ -216,6 +218,9 @@ function MyTab() {
             <Input label="Nghĩa (VI) *" value={form.meaning_vi} onChange={e => setForm({...form,meaning_vi:e.target.value})}/>
             <Input label="Nghĩa (JA)" value={form.meaning_ja} onChange={e => setForm({...form,meaning_ja:e.target.value})}/>
           </div>
+          {form.kanji && (
+            <Input label="Hán Việt" value={form.han_viet} onChange={e => setForm({...form,han_viet:e.target.value})} placeholder="vd: an toàn"/>
+          )}
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-sm font-medium text-on-muted mb-1">Level</label>

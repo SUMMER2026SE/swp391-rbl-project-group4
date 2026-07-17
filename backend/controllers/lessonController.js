@@ -3,6 +3,7 @@
 const { supabaseAdmin } = require('../config/supabase');
 const { checkCourseContentAccess } = require('../services/courseAccess');
 const { describeThreshold } = require('../services/passThreshold');
+const { markLessonCompleted } = require('../services/lessonProgress');
 
 // Bảng quiz nằm ở exam_module; tiến độ (lesson_progress) + units nằm ở content_module
 const examDb = supabaseAdmin.schema('exam_module');
@@ -44,7 +45,7 @@ exports.getOne = async (req, res) => {
     const kanjiIds   = (kanjiLinks || []).map(l => l.kanji_id);
     const grammarIds = (grammarLinks || []).map(l => l.grammar_point_id);
 
-    const [{ data: vocab }, { data: kanji }, { data: grammarPoints }, { data: quiz }, order, { data: progress }] = await Promise.all([
+    const [{ data: vocab }, { data: kanji }, { data: grammarPoints }, { data: quiz }, order, { data: progress }, { data: extra }] = await Promise.all([
       vocabIds.length
         ? supabaseAdmin.from('vocabulary')
             .select('id,kanji,reading,meaning_vi,meaning_ja,type,example_sentence')
@@ -61,13 +62,15 @@ exports.getOne = async (req, res) => {
             .in('id', grammarIds).order('created_at')
         : Promise.resolve({ data: [] }),
       examDb.from('quizzes')
-        .select('id,title,time_limit,type')
+        .select('id,title,time_limit,type,passing_type')
         .eq('lesson_id', id)
         .limit(1)
         .maybeSingle(),
       buildCourseItemOrder(lesson.course_id),
       contentDb.from('lesson_progress')
         .select('status').eq('lesson_id', id).eq('student_id', req.user.id).maybeSingle(),
+      // View compat không có description/reading_article_id/transcript_segments — lấy thêm từ bảng gốc.
+      contentDb.from('lessons').select('description,reading_article_id,transcript_segments').eq('id', id).single(),
     ]);
 
     const idx = order.findIndex(i => i.id === id);
@@ -81,6 +84,9 @@ exports.getOne = async (req, res) => {
 
     res.json({
       ...lesson,
+      description: extra?.description ?? null,
+      reading_article_id: extra?.reading_article_id ?? null,
+      transcript_segments: extra?.transcript_segments ?? null,
       vocabulary: vocab || [],
       kanji: kanji || [],
       grammar_points: grammarPoints || [],
@@ -112,19 +118,7 @@ exports.complete = async (req, res) => {
         });
     }
 
-    const { data: existing } = await contentDb.from('lesson_progress')
-      .select('id').eq('lesson_id', id).eq('student_id', studentId).maybeSingle();
-    if (existing) {
-      await contentDb.from('lesson_progress')
-        .update({ status: 'completed', progress_pct: 100, completed_at: new Date().toISOString() })
-        .eq('id', existing.id);
-    } else {
-      await contentDb.from('lesson_progress').insert({
-        student_id: studentId, lesson_id: id,
-        status: 'completed', progress_pct: 100, last_position: 0, time_spent_sec: 0,
-        completed_at: new Date().toISOString(),
-      });
-    }
+    await markLessonCompleted(studentId, id);
     res.json({ message: 'Đã lưu tiến độ.' });
   } catch (err) {
     console.error('Complete lesson error:', err);

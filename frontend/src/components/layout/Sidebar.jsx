@@ -1,17 +1,14 @@
-import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { useAuth } from '../../contexts/AuthContext';
-import { useLang } from '../../contexts/LangContext';
+import { useLayoutEffect, useRef } from 'react';
+import { Link, useLocation } from 'react-router-dom';
 
 export default function Sidebar({ links, brand = 'Kizuna Nihongo', collapsed = false, onToggle }) {
-  const { logout } = useAuth();
-  const { t } = useLang();
   const location = useLocation();
-  const navigate = useNavigate();
+  const navRef = useRef(null);
 
-  const handleLogout = async () => {
-    await logout();
-    navigate('/');
-  };
+  useLayoutEffect(() => {
+    const saved = Number(sessionStorage.getItem('sidebar_scroll') || 0);
+    if (navRef.current) navRef.current.scrollTop = saved;
+  }, []);
 
   return (
     <aside className={`hidden md:flex flex-col h-screen bg-white border-r border-outline/30 fixed left-0 top-0 z-40 pt-6 pb-4 transition-all duration-200 ${
@@ -43,9 +40,13 @@ export default function Sidebar({ links, brand = 'Kizuna Nihongo', collapsed = f
         </button>
       )}
 
-      <nav className="flex-1 flex flex-col gap-1 overflow-y-auto min-h-0 -mx-2 px-2">
+      <nav ref={navRef}
+        onScroll={() => sessionStorage.setItem('sidebar_scroll', navRef.current?.scrollTop ?? 0)}
+        className="flex-1 flex flex-col gap-1 overflow-y-auto min-h-0 -mx-2 px-2">
         {links.map((link) => {
-          const active = location.pathname === link.to || location.pathname.startsWith(link.to + '/');
+          const active = link.exact
+            ? location.pathname === link.to
+            : (location.pathname === link.to || location.pathname.startsWith(link.to + '/'));
           return (
             <Link key={link.to} to={link.to} title={collapsed ? link.label : undefined}
               className={`flex items-center gap-3 rounded-xl text-sm font-medium transition-all ${
@@ -61,16 +62,6 @@ export default function Sidebar({ links, brand = 'Kizuna Nihongo', collapsed = f
           );
         })}
       </nav>
-
-      <div className="border-t border-outline/30 pt-4 flex-shrink-0 mt-2">
-        <button onClick={handleLogout} title={collapsed ? t('nav.logout') : undefined}
-          className={`w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-surface-low text-on-surface font-semibold text-sm hover:bg-outline/30 transition-colors ${
-            collapsed ? 'px-2' : 'px-4'
-          }`}>
-          <span className="material-symbols-outlined text-xl">logout</span>
-          {!collapsed && t('nav.logout')}
-        </button>
-      </div>
     </aside>
   );
 }

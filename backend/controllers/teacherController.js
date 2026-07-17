@@ -27,11 +27,11 @@ exports.listMyVocab = async (req, res) => {
 };
 
 exports.createMyVocab = async (req, res) => {
-  const { kanji, reading, meaning_vi, meaning_ja, level, type, example_sentence } = req.body;
+  const { kanji, reading, meaning_vi, meaning_ja, level, type, example_sentence, han_viet } = req.body;
   if (!reading || !meaning_vi) return res.status(400).json({ error: 'Reading và nghĩa là bắt buộc.' });
   try {
     const { data, error } = await supabaseAdmin.from('vocabulary')
-      .insert({ kanji, reading, meaning_vi, meaning_ja, level, type, example_sentence, created_by: req.user.id, is_public: true })
+      .insert({ kanji, reading, meaning_vi, meaning_ja, level, type, example_sentence, han_viet: han_viet || null, created_by: req.user.id, is_public: true })
       .select().single();
     if (error) throw error;
     res.status(201).json(data);
@@ -42,7 +42,7 @@ exports.updateMyVocab = async (req, res) => {
   try {
     const { data: row } = await supabaseAdmin.from('vocabulary').select('created_by').eq('id', req.params.id).single();
     if (!row || row.created_by !== req.user.id) return res.status(403).json({ error: 'Không có quyền.' });
-    const allowed = ['kanji','reading','meaning_vi','meaning_ja','level','type','example_sentence'];
+    const allowed = ['kanji','reading','meaning_vi','meaning_ja','level','type','example_sentence','han_viet'];
     const updates = Object.fromEntries(Object.entries(req.body).filter(([k]) => allowed.includes(k)));
     const { data, error } = await supabaseAdmin.from('vocabulary').update(updates).eq('id', req.params.id).select().single();
     if (error) throw error;
@@ -409,10 +409,29 @@ exports.updateUnit = async (req, res) => {
   } catch (err) { res.status(500).json({ error: 'Không thể cập nhật.' }); }
 };
 
+exports.reorderUnits = async (req, res) => {
+  const { items } = req.body; // [{ id, sort_order }]
+  if (!Array.isArray(items)) return res.status(400).json({ error: 'items phải là mảng.' });
+  try {
+    // Chỉ sắp xếp unit thuộc khóa do chính mình tạo.
+    const { data: rows } = await contentDb.from('units').select('course_id').in('id', items.map(i => i.id));
+    for (const cid of [...new Set((rows || []).map(r => r.course_id))])
+      if (!(await ownsCourse(cid, req.user.id))) return res.status(403).json({ error: 'Không có quyền.' });
+    await Promise.all(items.map(({ id, sort_order }) =>
+      contentDb.from('units').update({ sort_order, updated_at: new Date().toISOString() }).eq('id', id)
+    ));
+    res.json({ message: 'Đã cập nhật thứ tự.' });
+  } catch (err) { res.status(500).json({ error: 'Không thể cập nhật thứ tự.' }); }
+};
+
 exports.reorderLessons = async (req, res) => {
   const { items } = req.body; // [{ id, order_index }]
   if (!Array.isArray(items)) return res.status(400).json({ error: 'items phải là mảng.' });
   try {
+    // Chỉ sắp xếp mục thuộc khóa do chính mình tạo.
+    const { data: rows } = await supabaseAdmin.from('lessons').select('course_id').in('id', items.map(i => i.id));
+    for (const cid of [...new Set((rows || []).map(r => r.course_id))])
+      if (!(await ownsCourse(cid, req.user.id))) return res.status(403).json({ error: 'Không có quyền.' });
     await Promise.all(items.map(({ id, order_index }) =>
       supabaseAdmin.from('lessons').update({ order_index, updated_at: new Date().toISOString() }).eq('id', id)
     ));
@@ -436,12 +455,14 @@ exports.getLesson = async (req, res) => {
     const { data: lesson } = await supabaseAdmin.from('lessons').select('*').eq('id', req.params.id).single();
     if (!lesson) return res.status(404).json({ error: 'Không tìm thấy mục.' });
     if (!(await ownsCourse(lesson.course_id, req.user.id))) return res.status(403).json({ error: 'Không có quyền.' });
-    res.json(lesson);
+    // View compat không có description/transcript_segments — lấy thêm từ bảng gốc (như price của course).
+    const { data: extra } = await contentDb.from('lessons').select('description,transcript_segments').eq('id', req.params.id).single();
+    res.json({ ...lesson, description: extra?.description ?? null, transcript_segments: extra?.transcript_segments ?? null });
   } catch (err) { res.status(500).json({ error: 'Lỗi.' }); }
 };
 
 exports.createLesson = async (req, res) => {
-  const { course_id, unit_id, title, title_ja, lesson_type, content, content_url, transcript, grammar_notes, order_index, duration_minutes, question_count } = req.body;
+  const { course_id, unit_id, title, title_ja, lesson_type, content, content_url, transcript, transcript_segments, grammar_notes, order_index, duration_minutes, question_count } = req.body;
   if (!course_id || !unit_id || !title) return res.status(400).json({ error: 'Thiếu thông tin bắt buộc.' });
   if (!(await ownsCourse(course_id, req.user.id))) return res.status(403).json({ error: 'Không có quyền.' });
   try {
@@ -449,7 +470,7 @@ exports.createLesson = async (req, res) => {
       .insert({
         course_id, unit_id, title, title_ja: title_ja || null,
         content_body: content || null, content_type: lesson_type || 'reading',
-        content_url: content_url || null, transcript: transcript || null, grammar_notes: grammar_notes || null,
+        content_url: content_url || null, transcript: transcript || null, transcript_segments: transcript_segments || null, grammar_notes: grammar_notes || null,
         sort_order: order_index || 0, duration_minutes: duration_minutes || 0, question_count: question_count || 0,
         is_published: true,
       })
@@ -464,7 +485,7 @@ exports.updateLesson = async (req, res) => {
     const { data: lesson } = await contentDb.from('lessons').select('course_id').eq('id', req.params.id).single();
     if (!lesson || !(await ownsCourse(lesson.course_id, req.user.id))) return res.status(403).json({ error: 'Không có quyền.' });
     const FIELD_MAP = { content: 'content_body', lesson_type: 'content_type', order_index: 'sort_order', module_id: 'unit_id' };
-    const allowed = ['title', 'title_ja', 'content', 'order_index', 'is_published', 'unit_id', 'lesson_type', 'duration_minutes', 'question_count', 'grammar_notes', 'content_url', 'transcript'];
+    const allowed = ['title', 'title_ja', 'content', 'order_index', 'is_published', 'unit_id', 'lesson_type', 'duration_minutes', 'question_count', 'grammar_notes', 'content_url', 'transcript', 'transcript_segments', 'description'];
     const raw = Object.fromEntries(Object.entries(req.body).filter(([k]) => allowed.includes(k)));
     const updates = Object.fromEntries(Object.entries(raw).map(([k, v]) => [FIELD_MAP[k] || k, v]));
     updates.updated_at = new Date().toISOString();
@@ -472,6 +493,23 @@ exports.updateLesson = async (req, res) => {
     if (error) throw error;
     res.json(data);
   } catch (err) { res.status(500).json({ error: 'Không thể cập nhật.' }); }
+};
+
+// Chép lời tự động cho lesson video (cả upload lẫn YouTube qua yt-dlp) — chỉ trên khóa
+// của chính mình. Trả về bản nháp segments cho editor duyệt, KHÔNG ghi DB (lưu qua
+// PUT /lessons/:id sau khi xem lại).
+exports.transcribeLessonVideo = async (req, res) => {
+  const { runVideoTranscription } = require('../services/lessonTranscribe');
+  try {
+    const { data: lesson } = await contentDb.from('lessons').select('course_id, content_url').eq('id', req.params.id).single();
+    if (!lesson || !(await ownsCourse(lesson.course_id, req.user.id))) return res.status(403).json({ error: 'Không có quyền.' });
+    if (!lesson.content_url) return res.status(400).json({ error: 'Mục chưa có video.' });
+    const { segments, transcript } = await runVideoTranscription(lesson.content_url);
+    res.json({ segments, transcript, count: segments.length });
+  } catch (err) {
+    console.error('transcribeLessonVideo (teacher) error:', err);
+    res.status(500).json({ error: 'Không thể chép lời tự động: ' + err.message });
+  }
 };
 
 exports.deleteLesson = async (req, res) => {
@@ -579,4 +617,221 @@ exports.createGrammarForLesson = async (req, res) => {
   if (lesson_id && !(await ownsLesson(lesson_id, req.user.id)))
     return res.status(403).json({ error: 'Bạn không có quyền thêm vào bài này.' });
   return require('./adminController').createGrammarPoint(req, res);
+};
+
+// ── Quiz của Mục (lesson quiz) ─────────────────────────────────────────────────
+// Trình soạn quiz gắn với Mục (giống admin /admin/quizzes), khác bộ "Bài kiểm tra"
+// (/api/exams/teacher/*: is_exam=true, sở hữu qua teacher_id). Ở đây quiz thuộc
+// lesson → sở hữu kiểm tra qua khóa học do chính giáo viên tạo (ownsLesson).
+const { validateThreshold } = require('../services/passThreshold');
+
+// Quiz phải gắn lesson thuộc khóa của giáo viên; trả về quiz row hoặc null.
+async function ownedLessonQuiz(quizId, userId) {
+  const { data: quiz } = await examDb.from('quizzes').select('*').eq('id', quizId).single();
+  if (!quiz || !quiz.lesson_id) return null;
+  return (await ownsLesson(quiz.lesson_id, userId)) ? quiz : null;
+}
+
+exports.listLessonQuizzes = async (req, res) => {
+  const { lesson_id } = req.query;
+  if (!lesson_id) return res.status(400).json({ error: 'Thiếu lesson_id.' });
+  if (!(await ownsLesson(lesson_id, req.user.id))) return res.status(403).json({ error: 'Không có quyền.' });
+  try {
+    const { data, error } = await examDb.from('quizzes')
+      .select('*').eq('lesson_id', lesson_id).order('created_at', { ascending: false });
+    if (error) throw error;
+    res.json({ data: data || [], total: (data || []).length });
+  } catch (err) { res.status(500).json({ error: 'Không thể tải danh sách quiz.' }); }
+};
+
+exports.createLessonQuiz = async (req, res) => {
+  const { title, title_ja, description, lesson_id, type, time_limit, mode, strict_fullscreen } = req.body;
+  if (!title) return res.status(400).json({ error: 'Tiêu đề không được để trống.' });
+  if (!lesson_id) return res.status(400).json({ error: 'Thiếu lesson_id.' });
+  if (!(await ownsLesson(lesson_id, req.user.id))) return res.status(403).json({ error: 'Không có quyền.' });
+  try {
+    const { data, error } = await examDb.from('quizzes')
+      .insert({ title, title_ja, description, lesson_id, type: type || 'multiple_choice', time_limit,
+                mode: mode === 'proctored' ? 'proctored' : 'normal',
+                // "Giám sát" luôn kéo theo toàn màn hình nghiêm ngặt (webcam đã bỏ)
+                strict_fullscreen: mode === 'proctored' ? true : strict_fullscreen === true })
+      .select().single();
+    if (error) throw error;
+    res.status(201).json(data);
+  } catch (err) { res.status(500).json({ error: err.message || 'Không thể tạo quiz.' }); }
+};
+
+exports.updateLessonQuiz = async (req, res) => {
+  const allowed = ['title','title_ja','description','type','time_limit','is_published','mode','strict_fullscreen','passing_type','passing_value'];
+  const updates = Object.fromEntries(Object.entries(req.body).filter(([k]) => allowed.includes(k)));
+  if (updates.mode === 'proctored') updates.strict_fullscreen = true;
+  try {
+    if (!(await ownedLessonQuiz(req.params.id, req.user.id))) return res.status(403).json({ error: 'Không có quyền với quiz này.' });
+    if ('passing_type' in updates || 'passing_value' in updates) {
+      let total = 0;
+      if (updates.passing_type === 'count') {
+        const { count } = await examDb.from('quiz_questions')
+          .select('id', { count: 'exact', head: true }).eq('quiz_id', req.params.id);
+        total = count || 0;
+      }
+      const v = validateThreshold(updates.passing_type, updates.passing_value, total);
+      if (v.error) return res.status(400).json({ error: v.error });
+      updates.passing_type  = v.type;
+      updates.passing_value = v.value;
+    }
+    const { data, error } = await examDb.from('quizzes').update(updates).eq('id', req.params.id).select().single();
+    if (error) throw error;
+    res.json(data);
+  } catch (err) { res.status(500).json({ error: 'Không thể cập nhật.' }); }
+};
+
+exports.deleteLessonQuiz = async (req, res) => {
+  try {
+    if (!(await ownedLessonQuiz(req.params.id, req.user.id))) return res.status(403).json({ error: 'Không có quyền với quiz này.' });
+    await examDb.from('quizzes').delete().eq('id', req.params.id);
+    res.json({ message: 'Đã xóa.' });
+  } catch (err) { res.status(500).json({ error: 'Không thể xóa.' }); }
+};
+
+exports.listLessonQuizQuestions = async (req, res) => {
+  try {
+    if (!(await ownedLessonQuiz(req.params.quizId, req.user.id))) return res.status(403).json({ error: 'Không có quyền với quiz này.' });
+    const { data, error } = await examDb
+      .from('quiz_questions')
+      .select('id,question,options,correct_answer,correct_answer_data,question_type,bank_question_id,explanation,order_index')
+      .eq('quiz_id', req.params.quizId)
+      .order('order_index');
+    if (error) throw error;
+    res.json(data || []);
+  } catch (err) { res.status(500).json({ error: 'Không thể tải câu hỏi.' }); }
+};
+
+exports.createLessonQuizQuestion = async (req, res) => {
+  const {
+    quiz_id, question, options, correct_answer, correct_answer_data,
+    explanation, order_index, question_type, bank_question_id,
+  } = req.body;
+  if (!quiz_id) return res.status(400).json({ error: 'Thiếu quiz_id.' });
+  if (!bank_question_id && !question) return res.status(400).json({ error: 'Thiếu nội dung câu hỏi.' });
+  try {
+    if (!(await ownedLessonQuiz(quiz_id, req.user.id))) return res.status(403).json({ error: 'Không có quyền với quiz này.' });
+    const { data, error } = await examDb.from('quiz_questions')
+      .insert({
+        quiz_id,
+        question:             question || null,
+        options:              options  || null,
+        correct_answer:       correct_answer || null,
+        correct_answer_data:  correct_answer_data || null,
+        explanation:          explanation || null,
+        order_index:          order_index ?? 0,
+        question_type:        question_type || 'single_choice',
+        bank_question_id:     bank_question_id || null,
+      })
+      .select().single();
+    if (error) throw error;
+    res.status(201).json(data);
+  } catch (err) { res.status(500).json({ error: 'Không thể tạo câu hỏi.' }); }
+};
+
+// Tìm quiz chứa câu hỏi rồi kiểm tra sở hữu qua lesson.
+async function ownedQuizQuestion(questionId, userId) {
+  const { data: q } = await examDb.from('quiz_questions').select('quiz_id').eq('id', questionId).single();
+  if (!q) return null;
+  return (await ownedLessonQuiz(q.quiz_id, userId)) ? q : null;
+}
+
+exports.updateLessonQuizQuestion = async (req, res) => {
+  const allowed = [
+    'question','options','correct_answer','correct_answer_data',
+    'explanation','order_index','question_type','bank_question_id',
+  ];
+  const updates = Object.fromEntries(Object.entries(req.body).filter(([k]) => allowed.includes(k)));
+  try {
+    if (!(await ownedQuizQuestion(req.params.id, req.user.id))) return res.status(403).json({ error: 'Không có quyền với câu hỏi này.' });
+    const { data, error } = await examDb.from('quiz_questions').update(updates).eq('id', req.params.id).select().single();
+    if (error) throw error;
+    res.json(data);
+  } catch (err) { res.status(500).json({ error: 'Không thể cập nhật.' }); }
+};
+
+exports.deleteLessonQuizQuestion = async (req, res) => {
+  try {
+    if (!(await ownedQuizQuestion(req.params.id, req.user.id))) return res.status(403).json({ error: 'Không có quyền với câu hỏi này.' });
+    await examDb.from('quiz_questions').delete().eq('id', req.params.id);
+    res.json({ message: 'Đã xóa.' });
+  } catch (err) { res.status(500).json({ error: 'Không thể xóa.' }); }
+};
+
+// Nhập nhiều câu hỏi từ ngân hàng đề vào quiz.
+exports.importLessonQuizFromBank = async (req, res) => {
+  const { quizId } = req.params;
+  const { question_ids, source = 'mine' } = req.body; // source: 'mine' (riêng) | 'global' (chung, đã duyệt)
+  if (!Array.isArray(question_ids) || !question_ids.length)
+    return res.status(400).json({ error: 'Không có câu hỏi được chọn.' });
+  try {
+    if (!(await ownedLessonQuiz(quizId, req.user.id))) return res.status(403).json({ error: 'Không có quyền với quiz này.' });
+
+    const { data: existing } = await examDb
+      .from('quiz_questions').select('order_index').eq('quiz_id', quizId).order('order_index', { ascending: false }).limit(1);
+    let nextIdx = existing && existing.length ? (existing[0].order_index + 1) : 0;
+
+    // Lấy câu hỏi từ ngân hàng riêng (của GV) hoặc ngân hàng chung của admin (đã duyệt)
+    const bankQuery = source === 'global'
+      ? examDb.from('question_bank').select('*').in('id', question_ids).eq('status', 'approved')
+      : examDb.from('teacher_question_bank').select('*').in('id', question_ids).eq('teacher_id', req.user.id);
+    const { data: bankRows, error: fetchErr } = await bankQuery;
+    if (fetchErr) throw fetchErr;
+
+    const rows = (bankRows || []).map((bq, i) => ({
+      quiz_id:             quizId,
+      bank_question_id:    bq.id,
+      question_type:       bq.question_type || 'single_choice',
+      question:            bq.question_text,
+      options:             bq.options,
+      correct_answer:      typeof bq.correct_answer === 'string' ? bq.correct_answer : null,
+      correct_answer_data: typeof bq.correct_answer !== 'string' ? bq.correct_answer : null,
+      explanation:         bq.explanation || null,
+      order_index:         nextIdx + i,
+    }));
+
+    const { data, error } = await examDb.from('quiz_questions').insert(rows).select();
+    if (error) throw error;
+    res.status(201).json(data);
+  } catch (err) { res.status(500).json({ error: 'Không thể nhập câu hỏi.' }); }
+};
+
+// GET /api/teacher/quizzes/:quizId/attempts — danh sách bài làm + dữ liệu giám sát
+exports.listLessonQuizAttempts = async (req, res) => {
+  try {
+    if (!(await ownedLessonQuiz(req.params.quizId, req.user.id))) return res.status(403).json({ error: 'Không có quyền với quiz này.' });
+    const { data: attempts, error } = await examDb
+      .from('quiz_attempts')
+      .select('id,user_id,score,total_questions,mode,violation_count,proctor_events,snapshots,completed_at')
+      .eq('quiz_id', req.params.quizId)
+      .order('completed_at', { ascending: false });
+    if (error) throw error;
+    if (!attempts || attempts.length === 0) return res.json([]);
+
+    // Gắn tên học viên
+    const userIds = [...new Set(attempts.map(a => a.user_id))];
+    const { data: users } = await supabaseAdmin.from('users').select('id,full_name,email').in('id', userIds);
+    const uMap = Object.fromEntries((users || []).map(u => [u.id, u]));
+
+    // Tạo signed URL cho ảnh giám sát (hết hạn sau 1 giờ)
+    const result = await Promise.all(attempts.map(async (a) => {
+      let snapshotUrls = [];
+      if (Array.isArray(a.snapshots) && a.snapshots.length > 0) {
+        const { data: signed } = await supabaseAdmin.storage
+          .from('proctor-snapshots')
+          .createSignedUrls(a.snapshots, 3600);
+        snapshotUrls = (signed || []).map(s => s.signedUrl).filter(Boolean);
+      }
+      return { ...a, student: uMap[a.user_id] || { email: a.user_id }, snapshot_urls: snapshotUrls };
+    }));
+
+    res.json(result);
+  } catch (err) {
+    console.error('List lesson quiz attempts error:', err);
+    res.status(500).json({ error: 'Không thể tải bài làm.' });
+  }
 };

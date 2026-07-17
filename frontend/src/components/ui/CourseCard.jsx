@@ -41,8 +41,6 @@ export default function CourseCard({ course }) {
   const lvl = course.difficulty_level || course.level;
   const rating = Number(course.avg_rating) || 0;
   const reviewCount = course.review_count || 0;
-  const isAdmin = course.creator_type === 'admin';
-  const author = course.creator_name || (isAdmin ? 'Kizuna Nihongo' : 'Giáo viên');
 
   return (
     <Link
@@ -85,6 +83,13 @@ export default function CourseCard({ course }) {
         </h3>
         {course.title_ja && <p className="text-sm text-on-muted mb-2">{course.title_ja}</p>}
 
+        {/* Badge người tạo */}
+        <span className={`inline-flex items-center gap-1 self-start px-2 py-0.5 rounded-full text-[11px] font-semibold mb-2 ${
+          course.creator_type === 'teacher' ? 'bg-sumire-purple/10 text-sumire-purple' : 'bg-tsubaki-red/10 text-tsubaki-red'}`}>
+          <span className="material-symbols-outlined text-[13px]">{course.creator_type === 'teacher' ? 'person' : 'verified'}</span>
+          {course.creator_type === 'teacher' ? `GV: ${course.creator_name || 'Giáo viên'}` : 'Hệ thống'}
+        </span>
+
         {/* Rating */}
         <div className="flex items-center gap-1.5 text-xs mb-3">
           {reviewCount > 0 ? (
@@ -105,17 +110,21 @@ export default function CourseCard({ course }) {
           {course.description || 'Khóa học tiếng Nhật chất lượng cao dành cho người học.'}
         </p>
 
-        {/* Footer: tác giả + lượt đăng ký */}
-        <div className="mt-auto pt-4 border-t border-outline-variant/40 flex items-center justify-between gap-2">
-          <span className="flex items-center gap-1.5 text-xs text-on-muted min-w-0">
-            <span className={`material-symbols-outlined text-base shrink-0 ${isAdmin ? 'text-tsubaki-red fill' : ''}`}>
-              {isAdmin ? 'verified' : 'person'}
-            </span>
-            <span className="truncate">{author}</span>
-          </span>
-          <span className="flex items-center gap-1 text-xs text-on-muted shrink-0">
+        {/* Footer: số học viên • số bài • ngày tạo */}
+        <div className="mt-auto pt-4 border-t border-outline-variant/40 flex items-center gap-3 text-xs text-on-muted">
+          <span className="flex items-center gap-1">
             <span className="material-symbols-outlined text-base">group</span>
             {formatCount(course.enrollment_count)} học viên
+          </span>
+          {course.lesson_count != null && (
+            <span className="flex items-center gap-1">
+              <span className="material-symbols-outlined text-base">menu_book</span>
+              {course.lesson_count} bài
+            </span>
+          )}
+          <span className="flex items-center gap-1 ml-auto">
+            <span className="material-symbols-outlined text-base">calendar_today</span>
+            {course.created_at ? new Date(course.created_at).toLocaleDateString('vi') : '—'}
           </span>
         </div>
       </div>

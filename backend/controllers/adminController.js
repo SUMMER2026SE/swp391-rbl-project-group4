@@ -193,18 +193,35 @@ exports.listCourses = async (req, res) => {
     const all = allRes.count || 0;
     const published = pubRes.count || 0;
 
-    // Bổ sung số học viên (cột cache ở content_module) + số mục cho từng khóa của trang.
+    // Bổ sung số học viên (cột cache ở content_module) + số mục cho từng khóa của trang,
+    // kèm creator_type/tên người tạo để frontend phân biệt khóa hệ thống vs khóa teacher.
     const ids = rows.map(c => c.id);
-    let enrollMap = {}, lessonMap = {};
+    let enrollMap = {}, lessonMap = {}, metaMap = {}, creatorNameMap = {};
     if (ids.length) {
       const [{ data: cm }, { data: ls }] = await Promise.all([
-        contentDb.from('courses').select('id,enrollment_count').in('id', ids),
+        contentDb.from('courses').select('id,enrollment_count,creator_type,created_by').in('id', ids),
         supabaseAdmin.from('lessons').select('course_id').in('course_id', ids),
       ]);
       enrollMap = Object.fromEntries((cm || []).map(c => [c.id, c.enrollment_count]));
+      metaMap   = Object.fromEntries((cm || []).map(c => [c.id, c]));
       (ls || []).forEach(l => { lessonMap[l.course_id] = (lessonMap[l.course_id] || 0) + 1; });
+
+      const teacherIds = [...new Set((cm || []).filter(c => c.creator_type === 'teacher').map(c => c.created_by).filter(Boolean))];
+      if (teacherIds.length) {
+        const { data: creators } = await supabaseAdmin.from('users').select('id,full_name,email').in('id', teacherIds);
+        creatorNameMap = Object.fromEntries((creators || []).map(u => [u.id, u.full_name || u.email]));
+      }
     }
-    const data = rows.map(c => ({ ...c, enrollment_count: enrollMap[c.id] || 0, lesson_count: lessonMap[c.id] || 0 }));
+    const data = rows.map(c => {
+      const meta = metaMap[c.id] || {};
+      return {
+        ...c,
+        enrollment_count: enrollMap[c.id] || 0,
+        lesson_count: lessonMap[c.id] || 0,
+        creator_type: meta.creator_type || 'admin',
+        creator_name: meta.creator_type === 'teacher' ? (creatorNameMap[meta.created_by] || 'Giáo viên') : 'Kizuna Nihongo',
+      };
+    });
 
     res.json({
       data, total: pageRes.count, page: Number(page), limit: Number(limit),
@@ -271,6 +288,47 @@ exports.createCourse = async (req, res) => {
   } catch (err) { res.status(500).json({ error: 'Không thể tạo khóa học.' }); }
 };
 
+// ── Chặn admin sửa nội dung khóa học do teacher tạo ──────────────────────────
+// Khóa creator_type='teacher': chỉ chính teacher đó (qua /api/teacher/*) được
+// sửa/xóa nội dung. Admin chỉ còn quyền publish/unpublish qua publishCourse.
+const TEACHER_COURSE_MSG = 'Khóa học do giáo viên tạo — admin không có quyền chỉnh sửa nội dung.';
+
+async function isTeacherCourse(courseId) {
+  if (!courseId) return false;
+  const { data } = await contentDb.from('courses').select('creator_type').eq('id', courseId).maybeSingle();
+  return data?.creator_type === 'teacher';
+}
+
+async function hasTeacherCourse(courseIds) {
+  const ids = [...new Set((courseIds || []).filter(Boolean))];
+  if (!ids.length) return false;
+  const { data } = await contentDb.from('courses')
+    .select('id').in('id', ids).eq('creator_type', 'teacher').limit(1);
+  return !!(data && data.length);
+}
+
+async function courseIdOfUnit(unitId) {
+  const { data } = await contentDb.from('units').select('course_id').eq('id', unitId).maybeSingle();
+  return data?.course_id || null;
+}
+
+async function courseIdOfLesson(lessonId) {
+  const { data } = await contentDb.from('lessons').select('course_id').eq('id', lessonId).maybeSingle();
+  return data?.course_id || null;
+}
+
+async function courseIdOfQuiz(quizId) {
+  const { data } = await examDb.from('quizzes').select('course_id,lesson_id').eq('id', quizId).maybeSingle();
+  if (!data) return null;
+  if (data.course_id) return data.course_id;
+  return data.lesson_id ? courseIdOfLesson(data.lesson_id) : null;
+}
+
+async function courseIdOfQuizQuestion(questionId) {
+  const { data } = await examDb.from('quiz_questions').select('quiz_id').eq('id', questionId).maybeSingle();
+  return data?.quiz_id ? courseIdOfQuiz(data.quiz_id) : null;
+}
+
 exports.updateCourse = async (req, res) => {
   // Cột cơ bản qua view compat; cột giá/phân loại ghi thẳng vào bảng gốc content_module.
   const viewAllowed = ['title','title_ja','description','description_ja','level','thumbnail_url','is_published'];
@@ -278,6 +336,8 @@ exports.updateCourse = async (req, res) => {
   const viewUpdates = Object.fromEntries(Object.entries(req.body).filter(([k]) => viewAllowed.includes(k)));
   const newUpdates  = Object.fromEntries(Object.entries(req.body).filter(([k]) => newAllowed.includes(k)));
   try {
+    if (await isTeacherCourse(req.params.id))
+      return res.status(403).json({ error: TEACHER_COURSE_MSG });
     let data = null;
     if (Object.keys(viewUpdates).length) {
       viewUpdates.updated_at = new Date().toISOString();
@@ -303,18 +363,41 @@ exports.updateCourse = async (req, res) => {
 
 exports.deleteCourse = async (req, res) => {
   try {
+    if (await isTeacherCourse(req.params.id))
+      return res.status(403).json({ error: TEACHER_COURSE_MSG });
     await supabaseAdmin.from('courses').delete().eq('id', req.params.id);
     res.json({ message: 'Đã xóa.' });
   } catch (err) { res.status(500).json({ error: 'Không thể xóa.' }); }
+};
+
+// PATCH /api/admin/courses/:id/publish — tách quyền publish khỏi quyền sửa nội dung:
+// admin publish/unpublish được MỌI khóa học (kể cả của teacher), chỉ đổi đúng 1 field.
+exports.publishCourse = async (req, res) => {
+  const { is_published } = req.body;
+  if (typeof is_published !== 'boolean')
+    return res.status(400).json({ error: 'is_published phải là boolean.' });
+  try {
+    const { data, error } = await supabaseAdmin.from('courses')
+      .update({ is_published, updated_at: new Date().toISOString() })
+      .eq('id', req.params.id).select().single();
+    if (error || !data) return res.status(404).json({ error: 'Không tìm thấy khóa học.' });
+    res.json(data);
+  } catch (err) { res.status(500).json({ error: 'Không thể cập nhật trạng thái xuất bản.' }); }
 };
 
 // ── Course Builder ────────────────────────────────────────────────────────────
 exports.getCourseBuilder = async (req, res) => {
   const { courseId } = req.params;
   try {
+    if (await isTeacherCourse(courseId))
+      return res.status(403).json({ error: TEACHER_COURSE_MSG });
     const { data: course, error: cErr } = await supabaseAdmin
       .from('courses').select('*').eq('id', courseId).single();
     if (cErr || !course) return res.status(404).json({ error: 'Không tìm thấy khóa học.' });
+
+    // View compat không có reference_curriculum — lấy thêm từ bảng gốc (như bản teacher).
+    const { data: extra } = await contentDb.from('courses')
+      .select('reference_curriculum').eq('id', courseId).single();
 
     const [{ data: units, error: uErr }, { data: lessons, error: lErr }] = await Promise.all([
       contentDb.from('units').select('*').eq('course_id', courseId).order('sort_order'),
@@ -331,7 +414,7 @@ exports.getCourseBuilder = async (req, res) => {
       lessons: items.filter(l => l.unit_id === u.id),
     }));
 
-    res.json({ ...course, units: unitsWithItems });
+    res.json({ ...course, ...(extra || {}), units: unitsWithItems });
   } catch (err) { res.status(500).json({ error: 'Lỗi tải dữ liệu.' }); }
 };
 
@@ -340,6 +423,8 @@ exports.createUnit = async (req, res) => {
   const { course_id, title, title_ja, sort_order, description, level } = req.body;
   if (!course_id || !title) return res.status(400).json({ error: 'Thiếu thông tin bắt buộc.' });
   try {
+    if (await isTeacherCourse(course_id))
+      return res.status(403).json({ error: TEACHER_COURSE_MSG });
     const { data, error } = await contentDb.from('units')
       .insert({ course_id, title, title_ja: title_ja || null, sort_order: sort_order ?? 0, description: description || null, level: level || null })
       .select().single();
@@ -353,6 +438,8 @@ exports.updateUnit = async (req, res) => {
   const updates = Object.fromEntries(Object.entries(req.body).filter(([k]) => allowed.includes(k)));
   updates.updated_at = new Date().toISOString();
   try {
+    if (await isTeacherCourse(await courseIdOfUnit(req.params.id)))
+      return res.status(403).json({ error: TEACHER_COURSE_MSG });
     const { data, error } = await contentDb.from('units').update(updates).eq('id', req.params.id).select().single();
     if (error) throw error;
     res.json(data);
@@ -361,6 +448,8 @@ exports.updateUnit = async (req, res) => {
 
 exports.deleteUnit = async (req, res) => {
   try {
+    if (await isTeacherCourse(await courseIdOfUnit(req.params.id)))
+      return res.status(403).json({ error: TEACHER_COURSE_MSG });
     await contentDb.from('units').delete().eq('id', req.params.id);
     res.json({ message: 'Đã xóa bài học.' });
   } catch (err) { res.status(500).json({ error: 'Không thể xóa.' }); }
@@ -370,6 +459,9 @@ exports.reorderUnits = async (req, res) => {
   const { items } = req.body; // [{ id, sort_order }]
   if (!Array.isArray(items)) return res.status(400).json({ error: 'items phải là mảng.' });
   try {
+    const { data: us } = await contentDb.from('units').select('course_id').in('id', items.map(i => i.id));
+    if (await hasTeacherCourse((us || []).map(u => u.course_id)))
+      return res.status(403).json({ error: TEACHER_COURSE_MSG });
     await Promise.all(items.map(({ id, sort_order }) =>
       contentDb.from('units').update({ sort_order, updated_at: new Date().toISOString() }).eq('id', id)
     ));
@@ -381,6 +473,9 @@ exports.reorderLessons = async (req, res) => {
   const { items } = req.body; // [{ id, order_index }]
   if (!Array.isArray(items)) return res.status(400).json({ error: 'items phải là mảng.' });
   try {
+    const { data: ls } = await contentDb.from('lessons').select('course_id').in('id', items.map(i => i.id));
+    if (await hasTeacherCourse((ls || []).map(l => l.course_id)))
+      return res.status(403).json({ error: TEACHER_COURSE_MSG });
     await Promise.all(items.map(({ id, order_index }) =>
       supabaseAdmin.from('lessons').update({ order_index, updated_at: new Date().toISOString() }).eq('id', id)
     ));
@@ -393,7 +488,9 @@ exports.getLesson = async (req, res) => {
   try {
     const { data, error } = await supabaseAdmin.from('lessons').select('*').eq('id', req.params.id).single();
     if (error || !data) return res.status(404).json({ error: 'Không tìm thấy bài học.' });
-    res.json(data);
+    // View compat không có description/transcript_segments — lấy thêm từ bảng gốc (như price của course).
+    const { data: extra } = await contentDb.from('lessons').select('description,transcript_segments').eq('id', req.params.id).single();
+    res.json({ ...data, description: extra?.description ?? null, transcript_segments: extra?.transcript_segments ?? null });
   } catch (err) { res.status(500).json({ error: 'Lỗi.' }); }
 };
 
@@ -423,12 +520,14 @@ exports.listLessons = async (req, res) => {
 };
 
 exports.createLesson = async (req, res) => {
-  const { course_id, unit_id, title, title_ja, lesson_type, content, grammar_notes, content_url, transcript, order_index, duration_minutes, question_count, is_published } = req.body;
+  const { course_id, unit_id, title, title_ja, lesson_type, content, grammar_notes, content_url, transcript, transcript_segments, order_index, duration_minutes, question_count, is_published } = req.body;
   if (!course_id || !unit_id || !title) return res.status(400).json({ error: 'Thiếu thông tin bắt buộc.' });
   try {
+    if (await isTeacherCourse(course_id))
+      return res.status(403).json({ error: TEACHER_COURSE_MSG });
     const contentDb = supabaseAdmin.schema('content_module');
     const { data, error } = await contentDb.from('lessons')
-      .insert({ course_id, unit_id: unit_id || null, title, title_ja, content_body: content, content_type: lesson_type || 'reading', grammar_notes, content_url, transcript, sort_order: order_index || 0, duration_minutes: duration_minutes || 0, question_count: question_count || 0, is_published: is_published ?? false })
+      .insert({ course_id, unit_id: unit_id || null, title, title_ja, content_body: content, content_type: lesson_type || 'reading', grammar_notes, content_url, transcript, transcript_segments: transcript_segments || null, sort_order: order_index || 0, duration_minutes: duration_minutes || 0, question_count: question_count || 0, is_published: is_published ?? false })
       .select().single();
     if (error) throw error;
     res.status(201).json(data);
@@ -440,12 +539,14 @@ exports.createLesson = async (req, res) => {
 
 exports.updateLesson = async (req, res) => {
   const FIELD_MAP = { content: 'content_body', lesson_type: 'content_type', order_index: 'sort_order', module_id: 'unit_id' };
-  const allowed = ['title','title_ja','content','order_index','is_published','course_id','module_id','unit_id','lesson_type','duration_minutes','question_count','grammar_notes','content_url','transcript'];
+  const allowed = ['title','title_ja','content','order_index','is_published','course_id','module_id','unit_id','lesson_type','duration_minutes','question_count','grammar_notes','content_url','transcript','transcript_segments','description'];
   const raw = Object.fromEntries(Object.entries(req.body).filter(([k]) => allowed.includes(k)));
   const updates = Object.fromEntries(Object.entries(raw).map(([k, v]) => [FIELD_MAP[k] || k, v]));
 
   updates.updated_at = new Date().toISOString();
   try {
+    if (await isTeacherCourse(await courseIdOfLesson(req.params.id)))
+      return res.status(403).json({ error: TEACHER_COURSE_MSG });
     const contentDb = supabaseAdmin.schema('content_module');
     const { data, error } = await contentDb.from('lessons').update(updates).eq('id', req.params.id).select().single();
     if (error) throw error;
@@ -458,6 +559,8 @@ exports.updateLesson = async (req, res) => {
 
 exports.deleteLesson = async (req, res) => {
   try {
+    if (await isTeacherCourse(await courseIdOfLesson(req.params.id)))
+      return res.status(403).json({ error: TEACHER_COURSE_MSG });
     const contentDb = supabaseAdmin.schema('content_module');
     const { error } = await contentDb.from('lessons').delete().eq('id', req.params.id);
     if (error) throw error;
@@ -476,7 +579,7 @@ exports.importVocab = async (req, res) => {
   if (rows.length > 500)
     return res.status(400).json({ error: 'Tối đa 500 từ mỗi lần nhập.' });
 
-  const ALLOWED = ['kanji','reading','meaning_vi','meaning_ja','level','type','topic','example_sentence','lesson_id'];
+  const ALLOWED = ['kanji','reading','meaning_vi','meaning_ja','level','type','topic','example_sentence','lesson_id','han_viet'];
   const LEVELS  = new Set(['N5','N4','N3','N2','N1']);
   const TYPES   = new Set(['DANH TỪ','ĐỘNG TỪ','TÍNH TỪ','PHÓ TỪ','LIÊN TỪ']);
   const errors  = [];
@@ -577,11 +680,11 @@ exports.listVocab = async (req, res) => {
 };
 
 exports.createVocab = async (req, res) => {
-  const { kanji, reading, meaning_vi, meaning_ja, level, lesson_id, type, topic, example_sentence } = req.body;
+  const { kanji, reading, meaning_vi, meaning_ja, level, lesson_id, type, topic, example_sentence, image_url, han_viet } = req.body;
   if (!reading || !meaning_vi) return res.status(400).json({ error: 'Thiếu thông tin bắt buộc.' });
   try {
     const { data, error } = await supabaseAdmin.from('vocabulary')
-      .insert({ kanji, reading, meaning_vi, meaning_ja, level, lesson_id, type, topic, example_sentence, created_by: req.user?.id || null })
+      .insert({ kanji, reading, meaning_vi, meaning_ja, level, lesson_id, type, topic, example_sentence, image_url: image_url || null, han_viet: han_viet || null, created_by: req.user?.id || null })
       .select().single();
     if (error) throw error;
     // Gắn từ mới vào Mục qua bảng nối để hiển thị trong bài.
@@ -600,6 +703,8 @@ exports.attachVocab = async (req, res) => {
   const ids = Array.isArray(req.body?.ids) ? req.body.ids : [];
   if (ids.length === 0) return res.status(400).json({ error: 'Chưa chọn từ vựng nào.' });
   try {
+    if (await isTeacherCourse(await courseIdOfLesson(lessonId)))
+      return res.status(403).json({ error: TEACHER_COURSE_MSG });
     const rows = ids.map(vocabulary_id => ({ lesson_id: lessonId, vocabulary_id }));
     const { error } = await contentDb.from('lesson_vocabulary')
       .upsert(rows, { onConflict: 'lesson_id,vocabulary_id' });
@@ -612,6 +717,8 @@ exports.attachVocab = async (req, res) => {
 exports.detachVocab = async (req, res) => {
   const { lessonId, vocabId } = req.params;
   try {
+    if (await isTeacherCourse(await courseIdOfLesson(lessonId)))
+      return res.status(403).json({ error: TEACHER_COURSE_MSG });
     const { error } = await contentDb.from('lesson_vocabulary')
       .delete().eq('lesson_id', lessonId).eq('vocabulary_id', vocabId);
     if (error) throw error;
@@ -620,7 +727,7 @@ exports.detachVocab = async (req, res) => {
 };
 
 exports.updateVocab = async (req, res) => {
-  const allowed = ['kanji','reading','meaning_vi','meaning_ja','level','lesson_id','type','topic','example_sentence','image_url'];
+  const allowed = ['kanji','reading','meaning_vi','meaning_ja','level','lesson_id','type','topic','example_sentence','image_url','han_viet'];
   const updates = Object.fromEntries(Object.entries(req.body).filter(([k]) => allowed.includes(k)));
   try {
     const { data, error } = await supabaseAdmin.from('vocabulary').update(updates).eq('id', req.params.id).select().single();
@@ -760,6 +867,35 @@ exports.createGrammarPoint = async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message || 'Không thể tạo ngữ pháp.' }); }
 };
 
+// Gắn hàng loạt ngữ pháp có sẵn vào Mục (bảng nối nhiều–nhiều, giống attachKanji).
+exports.attachGrammar = async (req, res) => {
+  const { lessonId } = req.params;
+  const ids = Array.isArray(req.body?.ids) ? req.body.ids : [];
+  if (ids.length === 0) return res.status(400).json({ error: 'Chưa chọn ngữ pháp nào.' });
+  try {
+    if (await isTeacherCourse(await courseIdOfLesson(lessonId)))
+      return res.status(403).json({ error: TEACHER_COURSE_MSG });
+    const rows = ids.map(grammar_point_id => ({ lesson_id: lessonId, grammar_point_id }));
+    const { error } = await contentDb.from('lesson_grammar_points')
+      .upsert(rows, { onConflict: 'lesson_id,grammar_point_id' });
+    if (error) throw error;
+    res.json({ message: `Đã thêm ${ids.length} ngữ pháp vào bài.` });
+  } catch (err) { res.status(500).json({ error: 'Không thể thêm ngữ pháp.' }); }
+};
+
+// Gỡ một ngữ pháp khỏi Mục (không xóa mẫu gốc).
+exports.detachGrammar = async (req, res) => {
+  const { lessonId, grammarId } = req.params;
+  try {
+    if (await isTeacherCourse(await courseIdOfLesson(lessonId)))
+      return res.status(403).json({ error: TEACHER_COURSE_MSG });
+    const { error } = await contentDb.from('lesson_grammar_points')
+      .delete().eq('lesson_id', lessonId).eq('grammar_point_id', grammarId);
+    if (error) throw error;
+    res.json({ message: 'Đã gỡ khỏi bài.' });
+  } catch (err) { res.status(500).json({ error: 'Không thể gỡ ngữ pháp.' }); }
+};
+
 exports.updateGrammarPoint = async (req, res) => {
   const allowed = ['title','title_ja','meaning_vi','explanation','example_sentence','level'];
   const updates = Object.fromEntries(Object.entries(req.body).filter(([k]) => allowed.includes(k)));
@@ -827,6 +963,24 @@ exports.adminListStudyLists = async (req, res) => {
   } catch (err) {
     console.error('admin.listStudyLists:', err);
     res.status(500).json({ error: 'Không thể tải danh sách.' });
+  }
+};
+
+// Khóa/mở bài đăng — khóa thì ẩn khỏi học sinh (giáo viên vẫn sửa được để khắc
+// phục), kèm ghi chú lý do; mở lại thì hiện lại bình thường.
+// PUT /api/admin/study-lists/:id/lock  { locked: boolean, note?: string }
+exports.lockStudyList = async (req, res) => {
+  const { locked, note } = req.body;
+  try {
+    const { data, error } = await supabaseAdmin.from('study_list_posts')
+      .update({ is_locked: !!locked, lock_note: locked ? (note || null) : null })
+      .eq('id', req.params.id).select().single();
+    if (error) throw error;
+    if (!data) return res.status(404).json({ error: 'Không tìm thấy.' });
+    res.json(data);
+  } catch (err) {
+    console.error('admin.lockStudyList:', err);
+    res.status(500).json({ error: 'Không thể cập nhật trạng thái khóa.' });
   }
 };
 
@@ -968,6 +1122,8 @@ exports.attachKanji = async (req, res) => {
   const ids = Array.isArray(req.body?.ids) ? req.body.ids : [];
   if (ids.length === 0) return res.status(400).json({ error: 'Chưa chọn kanji nào.' });
   try {
+    if (await isTeacherCourse(await courseIdOfLesson(lessonId)))
+      return res.status(403).json({ error: TEACHER_COURSE_MSG });
     const rows = ids.map(kanji_id => ({ lesson_id: lessonId, kanji_id }));
     const { error } = await contentDb.from('lesson_kanji')
       .upsert(rows, { onConflict: 'lesson_id,kanji_id' });
@@ -980,6 +1136,8 @@ exports.attachKanji = async (req, res) => {
 exports.detachKanji = async (req, res) => {
   const { lessonId, kanjiId } = req.params;
   try {
+    if (await isTeacherCourse(await courseIdOfLesson(lessonId)))
+      return res.status(403).json({ error: TEACHER_COURSE_MSG });
     const { error } = await contentDb.from('lesson_kanji')
       .delete().eq('lesson_id', lessonId).eq('kanji_id', kanjiId);
     if (error) throw error;
@@ -1247,6 +1405,26 @@ exports.uploadLessonVideo = async (req, res) => {
     const { data: { publicUrl } } = supabaseAdmin.storage.from('lesson-videos').getPublicUrl(filename);
     res.json({ url: publicUrl });
   } catch (err) { res.status(500).json({ error: 'Không thể tải file video lên.' }); }
+};
+
+// Chép lời tự động (Whisper + dịch) cho lesson video — cả video upload lẫn link
+// YouTube (tải audio qua yt-dlp). Trả về bản nháp segments cho editor duyệt —
+// KHÔNG ghi DB (giáo viên xem lại rồi lưu qua PUT /lessons/:id).
+exports.transcribeLessonVideo = async (req, res) => {
+  const { runVideoTranscription } = require('../services/lessonTranscribe');
+  try {
+    if (await isTeacherCourse(await courseIdOfLesson(req.params.id)))
+      return res.status(403).json({ error: TEACHER_COURSE_MSG });
+    const contentDb = supabaseAdmin.schema('content_module');
+    const { data: lesson } = await contentDb.from('lessons').select('content_url').eq('id', req.params.id).single();
+    if (!lesson) return res.status(404).json({ error: 'Không tìm thấy bài học.' });
+    if (!lesson.content_url) return res.status(400).json({ error: 'Bài học chưa có video.' });
+    const { segments, transcript } = await runVideoTranscription(lesson.content_url);
+    res.json({ segments, transcript, count: segments.length });
+  } catch (err) {
+    console.error('transcribeLessonVideo error:', err);
+    res.status(500).json({ error: 'Không thể chép lời tự động: ' + err.message });
+  }
 };
 
 // ── Listening Passages ────────────────────────────────────────────────────────
@@ -1543,6 +1721,9 @@ exports.createQuiz = async (req, res) => {
   const { title, title_ja, description, course_id, lesson_id, type, time_limit, mode, strict_fullscreen } = req.body;
   if (!title) return res.status(400).json({ error: 'Tiêu đề không được để trống.' });
   try {
+    const targetCourseId = course_id || (lesson_id ? await courseIdOfLesson(lesson_id) : null);
+    if (await isTeacherCourse(targetCourseId))
+      return res.status(403).json({ error: TEACHER_COURSE_MSG });
     const { data, error } = await examDb.from('quizzes')
       .insert({ title, title_ja, description, course_id, lesson_id, type: type || 'multiple_choice', time_limit,
                 mode: mode === 'proctored' ? 'proctored' : 'normal',
@@ -1559,6 +1740,8 @@ exports.updateQuiz = async (req, res) => {
   const updates = Object.fromEntries(Object.entries(req.body).filter(([k]) => allowed.includes(k)));
   if (updates.mode === 'proctored') updates.strict_fullscreen = true;
   try {
+    if (await isTeacherCourse(await courseIdOfQuiz(req.params.id)))
+      return res.status(403).json({ error: TEACHER_COURSE_MSG });
     if ('passing_type' in updates || 'passing_value' in updates) {
       let total = 0;
       if (updates.passing_type === 'count') {
@@ -1579,6 +1762,8 @@ exports.updateQuiz = async (req, res) => {
 
 exports.deleteQuiz = async (req, res) => {
   try {
+    if (await isTeacherCourse(await courseIdOfQuiz(req.params.id)))
+      return res.status(403).json({ error: TEACHER_COURSE_MSG });
     await examDb.from('quizzes').delete().eq('id', req.params.id);
     res.json({ message: 'Đã xóa.' });
   } catch (err) { res.status(500).json({ error: 'Không thể xóa.' }); }
@@ -1608,6 +1793,8 @@ exports.createQuestion = async (req, res) => {
   const needsText = !bank_question_id;
   if (needsText && !question) return res.status(400).json({ error: 'Thiếu nội dung câu hỏi.' });
   try {
+    if (await isTeacherCourse(await courseIdOfQuiz(quiz_id)))
+      return res.status(403).json({ error: TEACHER_COURSE_MSG });
     const { data, error } = await examDb.from('quiz_questions')
       .insert({
         quiz_id,
@@ -1633,6 +1820,8 @@ exports.updateQuestion = async (req, res) => {
   ];
   const updates = Object.fromEntries(Object.entries(req.body).filter(([k]) => allowed.includes(k)));
   try {
+    if (await isTeacherCourse(await courseIdOfQuizQuestion(req.params.id)))
+      return res.status(403).json({ error: TEACHER_COURSE_MSG });
     const { data, error } = await examDb.from('quiz_questions').update(updates).eq('id', req.params.id).select().single();
     if (error) throw error;
     res.json(data);
@@ -1641,6 +1830,8 @@ exports.updateQuestion = async (req, res) => {
 
 exports.deleteQuestion = async (req, res) => {
   try {
+    if (await isTeacherCourse(await courseIdOfQuizQuestion(req.params.id)))
+      return res.status(403).json({ error: TEACHER_COURSE_MSG });
     await examDb.from('quiz_questions').delete().eq('id', req.params.id);
     res.json({ message: 'Đã xóa.' });
   } catch (err) { res.status(500).json({ error: 'Không thể xóa.' }); }
@@ -1653,6 +1844,8 @@ exports.importFromBank = async (req, res) => {
   if (!Array.isArray(question_ids) || !question_ids.length)
     return res.status(400).json({ error: 'Không có câu hỏi được chọn.' });
   try {
+    if (await isTeacherCourse(await courseIdOfQuiz(quizId)))
+      return res.status(403).json({ error: TEACHER_COURSE_MSG });
     // Fetch max order_index for this quiz
     const { data: existing } = await examDb
       .from('quiz_questions').select('order_index').eq('quiz_id', quizId).order('order_index', { ascending: false }).limit(1);

@@ -1,14 +1,18 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import StudentLayout from '../../components/layout/StudentLayout';
+import TeacherLayout from '../../components/layout/TeacherLayout';
+import AdminLayout from '../../components/layout/AdminLayout';
 import Alert from '../../components/ui/Alert';
 import Button from '../../components/ui/Button';
 import Input from '../../components/ui/Input';
-import FuriganaText from '../../components/ui/FuriganaText';
-import KanjiCanvas from '../../components/kanji/KanjiCanvas';
-import WorksheetPreview from '../../components/kanji/WorksheetPreview';
+import KanjiWritingPracticeModal from '../../components/kanji/KanjiWritingPracticeModal';
+import KanjiPdfPanel from '../../components/kanji/KanjiPdfPanel';
+import AddCardsToFlashcardModal from '../../components/reading/AddCardsToFlashcardModal';
 import ImportFileModal from '../../components/admin/ImportFileModal';
-import { downloadWorksheetPDF } from '../../lib/kanjiWorksheet';
+import CollapsibleSection from '../../components/shared/CollapsibleSection';
+import GrammarItemCard, { NumberBadge, RemoveBadge } from '../../components/shared/GrammarItemCard';
+import VocabWordViewer from '../../components/shared/VocabWordViewer';
 import { TOPICS, TOPIC_ICONS } from '../../lib/studyListTopics';
 import { useAuth } from '../../contexts/AuthContext';
 import { usePageContext } from '../../contexts/PageContext';
@@ -25,271 +29,80 @@ const SEARCH_ENDPOINT = { vocabulary: '/vocabulary', kanji: '/kanji', grammar: '
 const ITEM_LABEL = (listType, item) => listType === 'kanji' ? item.character : listType === 'grammar' ? item.title : (item.kanji || item.reading);
 const ITEM_SUB   = (item) => item.meaning_vi;
 
-function NumberBadge({ n }) {
+// Thẻ dòng ngữ pháp trong danh sách — dùng chung với Mục ngữ pháp của khóa học.
+function ItemCard({ item, index, type, postId, editable, onRemove }) {
   return (
-    <span className="absolute top-3 left-3 w-6 h-6 rounded-full bg-charcoal/80 text-white text-xs font-bold flex items-center justify-center">
-      {n}
-    </span>
+    <GrammarItemCard item={item} index={index} to={`/study-lists/${type}/${postId}/${item.id}`}
+      editable={editable} onRemove={onRemove} listRow />
   );
 }
 
-function RemoveBadge({ onRemove }) {
-  return (
-    <button
-      onClick={(e) => { e.preventDefault(); e.stopPropagation(); onRemove(); }}
-      title="Xóa khỏi bài đăng"
-      className="absolute top-3 right-3 w-6 h-6 rounded-full bg-white/90 text-on-muted hover:text-error hover:bg-white flex items-center justify-center shadow-sm transition-colors"
-    >
-      <span className="material-symbols-outlined text-base">close</span>
-    </button>
-  );
-}
+// Thẻ kanji sửa được inline (kanji/on/kun/hán việt/nghĩa) — cùng kiểu
+// onBlur-lưu như VocabWordViewer, để đồng bộ với từ vựng.
+const toReadingArr = (s) => s.split(/[,、]\s*/).map(x => x.trim()).filter(Boolean);
 
-function ItemCard({ item, listType, index, type, postId, editable, onRemove }) {
-  if (listType === 'vocabulary') {
-    return (
-      <div className="relative glass-card rounded-2xl p-5 pt-8 text-center">
-        <NumberBadge n={index + 1} />
-        {editable && <RemoveBadge onRemove={onRemove} />}
-        <FuriganaText text={item.kanji || item.reading} textClassName="text-2xl font-bold text-tsubaki-red mb-1" />
-        {item.kanji && <p className="text-sm text-on-muted">{item.reading}</p>}
-        <p className="text-sm font-medium mt-2">{item.meaning_vi}</p>
-        {item.level && <span className={`inline-block mt-2 px-2 py-0.5 rounded-full text-xs font-bold ${LEVEL_COLORS[item.level] || 'bg-surface-low text-on-muted'}`}>{item.level}</span>}
-      </div>
-    );
-  }
-  if (listType === 'kanji') {
-    return (
-      <div className="relative glass-card rounded-2xl p-5 pt-8 text-center">
-        <NumberBadge n={index + 1} />
-        {editable && <RemoveBadge onRemove={onRemove} />}
-        <p className="text-4xl font-bold text-tsubaki-red mb-1">{item.character}</p>
-        <p className="text-xs text-on-muted">On: {(item.reading_on || []).join('、') || '—'}</p>
-        <p className="text-xs text-on-muted">Kun: {(item.reading_kun || []).join('、') || '—'}</p>
-        <p className="text-sm font-medium mt-2">{item.meaning_vi}</p>
-        {item.level && <span className={`inline-block mt-2 px-2 py-0.5 rounded-full text-xs font-bold ${LEVEL_COLORS[item.level] || 'bg-surface-low text-on-muted'}`}>{item.level}</span>}
-      </div>
-    );
-  }
-  // grammar — thẻ gọn, bấm vào mở trang chi tiết riêng (URL thật, back trình duyệt hoạt động đúng)
-  return (
-    <div className="relative">
-      {editable && <RemoveBadge onRemove={onRemove} />}
-      <Link
-        to={`/study-lists/${type}/${postId}/${item.id}`}
-        className="relative glass-card rounded-2xl p-5 pt-8 block hover:shadow-lg hover:-translate-y-0.5 hover:border-tsubaki-red/30 border border-transparent transition-all"
-      >
-        <NumberBadge n={index + 1} />
-        <p className="text-xl font-bold text-tsubaki-red">{item.title}</p>
-        {item.title_ja && <p className="text-sm text-on-muted">{item.title_ja}</p>}
-        <p className="text-sm font-medium mt-2">{item.meaning_vi}</p>
-        <div className="flex items-center justify-between mt-3">
-          {item.level && <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${LEVEL_COLORS[item.level] || 'bg-surface-low text-on-muted'}`}>{item.level}</span>}
-          <span className="flex items-center gap-1 text-xs text-tsubaki-red font-semibold ml-auto">
-            Xem chi tiết <span className="material-symbols-outlined text-sm">arrow_forward</span>
-          </span>
-        </div>
-      </Link>
-    </div>
-  );
-}
-
-// Xem từng từ một, giống bố cục thẻ tra từ tham khảo: ảnh/icon minh họa, từ +
-// đọc, nghĩa, ví dụ có thể mở rộng, thanh tiến trình và nút Trước/Tiếp theo.
-// editable=true (chủ bài đăng hoặc admin) cho phép sửa kanji/đọc/nghĩa/ảnh
-// ngay trên chính trang này, không cần qua modal riêng.
-function VocabWordViewer({ items, topic, editable, onItemSaved, onItemRemoved }) {
-  const [levelFilter, setLevelFilter] = useState('');
-  const [idx, setIdx] = useState(0);
-  const [showExample, setShowExample] = useState(false);
-
-  // Chỉ hiện các cấp độ thực sự có mặt trong bài — 1 chủ đề thường có từ ở
-  // nhiều cấp độ khác nhau, lọc cấp độ nằm ở đây thay vì ngoài trang duyệt.
-  const availableLevels = ['N5', 'N4', 'N3', 'N2', 'N1'].filter(l => items.some(it => it.level === l));
-  const filtered = levelFilter ? items.filter(it => it.level === levelFilter) : items;
-
-  // Danh sách bên trái luôn sắp N5 → N1 (từ chưa gắn cấp độ xếp cuối) — thứ tự
-  // này cũng là thứ tự duyệt Trước/Tiếp theo để nhất quán với danh sách.
-  const LEVEL_ORDER = { N5: 0, N4: 1, N3: 2, N2: 3, N1: 4 };
-  const sorted = [...filtered].sort((a, b) => (LEVEL_ORDER[a.level] ?? 5) - (LEVEL_ORDER[b.level] ?? 5));
-
-  useEffect(() => { setIdx(0); }, [levelFilter]);
-  useEffect(() => { if (idx >= sorted.length) setIdx(Math.max(0, sorted.length - 1)); }, [sorted.length]);
-
-  const item = sorted[idx] || sorted[0];
-  const total = sorted.length;
-  const icon = (topic && TOPIC_ICONS[topic]) || 'translate';
-
-  const [kanji, setKanji]     = useState(item?.kanji || '');
-  const [reading, setReading] = useState(item?.reading || '');
-  const [meaning, setMeaning] = useState(item?.meaning_vi || '');
-  const [saving, setSaving]   = useState(false);
-  const fileRef = useRef(null);
+function KanjiItemCard({ item, index, editable, onRemove, onSave, selected, onToggleSelect }) {
+  const [character, setCharacter]   = useState(item.character || '');
+  const [readingOn, setReadingOn]   = useState((item.reading_on || []).join('、'));
+  const [readingKun, setReadingKun] = useState((item.reading_kun || []).join('、'));
+  const [hanViet, setHanViet]       = useState(item.han_viet || '');
+  const [meaning, setMeaning]       = useState(item.meaning_vi || '');
+  const [saving, setSaving]         = useState(false);
 
   useEffect(() => {
-    if (!item) return;
-    setShowExample(false);
-    setKanji(item.kanji || '');
-    setReading(item.reading || '');
+    setCharacter(item.character || '');
+    setReadingOn((item.reading_on || []).join('、'));
+    setReadingKun((item.reading_kun || []).join('、'));
+    setHanViet(item.han_viet || '');
     setMeaning(item.meaning_vi || '');
-  }, [idx, item?.id]);
-
-  if (!item) return <div className="glass-card rounded-2xl p-12 text-center text-on-muted">Không còn từ nào ở bộ lọc này.</div>;
+  }, [item.id]);
 
   const save = async (patch) => {
     setSaving(true);
-    try {
-      await api.put(`/teacher/vocabulary/${item.id}`, patch);
-      onItemSaved(item.id, patch);
-    } catch (e) { alert(e.message); }
-    finally { setSaving(false); }
+    try { await onSave(patch); } catch (e) { alert(e.message); } finally { setSaving(false); }
   };
 
-  const handleFile = async (e) => {
-    const file = e.target.files?.[0];
-    e.target.value = '';
-    if (!file) return;
-    setSaving(true);
-    try {
-      const fd = new FormData();
-      fd.append('image', file);
-      const up = await api.post('/teacher/vocabulary/upload-image', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
-      await save({ image_url: up.data.url });
-    } catch (e2) { alert(e2.message); setSaving(false); }
-  };
+  if (!editable) {
+    return (
+      <div className="relative glass-card rounded-2xl p-5 pt-8 text-center">
+        <NumberBadge n={index + 1} />
+        {onToggleSelect && (
+          <input type="checkbox" checked={!!selected} onChange={onToggleSelect}
+            className="absolute top-3 right-3 w-4 h-4 accent-tsubaki-red cursor-pointer" />
+        )}
+        <p className="text-4xl font-bold text-tsubaki-red mb-1">{item.character}</p>
+        <p className="text-xs text-on-muted">On: {(item.reading_on || []).join('、') || '—'}</p>
+        <p className="text-xs text-on-muted">Kun: {(item.reading_kun || []).join('、') || '—'}</p>
+        {item.han_viet && <p className="text-xs text-amber-600 font-medium mt-0.5">Hán Việt: {item.han_viet}</p>}
+        <p className="text-sm font-medium mt-2">{item.meaning_vi}</p>
+        {item.level && <span className={`inline-block mt-2 px-2 py-0.5 rounded-full text-xs font-bold ${LEVEL_COLORS[item.level] || 'bg-surface-low text-on-muted'}`}>{item.level}</span>}
+      </div>
+    );
+  }
 
-  const editInputClass = 'w-full text-center bg-transparent border-b border-transparent hover:border-outline focus:border-tsubaki-red outline-none transition-colors';
+  const fieldClass = 'w-full text-center bg-transparent border-b border-transparent hover:border-outline focus:border-tsubaki-red outline-none transition-colors';
 
   return (
-    <div className="flex flex-col lg:flex-row gap-6 max-w-5xl mx-auto">
-      {/* Danh sách từ vựng bên trái — sắp theo cấp độ N5 → N1, bấm để nhảy tới từ đó */}
-      <aside className="lg:w-64 shrink-0">
-        <div className="glass-card rounded-2xl p-3 lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto scrollbar-thin">
-          <p className="px-2 py-1.5 text-xs font-semibold text-on-muted uppercase tracking-wide">Danh sách từ ({total})</p>
-          <div className="space-y-0.5">
-            {sorted.map((it, i) => (
-              <div
-                key={it.id}
-                className={`flex items-center gap-1 rounded-lg ${i === idx ? 'bg-tsubaki-red/10' : 'hover:bg-surface-low'} transition-colors`}
-              >
-                <button
-                  onClick={() => setIdx(i)}
-                  className={`flex-1 min-w-0 flex items-center justify-between gap-2 px-2.5 py-2 text-sm text-left ${i === idx ? 'text-tsubaki-red font-semibold' : 'text-on-muted'}`}
-                >
-                  <span className="truncate">{it.kanji || it.reading}</span>
-                  {it.level && <span className={`shrink-0 px-1.5 py-0.5 rounded-full text-[10px] font-bold ${LEVEL_COLORS[it.level] || 'bg-surface-low text-on-muted'}`}>{it.level}</span>}
-                </button>
-                {editable && (
-                  <button onClick={() => onItemRemoved(it.id)} title="Xóa khỏi bài đăng"
-                    className="shrink-0 w-6 h-6 mr-1 rounded-full flex items-center justify-center text-on-muted hover:text-error hover:bg-error/10 transition-colors">
-                    <span className="material-symbols-outlined text-sm">close</span>
-                  </button>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-      </aside>
-
-      <div className="flex-1 min-w-0 max-w-xl mx-auto lg:mx-0 w-full">
-      {availableLevels.length > 1 && (
-        <div className="flex flex-wrap justify-center gap-2 mb-4">
-          <button onClick={() => setLevelFilter('')}
-            className={`px-3 py-1 rounded-full text-xs font-semibold transition-colors ${!levelFilter ? 'bg-tsubaki-red text-white' : 'bg-white border border-outline text-on-muted hover:border-tsubaki-red'}`}>
-            Tất cả
-          </button>
-          {availableLevels.map(l => (
-            <button key={l} onClick={() => setLevelFilter(l)}
-              className={`px-3 py-1 rounded-full text-xs font-semibold transition-colors ${levelFilter === l ? 'bg-tsubaki-red text-white' : 'bg-white border border-outline text-on-muted hover:border-tsubaki-red'}`}>
-              {l}
-            </button>
-          ))}
-        </div>
-      )}
-      <div className="glass-card rounded-3xl overflow-hidden">
-        <div className={`h-64 relative flex items-center justify-center overflow-hidden ${item.image_url ? '' : 'bg-gradient-to-br from-tsubaki-red/80 to-sumire-purple/80'} ${editable ? 'group' : ''}`}>
-          {item.image_url ? (
-            <img src={item.image_url} alt={item.kanji || item.reading} className="absolute inset-0 w-full h-full object-cover" />
-          ) : (
-            <span className="material-symbols-outlined text-7xl text-white/90">{icon}</span>
-          )}
-          {editable && (
-            <>
-              <button onClick={() => fileRef.current?.click()}
-                className="relative z-10 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-black/40 text-white text-sm opacity-0 group-hover:opacity-100 transition-opacity">
-                <span className="material-symbols-outlined text-base">add_photo_alternate</span> Đổi ảnh
-              </button>
-              <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleFile} />
-            </>
-          )}
-        </div>
-        <div className="p-6 text-center">
-          {editable ? (
-            <>
-              <input value={kanji} onChange={e => setKanji(e.target.value)} onBlur={() => kanji !== (item.kanji || '') && save({ kanji })}
-                placeholder="Kanji (nếu có)" className={`${editInputClass} text-3xl font-bold text-charcoal py-1`} />
-              <input value={reading} onChange={e => setReading(e.target.value)} onBlur={() => reading !== (item.reading || '') && save({ reading })}
-                placeholder="Cách đọc" className={`${editInputClass} text-base text-on-muted mt-1 py-1`} />
-              <input value={meaning} onChange={e => setMeaning(e.target.value)} onBlur={() => meaning !== (item.meaning_vi || '') && save({ meaning_vi: meaning })}
-                placeholder="Nghĩa tiếng Việt" className={`${editInputClass} text-lg font-medium text-tsubaki-red mt-3 py-1`} />
-              {saving && <p className="text-xs text-on-muted mt-2">Đang lưu…</p>}
-            </>
-          ) : (
-            <>
-              <FuriganaText text={item.kanji || item.reading} textClassName="text-3xl font-bold text-charcoal" />
-              {item.kanji && <p className="text-base text-on-muted mt-1">{item.reading}</p>}
-              <p className="text-lg font-medium text-tsubaki-red mt-3">{item.meaning_vi}</p>
-              {item.level && <span className={`inline-block mt-2 px-2 py-0.5 rounded-full text-xs font-bold ${LEVEL_COLORS[item.level] || 'bg-surface-low text-on-muted'}`}>{item.level}</span>}
-            </>
-          )}
-
-          {item.example_sentence && (
-            <div className="mt-4">
-              {!showExample ? (
-                <button onClick={() => setShowExample(true)} className="text-sm text-tsubaki-red font-semibold hover:underline">
-                  Xem ví dụ
-                </button>
-              ) : (
-                <p className="text-sm text-on-muted italic bg-surface-low rounded-xl px-4 py-3">
-                  「<FuriganaText text={item.example_sentence} textClassName="text-sm italic" />」
-                </p>
-              )}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {editable && (
-        <div className="mt-4">
-          <button onClick={() => onItemRemoved(item.id)}
-            className="w-full flex items-center justify-center gap-1 py-2 rounded-xl border border-outline text-xs text-on-muted hover:border-error hover:text-error transition-colors">
-            <span className="material-symbols-outlined text-base">delete</span> Xóa từ này khỏi bài đăng
-          </button>
-        </div>
-      )}
-
-      <div className="h-1.5 bg-surface-low rounded-full mt-4 overflow-hidden">
-        <div className="h-full bg-emerald-500 transition-all" style={{ width: `${((idx + 1) / total) * 100}%` }} />
-      </div>
-      <p className="text-center text-xs text-on-muted mt-1">{idx + 1} / {total}</p>
-
-      <div className="flex gap-2 mt-4">
-        <button
-          onClick={() => setIdx(i => Math.max(0, i - 1))}
-          disabled={idx === 0}
-          className="flex-1 flex items-center justify-center gap-1 py-2.5 rounded-xl border border-outline text-sm text-on-muted hover:border-tsubaki-red hover:text-tsubaki-red disabled:opacity-30 transition-colors"
-        >
-          <span className="material-symbols-outlined text-lg">arrow_back</span> Trước
-        </button>
-        <button
-          onClick={() => setIdx(i => Math.min(total - 1, i + 1))}
-          disabled={idx === total - 1}
-          className="flex-1 flex items-center justify-center gap-1 py-2.5 rounded-xl bg-tsubaki-red text-white text-sm font-semibold hover:opacity-90 disabled:opacity-30 transition-colors"
-        >
-          Tiếp theo <span className="material-symbols-outlined text-lg">arrow_forward</span>
-        </button>
-      </div>
-      </div>
+    <div className="relative glass-card rounded-2xl p-5 pt-8 text-center">
+      <NumberBadge n={index + 1} />
+      <RemoveBadge onRemove={onRemove} />
+      <input value={character} onChange={e => setCharacter(e.target.value)}
+        onBlur={() => character !== (item.character || '') && character.trim() && save({ character })}
+        placeholder="漢" className={`${fieldClass} text-4xl font-bold text-charcoal mb-1`} />
+      <input value={readingOn} onChange={e => setReadingOn(e.target.value)}
+        onBlur={() => { const arr = toReadingArr(readingOn); if (arr.join('、') !== (item.reading_on || []).join('、')) save({ reading_on: arr }); }}
+        placeholder="On (phân cách bởi 、)" className={`${fieldClass} text-xs text-on-muted`} />
+      <input value={readingKun} onChange={e => setReadingKun(e.target.value)}
+        onBlur={() => { const arr = toReadingArr(readingKun); if (arr.join('、') !== (item.reading_kun || []).join('、')) save({ reading_kun: arr }); }}
+        placeholder="Kun (phân cách bởi 、)" className={`${fieldClass} text-xs text-on-muted mt-0.5`} />
+      <input value={hanViet} onChange={e => setHanViet(e.target.value)}
+        onBlur={() => hanViet !== (item.han_viet || '') && save({ han_viet: hanViet || null })}
+        placeholder="Hán Việt" className={`${fieldClass} text-xs text-amber-600 font-medium mt-0.5`} />
+      <input value={meaning} onChange={e => setMeaning(e.target.value)}
+        onBlur={() => meaning !== (item.meaning_vi || '') && save({ meaning_vi: meaning })}
+        placeholder="Nghĩa" className={`${fieldClass} text-sm font-medium mt-2`} />
+      {item.level && <span className={`inline-block mt-2 px-2 py-0.5 rounded-full text-xs font-bold ${LEVEL_COLORS[item.level] || 'bg-surface-low text-on-muted'}`}>{item.level}</span>}
+      {saving && <p className="text-[10px] text-on-muted mt-1">Đang lưu…</p>}
     </div>
   );
 }
@@ -323,51 +136,36 @@ function InfoPanel({ post, onSaved }) {
   };
 
   return (
-    <section className="mb-4 bg-white border border-outline/30 shadow-sm rounded-2xl overflow-hidden">
-      <button onClick={openPanel} className="w-full flex items-center justify-between px-5 py-4 text-left hover:bg-surface-low/40 transition-colors">
-        <div className="flex items-center gap-3">
-          <span className="w-8 h-8 rounded-full bg-tsubaki-red/10 text-tsubaki-red flex items-center justify-center shrink-0">
-            <span className="material-symbols-outlined text-lg">edit_note</span>
-          </span>
-          <div>
-            <h3 className="font-semibold text-on-surface text-sm">Thông tin bài đăng</h3>
-            <p className="text-xs text-on-muted">Tiêu đề, chủ đề, cấp độ, mô tả</p>
-          </div>
-        </div>
-        <span className="material-symbols-outlined text-on-muted transition-transform" style={{ transform: open ? 'rotate(180deg)' : 'none' }}>expand_more</span>
-      </button>
-      {open && (
-        <div className="px-5 pb-5 border-t border-outline/10 pt-4 space-y-4">
-          {err && <Alert type="error" onClose={() => setErr('')}>{err}</Alert>}
-          <Input label="Tiêu đề *" value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} />
-          <div>
-            <label className="block text-sm font-medium text-on-muted mb-1">Chủ đề{isVocab ? ' *' : ''}</label>
-            <select value={form.topic} onChange={e => setForm({ ...form, topic: e.target.value })}
-              className="w-full px-4 py-3 bg-white border border-outline rounded-xl text-sm outline-none focus:border-tsubaki-red">
-              <option value="">-- Không chọn --</option>
-              {TOPICS.map(t => <option key={t} value={t}>{t}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-on-muted mb-1">Cấp độ{isVocab ? '' : ' *'}</label>
-            <select value={form.level} onChange={e => setForm({ ...form, level: e.target.value })}
-              className="w-full px-4 py-3 bg-white border border-outline rounded-xl text-sm outline-none focus:border-tsubaki-red">
-              <option value="">-- Chọn cấp độ --</option>
-              {LEVELS.map(l => <option key={l} value={l}>{l}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-on-muted mb-1">Mô tả</label>
-            <textarea value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} rows={3}
-              className="w-full px-4 py-3 bg-white border border-outline rounded-xl text-sm outline-none focus:border-tsubaki-red resize-none" />
-          </div>
-          <div className="flex justify-end gap-2">
-            <Button variant="secondary" onClick={() => setOpen(false)}>Hủy</Button>
-            <Button loading={saving} onClick={handleSave}>Lưu thông tin</Button>
-          </div>
-        </div>
-      )}
-    </section>
+    <CollapsibleSection icon="edit_note" title="Thông tin bài đăng" subtitle="Tiêu đề, chủ đề, cấp độ, mô tả"
+      open={open} onToggle={openPanel} className="mb-4">
+      {err && <Alert type="error" onClose={() => setErr('')}>{err}</Alert>}
+      <Input label="Tiêu đề *" value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} />
+      <div>
+        <label className="block text-sm font-medium text-on-muted mb-1">Chủ đề{isVocab ? ' *' : ''}</label>
+        <select value={form.topic} onChange={e => setForm({ ...form, topic: e.target.value })}
+          className="w-full px-4 py-3 bg-white border border-outline rounded-xl text-sm outline-none focus:border-tsubaki-red">
+          <option value="">-- Không chọn --</option>
+          {TOPICS.map(t => <option key={t} value={t}>{t}</option>)}
+        </select>
+      </div>
+      <div>
+        <label className="block text-sm font-medium text-on-muted mb-1">Cấp độ{isVocab ? '' : ' *'}</label>
+        <select value={form.level} onChange={e => setForm({ ...form, level: e.target.value })}
+          className="w-full px-4 py-3 bg-white border border-outline rounded-xl text-sm outline-none focus:border-tsubaki-red">
+          <option value="">-- Chọn cấp độ --</option>
+          {LEVELS.map(l => <option key={l} value={l}>{l}</option>)}
+        </select>
+      </div>
+      <div>
+        <label className="block text-sm font-medium text-on-muted mb-1">Mô tả</label>
+        <textarea value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} rows={3}
+          className="w-full px-4 py-3 bg-white border border-outline rounded-xl text-sm outline-none focus:border-tsubaki-red resize-none" />
+      </div>
+      <div className="flex justify-end gap-2">
+        <Button variant="secondary" onClick={() => setOpen(false)}>Hủy</Button>
+        <Button loading={saving} onClick={handleSave}>Lưu thông tin</Button>
+      </div>
+    </CollapsibleSection>
   );
 }
 
@@ -398,51 +196,38 @@ function ManagePanel({ post, onChanged }) {
   };
 
   return (
-    <section className="mb-6 bg-white border border-outline/30 shadow-sm rounded-2xl overflow-hidden">
-      <button onClick={() => setOpen(o => !o)} className="w-full flex items-center justify-between px-5 py-4 text-left hover:bg-surface-low/40 transition-colors">
-        <div className="flex items-center gap-3">
-          <span className="w-8 h-8 rounded-full bg-tsubaki-red/10 text-tsubaki-red flex items-center justify-center shrink-0">
-            <span className="material-symbols-outlined text-lg">playlist_add</span>
-          </span>
-          <div>
-            <h3 className="font-semibold text-on-surface text-sm">Quản lý mục</h3>
-            <p className="text-xs text-on-muted">Tìm & thêm mục có sẵn, hoặc nhập file/JSON hàng loạt</p>
-          </div>
+    <>
+      <CollapsibleSection icon="playlist_add" title="Quản lý mục" subtitle="Tìm & thêm mục có sẵn, hoặc nhập file/JSON hàng loạt"
+        open={open} onToggle={() => setOpen(o => !o)} className="mb-6">
+        {err && <Alert type="error" onClose={() => setErr('')}>{err}</Alert>}
+
+        <div className="flex justify-end">
+          <Button variant="secondary" size="sm" onClick={() => setImportOpen(true)}>
+            <span className="material-symbols-outlined text-base">upload_file</span> Nhập file / JSON
+          </Button>
         </div>
-        <span className="material-symbols-outlined text-on-muted transition-transform" style={{ transform: open ? 'rotate(180deg)' : 'none' }}>expand_more</span>
-      </button>
-      {open && (
-        <div className="px-5 pb-5 border-t border-outline/10 pt-4 space-y-4">
-          {err && <Alert type="error" onClose={() => setErr('')}>{err}</Alert>}
 
-          <div className="flex justify-end">
-            <Button variant="secondary" size="sm" onClick={() => setImportOpen(true)}>
-              <span className="material-symbols-outlined text-base">upload_file</span> Nhập file / JSON
-            </Button>
+        <form onSubmit={runSearch} className="flex gap-2">
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Tìm để thêm vào bài đăng..."
+            className="flex-1 px-4 py-2 border border-outline rounded-xl text-sm outline-none focus:border-tsubaki-red" />
+          <Button type="submit" size="sm">Tìm</Button>
+        </form>
+
+        {results.length > 0 && (
+          <div className="border border-outline rounded-xl divide-y divide-outline/40 max-h-48 overflow-y-auto">
+            {results.map(item => (
+              <div key={item.id} className="flex items-center justify-between px-3 py-2 text-sm">
+                <span><strong>{ITEM_LABEL(post.list_type, item)}</strong> — {ITEM_SUB(item)}</span>
+                {currentIds.has(item.id) ? (
+                  <span className="text-xs text-on-muted">Đã có</span>
+                ) : (
+                  <button onClick={() => addItem(item.id)} className="text-tsubaki-red text-xs font-semibold hover:underline">+ Thêm</button>
+                )}
+              </div>
+            ))}
           </div>
-
-          <form onSubmit={runSearch} className="flex gap-2">
-            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Tìm để thêm vào bài đăng..."
-              className="flex-1 px-4 py-2 border border-outline rounded-xl text-sm outline-none focus:border-tsubaki-red" />
-            <Button type="submit" size="sm">Tìm</Button>
-          </form>
-
-          {results.length > 0 && (
-            <div className="border border-outline rounded-xl divide-y divide-outline/40 max-h-48 overflow-y-auto">
-              {results.map(item => (
-                <div key={item.id} className="flex items-center justify-between px-3 py-2 text-sm">
-                  <span><strong>{ITEM_LABEL(post.list_type, item)}</strong> — {ITEM_SUB(item)}</span>
-                  {currentIds.has(item.id) ? (
-                    <span className="text-xs text-on-muted">Đã có</span>
-                  ) : (
-                    <button onClick={() => addItem(item.id)} className="text-tsubaki-red text-xs font-semibold hover:underline">+ Thêm</button>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
+        )}
+      </CollapsibleSection>
 
       <ImportFileModal
         open={importOpen}
@@ -451,7 +236,7 @@ function ManagePanel({ post, onChanged }) {
         studyListId={post.id}
         onImported={async () => { await onChanged(); setImportOpen(false); }}
       />
-    </section>
+    </>
   );
 }
 
@@ -459,11 +244,18 @@ export default function StudyListDetail() {
   const { type, id } = useParams();
   const navigate = useNavigate();
   const { user, isAdmin, isTeacher } = useAuth();
-  const [post, setPost]       = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError]     = useState('');
+  const [post, setPost]         = useState(null);
+  const [loading, setLoading]   = useState(true);
+  const [error, setError]       = useState('');
+  const [grammarQuery, setGrammarQuery] = useState('');
 
-  const canEdit = !!user && !!post && (user.id === post.created_by || isAdmin());
+  // Dùng layout theo đúng vai trò người xem — teacher/admin xem bài đăng vẫn ở
+  // trong giao diện của họ, không bị đổi sang giao diện học viên.
+  const Layout = isAdmin() ? AdminLayout : isTeacher() ? TeacherLayout : StudentLayout;
+
+  // Chỉ chủ bài đăng (giáo viên) mới sửa được nội dung — admin không tự ý sửa
+  // thay, muốn yêu cầu sửa thì dùng khóa bài + ghi chú ở trang quản lý.
+  const canEdit = !!user && !!post && user.id === post.created_by;
 
   // Cho trợ lý AI biết đang xem bài đăng nào
   usePageContext({
@@ -481,61 +273,26 @@ export default function StudyListDetail() {
     setPost(p => ({ ...p, items: p.items.map(it => it.id === itemId ? { ...it, ...patch } : it) }));
   };
 
+  // Lưu chỉnh sửa inline từ viewer (chủ bài đăng/admin) — endpoint của bài đăng.
+  const saveVocabItem = async (itemId, patch) => {
+    await api.put(`/teacher/vocabulary/${itemId}`, patch);
+    handleItemSaved(itemId, patch);
+  };
+
+  const uploadVocabImage = async (file) => {
+    const fd = new FormData();
+    fd.append('image', file);
+    const up = await api.post('/teacher/vocabulary/upload-image', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+    return up.data.url;
+  };
+
+  const saveKanjiItem = async (itemId, patch) => {
+    await api.put(`/teacher/kanji/${itemId}`, patch);
+    handleItemSaved(itemId, patch);
+  };
+
   // ── Luyện viết ──────────────────────────────────────────────────────────────
-  const scoreColor = (s) => s >= 80 ? '#16a34a' : s >= 50 ? '#d97706' : '#ae2826';
-  const scoreBg    = (s) => s >= 80 ? '#f0fdf4' : s >= 50 ? '#fffbeb' : '#fdf2f2';
-
-  const canvasRef = useRef(null);
-  const [writingOpen,  setWritingOpen]  = useState(false);
-  const [writeQueue,   setWriteQueue]   = useState([]);
-  const [writeIdx,     setWriteIdx]     = useState(0);
-  const [showGuide,    setShowGuide]    = useState(true);
-  const [brush,        setBrush]        = useState(14);
-  const [strokeCount,  setStrokeCount]  = useState(0);
-  const [scoring,      setScoring]      = useState(false);
-  const [scoreResult,  setScoreResult]  = useState(null);
-  const [scoreErr,     setScoreErr]     = useState('');
-
-  const openWriting = () => {
-    setWriteQueue((post?.items || []).map(item => ({
-      char: item.character,
-      reading_on:  item.reading_on  || [],
-      reading_kun: item.reading_kun || [],
-      meaning_vi:  item.meaning_vi  || '',
-    })));
-    setWriteIdx(0);
-    setScoreResult(null);
-    setScoreErr('');
-    setStrokeCount(0);
-    setWritingOpen(true);
-  };
-
-  const removeFromQueue = (i) => {
-    setScoreResult(null);
-    setScoreErr('');
-    setWriteQueue(q => {
-      const next = q.filter((_, j) => j !== i);
-      setWriteIdx(idx => i < idx ? idx - 1 : i === idx ? Math.min(idx, next.length - 1) : idx);
-      return next;
-    });
-  };
-
-  const handleWriteCount = useCallback((c) => {
-    setStrokeCount(c);
-    setScoreResult(null);
-    setScoreErr('');
-  }, []);
-
-  const handleWriteScore = async () => {
-    const img = canvasRef.current?.getImage();
-    if (!img || !writeQueue[writeIdx]) return;
-    setScoring(true); setScoreErr(''); setScoreResult(null);
-    try {
-      const r = await api.post('/kanji/score-writing', { image: img, character: writeQueue[writeIdx].char });
-      setScoreResult(r.data);
-    } catch (e) { setScoreErr(e.response?.data?.error || 'Không chấm được, thử lại.'); }
-    finally { setScoring(false); }
-  };
+  const [writingOpen, setWritingOpen] = useState(false);
 
   const handleItemRemoved = async (itemId) => {
     if (!confirm('Xóa mục này khỏi bài đăng?')) return;
@@ -545,22 +302,32 @@ export default function StudyListDetail() {
     } catch (e) { setError(e.message); }
   };
 
-  const [showPdf, setShowPdf]       = useState(false);
-  const [pdfList, setPdfList]       = useState([]);
-  const [boxSize, setBoxSize]       = useState(68);
-  const [guideCount, setGuideCount] = useState(3);
-  const [downloading, setDownloading] = useState(false);
+  const [showPdf, setShowPdf] = useState(false);
 
-  const openPdf = (items) => {
-    setPdfList(items.map(item => ({
-      char: item.character,
-      reading_on:  item.reading_on  || [],
-      reading_kun: item.reading_kun || [],
-      meaning_vi:  item.meaning_vi  || '',
-      han_viet:    item.han_viet    || '',
-    })));
-    setShowPdf(true);
-  };
+  // ── Thêm vào Flashcard (giống mục Luyện đọc) — dùng chung cho Từ vựng & Kanji ──
+  const [fcSelected, setFcSelected] = useState({});
+  const [fcModalOpen, setFcModalOpen] = useState(false);
+  const flashcardable = post?.list_type === 'vocabulary' || post?.list_type === 'kanji';
+
+  useEffect(() => {
+    if (flashcardable) {
+      setFcSelected(Object.fromEntries(post.items.map(it => [it.id, true])));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [post?.id, post?.items?.length]);
+
+  const allSelected = !!post?.items?.length && post.items.every(it => fcSelected[it.id]);
+  const toggleAllSelected = () => setFcSelected(
+    allSelected ? {} : Object.fromEntries((post?.items || []).map(it => [it.id, true]))
+  );
+  const toggleSelected = (id) => setFcSelected(s => ({ ...s, [id]: !s[id] }));
+  const flashcards = (post?.items || [])
+    .filter(it => fcSelected[it.id])
+    .map(it => post.list_type === 'kanji'
+      ? { term: it.character, definition: `On: ${(it.reading_on || []).join(', ') || '-'} / Kun: ${(it.reading_kun || []).join(', ') || '-'} - ${it.meaning_vi || ''}` }
+      : { term: it.kanji || it.reading, definition: it.kanji ? [it.reading, it.meaning_vi].filter(Boolean).join(' — ') : (it.meaning_vi || '') }
+    )
+    .filter(c => c.term && c.definition);
 
   useEffect(() => {
     setLoading(true);
@@ -568,8 +335,18 @@ export default function StudyListDetail() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
+  const filteredGrammar = (() => {
+    if (!post) return [];
+    const q = grammarQuery.trim().toLowerCase();
+    if (!q) return post.items;
+    return post.items.filter(item =>
+      (item.title || '').toLowerCase().includes(q) ||
+      (item.meaning_vi || '').toLowerCase().includes(q)
+    );
+  })();
+
   return (
-    <StudentLayout title="Chi tiết bài đăng">
+    <Layout title="Chi tiết bài đăng">
       {error && <Alert type="error" onClose={() => setError('')}>{error}</Alert>}
 
       <button
@@ -586,16 +363,68 @@ export default function StudyListDetail() {
       ) : (
         <>
           <div className="mb-6">
-            <h1 className="font-display text-2xl font-bold mb-1">{post.title}</h1>
-            {post.description && <p className="text-on-muted mb-2">{post.description}</p>}
-            <div className="flex items-center gap-4 text-sm text-on-muted flex-wrap">
-              {post.level && <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${LEVEL_COLORS[post.level] || 'bg-surface-low text-on-muted'}`}>{post.level}</span>}
-              {post.topic && <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-600">{post.topic}</span>}
-              <span className="flex items-center gap-1"><span className="material-symbols-outlined text-base">person</span>{post.creator_name || '—'}</span>
-              <span className="flex items-center gap-1"><span className="material-symbols-outlined text-base">bookmarks</span>{post.items.length} mục</span>
-              <span className="flex items-center gap-1"><span className="material-symbols-outlined text-base">visibility</span>{post.view_count} lượt xem</span>
+            <div className="flex items-start justify-between gap-4">
+              <div className="min-w-0">
+                <h1 className="font-display text-2xl font-bold mb-1">{post.title}</h1>
+                {post.description && <p className="text-on-muted mb-2">{post.description}</p>}
+                <div className="flex items-center gap-4 text-sm text-on-muted flex-wrap">
+                  {post.level && <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${LEVEL_COLORS[post.level] || 'bg-surface-low text-on-muted'}`}>{post.level}</span>}
+                  {post.topic && <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-600">{post.topic}</span>}
+                  <span className="flex items-center gap-1"><span className="material-symbols-outlined text-base">person</span>{post.creator_name || '—'}</span>
+                  <span className="flex items-center gap-1"><span className="material-symbols-outlined text-base">bookmarks</span>{post.items.length} mục</span>
+                  <span className="flex items-center gap-1"><span className="material-symbols-outlined text-base">visibility</span>{post.view_count} lượt xem</span>
+                </div>
+              </div>
+              {type === 'kanji' && (
+                <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
+                  {post.items.length > 0 && (
+                    <>
+                      <button onClick={toggleAllSelected} className="text-xs font-semibold text-on-muted hover:text-tsubaki-red transition-colors">
+                        {allSelected ? 'Bỏ chọn tất cả' : 'Chọn tất cả'}
+                      </button>
+                      <Button variant="secondary" size="sm" disabled={flashcards.length === 0} onClick={() => setFcModalOpen(true)}>
+                        <span className="material-symbols-outlined text-[18px]">style</span>
+                        Thêm vào Flashcard ({flashcards.length})
+                      </Button>
+                    </>
+                  )}
+                  <Button variant="secondary" onClick={() => setWritingOpen(true)}>
+                    <span className="material-symbols-outlined text-lg">draw</span>
+                    Luyện viết
+                  </Button>
+                  <Button onClick={() => setShowPdf(true)}>
+                    <span className="material-symbols-outlined text-lg">article</span>
+                    Tải PDF luyện viết
+                  </Button>
+                </div>
+              )}
+              {type === 'vocabulary' && post.items.length > 0 && (
+                <div className="flex items-center gap-3 shrink-0">
+                  <button onClick={toggleAllSelected} className="text-xs font-semibold text-on-muted hover:text-tsubaki-red transition-colors">
+                    {allSelected ? 'Bỏ chọn tất cả' : 'Chọn tất cả'}
+                  </button>
+                  <Button size="sm" disabled={flashcards.length === 0} onClick={() => setFcModalOpen(true)}>
+                    <span className="material-symbols-outlined text-[18px]">style</span>
+                    Thêm vào Flashcard ({flashcards.length})
+                  </Button>
+                </div>
+              )}
             </div>
           </div>
+
+          {canEdit && post.is_locked && (
+            <div className="mb-6 rounded-2xl border border-red-200 bg-red-50 p-4 flex items-start gap-3">
+              <span className="material-symbols-outlined text-error text-2xl shrink-0">lock</span>
+              <div>
+                <p className="font-semibold text-error text-sm">Bài đăng đang bị khóa — đã ẩn khỏi học viên</p>
+                <p className="text-sm text-charcoal/80 mt-0.5">
+                  {post.lock_note
+                    ? <>Quản trị viên yêu cầu chỉnh sửa: <span className="font-medium">{post.lock_note}</span></>
+                    : 'Quản trị viên yêu cầu chỉnh sửa nội dung. Bạn vẫn có thể sửa bài đăng bình thường bên dưới; bài sẽ tự hiện lại sau khi quản trị viên mở khóa.'}
+                </p>
+              </div>
+            </div>
+          )}
 
           {canEdit && (
             <>
@@ -607,96 +436,73 @@ export default function StudyListDetail() {
           {post.items.length === 0 ? (
             <div className="glass-card rounded-2xl p-12 text-center text-on-muted">Bài đăng này chưa có mục nào.</div>
           ) : post.list_type === 'vocabulary' ? (
-            <VocabWordViewer items={post.items} topic={post.topic} editable={canEdit} onItemSaved={handleItemSaved} onItemRemoved={handleItemRemoved} />
+            <VocabWordViewer
+              items={post.items}
+              icon={(post.topic && TOPIC_ICONS[post.topic]) || 'translate'}
+              editable={canEdit}
+              saveItem={saveVocabItem}
+              uploadImage={uploadVocabImage}
+              onRemoveItem={canEdit ? handleItemRemoved : undefined}
+              renderItemExtra={(it) => (
+                <input type="checkbox" checked={!!fcSelected[it.id]}
+                  onChange={() => toggleSelected(it.id)} className="w-4 h-4 accent-tsubaki-red cursor-pointer" />
+              )}
+            />
           ) : (
             <>
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                {post.items.map((item, i) => (
-                  <ItemCard key={item.id} item={item} listType={post.list_type} index={i} type={type} postId={id}
-                    editable={canEdit} onRemove={() => handleItemRemoved(item.id)} />
-                ))}
-              </div>
-
-              {type === 'kanji' && (
-                <div className="mt-8 flex justify-center gap-3">
-                  <Button variant="secondary" onClick={openWriting}>
-                    <span className="material-symbols-outlined text-lg">draw</span>
-                    Luyện viết
-                  </Button>
-                  <Button onClick={() => openPdf(post.items)}>
-                    <span className="material-symbols-outlined text-lg">article</span>
-                    Tạo PDF luyện viết
-                  </Button>
+              {post.list_type === 'grammar' ? (
+                <div className="glass-card rounded-2xl overflow-hidden divide-y divide-outline">
+                  <div className="px-4 py-2.5">
+                    <div className="flex items-center gap-2 px-3 py-2 bg-surface-low rounded-xl">
+                      <span className="material-symbols-outlined text-base text-on-muted">search</span>
+                      <input
+                        type="text"
+                        placeholder="Tìm theo cấu trúc hoặc nghĩa tiếng Việt..."
+                        value={grammarQuery}
+                        onChange={e => setGrammarQuery(e.target.value)}
+                        className="flex-1 bg-transparent text-sm outline-none placeholder:text-on-muted"
+                      />
+                      {grammarQuery && (
+                        <button onClick={() => setGrammarQuery('')} className="text-on-muted hover:text-charcoal">
+                          <span className="material-symbols-outlined text-base">close</span>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  {filteredGrammar.length === 0 ? (
+                    <p className="px-4 py-6 text-center text-sm text-on-muted">Không tìm thấy kết quả.</p>
+                  ) : (
+                    filteredGrammar.map((item, i) => (
+                      <ItemCard key={item.id} item={item} index={i} type={type} postId={id}
+                        editable={canEdit} onRemove={() => handleItemRemoved(item.id)} />
+                    ))
+                  )}
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                  {post.items.map((item, i) => (
+                    <KanjiItemCard key={item.id} item={item} index={i}
+                      editable={canEdit} onRemove={() => handleItemRemoved(item.id)}
+                      onSave={(patch) => saveKanjiItem(item.id, patch)}
+                      selected={!!fcSelected[item.id]} onToggleSelect={() => toggleSelected(item.id)} />
+                  ))}
                 </div>
               )}
 
+
               {type === 'kanji' && showPdf && (
-                <div className="mt-6 glass-card rounded-2xl p-6 space-y-5">
-                  <div className="flex items-center justify-between">
-                    <h2 className="font-semibold text-base">Bộ luyện viết PDF</h2>
-                    <button onClick={() => setShowPdf(false)} className="text-on-muted hover:text-charcoal">
-                      <span className="material-symbols-outlined">close</span>
-                    </button>
-                  </div>
-
-                  {/* Danh sách kanji — X để xóa khỏi PDF */}
-                  <div className="flex flex-wrap gap-1.5">
-                    {pdfList.map((k, i) => (
-                      <div key={i} className="relative group">
-                        <div className="w-10 h-10 rounded-lg border border-outline bg-surface text-xl flex items-center justify-center">
-                          {k.char}
-                        </div>
-                        <button
-                          onClick={() => setPdfList(l => l.filter((_, j) => j !== i))}
-                          className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-charcoal/70 text-white text-[10px] opacity-0 group-hover:opacity-100 flex items-center justify-center">
-                          ×
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-
-                  {pdfList.length === 0 ? (
-                    <p className="text-sm text-on-muted text-center py-4">Không còn kanji nào — thêm lại bằng cách nhấn "Tạo PDF luyện viết".</p>
-                  ) : (
-                    <>
-                      {/* Cài đặt */}
-                      <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
-                        <label className="flex items-center gap-2 text-sm">Cỡ ô
-                          <select value={boxSize} onChange={e => setBoxSize(Number(e.target.value))}
-                            className="px-2 py-1 border border-outline rounded-lg text-sm">
-                            <option value={56}>Nhỏ</option>
-                            <option value={68}>Vừa</option>
-                            <option value={84}>Lớn</option>
-                          </select>
-                        </label>
-                        <label className="flex items-center gap-2 text-sm">Ô chữ mờ
-                          <select value={guideCount} onChange={e => setGuideCount(Number(e.target.value))}
-                            className="px-2 py-1 border border-outline rounded-lg text-sm">
-                            <option value={1}>1</option>
-                            <option value={2}>2</option>
-                            <option value={3}>3</option>
-                            <option value={0}>Không</option>
-                          </select>
-                        </label>
-                        <div className="ml-auto">
-                          <Button
-                            loading={downloading}
-                            onClick={async () => {
-                              setDownloading(true);
-                              try {
-                                await downloadWorksheetPDF('ws-print', `luyen-viet-${post.title}.pdf`);
-                              } finally { setDownloading(false); }
-                            }}>
-                            <span className="material-symbols-outlined text-lg">download</span> Tải PDF
-                          </Button>
-                        </div>
-                      </div>
-
-                      {/* Preview */}
-                      <WorksheetPreview list={pdfList} boxSize={boxSize} guideCount={guideCount} />
-                    </>
-                  )}
-                </div>
+                <KanjiPdfPanel
+                  className="mt-6"
+                  list={post.items.map(item => ({
+                    char: item.character,
+                    reading_on:  item.reading_on  || [],
+                    reading_kun: item.reading_kun || [],
+                    meaning_vi:  item.meaning_vi  || '',
+                    han_viet:    item.han_viet    || '',
+                  }))}
+                  filename={`luyen-viet-${post.title}.pdf`}
+                  onClose={() => setShowPdf(false)}
+                />
               )}
             </>
           )}
@@ -704,112 +510,16 @@ export default function StudyListDetail() {
       )}
       {/* ── Modal luyện viết Kanji ──────────────────────────────────────────── */}
       {writingOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col overflow-hidden">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-outline/40 shrink-0">
-              <h2 className="font-display font-bold text-lg">Luyện viết Kanji</h2>
-              <button onClick={() => setWritingOpen(false)} className="text-on-muted hover:text-charcoal">
-                <span className="material-symbols-outlined">close</span>
-              </button>
-            </div>
-
-            <div className="flex-1 overflow-y-auto p-6 space-y-5">
-              {/* Queue chips */}
-              {writeQueue.length > 0 && (
-                <div className="flex flex-wrap gap-1.5">
-                  {writeQueue.map((k, i) => (
-                    <div key={i} className="relative group">
-                      <button
-                        onClick={() => { setWriteIdx(i); setScoreResult(null); setScoreErr(''); }}
-                        className={`w-10 h-10 rounded-lg border text-xl flex items-center justify-center transition-all ${i === writeIdx ? 'border-tsubaki-red bg-tsubaki-red/10 text-tsubaki-red ring-2 ring-tsubaki-red/20' : 'border-outline hover:bg-surface-low'}`}>
-                        {k.char}
-                      </button>
-                      <button
-                        onClick={() => removeFromQueue(i)}
-                        className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-charcoal/70 text-white text-[10px] opacity-0 group-hover:opacity-100 flex items-center justify-center">
-                        ×
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {writeQueue.length === 0 ? (
-                <div className="py-12 text-center">
-                  <span className="material-symbols-outlined text-5xl text-on-muted/20 block mb-3">check_circle</span>
-                  <p className="font-semibold mb-1">Đã bỏ qua hết!</p>
-                  <p className="text-on-muted text-sm">Không còn kanji nào trong danh sách.</p>
-                </div>
-              ) : (
-                <>
-                  <p className="text-xs text-on-muted flex flex-wrap justify-center gap-x-3 min-h-[1rem]">
-                    {writeQueue[writeIdx]?.reading_on?.length > 0 && <span>On: <b className="text-charcoal">{writeQueue[writeIdx].reading_on.join('、')}</b></span>}
-                    {writeQueue[writeIdx]?.reading_kun?.length > 0 && <span>Kun: <b className="text-charcoal">{writeQueue[writeIdx].reading_kun.join('、')}</b></span>}
-                    {writeQueue[writeIdx]?.meaning_vi && <span>Nghĩa: <b className="text-charcoal">{writeQueue[writeIdx].meaning_vi}</b></span>}
-                  </p>
-
-                  <div className="flex justify-center">
-                    <KanjiCanvas ref={canvasRef} char={writeQueue[writeIdx]?.char} showGuide={showGuide} brush={brush} onCount={handleWriteCount} />
-                  </div>
-
-                  <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2">
-                    <label className="flex items-center gap-2 text-sm cursor-pointer">
-                      <input type="checkbox" checked={showGuide} onChange={e => setShowGuide(e.target.checked)} className="accent-tsubaki-red" /> Chữ mờ
-                    </label>
-                    <label className="flex items-center gap-2 text-sm">Cỡ nét
-                      <input type="range" min="6" max="28" value={brush} onChange={e => setBrush(Number(e.target.value))} className="accent-tsubaki-red w-24" />
-                    </label>
-                  </div>
-
-                  <div className="flex flex-col items-center gap-2">
-                    <Button onClick={handleWriteScore} loading={scoring} disabled={strokeCount === 0}>
-                      <span className="material-symbols-outlined text-lg">auto_awesome</span> Chấm điểm AI
-                    </Button>
-                    {strokeCount === 0 && !scoreResult && <p className="text-xs text-on-muted">Vẽ chữ trước rồi bấm chấm điểm.</p>}
-                  </div>
-
-                  {scoreErr && <p className="text-sm text-tsubaki-red text-center">{scoreErr}</p>}
-
-                  {scoreResult && (
-                    <div className="rounded-2xl border p-4"
-                      style={{ borderColor: scoreResult.similarity != null ? scoreColor(scoreResult.similarity) + '44' : '#e5e7eb', background: scoreResult.similarity != null ? scoreBg(scoreResult.similarity) : '#f9fafb' }}>
-                      {scoreResult.similarity != null && (
-                        <div className="flex items-center justify-center gap-2 mb-2">
-                          <span className="text-sm text-on-muted">Độ giống</span>
-                          <span className="text-4xl font-display font-bold" style={{ color: scoreColor(scoreResult.similarity) }}>{scoreResult.similarity}%</span>
-                        </div>
-                      )}
-                      {scoreResult.comment && <p className="text-sm text-center text-charcoal mb-2">{scoreResult.comment}</p>}
-                      {scoreResult.errors?.length > 0 && (
-                        <ul className="space-y-1 mt-1">
-                          {scoreResult.errors.map((e, i) => (
-                            <li key={i} className="text-sm text-charcoal flex gap-1.5">
-                              <span className="material-symbols-outlined text-base text-tsubaki-red shrink-0">close</span>{e}
-                            </li>
-                          ))}
-                        </ul>
-                      )}
-                      {scoreResult.similarity != null && !scoreResult.errors?.length && (
-                        <p className="text-sm text-center text-emerald-600 flex items-center justify-center gap-1">
-                          <span className="material-symbols-outlined text-lg">check_circle</span> Viết tốt, không có lỗi!
-                        </p>
-                      )}
-                    </div>
-                  )}
-
-                  {writeQueue.length > 1 && (
-                    <div className="flex items-center justify-center gap-4">
-                      <Button variant="secondary" onClick={() => { setWriteIdx(i => Math.max(0, i - 1)); setScoreResult(null); setScoreErr(''); }} disabled={writeIdx === 0}>← Trước</Button>
-                      <span className="text-sm text-on-muted">{writeIdx + 1}/{writeQueue.length}</span>
-                      <Button variant="secondary" onClick={() => { setWriteIdx(i => Math.min(writeQueue.length - 1, i + 1)); setScoreResult(null); setScoreErr(''); }} disabled={writeIdx === writeQueue.length - 1}>Sau →</Button>
-                    </div>
-                  )}
-                </>
-              )}
-            </div>
-          </div>
-        </div>
+        <KanjiWritingPracticeModal items={post?.items || []} onClose={() => setWritingOpen(false)} />
       )}
-    </StudentLayout>
+
+      {/* ── Modal thêm mục đã chọn vào Flashcard ─────────────────────────────── */}
+      <AddCardsToFlashcardModal
+        open={fcModalOpen}
+        onClose={() => setFcModalOpen(false)}
+        cards={flashcards}
+        suggestedTitle={`${post?.list_type === 'kanji' ? 'Kanji' : 'Từ vựng'} bài đăng "${post?.title || ''}"`.slice(0, 100)}
+      />
+    </Layout>
   );
 }

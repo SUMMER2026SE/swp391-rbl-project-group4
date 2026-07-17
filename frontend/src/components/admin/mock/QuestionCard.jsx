@@ -1,13 +1,15 @@
 import { useState } from 'react';
 import Button from '../../ui/Button';
-import { adminUploadMedia } from '../../../lib/mockExamApi';
+import { adminUploadMedia, adminGenerateQuestionAudio } from '../../../lib/mockExamApi';
 
 // Card soạn/sửa 1 câu hỏi trắc nghiệm (3–4 lựa chọn). Dùng cho câu đã lưu (editable inline).
-// value: { id?, question_text, options[], correct_index, explanation, audio_url, image_url }
+// value: { id?, question_text, options[], correct_index, explanation, audio_url, image_url, audio_transcript }
 export default function QuestionCard({ index, value, onSave, onDelete, listening, saving, disabled }) {
   const [q, setQ] = useState(value);
   const [dirty, setDirty] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [tts, setTts] = useState(false);
+  const [mediaError, setMediaError] = useState('');
 
   const update = (patch) => { setQ(prev => ({ ...prev, ...patch })); setDirty(true); };
   const setOption = (i, val) => {
@@ -18,13 +20,42 @@ export default function QuestionCard({ index, value, onSave, onDelete, listening
     let options = [...q.options];
     while (options.length < n) options.push('');
     options = options.slice(0, n);
-    update({ options, correct_index: Math.min(q.correct_index, n - 1) });
+    // Bản dịch lựa chọn phải luôn cùng độ dài options (BE validate)
+    let option_translations = q.option_translations;
+    if (Array.isArray(option_translations)) {
+      option_translations = [...option_translations];
+      while (option_translations.length < n) option_translations.push('');
+      option_translations = option_translations.slice(0, n);
+    }
+    update({ options, correct_index: Math.min(q.correct_index, n - 1), option_translations });
+  };
+  const setOptionTranslation = (i, val) => {
+    const option_translations = [...(q.option_translations || q.options.map(() => ''))];
+    option_translations[i] = val;
+    update({ option_translations });
   };
   const uploadAudio = async (file) => {
     if (!file) return;
-    setUploading(true);
+    setUploading(true); setMediaError('');
     try { const { url } = await adminUploadMedia('audio', file); update({ audio_url: url }); }
+    catch (e) { setMediaError(e.message); }
     finally { setUploading(false); }
+  };
+  const uploadImage = async (file) => {
+    if (!file) return;
+    setUploading(true); setMediaError('');
+    try { const { url } = await adminUploadMedia('image', file); update({ image_url: url }); }
+    catch (e) { setMediaError(e.message); }
+    finally { setUploading(false); }
+  };
+  // TTS đọc transcript ĐÃ LƯU trong DB → cần lưu câu trước khi tạo audio
+  const generateAudio = async () => {
+    setTts(true); setMediaError('');
+    try {
+      const r = await adminGenerateQuestionAudio(q.id);
+      setQ(prev => ({ ...prev, audio_url: r.audio_url }));
+    } catch (e) { setMediaError(e.message); }
+    finally { setTts(false); }
   };
 
   const canSave = q.options.every(o => o.trim()) && q.options.length >= 3;
@@ -49,31 +80,69 @@ export default function QuestionCard({ index, value, onSave, onDelete, listening
       />
 
       {listening && (
-        <div className="flex items-center gap-2 text-xs">
-          {q.audio_url
-            ? <audio src={q.audio_url} controls className="h-8 max-w-[60%]" />
-            : <span className="text-on-muted">Chưa có audio riêng cho câu</span>}
-          <label className="cursor-pointer text-tsubaki-red font-semibold hover:underline">
-            {uploading ? 'Đang tải…' : (q.audio_url ? 'Đổi audio' : 'Tải audio câu')}
-            <input type="file" accept="audio/*" className="hidden" disabled={disabled}
-              onChange={e => uploadAudio(e.target.files[0])} />
-          </label>
+        <div className="space-y-2">
+          <div className="flex items-center gap-2 text-xs">
+            {q.audio_url
+              ? <audio src={q.audio_url} controls className="h-8 max-w-[60%]" />
+              : <span className="text-on-muted">Chưa có audio cho câu (bắt buộc để xuất bản)</span>}
+            <label className="cursor-pointer text-tsubaki-red font-semibold hover:underline">
+              {uploading ? 'Đang tải…' : (q.audio_url ? 'Đổi audio' : 'Tải audio câu')}
+              <input type="file" accept="audio/*" className="hidden" disabled={disabled}
+                onChange={e => uploadAudio(e.target.files[0])} />
+            </label>
+          </div>
+          {/* Ảnh từng câu — dùng cho 発話表現 (mỗi câu 1 tranh) */}
+          <div className="flex items-center gap-2 text-xs">
+            {q.image_url && <img src={q.image_url} className="h-12 rounded border border-outline/40" alt="" />}
+            <label className="cursor-pointer text-tsubaki-red font-semibold hover:underline flex items-center gap-1">
+              <span className="material-symbols-outlined text-base">image</span>
+              {q.image_url ? 'Đổi ảnh' : 'Tải ảnh câu (発話表現)'}
+              <input type="file" accept="image/*" className="hidden" disabled={disabled}
+                onChange={e => uploadImage(e.target.files[0])} />
+            </label>
+          </div>
+          <textarea
+            value={q.audio_transcript || ''} disabled={disabled}
+            onChange={e => update({ audio_transcript: e.target.value })}
+            placeholder="Transcript (hiện khi học viên xem lại) — mỗi lượt thoại một dòng, có nhãn 男：/女："
+            className="w-full px-3 py-2 border border-outline rounded-lg text-sm resize-y min-h-[48px] outline-none focus:border-tsubaki-red"
+          />
+          <div className="flex flex-wrap items-center gap-2">
+            <Button size="sm" variant="secondary" loading={tts}
+              disabled={disabled || !q.id || dirty || !q.audio_transcript?.trim()}
+              onClick={generateAudio}>
+              <span className="material-symbols-outlined text-base">record_voice_over</span>
+              Tạo audio từ transcript (TTS)
+            </Button>
+            <span className="text-[11px] text-on-muted">
+              {!q.id || dirty
+                ? 'Lưu câu trước rồi mới tạo audio (TTS đọc transcript đã lưu).'
+                : 'Giọng máy đọc theo nhãn 男：(nam) / 女：(nữ) — có thể upload file thu âm riêng để thay thế.'}
+            </span>
+          </div>
+          {mediaError && <p className="text-xs text-error">{mediaError}</p>}
         </div>
       )}
 
       <div className="space-y-1.5">
         {q.options.map((opt, i) => (
-          <div key={i} className="flex items-center gap-2">
-            <button onClick={() => update({ correct_index: i })} disabled={disabled}
-              title="Đánh dấu đáp án đúng"
-              className={`w-6 h-6 shrink-0 rounded-full text-xs font-bold flex items-center justify-center border-2 ${
-                q.correct_index === i ? 'bg-green-500 border-green-500 text-white' : 'border-outline text-on-muted'}`}>
-              {i + 1}
-            </button>
-            <input value={opt} disabled={disabled}
-              onChange={e => setOption(i, e.target.value)}
-              placeholder={`Lựa chọn ${i + 1}`}
-              className={`flex-1 px-3 py-1.5 border rounded-lg text-sm outline-none focus:border-tsubaki-red ${q.correct_index === i ? 'border-green-400 bg-green-50' : 'border-outline'}`} />
+          <div key={i} className="space-y-1">
+            <div className="flex items-center gap-2">
+              <button onClick={() => update({ correct_index: i })} disabled={disabled}
+                title="Đánh dấu đáp án đúng"
+                className={`w-6 h-6 shrink-0 rounded-full text-xs font-bold flex items-center justify-center border-2 ${
+                  q.correct_index === i ? 'bg-green-500 border-green-500 text-white' : 'border-outline text-on-muted'}`}>
+                {i + 1}
+              </button>
+              <input value={opt} disabled={disabled}
+                onChange={e => setOption(i, e.target.value)}
+                placeholder={`Lựa chọn ${i + 1}`}
+                className={`flex-1 px-3 py-1.5 border rounded-lg text-sm outline-none focus:border-tsubaki-red ${q.correct_index === i ? 'border-green-400 bg-green-50' : 'border-outline'}`} />
+            </div>
+            <input value={(q.option_translations || [])[i] || ''} disabled={disabled}
+              onChange={e => setOptionTranslation(i, e.target.value)}
+              placeholder={`Dịch lựa chọn ${i + 1} (tiếng Việt — hiện khi xem lại)`}
+              className="ml-8 w-[calc(100%-2rem)] px-3 py-1 border border-outline/50 rounded-lg text-xs italic outline-none focus:border-tsubaki-red" />
           </div>
         ))}
       </div>
@@ -82,6 +151,15 @@ export default function QuestionCard({ index, value, onSave, onDelete, listening
         value={q.explanation || ''} disabled={disabled}
         onChange={e => update({ explanation: e.target.value })}
         placeholder="Giải thích (hiện khi học viên xem lại bài)"
+        className="w-full px-3 py-2 border border-outline rounded-lg text-sm resize-y min-h-[44px] outline-none focus:border-tsubaki-red"
+      />
+
+      <textarea
+        value={q.translation_vi || ''} disabled={disabled}
+        onChange={e => update({ translation_vi: e.target.value })}
+        placeholder={listening
+          ? 'Bản dịch câu hỏi + tóm tắt nội dung audio (tiếng Việt — hiện khi học viên xem lại bài)'
+          : 'Bản dịch câu hỏi (tiếng Việt — hiện khi học viên xem lại bài)'}
         className="w-full px-3 py-2 border border-outline rounded-lg text-sm resize-y min-h-[44px] outline-none focus:border-tsubaki-red"
       />
 

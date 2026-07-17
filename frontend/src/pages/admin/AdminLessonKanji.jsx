@@ -5,6 +5,7 @@ import Modal from '../../components/ui/Modal';
 import Button from '../../components/ui/Button';
 import Alert from '../../components/ui/Alert';
 import ImportFileModal from '../../components/admin/ImportFileModal';
+import LessonInfoPanel from '../../components/shared/LessonInfoPanel';
 import api from '../../lib/api';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -459,6 +460,8 @@ export default function AdminLessonKanji() {
           </Button>
         </div>
       </section>
+
+      <LessonInfoPanel lesson={lesson} apiBase={apiBase} onSaved={u => setLesson(l => ({ ...l, ...u }))} />
 
       {/* Progress bar */}
       {kanji.length > 0 && (

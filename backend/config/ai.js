@@ -63,8 +63,12 @@ function parseSRT(srt) {
 async function whisperTranscribe(audioBuffer, filename, mimeType, language) {
   const formData = new FormData();
   formData.append('file', new Blob([audioBuffer], { type: mimeType }), filename);
+  // FPT AI Cloud không có whisper-large-v3 bản đầy đủ (đã kiểm tra GET /v1/models
+  // 2026-07: chỉ có turbo và medium) — turbo là bản chính xác nhất hiện có.
   formData.append('model', process.env.FPT_AI_WHISPER_MODEL || 'whisper-large-v3-turbo');
   formData.append('response_format', 'srt');
+  // temperature 0: bám sát audio, giảm "sáng tác" nội dung khi nghe không rõ.
+  formData.append('temperature', '0');
   if (language) formData.append('language', language);
 
   const res = await fetch(`${FPT_AI_BASE}/audio/transcriptions`, {

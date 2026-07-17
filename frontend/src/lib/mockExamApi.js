@@ -13,7 +13,6 @@ export const getMockResult   = (aid)   => api.get(`/mock-exams/attempts/${aid}/r
 export const getMockReview   = (aid)   => api.get(`/mock-exams/attempts/${aid}/review`).then(r => r.data);
 export const getMockLeaderboard = (id) => api.get(`/mock-exams/${id}/leaderboard`).then(r => r.data);
 export const getMockHistory  = ()      => api.get('/mock-exams/me/history').then(r => r.data);
-export const getMockStats    = ()      => api.get('/mock-exams/me/stats').then(r => r.data);
 
 // ─── Admin ────────────────────────────────────────────────────────────────────
 export const adminListExams  = (params) => api.get('/admin/mock-exams', { params }).then(r => r.data);
@@ -35,6 +34,7 @@ export const adminDeleteGroup = (id)   => api.delete(`/admin/mock-groups/${id}`)
 export const adminReorderGroups = (ids) => api.patch('/admin/mock-groups/reorder', { ids }).then(r => r.data);
 
 export const adminCreateQuestions = (groupId, questions) => api.post(`/admin/mock-groups/${groupId}/questions`, { questions }).then(r => r.data);
+export const adminGenerateQuestionAudio = (id) => api.post(`/admin/mock-questions/${id}/tts`).then(r => r.data);
 export const adminUpdateQuestion = (id, body) => api.put(`/admin/mock-questions/${id}`, body).then(r => r.data);
 export const adminDeleteQuestion = (id) => api.delete(`/admin/mock-questions/${id}`).then(r => r.data);
 export const adminReorderQuestions = (ids) => api.patch('/admin/mock-questions/reorder', { ids }).then(r => r.data);

@@ -22,7 +22,10 @@ function fmtLock(ms) {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 }
 
-export default function Quiz() {
+// Layout: mặc định StudentLayout; trang preview admin/teacher truyền layout riêng
+// (pattern như CourseDetail/LessonView). Điều hướng quay lại dùng navigate(-1) nên
+// tự về đúng trang preview trước đó, không cần prefix riêng.
+export default function Quiz({ Layout = StudentLayout }) {
   const { id } = useParams();
   const navigate = useNavigate();
   const [quiz, setQuiz]         = useState(null);
@@ -33,11 +36,11 @@ export default function Quiz() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError]       = useState('');
   const [timeLeft, setTimeLeft] = useState(null);
-  const [furigana, setFurigana] = useState(false);
   const [shuffledRights, setShuffledRights] = useState({}); // matching: cột phải đã xáo trộn
   const [lockedUntil, setLockedUntil] = useState(null); // strict fullscreen: bị khóa đến lúc nào
   const [kicked, setKicked]           = useState(false); // bị khóa ngay giữa lúc làm bài
   const [nowTs, setNowTs]             = useState(Date.now());
+  const [furigana, setFurigana] = useState(false);   // bật/tắt furigana cho câu hỏi + bài đọc/nghe
 
   const isStrictFs  = quiz?.strict_fullscreen === true;
   const lockdown    = useFullscreenLockdown(id, {
@@ -129,15 +132,15 @@ export default function Quiz() {
     catch { setError('Không thể bật chế độ toàn màn hình. Vui lòng thử lại.'); }
   };
 
-  if (loading) return <StudentLayout title="Quiz"><div className="flex justify-center py-16"><span className="material-symbols-outlined animate-spin text-tsubaki-red text-4xl">progress_activity</span></div></StudentLayout>;
-  if (error && !quiz) return <StudentLayout title="Lỗi"><Alert type="error">{error}</Alert></StudentLayout>;
+  if (loading) return <Layout title="Quiz"><div className="flex justify-center py-16"><span className="material-symbols-outlined animate-spin text-tsubaki-red text-4xl">progress_activity</span></div></Layout>;
+  if (error && !quiz) return <Layout title="Lỗi"><Alert type="error">{error}</Alert></Layout>;
 
   const lockRemainMs = lockedUntil ? new Date(lockedUntil).getTime() - nowTs : 0;
 
   // ── Strict fullscreen: bị khóa ngay giữa lúc làm bài ────────────────────────
   if (kicked) {
     return (
-      <StudentLayout title={quiz?.title}>
+      <Layout title={quiz?.title}>
         <div className="max-w-md mx-auto text-center">
           <div className="glass-card rounded-2xl p-10">
             <span className="material-symbols-outlined text-6xl text-tsubaki-red block mb-4">lock_clock</span>
@@ -150,14 +153,14 @@ export default function Quiz() {
             <p className="text-xs text-on-muted mt-3">Tự động quay lại sau vài giây…</p>
           </div>
         </div>
-      </StudentLayout>
+      </Layout>
     );
   }
 
   // ── Strict fullscreen: bị chặn ngay khi mở bài (đang trong thời gian khóa) ──
   if (lockedUntil && !quiz) {
     return (
-      <StudentLayout title="Bài thi bị khóa">
+      <Layout title="Bài thi bị khóa">
         <div className="max-w-md mx-auto text-center">
           <div className="glass-card rounded-2xl p-10">
             <span className="material-symbols-outlined text-6xl text-tsubaki-red block mb-4">lock_clock</span>
@@ -175,14 +178,14 @@ export default function Quiz() {
             </button>
           </div>
         </div>
-      </StudentLayout>
+      </Layout>
     );
   }
 
   // ── Strict fullscreen: màn hình chờ vào fullscreen ─────────────────────────
   if (isStrictFs && !examStarted && !result) {
     return (
-      <StudentLayout title={quiz?.title}>
+      <Layout title={quiz?.title}>
         <div className="max-w-lg mx-auto">
           <div className="glass-card rounded-2xl p-8">
             <div className="text-center mb-6">
@@ -213,7 +216,7 @@ export default function Quiz() {
             </button>
           </div>
         </div>
-      </StudentLayout>
+      </Layout>
     );
   }
 
@@ -243,7 +246,7 @@ export default function Quiz() {
       ? (result.passed ? 'Đạt' : 'Chưa đạt')
       : (pctScore >= 80 ? 'Xuất sắc!' : pctScore >= 60 ? 'Khá tốt!' : 'Cần ôn luyện thêm.');
     return (
-      <StudentLayout title="Kết quả">
+      <Layout title="Kết quả">
         <div className="max-w-md mx-auto text-center">
           <div className="glass-card rounded-2xl p-10">
             <span className={`material-symbols-outlined text-7xl mb-4 block ${good ? 'text-green-500' : 'text-tsubaki-red'}`}>
@@ -281,7 +284,7 @@ export default function Quiz() {
             </div>
           </div>
         </div>
-      </StudentLayout>
+      </Layout>
     );
   }
 
@@ -361,7 +364,7 @@ export default function Quiz() {
                         : 'border-outline hover:border-tsubaki-red/50 hover:bg-surface-low'
                     }`}>
                     <span className="font-bold mr-3 text-on-muted">{String.fromCharCode(65 + i)}.</span>
-                    <FuriganaText text={opt} enabled={furigana} />
+                    <FuriganaText text={opt} enabled={false} />
                   </button>
                 ))}
               </div>
@@ -387,7 +390,7 @@ export default function Quiz() {
                       <span className={`material-symbols-outlined text-lg align-middle mr-3 ${selected ? 'text-tsubaki-red' : 'text-on-muted'}`}>
                         {selected ? 'check_box' : 'check_box_outline_blank'}
                       </span>
-                      <FuriganaText text={opt} enabled={furigana} />
+                      <FuriganaText text={opt} enabled={false} />
                     </button>
                   );
                 })}
@@ -400,7 +403,7 @@ export default function Quiz() {
                 {(q.options || []).map((pair, i) => (
                   <div key={i} className="flex items-center gap-3">
                     <div className="flex-1 px-4 py-3 rounded-xl border-2 border-outline bg-surface-low/50 text-sm font-medium">
-                      <FuriganaText text={pair.left} enabled={furigana} />
+                      <FuriganaText text={pair.left} enabled={false} />
                     </div>
                     <span className="material-symbols-outlined text-on-muted shrink-0">arrow_forward</span>
                     <select
@@ -484,5 +487,5 @@ export default function Quiz() {
   // Khi vào thi ở chế độ toàn màn hình nghiêm ngặt: chỉ hiện bài thi, ẩn sidebar
   return isStrictFs
     ? <div className="min-h-screen bg-surface px-6 py-10">{examContent}</div>
-    : <StudentLayout title={quiz?.title}>{examContent}</StudentLayout>;
+    : <Layout title={quiz?.title}>{examContent}</Layout>;
 }

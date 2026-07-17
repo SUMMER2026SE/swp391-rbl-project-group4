@@ -28,8 +28,8 @@ export default function TakeExam() {
     const [submitting, setSubmitting] = useState(false);
     const [error, setError]       = useState('');
     const [timeLeft, setTimeLeft] = useState(null);
-    const [furigana, setFurigana] = useState(false);
     const [shuffledRights, setShuffledRights] = useState({});
+    const [furigana, setFurigana] = useState(false);   // bật/tắt furigana cho câu hỏi + bài đọc/nghe
 
     const isProctored = exam?.mode === 'proctored';
     const proctor     = useProctoring(exam?.id, { enabled: isProctored });
@@ -252,7 +252,7 @@ export default function TakeExam() {
                                                     : 'border-outline hover:border-tsubaki-red/50 hover:bg-surface-low'
                                             }`}>
                                         <span className="font-bold mr-3 text-on-muted">{String.fromCharCode(65 + i)}.</span>
-                                        <FuriganaText text={opt} enabled={furigana} />
+                                        <FuriganaText text={opt} enabled={false} />
                                     </button>
                                 ))}
                             </div>
@@ -278,7 +278,7 @@ export default function TakeExam() {
                       <span className={`material-symbols-outlined text-lg align-middle mr-3 ${selected ? 'text-tsubaki-red' : 'text-on-muted'}`}>
                         {selected ? 'check_box' : 'check_box_outline_blank'}
                       </span>
-                                            <FuriganaText text={opt} enabled={furigana} />
+                                            <FuriganaText text={opt} enabled={false} />
                                         </button>
                                     );
                                 })}
@@ -291,7 +291,7 @@ export default function TakeExam() {
                                 {(q.options || []).map((pair, i) => (
                                     <div key={i} className="flex items-center gap-3">
                                         <div className="flex-1 px-4 py-3 rounded-xl border-2 border-outline bg-surface-low/50 text-sm font-medium">
-                                            <FuriganaText text={pair.left} enabled={furigana} />
+                                            <FuriganaText text={pair.left} enabled={false} />
                                         </div>
                                         <span className="material-symbols-outlined text-on-muted shrink-0">arrow_forward</span>
                                         <select

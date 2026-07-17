@@ -36,6 +36,7 @@ import Quiz         from './pages/student/Quiz';
 import Dictionary   from './pages/student/Dictionary';
 import ReadingList   from './pages/student/ReadingList';
 import ReadingReader from './pages/student/ReadingReader';
+import LessonReadingView from './pages/student/LessonReadingView';
 import Exams        from './pages/student/Exams';
 import TakeExam     from './pages/student/TakeExam';
 import MockExamList    from './pages/student/MockExamList';
@@ -56,6 +57,10 @@ import TeacherApplication from './pages/public/TeacherApplication';
 // Teacher pages
 import TeacherDashboard  from './pages/teacher/TeacherDashboard';
 import TeacherCourses    from './pages/teacher/TeacherCourses';
+import TeacherCoursePreview from './pages/teacher/TeacherCoursePreview';
+import TeacherLessonPreview from './pages/teacher/TeacherLessonPreview';
+import TeacherLessonReadingView from './pages/teacher/TeacherLessonReadingView';
+import TeacherQuizPreview from './pages/teacher/TeacherQuizPreview';
 import TeacherCourseContent from './pages/teacher/TeacherCourseContent';
 import UnitEditPage      from './pages/shared/UnitEditPage';
 import TeacherVocabulary from './pages/teacher/TeacherVocabulary';
@@ -73,6 +78,10 @@ import TeacherEarnings   from './pages/teacher/TeacherEarnings';
 import AdminDashboard  from './pages/admin/AdminDashboard';
 import AdminUsers      from './pages/admin/AdminUsers';
 import AdminCourses    from './pages/admin/AdminCourses';
+import AdminCoursePreview from './pages/admin/AdminCoursePreview';
+import AdminLessonPreview from './pages/admin/AdminLessonPreview';
+import AdminLessonReadingView from './pages/admin/AdminLessonReadingView';
+import AdminQuizPreview from './pages/admin/AdminQuizPreview';
 import AdminVocabulary from './pages/admin/AdminVocabulary';
 import AdminKanji      from './pages/admin/AdminKanji';
 import AdminQuizzes      from './pages/admin/AdminQuizzes';
@@ -97,6 +106,9 @@ import AdminLessonQuiz         from './pages/admin/AdminLessonQuiz';
 import AdminLessonReading      from './pages/admin/AdminLessonReading';
 import AdminLessonKanji        from './pages/admin/AdminLessonKanji';
 import AdminLessonVideo        from './pages/admin/AdminLessonVideo';
+import AdminLessonGrammar      from './pages/admin/AdminLessonGrammar';
+import AdminLessonGrammarItem  from './pages/admin/AdminLessonGrammarItem';
+import LessonGrammarItemDetail from './pages/student/LessonGrammarItemDetail';
 import AdminGrammarPoints      from './pages/admin/AdminGrammarPoints';
 
 import ChatPage from './pages/ChatPage';
@@ -131,12 +143,15 @@ export default function App() {
 
             {/* Student only — admin/teacher bị chuyển về dashboard riêng */}
             <Route path="/dashboard"  element={<StudentRoute><Dashboard /></StudentRoute>} />
-            <Route path="/courses"    element={<StudentRoute><Courses /></StudentRoute>} />
-            <Route path="/courses/:id" element={<StudentRoute><CourseDetail /></StudentRoute>} />
-            <Route path="/lessons/:id" element={<StudentRoute><LessonView /></StudentRoute>} />
-            <Route path="/vocabulary" element={<StudentRoute><Vocabulary /></StudentRoute>} />
-            <Route path="/grammar"    element={<StudentRoute><Grammar /></StudentRoute>} />
-            <Route path="/kanji"      element={<StudentRoute><Kanji /></StudentRoute>} />
+            {/* allowAdmin: admin vào xem/học khóa học như học sinh thật (miễn thanh toán) */}
+            <Route path="/courses"    element={<StudentRoute allowAdmin><Courses /></StudentRoute>} />
+            <Route path="/courses/:id" element={<StudentRoute adminRedirectTo="/admin/courses/preview/:id"><CourseDetail /></StudentRoute>} />
+            <Route path="/lessons/:id" element={<StudentRoute adminRedirectTo="/admin/lessons/preview/:id" teacherRedirectTo="/teacher/lessons/preview/:id"><LessonView /></StudentRoute>} />
+            <Route path="/lessons/:id/reading" element={<StudentRoute adminRedirectTo="/admin/lessons/:id/reading-view" teacherRedirectTo="/teacher/lessons/:id/reading-view"><LessonReadingView /></StudentRoute>} />
+            <Route path="/lessons/:lessonId/grammar/:itemId" element={<StudentRoute allowAdmin><LessonGrammarItemDetail /></StudentRoute>} />
+            <Route path="/vocabulary" element={<ProtectedRoute><Vocabulary /></ProtectedRoute>} />
+            <Route path="/grammar"    element={<ProtectedRoute><Grammar /></ProtectedRoute>} />
+            <Route path="/kanji"      element={<ProtectedRoute><Kanji /></ProtectedRoute>} />
             <Route path="/kanji/writing" element={<StudentRoute><KanjiWriting /></StudentRoute>} />
             <Route path="/study-lists/:type/:id" element={<ProtectedRoute><StudyListDetail /></ProtectedRoute>} />
             <Route path="/study-lists/:type/:id/:itemId" element={<ProtectedRoute><StudyListItemDetail /></ProtectedRoute>} />
@@ -149,7 +164,7 @@ export default function App() {
             <Route path="/billing"        element={<StudentRoute><BillingHistory /></StudentRoute>} />
             <Route path="/my-purchases"   element={<StudentRoute><MyCoursePurchases /></StudentRoute>} />
             {/* <Route path="/classes"    element={<StudentRoute><Classes /></StudentRoute>} /> */}{/* HIDDEN */}
-            <Route path="/quizzes/:id" element={<StudentRoute><Quiz /></StudentRoute>} />
+            <Route path="/quizzes/:id" element={<StudentRoute adminRedirectTo="/admin/quizzes/preview/:id" teacherRedirectTo="/teacher/quizzes/preview/:id"><Quiz /></StudentRoute>} />
             <Route path="/dictionary" element={<StudentRoute><Dictionary /></StudentRoute>} />
             <Route path="/reading"     element={<StudentRoute><ReadingList /></StudentRoute>} />
             <Route path="/reading/:id" element={<StudentRoute><ReadingReader /></StudentRoute>} />
@@ -176,6 +191,10 @@ export default function App() {
             {/* Teacher (teacher + admin) */}
             <Route path="/teacher"       element={<TeacherRoute><TeacherDashboard /></TeacherRoute>} />
             <Route path="/teacher/courses" element={<TeacherRoute><TeacherCourses /></TeacherRoute>} />
+            <Route path="/teacher/courses/preview/:id" element={<TeacherRoute><TeacherCoursePreview /></TeacherRoute>} />
+            <Route path="/teacher/lessons/preview/:id" element={<TeacherRoute><TeacherLessonPreview /></TeacherRoute>} />
+            <Route path="/teacher/lessons/:id/reading-view" element={<TeacherRoute><TeacherLessonReadingView /></TeacherRoute>} />
+            <Route path="/teacher/quizzes/preview/:id" element={<TeacherRoute><TeacherQuizPreview /></TeacherRoute>} />
             <Route path="/teacher/courses/:courseId/edit" element={<TeacherRoute><TeacherCourseContent /></TeacherRoute>} />
             <Route path="/teacher/courses/:courseId/units/:unitId/edit" element={<TeacherRoute><UnitEditPage /></TeacherRoute>} />
             {/* Trình soạn chuyên sâu cho giáo viên — dùng chung component với admin (role-aware) */}
@@ -183,6 +202,9 @@ export default function App() {
             <Route path="/teacher/lessons/:lessonId/reading"    element={<TeacherRoute><AdminLessonReading /></TeacherRoute>} />
             <Route path="/teacher/lessons/:lessonId/vocabulary" element={<TeacherRoute><AdminLessonVocabulary /></TeacherRoute>} />
             <Route path="/teacher/lessons/:lessonId/kanji"      element={<TeacherRoute><AdminLessonKanji /></TeacherRoute>} />
+            <Route path="/teacher/lessons/:lessonId/quiz"       element={<TeacherRoute><AdminLessonQuiz /></TeacherRoute>} />
+            <Route path="/teacher/lessons/:lessonId/grammar"    element={<TeacherRoute><AdminLessonGrammar /></TeacherRoute>} />
+            <Route path="/teacher/lessons/:lessonId/grammar/:itemId" element={<TeacherRoute><AdminLessonGrammarItem /></TeacherRoute>} />
             <Route path="/teacher/vocab" element={<TeacherRoute><TeacherVocabulary /></TeacherRoute>} />
             <Route path="/teacher/kanji"    element={<TeacherRoute><TeacherKanji /></TeacherRoute>} />
             <Route path="/teacher/grammar"  element={<TeacherRoute><TeacherGrammar /></TeacherRoute>} />
@@ -198,6 +220,10 @@ export default function App() {
             <Route path="/admin"             element={<AdminRoute><AdminDashboard /></AdminRoute>} />
             <Route path="/admin/users"       element={<AdminRoute><AdminUsers /></AdminRoute>} />
             <Route path="/admin/courses"     element={<AdminRoute><AdminCourses /></AdminRoute>} />
+            <Route path="/admin/courses/preview/:id" element={<AdminRoute><AdminCoursePreview /></AdminRoute>} />
+            <Route path="/admin/lessons/preview/:id" element={<AdminRoute><AdminLessonPreview /></AdminRoute>} />
+            <Route path="/admin/lessons/:id/reading-view" element={<AdminRoute><AdminLessonReadingView /></AdminRoute>} />
+            <Route path="/admin/quizzes/preview/:id" element={<AdminRoute><AdminQuizPreview /></AdminRoute>} />
             <Route path="/admin/vocabulary"   element={<AdminRoute><AdminVocabulary /></AdminRoute>} />
             <Route path="/admin/study-lists" element={<AdminRoute><AdminStudyLists /></AdminRoute>} />
             <Route path="/admin/kanji"        element={<AdminRoute><AdminKanji /></AdminRoute>} />
@@ -225,6 +251,8 @@ export default function App() {
             <Route path="/admin/lessons/:lessonId/reading"     element={<AdminRoute><AdminLessonReading /></AdminRoute>} />
             <Route path="/admin/lessons/:lessonId/kanji"       element={<AdminRoute><AdminLessonKanji /></AdminRoute>} />
             <Route path="/admin/lessons/:lessonId/video"       element={<AdminRoute><AdminLessonVideo /></AdminRoute>} />
+            <Route path="/admin/lessons/:lessonId/grammar"     element={<AdminRoute><AdminLessonGrammar /></AdminRoute>} />
+            <Route path="/admin/lessons/:lessonId/grammar/:itemId" element={<AdminRoute><AdminLessonGrammarItem /></AdminRoute>} />
 
             {/* Fallback */}
             <Route path="*" element={<NotFound />} />

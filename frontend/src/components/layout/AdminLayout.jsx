@@ -1,9 +1,10 @@
 ﻿import Sidebar from './Sidebar';
+import MobileNav from './MobileNav';
+import AppHeader from './AppHeader';
 import { useLang } from '../../contexts/LangContext';
-import { useAuth } from '../../contexts/AuthContext';
 
 const ADMIN_LINKS = (t) => [
-  { to: '/admin',             icon: 'dashboard',     label: t('admin.dashboard') },
+  { to: '/admin',             icon: 'dashboard',     label: t('admin.dashboard'), exact: true },
   { to: '/admin/users',       icon: 'group',         label: t('admin.users') },
   { to: '/admin/courses',     icon: 'menu_book',     label: t('admin.courses') },
   { to: '/admin/vocabulary',  icon: 'translate',     label: t('admin.vocabulary') },
@@ -29,25 +30,20 @@ const ADMIN_LINKS = (t) => [
 
 export default function AdminLayout({ children, title }) {
   const { t } = useLang();
-  const { user } = useAuth();
 
   return (
     <div className="flex min-h-screen bg-surface">
       <Sidebar links={ADMIN_LINKS(t)} brand="KN Admin" />
 
       <div className="flex-1 md:ml-64 flex flex-col">
-        <header className="sticky top-0 z-30 bg-white/80 backdrop-blur-md border-b border-outline/30 h-16 flex items-center justify-between px-6">
-          <div className="flex items-center gap-3">
-            <span className="bg-sumire-purple text-white text-xs px-2 py-0.5 rounded font-bold uppercase tracking-wide">Admin</span>
-            <h1 className="text-sm font-bold text-charcoal">{title}</h1>
-          </div>
-          <span className="text-sm text-on-muted hidden md:block">{user?.email}</span>
-        </header>
+        <AppHeader roleBadge={{ label: t('roles.admin'), colorClass: 'bg-sumire-purple' }} title={title} />
 
-        <main className="flex-1 p-6 md:p-8 max-w-7xl mx-auto w-full">
+        <main className="flex-1 p-6 md:p-8 max-w-7xl mx-auto w-full pb-24 md:pb-8">
           {children}
         </main>
       </div>
+
+      <MobileNav links={ADMIN_LINKS(t)} />
     </div>
   );
 }

@@ -157,6 +157,20 @@ async function extractAudioChunk(inputPath, startS, durationS, voiceFilter = fal
   return stdout;
 }
 
+// ── Extract full audio track from a video file as mp3 buffer ─────────────────
+// Dùng cho nhánh fallback chép lời video: gửi audio (nhỏ hơn nhiều) cho Whisper
+// thay vì nguyên file video.
+async function extractAudioTrack(inputPath) {
+  if (!ffmpegAvailable()) throw new Error('ffmpeg not available');
+  const { stdout } = await runFfmpeg([
+    '-i', inputPath, '-vn',
+    '-f', 'mp3', '-ar', '16000', '-ac', '1', '-q:a', '5',
+    'pipe:1',
+  ]);
+  if (!stdout || stdout.length < 100) throw new Error('Không tách được audio từ video.');
+  return stdout;
+}
+
 // ── Merge speech segments into utterance groups ───────────────────────────────
 // Merge if gap ≤ gapS AND group would not exceed maxDurS.
 // Groups shorter than minDurS are removed.
@@ -179,4 +193,4 @@ function r2(n) { return Math.round(n * 100) / 100; }
 function tmpPath(name) { return path.join(os.tmpdir(), `kn_${Date.now()}_${Math.random().toString(36).slice(2)}_${name}`); }
 function tryUnlink(f) { try { fs.unlinkSync(f); } catch {} }
 
-module.exports = { analyzeSilence, extractAudioChunk, mergeIntoGroups };
+module.exports = { analyzeSilence, extractAudioChunk, mergeIntoGroups, extractAudioTrack };

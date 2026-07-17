@@ -29,8 +29,10 @@ exports.list = async (req, res) => {
     if (level) query = query.eq('level', level);
     if (topic) query = query.eq('topic', topic);
 
-    // mine=true — chỉ giáo viên/admin xem bài đăng của chính mình (trang quản lý)
+    // mine=true — chỉ giáo viên/admin xem bài đăng của chính mình (trang quản lý,
+    // vẫn thấy cả bài bị khóa để sửa theo yêu cầu). Duyệt công khai thì ẩn bài bị khóa.
     if (mine === 'true' && req.user) query = query.eq('created_by', req.user.id);
+    else query = query.eq('is_locked', false);
 
     const safe = search ? String(search).replace(/[,()%*]/g, ' ').trim() : '';
     if (safe) query = query.or(`title.ilike.%${safe}%,description.ilike.%${safe}%`);
@@ -72,6 +74,10 @@ exports.getOne = async (req, res) => {
   try {
     const { data: post, error } = await supabaseAdmin.from('study_list_posts').select('*').eq('id', req.params.id).single();
     if (error || !post) return res.status(404).json({ error: 'Không tìm thấy.' });
+
+    // Bài bị khóa (admin ẩn để yêu cầu sửa) — chỉ chủ bài và admin xem được.
+    const isOwnerOrAdmin = req.user && (req.user.id === post.created_by || req.user.user_metadata?.role === 'admin');
+    if (post.is_locked && !isOwnerOrAdmin) return res.status(404).json({ error: 'Không tìm thấy.' });
 
     const { data: itemRows } = await supabaseAdmin.from('study_list_items')
       .select('item_id,sort_order').eq('post_id', post.id).order('sort_order', { ascending: true });
@@ -125,17 +131,23 @@ exports.create = async (req, res) => {
   }
 };
 
-async function loadOwnedPost(id, user) {
+// allowAdmin=true: admin có quyền như chủ bài (dùng cho xóa cả bài — quyền kiểm
+// duyệt). allowAdmin=false: CHỈ chủ bài mới sửa được nội dung — admin muốn yêu
+// cầu sửa thì dùng khóa bài + ghi chú (adminController.lockStudyList), không
+// tự ý sửa thay giáo viên.
+async function loadOwnedPost(id, user, { allowAdmin = true } = {}) {
   const { data: post } = await supabaseAdmin.from('study_list_posts').select('*').eq('id', id).single();
   if (!post) return { post: null, allowed: false };
-  const allowed = post.created_by === user.id || user.user_metadata?.role === 'admin';
+  const isOwner = post.created_by === user.id;
+  const isAdmin = user.user_metadata?.role === 'admin';
+  const allowed = isOwner || (allowAdmin && isAdmin);
   return { post, allowed };
 }
 
 // PUT /api/study-lists/:id  { title, description }
 exports.update = async (req, res) => {
   try {
-    const { post, allowed } = await loadOwnedPost(req.params.id, req.user);
+    const { post, allowed } = await loadOwnedPost(req.params.id, req.user, { allowAdmin: false });
     if (!post) return res.status(404).json({ error: 'Không tìm thấy.' });
     if (!allowed) return res.status(403).json({ error: 'Bạn không có quyền sửa bài đăng này.' });
 
@@ -172,7 +184,7 @@ exports.addItem = async (req, res) => {
   const { item_id } = req.body;
   if (!item_id) return res.status(400).json({ error: 'item_id là bắt buộc.' });
   try {
-    const { post, allowed } = await loadOwnedPost(req.params.id, req.user);
+    const { post, allowed } = await loadOwnedPost(req.params.id, req.user, { allowAdmin: false });
     if (!post) return res.status(404).json({ error: 'Không tìm thấy.' });
     if (!allowed) return res.status(403).json({ error: 'Bạn không có quyền sửa bài đăng này.' });
 
@@ -200,7 +212,7 @@ exports.addItem = async (req, res) => {
 // Dedup → tạo mới vào bank nếu chưa có → link tất cả vào study_list_items.
 exports.importItems = async (req, res) => {
   try {
-    const { post, allowed } = await loadOwnedPost(req.params.id, req.user);
+    const { post, allowed } = await loadOwnedPost(req.params.id, req.user, { allowAdmin: false });
     if (!post) return res.status(404).json({ error: 'Không tìm thấy bài đăng.' });
     if (!allowed) return res.status(403).json({ error: 'Bạn không có quyền sửa bài đăng này.' });
 
@@ -213,7 +225,7 @@ exports.importItems = async (req, res) => {
     let toInsert = [];
 
     if (post.list_type === 'vocabulary') {
-      const ALLOWED = ['kanji', 'reading', 'meaning_vi', 'meaning_ja', 'level', 'type', 'topic', 'example_sentence'];
+      const ALLOWED = ['kanji', 'reading', 'meaning_vi', 'meaning_ja', 'level', 'type', 'topic', 'example_sentence', 'han_viet'];
       const cleaned = rows
         .filter(r => r.reading && r.meaning_vi)
         .map(r => Object.fromEntries(ALLOWED.filter(k => r[k] != null).map(k => [k, r[k]])));
@@ -306,7 +318,7 @@ exports.importItems = async (req, res) => {
 // DELETE /api/study-lists/:id/items/:itemId
 exports.removeItem = async (req, res) => {
   try {
-    const { post, allowed } = await loadOwnedPost(req.params.id, req.user);
+    const { post, allowed } = await loadOwnedPost(req.params.id, req.user, { allowAdmin: false });
     if (!post) return res.status(404).json({ error: 'Không tìm thấy.' });
     if (!allowed) return res.status(403).json({ error: 'Bạn không có quyền sửa bài đăng này.' });
 
