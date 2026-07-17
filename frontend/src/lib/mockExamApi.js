@@ -41,7 +41,18 @@ export const adminReorderQuestions = (ids) => api.patch('/admin/mock-questions/r
 export const adminImportFromBank = (groupId, question_ids) => api.post(`/admin/mock-groups/${groupId}/import-from-bank`, { question_ids }).then(r => r.data);
 export const adminAiGenerate = (groupId, count, topic, instruction) => api.post(`/admin/mock-groups/${groupId}/ai-generate`, { count, topic, instruction }).then(r => r.data);
 export const adminAiRegenerateOne = (groupId, body) => api.post(`/admin/mock-groups/${groupId}/ai-regenerate-one`, body).then(r => r.data);
-export const adminListBankForImport = (params) => api.get('/admin/question-bank', { params }).then(r => r.data);
+// ─── Ngân hàng đề JLPT riêng (jlpt-bank) ──────────────────────────────────────
+export const adminJlptBankStats           = (level)      => api.get('/admin/jlpt-bank/stats', { params: { level } }).then(r => r.data);
+export const adminJlptBankListQuestions   = (params)     => api.get('/admin/jlpt-bank/questions', { params }).then(r => r.data);
+export const adminJlptBankCreateQuestions = (body)       => api.post('/admin/jlpt-bank/questions', body).then(r => r.data);
+export const adminJlptBankUpdateQuestion  = (id, body)   => api.put(`/admin/jlpt-bank/questions/${id}`, body).then(r => r.data);
+export const adminJlptBankDeleteQuestion  = (id)         => api.delete(`/admin/jlpt-bank/questions/${id}`).then(r => r.data);
+export const adminJlptBankQuestionTts     = (id)         => api.post(`/admin/jlpt-bank/questions/${id}/tts`).then(r => r.data);
+export const adminJlptBankListGroups      = (params)     => api.get('/admin/jlpt-bank/groups', { params }).then(r => r.data);
+export const adminJlptBankCreateGroup     = (body)       => api.post('/admin/jlpt-bank/groups', body).then(r => r.data);
+export const adminJlptBankUpdateGroup     = (id, body)   => api.put(`/admin/jlpt-bank/groups/${id}`, body).then(r => r.data);
+export const adminJlptBankDeleteGroup     = (id)         => api.delete(`/admin/jlpt-bank/groups/${id}`).then(r => r.data);
+export const adminJlptBankAiGenerate      = (body)       => api.post('/admin/jlpt-bank/ai-generate', body).then(r => r.data);
 
 export function adminUploadMedia(kind, file) {
   const form = new FormData();

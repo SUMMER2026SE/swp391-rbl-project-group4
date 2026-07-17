@@ -89,6 +89,7 @@ import AdminTeacherApplications from './pages/admin/AdminTeacherApplications';
 import AdminSystemStatus  from './pages/admin/AdminSystemStatus';
 import AdminQuestionBank       from './pages/admin/AdminQuestionBank';
 import AdminMockExams          from './pages/admin/AdminMockExams';
+import AdminJlptBank           from './pages/admin/AdminJlptBank';
 import AdminRevenuePool        from './pages/admin/AdminRevenuePool';
 import AdminMockExamEditor     from './pages/admin/AdminMockExamEditor';
 import AdminReading            from './pages/admin/AdminReading';
@@ -230,6 +231,7 @@ export default function App() {
             <Route path="/admin/system"     element={<AdminRoute><AdminSystemStatus /></AdminRoute>} />
             <Route path="/admin/questions"  element={<AdminRoute><AdminQuestionBank /></AdminRoute>} />
             <Route path="/admin/mock-exams"     element={<AdminRoute><AdminMockExams /></AdminRoute>} />
+            <Route path="/admin/jlpt-bank"      element={<AdminRoute><AdminJlptBank /></AdminRoute>} />
             <Route path="/admin/revenue-pool"   element={<AdminRoute><AdminRevenuePool /></AdminRoute>} />
             <Route path="/admin/mock-exams/:id" element={<AdminRoute><AdminMockExamEditor /></AdminRoute>} />
             <Route path="/admin/reading"                element={<AdminRoute><AdminReading /></AdminRoute>} />

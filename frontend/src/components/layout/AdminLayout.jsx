@@ -14,6 +14,7 @@ const ADMIN_LINKS = (t) => [
   { to: '/admin/quizzes',      icon: 'quiz',          label: t('admin.quizzes') },
   { to: '/admin/questions',    icon: 'inventory_2',   label: 'Ngân hàng câu hỏi' },
   { to: '/admin/mock-exams',   icon: 'fact_check',    label: 'Thi thử JLPT' },
+  { to: '/admin/jlpt-bank',    icon: 'inventory',     label: 'Ngân hàng JLPT' },
   { to: '/admin/listening',    icon: 'headphones',      label: 'Hội thoại nghe' },
   { to: '/admin/placement',   icon: 'assignment_ind',  label: 'Kiểm tra NL' },
   { to: '/admin/reading',      icon: 'auto_stories',  label: 'Luyện đọc' },

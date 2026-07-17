@@ -344,6 +344,20 @@ router.post('/mock-questions/:id/tts',             mock.generateQuestionAudio);
 router.put('/mock-questions/:id',                  mock.updateQuestion);
 router.delete('/mock-questions/:id',               mock.deleteQuestion);
 
+// JLPT Question Bank (ngân hàng đề JLPT riêng — nguồn import cho đề thi thử)
+const jb = require('../../controllers/jlptBankController');
+router.get('/jlpt-bank/stats',              jb.stats);
+router.get('/jlpt-bank/questions',          jb.listQuestions);
+router.post('/jlpt-bank/questions',         jb.createQuestions);
+router.post('/jlpt-bank/questions/:id/tts', jb.generateQuestionAudio);
+router.put('/jlpt-bank/questions/:id',      jb.updateQuestion);
+router.delete('/jlpt-bank/questions/:id',   jb.deleteQuestion);
+router.get('/jlpt-bank/groups',             jb.listGroups);
+router.post('/jlpt-bank/groups',            jb.createGroup);
+router.put('/jlpt-bank/groups/:id',         jb.updateGroup);
+router.delete('/jlpt-bank/groups/:id',      jb.deleteGroup);
+router.post('/jlpt-bank/ai-generate',       jb.aiGenerate);
+
 // Placement Test — Question Bank
 const pc = require('../../controllers/placementController');
 router.get('/placement/stats',                pc.adminGetStats);

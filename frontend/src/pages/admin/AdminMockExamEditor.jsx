@@ -11,7 +11,7 @@ import {
   adminGetExam, adminPublishExam, adminUpdateExam, adminUpdateSection,
   adminUpdateGroup,
   adminCreateQuestions, adminUpdateQuestion, adminDeleteQuestion,
-  adminAiGenerate, adminAiRegenerateOne, adminImportFromBank, adminListBankForImport, adminUploadMedia,
+  adminAiGenerate, adminAiRegenerateOne, adminImportFromBank, adminJlptBankListQuestions, adminUploadMedia,
 } from '../../lib/mockExamApi';
 
 const blankQuestion = () => ({ question_text: '', options: ['', '', '', ''], correct_index: 0, explanation: '', translation_vi: '' });
@@ -592,7 +592,8 @@ function DraftEditForm({ draft, listening, onApply, onCancel }) {
   );
 }
 
-// ── Modal import từ ngân hàng câu hỏi ──
+// ── Modal import từ ngân hàng đề JLPT riêng (jlpt-bank) ──
+// List đã lọc sẵn đúng cấp + đúng dạng mondai của mondai đang soạn.
 function ImportBankModal({ group, level, onClose, onImported }) {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -600,10 +601,11 @@ function ImportBankModal({ group, level, onClose, onImported }) {
   const [search, setSearch] = useState('');
   const [error, setError] = useState('');
   const [importing, setImporting] = useState(false);
+  const listening = group.score_category === 'listening';
 
   const load = () => {
     setLoading(true);
-    adminListBankForImport({ level, question_type: 'single_choice', search: search || undefined, status: 'approved', limit: 50 })
+    adminJlptBankListQuestions({ level, mondai_type: group.mondai_type, search: search || undefined, limit: 50 })
       .then(r => setRows(r.data || []))
       .catch(e => setError(e.message))
       .finally(() => setLoading(false));
@@ -624,13 +626,13 @@ function ImportBankModal({ group, level, onClose, onImported }) {
   };
 
   return (
-    <Modal open onClose={onClose} size="xl" title="Nhập câu hỏi từ ngân hàng"
+    <Modal open onClose={onClose} size="xl" title={`Nhập từ ngân hàng JLPT · ${mondaiJa(group.mondai_type)} (${level})`}
       footer={<>
         <Button variant="secondary" onClick={onClose}>Đóng</Button>
         <Button onClick={doImport} loading={importing}>Nhập {Object.values(picked).filter(Boolean).length} câu</Button>
       </>}>
       {error && <Alert type="warning" onClose={() => setError('')}>{error}</Alert>}
-      <Alert type="info">Chỉ nhập được câu <b>single_choice</b> (3–4 lựa chọn) khớp định dạng. Câu sẽ được <b>sao chép</b> vào đề (snapshot).</Alert>
+      <Alert type="info">Chỉ hiện câu đúng cấp <b>{level}</b> + dạng <b>{mondaiJa(group.mondai_type)}</b> trong ngân hàng JLPT. Câu sẽ được <b>sao chép</b> vào đề (snapshot) — sửa bank sau này không ảnh hưởng đề.</Alert>
       <div className="flex gap-2 my-3">
         <input value={search} onChange={e => setSearch(e.target.value)} onKeyDown={e => e.key === 'Enter' && load()}
           placeholder="Tìm theo nội dung câu hỏi…" className="flex-1 px-3 py-2 border border-outline rounded-lg text-sm outline-none focus:border-tsubaki-red" />
@@ -638,14 +640,22 @@ function ImportBankModal({ group, level, onClose, onImported }) {
       </div>
       {loading ? <div className="flex justify-center py-10"><span className="material-symbols-outlined animate-spin text-tsubaki-red text-3xl">progress_activity</span></div> : (
         <div className="space-y-2 max-h-[45vh] overflow-y-auto">
-          {rows.length === 0 && <p className="text-center text-on-muted py-8">Không có câu hỏi phù hợp cấp {level}.</p>}
+          {rows.length === 0 && (
+            <p className="text-center text-on-muted py-8">
+              Ngân hàng chưa có câu dạng này cho cấp {level}. Soạn thêm ở trang <b>Ngân hàng JLPT</b>.
+            </p>
+          )}
           {rows.map(q => (
             <label key={q.id} className={`flex items-start gap-2 p-3 rounded-xl border cursor-pointer ${picked[q.id] ? 'border-tsubaki-red/40 bg-tsubaki-red/5' : 'border-outline/40'}`}>
               <input type="checkbox" checked={!!picked[q.id]} className="mt-1"
                 onChange={e => setPicked(p => ({ ...p, [q.id]: e.target.checked }))} />
               <div className="flex-1 text-sm">
-                <p className="font-semibold text-charcoal">{q.question_text}</p>
-                <p className="text-xs text-on-muted mt-0.5">{(q.options || []).join(' / ')} · Đáp án: <b>{q.correct_answer}</b></p>
+                <p className="font-semibold text-charcoal">{q.question_text || <em className="text-on-muted font-normal">(không có đề chữ — nghe)</em>}</p>
+                {listening && q.audio_transcript && <p className="text-xs text-blue-700 mt-0.5 line-clamp-2 whitespace-pre-wrap">🎧 {q.audio_transcript}</p>}
+                <p className="text-xs text-on-muted mt-0.5">
+                  {(q.options || []).join(' / ')} · Đáp án: <b>{q.options?.[q.correct_index]}</b>
+                  {listening && (q.audio_url ? ' · 🔊 có audio' : ' · ⚠️ chưa có audio')}
+                </p>
               </div>
             </label>
           ))}

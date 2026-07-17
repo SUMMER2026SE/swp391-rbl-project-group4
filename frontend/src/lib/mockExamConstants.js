@@ -62,6 +62,27 @@ export const PASSAGE_MONDAI_TYPES = new Set([
   'integrated_reading', 'thematic_reading', 'info_retrieval',
 ]);
 
+// Các dạng mondai nghe (cột listening) — mirror MONDAI_TYPES[type].category ở backend.
+export const LISTENING_MONDAI_TYPES = new Set([
+  'task_comprehension', 'point_comprehension', 'summary_comprehension',
+  'utterance_expression', 'quick_response', 'integrated_listening',
+]);
+
+// Số lựa chọn chuẩn theo dạng mondai (発話表現・即時応答 = 3, còn lại 4)
+export const mondaiOptionsCount = (type) =>
+  (type === 'utterance_expression' || type === 'quick_response') ? 3 : 4;
+
+// Danh sách mondai_type của 1 cấp theo thứ tự blueprint (dùng cho sidebar ngân hàng JLPT)
+export const levelMondaiTypes = (level) => {
+  const seen = new Set();
+  const out = [];
+  Object.keys(BLUEPRINT_COUNTS[level] || {}).forEach(k => {
+    const t = k.split(':')[1];
+    if (!seen.has(t)) { seen.add(t); out.push(t); }
+  });
+  return out;
+};
+
 // Tên phần thi hiển thị: "tiêu đề tiếng Nhật · tên tiếng Việt"
 export const sectionDisplay = (section) => {
   const vi = SECTION_LABEL[section.section_type] || '';

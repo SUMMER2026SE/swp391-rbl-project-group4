@@ -1,7 +1,7 @@
 'use strict';
 
 const { supabaseAdmin } = require('../config/supabase');
-const { BLUEPRINTS, MONDAI_TYPES, SCORE_COLUMNS } = require('../utils/jlptMock');
+const { BLUEPRINTS, MONDAI_TYPES, SCORE_COLUMNS, validateQuestionPayload } = require('../utils/jlptMock');
 
 // Toàn bộ bảng mock_* nằm trong schema jlpt_module (migration 024)
 const jlptDb = supabaseAdmin.schema('jlpt_module');
@@ -42,23 +42,6 @@ async function examIdOfQuestion(questionId) {
   if (error || !data) { const e = new Error('Không tìm thấy câu hỏi.'); e.httpStatus = 404; throw e; }
   const { examId } = await groupWithExamId(data.group_id);
   return examId;
-}
-
-// Validate payload 1 câu hỏi mock (trắc nghiệm 3–4 lựa chọn theo chuẩn JLPT)
-function validateQuestionPayload(q) {
-  if (!Array.isArray(q.options) || q.options.length < 3 || q.options.length > 4)
-    return 'Mỗi câu phải có 3 hoặc 4 lựa chọn.';
-  if (q.options.some(o => typeof o !== 'string' || !o.trim()))
-    return 'Lựa chọn không được để trống.';
-  const ci = Number(q.correct_index);
-  if (!Number.isInteger(ci) || ci < 0 || ci >= q.options.length)
-    return 'Đáp án đúng (correct_index) không hợp lệ.';
-  if (q.option_translations != null) {
-    if (!Array.isArray(q.option_translations) || q.option_translations.length !== q.options.length
-        || q.option_translations.some(t => typeof t !== 'string'))
-      return 'Bản dịch lựa chọn (option_translations) phải là mảng chuỗi cùng số lượng với lựa chọn.';
-  }
-  return null;
 }
 
 function handleError(res, err, fallback) {
@@ -510,40 +493,47 @@ exports.reorderQuestions = async (req, res) => {
   } catch (err) { handleError(res, err, 'Không thể sắp xếp câu hỏi.'); }
 };
 
-// ─── Import từ ngân hàng câu hỏi (copy snapshot, không reference) ─────────────
+// ─── Import từ ngân hàng đề JLPT riêng (copy snapshot, không reference) ───────
 
 // POST /api/admin/mock-groups/:groupId/import-from-bank — body { question_ids: [...] }
+// Nguồn: jlpt_module.jlpt_bank_questions — copy đủ field (dịch/transcript/media).
+// Sửa bank sau này KHÔNG ảnh hưởng câu đã import vào đề (snapshot).
 exports.importFromBank = async (req, res) => {
   const { question_ids } = req.body;
   if (!Array.isArray(question_ids) || !question_ids.length)
     return res.status(400).json({ error: 'Chọn ít nhất 1 câu hỏi để import.' });
   try {
     const { group, examId } = await groupWithExamId(req.params.groupId);
-    await assertEditableExam(examId);
+    const exam = await assertEditableExam(examId);
 
-    const { data: bankQs, error } = await supabaseAdmin.from('question_bank')
-      .select('id, question_text, question_type, options, correct_answer, explanation')
+    const { data: bankQs, error } = await jlptDb.from('jlpt_bank_questions')
+      .select('id, level, mondai_type, question_text, image_url, audio_url, audio_transcript, options, correct_index, explanation, translation_vi, option_translations')
       .in('id', question_ids);
     if (error) throw error;
 
     const skipped = [];
     const rows = [];
     for (const bq of bankQs || []) {
-      if (bq.question_type !== 'single_choice') {
-        skipped.push({ id: bq.id, reason: `Loại "${bq.question_type}" không dùng được cho đề JLPT (chỉ single_choice).` });
+      if (bq.level !== exam.level) {
+        skipped.push({ id: bq.id, reason: `Câu cấp ${bq.level} không khớp đề ${exam.level}.` });
         continue;
       }
-      const options = (Array.isArray(bq.options) ? bq.options : []).map(o => String(o).trim());
-      const correctIndex = options.findIndex(o => o === String(bq.correct_answer || '').trim());
-      if (options.length < 3 || options.length > 4 || correctIndex < 0) {
-        skipped.push({ id: bq.id, reason: 'Options/đáp án không khớp định dạng 3–4 lựa chọn.' });
+      if (bq.mondai_type !== group.mondai_type) {
+        skipped.push({ id: bq.id, reason: 'Dạng mondai không khớp với mondai đang soạn.' });
         continue;
       }
+      const msg = validateQuestionPayload(bq);
+      if (msg) { skipped.push({ id: bq.id, reason: msg }); continue; }
       rows.push({
-        question_text: bq.question_text,
-        options,
-        correct_index: correctIndex,
-        explanation:   bq.explanation || null,
+        question_text:       bq.question_text,
+        image_url:           bq.image_url,
+        audio_url:           bq.audio_url,
+        audio_transcript:    bq.audio_transcript,
+        options:             bq.options,
+        correct_index:       bq.correct_index,
+        explanation:         bq.explanation,
+        translation_vi:      bq.translation_vi,
+        option_translations: bq.option_translations,
       });
     }
     (question_ids.filter(id => !(bankQs || []).some(b => b.id === id)))
