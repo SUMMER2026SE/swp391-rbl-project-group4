@@ -53,6 +53,16 @@ export const adminJlptBankCreateGroup     = (body)       => api.post('/admin/jlp
 export const adminJlptBankUpdateGroup     = (id, body)   => api.put(`/admin/jlpt-bank/groups/${id}`, body).then(r => r.data);
 export const adminJlptBankDeleteGroup     = (id)         => api.delete(`/admin/jlpt-bank/groups/${id}`).then(r => r.data);
 export const adminJlptBankAiGenerate      = (body)       => api.post('/admin/jlpt-bank/ai-generate', body).then(r => r.data);
+export const adminJlptBankImportTemplate  = (level, mondai_type) =>
+  api.get('/admin/jlpt-bank/import-template', { params: { level, mondai_type }, responseType: 'blob' }).then(r => r.data);
+export const adminJlptBankImportCommit    = (body)       => api.post('/admin/jlpt-bank/import-commit', body).then(r => r.data);
+export function adminJlptBankImportFile(level, mondai_type, file) {
+  const form = new FormData();
+  form.append('level', level);
+  form.append('mondai_type', mondai_type);
+  form.append('file', file);
+  return api.post('/admin/jlpt-bank/import-file', form, { headers: { 'Content-Type': 'multipart/form-data' } }).then(r => r.data);
+}
 
 export function adminUploadMedia(kind, file) {
   const form = new FormData();

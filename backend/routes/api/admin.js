@@ -357,6 +357,18 @@ router.post('/jlpt-bank/groups',            jb.createGroup);
 router.put('/jlpt-bank/groups/:id',         jb.updateGroup);
 router.delete('/jlpt-bank/groups/:id',      jb.deleteGroup);
 router.post('/jlpt-bank/ai-generate',       jb.aiGenerate);
+// Import Excel/CSV vào bank JLPT (chỉ dạng câu đơn — xem jlptBankImport.js)
+const jlptImportUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const ok = /\.(csv|xlsx|xls)$/i.test(file.originalname);
+    ok ? cb(null, true) : cb(new Error('Chỉ chấp nhận file .xlsx, .xls hoặc .csv.'));
+  },
+});
+router.get('/jlpt-bank/import-template',    jb.importTemplate);
+router.post('/jlpt-bank/import-file',       jlptImportUpload.single('file'), jb.importFile);
+router.post('/jlpt-bank/import-commit',     jb.importCommit);
 
 // Placement Test — Question Bank
 const pc = require('../../controllers/placementController');

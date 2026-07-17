@@ -259,6 +259,52 @@ exports.aiGenerate = async (req, res) => {
   } catch (err) { handleError(res, err, 'Không thể sinh câu hỏi bằng AI.'); }
 };
 
+// ─── Import Excel/CSV vào bank ────────────────────────────────────────────────
+// Đợt đầu chỉ dạng câu đơn không passage/không nghe. Luồng: tải template →
+// upload file (preview, KHÔNG ghi DB) → commit (ghi source='import').
+
+// GET /api/admin/jlpt-bank/import-template?level=&mondai_type= — file .xlsx mẫu
+exports.importTemplate = async (req, res) => {
+  const { level, mondai_type } = req.query;
+  try {
+    assertLevelType(level, mondai_type);
+    const { assertImportableType, buildImportTemplate } = require('../utils/jlptBankImport');
+    assertImportableType(mondai_type);
+    const buffer = buildImportTemplate(level, mondai_type);
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="jlpt-bank-${level}-${mondai_type}.xlsx"`);
+    res.send(buffer);
+  } catch (err) { handleError(res, err, 'Không thể tạo file mẫu.'); }
+};
+
+// POST /api/admin/jlpt-bank/import-file — multipart { file, level, mondai_type } → preview, KHÔNG ghi DB
+exports.importFile = async (req, res) => {
+  const { level, mondai_type } = req.body;
+  try {
+    if (!req.file) return res.status(400).json({ error: 'Chưa chọn file để nhập.' });
+    assertLevelType(level, mondai_type);
+    const { assertImportableType, parseJlptBankImport } = require('../utils/jlptBankImport');
+    assertImportableType(mondai_type);
+    const result = await parseJlptBankImport({
+      buffer:     req.file.buffer,
+      filename:   req.file.originalname || '',
+      mondaiType: mondai_type,
+    });
+    res.json(result);
+  } catch (err) { handleError(res, err, 'Không thể đọc file nhập.'); }
+};
+
+// POST /api/admin/jlpt-bank/import-commit — body { level, mondai_type, questions[] } → ghi bank source='import'
+exports.importCommit = (req, res) => {
+  try {
+    const { assertImportableType } = require('../utils/jlptBankImport');
+    assertImportableType(req.body.mondai_type);
+  } catch (err) { return handleError(res, err, 'Không thể nhập câu hỏi.'); }
+  req.body.source = 'import';
+  req.body.group_id = undefined; // dạng import không có nhóm passage
+  return exports.createQuestions(req, res); // validate lại server-side + insert
+};
+
 // ─── TTS cho câu nghe trong bank ──────────────────────────────────────────────
 
 // POST /api/admin/jlpt-bank/questions/:id/tts — đọc audio_transcript → mp3 → gán audio_url

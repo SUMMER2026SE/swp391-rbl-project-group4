@@ -13,6 +13,7 @@ import {
   adminJlptBankUpdateQuestion, adminJlptBankDeleteQuestion, adminJlptBankQuestionTts,
   adminJlptBankListGroups, adminJlptBankCreateGroup, adminJlptBankUpdateGroup,
   adminJlptBankDeleteGroup, adminJlptBankAiGenerate, adminUploadMedia,
+  adminJlptBankImportTemplate, adminJlptBankImportFile, adminJlptBankImportCommit,
 } from '../../lib/mockExamApi';
 
 // Ngân hàng đề JLPT riêng (jlpt_module.jlpt_bank_*) — kho câu theo cấp × dạng mondai,
@@ -145,6 +146,7 @@ function QuestionPanel({ level, type, listening, onChanged }) {
   const [notice, setNotice] = useState('');
   const [form, setForm] = useState(null);      // null | { q } (q rỗng = thêm mới)
   const [showAi, setShowAi] = useState(false);
+  const [showImport, setShowImport] = useState(false);
   const [confirm, setConfirm] = useState(null);
   const [ttsId, setTtsId] = useState(null);
   const limit = 10;
@@ -178,6 +180,11 @@ function QuestionPanel({ level, type, listening, onChanged }) {
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="font-bold text-charcoal">{mondaiJa(type)} · {mondaiVi(type)} <span className="text-xs text-on-muted font-normal">({total} câu)</span></h2>
         <div className="flex items-center gap-2">
+          {!listening && (
+            <Button variant="secondary" size="sm" onClick={() => setShowImport(true)}>
+              <span className="material-symbols-outlined text-lg">upload_file</span> Nhập file
+            </Button>
+          )}
           <Button variant="purple" size="sm" onClick={() => setShowAi(true)}>
             <span className="material-symbols-outlined text-lg">smart_toy</span> AI sinh
           </Button>
@@ -231,6 +238,11 @@ function QuestionPanel({ level, type, listening, onChanged }) {
         <BankAiModal level={level} type={type} listening={listening} isPassage={false}
           onClose={() => setShowAi(false)}
           onSaved={(n) => { setShowAi(false); setNotice(`Đã thêm ${n} câu vào ngân hàng.`); load(); onChanged(); }} />
+      )}
+      {showImport && (
+        <ImportFileModal level={level} type={type}
+          onClose={() => setShowImport(false)}
+          onSaved={(n) => { setShowImport(false); setNotice(`Đã nhập ${n} câu từ file vào ngân hàng.`); load(); onChanged(); }} />
       )}
       <ConfirmDialog open={!!confirm} onCancel={() => setConfirm(null)}
         title="Xóa câu khỏi ngân hàng?" message="Câu đã import vào đề không bị ảnh hưởng (đề giữ bản sao). Thao tác này không thể hoàn tác."
@@ -543,6 +555,126 @@ function QuestionFormModal({ level, type, listening, initial, groupId, onClose, 
           placeholder="Giải thích đáp án (tiếng Việt, tùy chọn)"
           className="w-full px-3 py-2 border border-outline rounded-lg text-xs outline-none focus:border-tsubaki-red resize-y" />
       </div>
+    </Modal>
+  );
+}
+
+// ── Modal nhập câu từ file Excel/CSV vào bank (chỉ dạng câu đơn không passage/nghe) ──
+function ImportFileModal({ level, type, onClose, onSaved }) {
+  const [file, setFile] = useState(null);
+  const [parsing, setParsing] = useState(false);
+  const [preview, setPreview] = useState(null);  // { valid: [{row, question}], errors, warnings, source }
+  const [picked, setPicked] = useState([]);      // bool[] song song với preview.valid
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  const downloadTemplate = async () => {
+    setError('');
+    try {
+      const blob = await adminJlptBankImportTemplate(level, type);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `jlpt-bank-${level}-${type}.xlsx`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) { setError('Không thể tải file mẫu.'); }
+  };
+
+  const parseFile = async () => {
+    if (!file) return;
+    setParsing(true); setError('');
+    try {
+      const r = await adminJlptBankImportFile(level, type, file);
+      setPreview(r);
+      setPicked((r.valid || []).map(() => true));
+    } catch (e) { setError(e.message); }
+    finally { setParsing(false); }
+  };
+
+  const pickedCount = picked.filter(Boolean).length;
+
+  const commit = async () => {
+    const questions = preview.valid.filter((_, i) => picked[i]).map(v => v.question);
+    if (!questions.length) { setError('Chọn ít nhất 1 câu để nhập.'); return; }
+    setSaving(true); setError('');
+    try {
+      const r = await adminJlptBankImportCommit({ level, mondai_type: type, questions });
+      onSaved(r.saved ?? questions.length);
+    } catch (e) { setError(e.message); setSaving(false); }
+  };
+
+  return (
+    <Modal open onClose={onClose} size="xl" title={`Nhập câu từ file · ${mondaiJa(type)} (${level})`}
+      footer={preview ? <>
+        <Button variant="secondary" onClick={() => { setPreview(null); setPicked([]); }}>Chọn file khác</Button>
+        <Button onClick={commit} loading={saving} disabled={!pickedCount}>Nhập {pickedCount} câu vào ngân hàng</Button>
+      </> : <>
+        <Button variant="secondary" onClick={onClose}>Hủy</Button>
+        <Button onClick={parseFile} loading={parsing} disabled={!file}>Đọc file</Button>
+      </>}>
+      {error && <Alert type="error" onClose={() => setError('')}>{error}</Alert>}
+      {!preview ? (
+        <div className="space-y-4">
+          <Alert type="info">
+            Nhập câu dạng <b>{mondaiJa(type)}</b> ({mondaiVi(type)}) cấp {level} từ file .xlsx/.csv.
+            Tải file mẫu bên dưới, điền mỗi câu một dòng rồi upload — hệ thống sẽ kiểm tra và cho xem trước, chưa ghi vào ngân hàng.
+          </Alert>
+          <button type="button" onClick={downloadTemplate}
+            className="text-tsubaki-red font-semibold text-sm hover:underline flex items-center gap-1">
+            <span className="material-symbols-outlined text-lg">download</span> Tải file mẫu (.xlsx)
+          </button>
+          <label className="block border border-dashed border-outline/60 rounded-2xl p-6 text-center cursor-pointer hover:bg-surface-low">
+            <span className="material-symbols-outlined text-4xl text-on-muted block mb-1">upload_file</span>
+            <span className="text-sm font-semibold text-charcoal">{file ? file.name : 'Chọn file .xlsx / .xls / .csv'}</span>
+            <input type="file" accept=".xlsx,.xls,.csv" className="hidden"
+              onChange={e => setFile(e.target.files[0] || null)} />
+          </label>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {(preview.warnings || []).map((w, i) => <Alert key={i} type="warning">{w}</Alert>)}
+          {preview.errors?.length > 0 && (
+            <div className="border border-red-200 bg-red-50 rounded-xl p-3 text-sm space-y-1">
+              <p className="font-semibold text-red-700">{preview.errors.length} dòng lỗi — sẽ bị bỏ qua:</p>
+              {preview.errors.map((e, i) => (
+                <p key={i} className="text-xs text-red-700">Dòng {e.row}: {e.message}</p>
+              ))}
+            </div>
+          )}
+          {preview.valid.length === 0 ? (
+            <p className="text-sm text-on-muted text-center py-6">Không có dòng hợp lệ nào trong file.</p>
+          ) : (
+            <div className="space-y-2">
+              <p className="text-xs text-on-muted">{preview.valid.length} câu hợp lệ — bỏ tick câu không muốn nhập:</p>
+              {preview.valid.map((v, i) => (
+                <label key={i} className={`block border rounded-xl p-3 cursor-pointer ${picked[i] ? 'border-sumire-purple/40 bg-sumire-purple/5' : 'border-outline/40 opacity-60'}`}>
+                  <div className="flex items-start gap-2">
+                    <input type="checkbox" checked={!!picked[i]} className="mt-1"
+                      onChange={e => setPicked(p => p.map((x, j) => j === i ? e.target.checked : x))} />
+                    <div className="flex-1 text-sm">
+                      <p className="font-semibold text-charcoal whitespace-pre-wrap">
+                        <span className="text-[10px] text-on-muted font-normal mr-1.5">Dòng {v.row}</span>
+                        {v.question.question_text}
+                      </p>
+                      {v.question.translation_vi && <p className="text-xs text-emerald-700 mt-0.5">🇻🇳 {v.question.translation_vi}</p>}
+                      <ul className="mt-1 space-y-0.5">
+                        {v.question.options.map((o, k) => (
+                          <li key={k} className={k === v.question.correct_index ? 'text-green-700 font-semibold' : 'text-on-muted'}>
+                            {k + 1}. {o} {k === v.question.correct_index && '✓'}
+                            {v.question.option_translations?.[k] && <span className="block pl-4 text-[11px] italic font-normal text-on-muted">{v.question.option_translations[k]}</span>}
+                          </li>
+                        ))}
+                      </ul>
+                      {v.question.explanation && <p className="text-xs text-on-muted mt-1">💡 {v.question.explanation}</p>}
+                    </div>
+                  </div>
+                </label>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </Modal>
   );
 }
