@@ -31,7 +31,10 @@ exports.list = async (req, res) => {
     if (levelIds)              query = query.in('id', levelIds);
     if (difficulty)            query = query.eq('difficulty_level', difficulty);
     if (is_free !== undefined) query = query.eq('is_free', is_free === 'true');
-    if (search)                query = query.or(`title.ilike.%${search}%,description.ilike.%${search}%`);
+    if (search) {
+      const safe = String(search).replace(/[,()%*]/g, ' ').trim();
+      if (safe) query = query.or(`title.ilike.%${safe}%,description.ilike.%${safe}%`);
+    }
 
     const sortCol = sort === 'popular' ? 'enrollment_count'
                   : sort === 'rating'  ? 'avg_rating'

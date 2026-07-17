@@ -66,9 +66,11 @@ exports.getOne = async (req, res) => {
       }
     }
 
+    // KHÔNG trả correct_answer/correct_answer_data/explanation cho học sinh trước khi
+    // nộp bài — các trường này chỉ xuất hiện sau khi chấm (submitAttempt/getResults).
     const { data: questions } = await examDb
       .from('quiz_questions')
-      .select('id,question,options,correct_answer,correct_answer_data,question_type,bank_question_id,explanation,order_index')
+      .select('id,question,options,question_type,bank_question_id,order_index')
       .eq('quiz_id', req.params.id).order('order_index');
 
     res.json({ ...quiz, questions: questions || [] });

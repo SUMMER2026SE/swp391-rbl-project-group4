@@ -133,7 +133,10 @@ async function adminGetUsersWithSubscription(req, res) {
       .order('created_at', { ascending: false })
       .range(offset, offset + limit - 1);
 
-    if (search) userQuery = userQuery.or(`full_name.ilike.%${search}%,email.ilike.%${search}%`);
+    if (search) {
+      const safe = String(search).replace(/[,()%*]/g, ' ').trim();
+      if (safe) userQuery = userQuery.or(`full_name.ilike.%${safe}%,email.ilike.%${safe}%`);
+    }
 
     const { data: users, count, error: uErr } = await userQuery;
     if (uErr) throw new Error(uErr.message);

@@ -19,7 +19,10 @@ exports.listMyVocab = async (req, res) => {
       .order('created_at', { ascending: false })
       .range(offset, offset + Number(limit) - 1);
     if (level)  q = q.eq('level', level);
-    if (search) q = q.or(`kanji.ilike.%${search}%,reading.ilike.%${search}%,meaning_vi.ilike.%${search}%`);
+    if (search) {
+      const safe = String(search).replace(/[,()%*]/g, ' ').trim();
+      if (safe) q = q.or(`kanji.ilike.%${safe}%,reading.ilike.%${safe}%,meaning_vi.ilike.%${safe}%`);
+    }
     const { data, error, count } = await q;
     if (error) throw error;
     res.json({ data: data || [], total: count || 0 });
@@ -72,7 +75,10 @@ exports.listMyKanji = async (req, res) => {
       .order('created_at', { ascending: false })
       .range(offset, offset + Number(limit) - 1);
     if (level)  q = q.eq('level', level);
-    if (search) q = q.or(`character.ilike.%${search}%,meaning_vi.ilike.%${search}%,han_viet.ilike.%${search}%`);
+    if (search) {
+      const safe = String(search).replace(/[,()%*]/g, ' ').trim();
+      if (safe) q = q.or(`character.ilike.%${safe}%,meaning_vi.ilike.%${safe}%,han_viet.ilike.%${safe}%`);
+    }
     const { data, error, count } = await q;
     if (error) throw error;
     res.json({ data: data || [], total: count || 0 });
@@ -650,8 +656,13 @@ exports.createLessonQuiz = async (req, res) => {
   if (!lesson_id) return res.status(400).json({ error: 'Thiếu lesson_id.' });
   if (!(await ownsLesson(lesson_id, req.user.id))) return res.status(403).json({ error: 'Không có quyền.' });
   try {
+    // Phải set course_id — nếu để NULL, checkCourseContentAccess coi quiz là "không thuộc
+    // khóa nào" và học sinh chưa mua khóa vẫn truy cập được (bypass paywall).
+    const { data: lessonRow } = await contentDb.from('lessons')
+      .select('course_id').eq('id', lesson_id).single();
     const { data, error } = await examDb.from('quizzes')
-      .insert({ title, title_ja, description, lesson_id, type: type || 'multiple_choice', time_limit,
+      .insert({ title, title_ja, description, lesson_id, course_id: lessonRow?.course_id || null,
+                type: type || 'multiple_choice', time_limit,
                 mode: mode === 'proctored' ? 'proctored' : 'normal',
                 // "Giám sát" luôn kéo theo toàn màn hình nghiêm ngặt (webcam đã bỏ)
                 strict_fullscreen: mode === 'proctored' ? true : strict_fullscreen === true })

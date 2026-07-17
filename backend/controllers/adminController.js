@@ -1,6 +1,6 @@
 'use strict';
 
-const { supabaseAdmin } = require('../config/supabase');
+const { supabaseAdmin, updateUserMetadata } = require('../config/supabase');
 const { validateThreshold } = require('../services/passThreshold');
 
 // Bảng quiz đã chuyển sang schema exam_module (question_bank/users vẫn ở public)
@@ -42,7 +42,10 @@ exports.listUsers = async (req, res) => {
       .select('id,full_name,email,phone,avatar_url,created_at', { count: 'exact' })
       .order('created_at', { ascending: false })
       .range(offset, offset + Number(limit) - 1);
-    if (search) query = query.or(`full_name.ilike.%${search}%,email.ilike.%${search}%`);
+    if (search) {
+      const safe = String(search).replace(/[,()%*]/g, ' ').trim();
+      if (safe) query = query.or(`full_name.ilike.%${safe}%,email.ilike.%${safe}%`);
+    }
     const { data, error, count } = await query;
     if (error) throw error;
 
@@ -80,12 +83,17 @@ exports.updateUser = async (req, res) => {
     const updates = {};
     if (full_name !== undefined) updates.full_name = full_name;
     if (phone     !== undefined) updates.phone     = phone;
-    await supabaseAdmin.from('users').update(updates).eq('id', req.params.id);
+    if (Object.keys(updates).length > 0) {
+      const { error } = await supabaseAdmin.from('users').update(updates).eq('id', req.params.id);
+      if (error) throw error;
+    }
     if (role !== undefined) {
-      await supabaseAdmin.auth.admin.updateUserById(req.params.id, { user_metadata: { role } });
+      const { error } = await updateUserMetadata(req.params.id, { role });
+      if (error) throw error;
     }
     res.json({ message: 'Đã cập nhật.' });
   } catch (err) {
+    console.error('Update user error:', err);
     res.status(500).json({ error: 'Không thể cập nhật.' });
   }
 };
@@ -646,7 +654,10 @@ exports.listVocab = async (req, res) => {
       .order('created_at', { ascending: true })
       .range(offset, offset + Number(limit) - 1);
     if (level)  q = q.eq('level', level);
-    if (search) q = q.or(`kanji.ilike.%${search}%,reading.ilike.%${search}%,meaning_vi.ilike.%${search}%`);
+    if (search) {
+      const safe = String(search).replace(/[,()%*]/g, ' ').trim();
+      if (safe) q = q.or(`kanji.ilike.%${safe}%,reading.ilike.%${safe}%,meaning_vi.ilike.%${safe}%`);
+    }
     const { data, error, count } = await q;
     if (error) throw error;
     res.json({ data: data || [], total: count || 0 });
@@ -816,7 +827,10 @@ exports.listGrammarPoints = async (req, res) => {
       .order('created_at', { ascending: true })
       .range(offset, offset + Number(limit) - 1);
     if (level)  q = q.eq('level', level);
-    if (search) q = q.or(`title.ilike.%${search}%,meaning_vi.ilike.%${search}%`);
+    if (search) {
+      const safe = String(search).replace(/[,()%*]/g, ' ').trim();
+      if (safe) q = q.or(`title.ilike.%${safe}%,meaning_vi.ilike.%${safe}%`);
+    }
     const { data, error, count } = await q;
     if (error) throw error;
     res.json({ data: data || [], total: count || 0 });
@@ -1065,7 +1079,10 @@ exports.listKanji = async (req, res) => {
       .order('created_at', { ascending: true })
       .range(offset, offset + Number(limit) - 1);
     if (level)     q = q.eq('level', level);
-    if (search)    q = q.or(`character.ilike.%${search}%,meaning_vi.ilike.%${search}%,han_viet.ilike.%${search}%`);
+    if (search) {
+      const safe = String(search).replace(/[,()%*]/g, ' ').trim();
+      if (safe) q = q.or(`character.ilike.%${safe}%,meaning_vi.ilike.%${safe}%,han_viet.ilike.%${safe}%`);
+    }
     const { data, error, count } = await q;
     if (error) throw error;
     res.json({ data: data || [], total: count || 0 });
