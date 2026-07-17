@@ -39,7 +39,8 @@ export const adminUpdateQuestion = (id, body) => api.put(`/admin/mock-questions/
 export const adminDeleteQuestion = (id) => api.delete(`/admin/mock-questions/${id}`).then(r => r.data);
 export const adminReorderQuestions = (ids) => api.patch('/admin/mock-questions/reorder', { ids }).then(r => r.data);
 export const adminImportFromBank = (groupId, question_ids) => api.post(`/admin/mock-groups/${groupId}/import-from-bank`, { question_ids }).then(r => r.data);
-export const adminAiGenerate = (groupId, count, topic) => api.post(`/admin/mock-groups/${groupId}/ai-generate`, { count, topic }).then(r => r.data);
+export const adminAiGenerate = (groupId, count, topic, instruction) => api.post(`/admin/mock-groups/${groupId}/ai-generate`, { count, topic, instruction }).then(r => r.data);
+export const adminAiRegenerateOne = (groupId, body) => api.post(`/admin/mock-groups/${groupId}/ai-regenerate-one`, body).then(r => r.data);
 export const adminListBankForImport = (params) => api.get('/admin/question-bank', { params }).then(r => r.data);
 
 export function adminUploadMedia(kind, file) {

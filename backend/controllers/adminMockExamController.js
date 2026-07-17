@@ -565,22 +565,66 @@ exports.importFromBank = async (req, res) => {
 
 // ─── AI sinh nháp câu hỏi theo mondai ─────────────────────────────────────────
 
-// POST /api/admin/mock-groups/:groupId/ai-generate — body { count } → trả NHÁP, không ghi DB
+// Gom toàn bộ câu đã có của CẢ ĐỀ thành mảng chuỗi mô tả (câu hỏi → đáp án đúng)
+// để đưa vào prompt chống trùng lặp.
+async function existingQuestionSummaries(examId) {
+  const { data: sections, error } = await jlptDb.from('mock_exam_sections')
+    .select('id, mock_question_groups(id, mock_questions(question_text, options, correct_index, audio_transcript))')
+    .eq('exam_id', examId);
+  if (error) throw error;
+  const lines = [];
+  for (const s of sections || []) {
+    for (const g of s.mock_question_groups || []) {
+      for (const q of g.mock_questions || []) {
+        const answer = Array.isArray(q.options) ? q.options[q.correct_index] : '';
+        const text = q.question_text || (q.audio_transcript ? String(q.audio_transcript).slice(0, 80) : '');
+        if (text || answer) lines.push(`${text}${answer ? ` → ${answer}` : ''}`);
+      }
+    }
+  }
+  return lines;
+}
+
+// POST /api/admin/mock-groups/:groupId/ai-generate — body { count, topic, instruction } → trả NHÁP, không ghi DB
 exports.aiGenerateDrafts = async (req, res) => {
   const count = Math.min(Math.max(Number(req.body.count) || 5, 1), 15);
   try {
     const { group, examId } = await groupWithExamId(req.params.groupId);
     const { data: exam } = await jlptDb.from('mock_exams').select('id, level').eq('id', examId).single();
-    const { generateMondaiQuestions } = require('../utils/questionGen');
+    const { generateMondaiQuestions } = require('../utils/jlptQuestionGen');
     const result = await generateMondaiQuestions({
-      level:       exam.level,
-      mondaiType:  group.mondai_type,
+      level:             exam.level,
+      mondaiType:        group.mondai_type,
       count,
-      passageText: group.passage_text || '',
-      topic:       req.body.topic || '',
+      passageText:       group.passage_text || '',
+      topic:             req.body.topic || '',
+      instruction:       req.body.instruction || '',
+      existingQuestions: await existingQuestionSummaries(examId),
     });
     res.json(result);
   } catch (err) { handleError(res, err, 'Không thể sinh câu hỏi bằng AI.'); }
+};
+
+// POST /api/admin/mock-groups/:groupId/ai-regenerate-one
+// body { instruction, current_question, sibling_questions } → trả 1 câu NHÁP mới, không ghi DB
+exports.aiRegenerateOne = async (req, res) => {
+  try {
+    const { group, examId } = await groupWithExamId(req.params.groupId);
+    const { data: exam } = await jlptDb.from('mock_exams').select('id, level').eq('id', examId).single();
+    const siblings = Array.isArray(req.body.sibling_questions)
+      ? req.body.sibling_questions.map(s => String(s).slice(0, 200)).slice(0, 50)
+      : [];
+    const { regenerateOneQuestion } = require('../utils/jlptQuestionGen');
+    const result = await regenerateOneQuestion({
+      level:            exam.level,
+      mondaiType:       group.mondai_type,
+      instruction:      req.body.instruction || '',
+      currentQuestion:  req.body.current_question || {},
+      siblingQuestions: siblings,
+      passageText:      group.passage_text || '',
+    });
+    res.json(result);
+  } catch (err) { handleError(res, err, 'Không thể sinh lại câu hỏi bằng AI.'); }
 };
 
 // ─── Upload media ─────────────────────────────────────────────────────────────

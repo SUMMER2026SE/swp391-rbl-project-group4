@@ -338,6 +338,7 @@ router.delete('/mock-groups/:id',                  mock.deleteGroup);
 router.post('/mock-groups/:groupId/questions',           mock.createQuestions);
 router.post('/mock-groups/:groupId/import-from-bank',    mock.importFromBank);
 router.post('/mock-groups/:groupId/ai-generate',         mock.aiGenerateDrafts);
+router.post('/mock-groups/:groupId/ai-regenerate-one',   mock.aiRegenerateOne);
 router.patch('/mock-questions/reorder',            mock.reorderQuestions);
 router.post('/mock-questions/:id/tts',             mock.generateQuestionAudio);
 router.put('/mock-questions/:id',                  mock.updateQuestion);

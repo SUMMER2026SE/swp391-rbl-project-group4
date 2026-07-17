@@ -11,7 +11,7 @@ import {
   adminGetExam, adminPublishExam, adminUpdateExam, adminUpdateSection,
   adminUpdateGroup,
   adminCreateQuestions, adminUpdateQuestion, adminDeleteQuestion,
-  adminAiGenerate, adminImportFromBank, adminListBankForImport, adminUploadMedia,
+  adminAiGenerate, adminAiRegenerateOne, adminImportFromBank, adminListBankForImport, adminUploadMedia,
 } from '../../lib/mockExamApi';
 
 const blankQuestion = () => ({ question_text: '', options: ['', '', '', ''], correct_index: 0, explanation: '', translation_vi: '' });
@@ -386,29 +386,54 @@ function NewQuestionInline({ groupId, listening, onAdded, setError, onRegister }
 }
 
 // ── Modal AI sinh nháp ──
+// Bỏ các field nội bộ (_picked, _editing…) trước khi gửi lên server.
+const cleanDraft = (d) => Object.fromEntries(Object.entries(d).filter(([k]) => !k.startsWith('_')));
+// Chuỗi tóm tắt 1 câu (câu hỏi/transcript → đáp án đúng) cho prompt chống trùng.
+const draftSummary = (d) =>
+  `${d.question_text || (d.audio_transcript ? String(d.audio_transcript).slice(0, 80) : '')} → ${d.options?.[d.correct_index] || ''}`;
+
 function AiGenerateModal({ group, onClose, onAdded }) {
   const [count, setCount] = useState(5);
   const [topic, setTopic] = useState('');
+  const [instruction, setInstruction] = useState('');
   const [loading, setLoading] = useState(false);
-  const [drafts, setDrafts] = useState(null);   // [{...q, _picked}]
+  const [drafts, setDrafts] = useState(null);   // [{...q, _picked, _editing, _regenOpen, _regenNote, _regenLoading}]
   const [passage, setPassage] = useState(null);
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
   const listening = group.score_category === 'listening';
 
+  const patchDraft = (i, patch) => setDrafts(ds => ds.map((x, j) => j === i ? { ...x, ...patch } : x));
+
   const generate = async () => {
     setLoading(true); setError('');
     try {
-      const r = await adminAiGenerate(group.id, count, topic);
+      const r = await adminAiGenerate(group.id, count, topic, instruction);
       setDrafts(r.questions.map(q => ({ ...q, _picked: true })));
       setPassage(r.passage_text || null);
     } catch (e) { setError(e.message); }
     finally { setLoading(false); }
   };
 
+  const regenOne = async (i) => {
+    patchDraft(i, { _regenLoading: true }); setError('');
+    try {
+      const r = await adminAiRegenerateOne(group.id, {
+        instruction:       drafts[i]._regenNote || '',
+        current_question:  cleanDraft(drafts[i]),
+        sibling_questions: drafts.filter((_, j) => j !== i).map(draftSummary),
+      });
+      setDrafts(ds => ds.map((x, j) => j === i ? { ...r.question, _picked: true } : x));
+    } catch (e) {
+      setError(e.message);
+      patchDraft(i, { _regenLoading: false });
+    }
+  };
+
   const addPicked = async () => {
-    const picked = drafts.filter(d => d._picked).map(({ _picked, ...q }) => q);
+    const picked = drafts.filter(d => d._picked).map(cleanDraft);
     if (!picked.length) { setError('Chọn ít nhất 1 câu.'); return; }
+    if (drafts.some(d => d._editing)) { setError('Có câu đang sửa dở — bấm "Áp dụng" hoặc "Hủy" trước khi thêm vào đề.'); return; }
     setSaving(true); setError('');
     try {
       // Nếu AI sinh passage cho mondai đọc và group chưa có → gắn vào group
@@ -430,7 +455,7 @@ function AiGenerateModal({ group, onClose, onAdded }) {
       {error && <Alert type="error" onClose={() => setError('')}>{error}</Alert>}
       {!drafts ? (
         <div className="space-y-4">
-          <Alert type="info">AI sinh câu theo đúng dạng <b>{mondaiJa(group.mondai_type)}</b> ({mondaiVi(group.mondai_type)}). Với đọc hiểu dài và phần nghe, nên kiểm tra kỹ hoặc soạn tay.</Alert>
+          <Alert type="info">AI sinh câu theo đúng dạng <b>{mondaiJa(group.mondai_type)}</b> ({mondaiVi(group.mondai_type)}). Câu đã có trong đề được đưa vào prompt để tránh trùng lặp. Với đọc hiểu dài và phần nghe, nên kiểm tra kỹ hoặc soạn tay.</Alert>
           <div className="flex items-center gap-3">
             <label className="text-sm text-on-muted">Số câu:</label>
             <input type="number" min="1" max="15" value={count} onChange={e => setCount(+e.target.value)}
@@ -438,6 +463,9 @@ function AiGenerateModal({ group, onClose, onAdded }) {
           </div>
           <input value={topic} onChange={e => setTopic(e.target.value)} placeholder="Chủ đề (tùy chọn)"
             className="w-full px-3 py-2 border border-outline rounded-lg text-sm outline-none focus:border-tsubaki-red" />
+          <textarea value={instruction} onChange={e => setInstruction(e.target.value)} rows={3}
+            placeholder="Yêu cầu thêm cho AI (tùy chọn) — vd: tập trung ngữ pháp về điều kiện, tránh chủ đề ẩm thực…"
+            className="w-full px-3 py-2 border border-outline rounded-lg text-sm outline-none focus:border-tsubaki-red resize-y" />
         </div>
       ) : (
         <div className="space-y-3">
@@ -449,29 +477,118 @@ function AiGenerateModal({ group, onClose, onAdded }) {
           )}
           {drafts.map((d, i) => (
             <div key={i} className={`border rounded-xl p-3 ${d._picked ? 'border-sumire-purple/40 bg-sumire-purple/5' : 'border-outline/40 opacity-60'}`}>
-              <label className="flex items-start gap-2 cursor-pointer">
-                <input type="checkbox" checked={d._picked} className="mt-1"
-                  onChange={e => setDrafts(ds => ds.map((x, j) => j === i ? { ...x, _picked: e.target.checked } : x))} />
-                <div className="flex-1 text-sm">
-                  <p className="font-semibold text-charcoal">{d.question_text || <em className="text-on-muted">(không có đề chữ — nghe)</em>}</p>
-                  {d.translation_vi && <p className="text-xs text-emerald-700 mt-0.5 whitespace-pre-wrap">🇻🇳 {d.translation_vi}</p>}
-                  <ul className="mt-1 space-y-0.5">
-                    {d.options.map((o, k) => (
-                      <li key={k} className={k === d.correct_index ? 'text-green-700 font-semibold' : 'text-on-muted'}>
-                        {k + 1}. {o} {k === d.correct_index && '✓'}
-                        {d.option_translations?.[k] && <span className="block pl-4 text-[11px] italic font-normal text-on-muted">{d.option_translations[k]}</span>}
-                      </li>
-                    ))}
-                  </ul>
-                  {d.explanation && <p className="text-xs text-on-muted mt-1">💡 {d.explanation}</p>}
-                  {listening && d.audio_transcript && <p className="text-xs text-blue-700 mt-1">🎧 {d.audio_transcript}</p>}
-                </div>
-              </label>
+              {d._editing ? (
+                <DraftEditForm draft={d} listening={listening}
+                  onApply={(q) => patchDraft(i, { ...q, _editing: false })}
+                  onCancel={() => patchDraft(i, { _editing: false })} />
+              ) : (
+                <>
+                  <div className="flex items-start gap-2">
+                    <input type="checkbox" checked={d._picked} className="mt-1 cursor-pointer"
+                      onChange={e => patchDraft(i, { _picked: e.target.checked })} />
+                    <div className="flex-1 text-sm">
+                      <p className="font-semibold text-charcoal">{d.question_text || <em className="text-on-muted">(không có đề chữ — nghe)</em>}</p>
+                      {d.translation_vi && <p className="text-xs text-emerald-700 mt-0.5 whitespace-pre-wrap">🇻🇳 {d.translation_vi}</p>}
+                      <ul className="mt-1 space-y-0.5">
+                        {d.options.map((o, k) => (
+                          <li key={k} className={k === d.correct_index ? 'text-green-700 font-semibold' : 'text-on-muted'}>
+                            {k + 1}. {o} {k === d.correct_index && '✓'}
+                            {d.option_translations?.[k] && <span className="block pl-4 text-[11px] italic font-normal text-on-muted">{d.option_translations[k]}</span>}
+                          </li>
+                        ))}
+                      </ul>
+                      {d.explanation && <p className="text-xs text-on-muted mt-1">💡 {d.explanation}</p>}
+                      {listening && d.audio_transcript && <p className="text-xs text-blue-700 mt-1 whitespace-pre-wrap">🎧 {d.audio_transcript}</p>}
+                    </div>
+                    <div className="flex flex-col gap-1 shrink-0">
+                      <button type="button" title="Sửa câu này"
+                        onClick={() => patchDraft(i, { _editing: true, _regenOpen: false })}
+                        className="p-1 rounded-lg text-on-muted hover:bg-surface hover:text-charcoal">
+                        <span className="material-symbols-outlined text-lg">edit</span>
+                      </button>
+                      <button type="button" title="Sinh lại câu này"
+                        onClick={() => patchDraft(i, { _regenOpen: !d._regenOpen })}
+                        className="p-1 rounded-lg text-on-muted hover:bg-surface hover:text-sumire-purple">
+                        <span className="material-symbols-outlined text-lg">autorenew</span>
+                      </button>
+                    </div>
+                  </div>
+                  {d._regenOpen && (
+                    <div className="mt-2 pl-6 flex items-center gap-2">
+                      <input value={d._regenNote || ''} onChange={e => patchDraft(i, { _regenNote: e.target.value })}
+                        placeholder="Yêu cầu khi sinh lại (tùy chọn) — vd: câu này sai kiến thức, đổi từ vựng khác…"
+                        className="flex-1 px-3 py-1.5 border border-outline rounded-lg text-xs outline-none focus:border-sumire-purple" />
+                      <Button variant="purple" size="sm" loading={d._regenLoading} onClick={() => regenOne(i)}>Sinh lại</Button>
+                    </div>
+                  )}
+                </>
+              )}
             </div>
           ))}
         </div>
       )}
     </Modal>
+  );
+}
+
+// ── Form sửa inline 1 câu nháp AI (trong modal, chưa ghi DB) ──
+function DraftEditForm({ draft, listening, onApply, onCancel }) {
+  const [q, setQ] = useState(() => ({
+    ...cleanDraft(draft),
+    options: [...(draft.options || [])],
+    option_translations: Array.isArray(draft.option_translations) ? [...draft.option_translations] : null,
+  }));
+  const setField = (k, v) => setQ(p => ({ ...p, [k]: v }));
+  const setOpt = (k, v) => setQ(p => { const o = [...p.options]; o[k] = v; return { ...p, options: o }; });
+  const setOptTrans = (k, v) => setQ(p => {
+    const t = Array.isArray(p.option_translations) ? [...p.option_translations] : p.options.map(() => '');
+    t[k] = v; return { ...p, option_translations: t };
+  });
+  // Tên nhóm radio riêng cho mỗi form (nhiều card có thể mở sửa cùng lúc)
+  const [radioName] = useState(() => `draft-correct-${Math.random().toString(36).slice(2)}`);
+  const valid = q.options.length >= 3 && q.options.every(o => String(o).trim())
+    && Number.isInteger(q.correct_index) && q.correct_index >= 0 && q.correct_index < q.options.length;
+
+  return (
+    <div className="space-y-2 text-sm">
+      <textarea value={q.question_text || ''} onChange={e => setField('question_text', e.target.value)} rows={2}
+        placeholder="Câu hỏi (để trống với dạng nghe không in đề chữ)"
+        className="w-full px-3 py-2 border border-outline rounded-lg text-sm outline-none focus:border-sumire-purple resize-y" />
+      <input value={q.translation_vi || ''} onChange={e => setField('translation_vi', e.target.value)}
+        placeholder="Bản dịch tiếng Việt của câu hỏi"
+        className="w-full px-3 py-1.5 border border-outline rounded-lg text-xs outline-none focus:border-sumire-purple" />
+      {listening && (
+        <textarea value={q.audio_transcript || ''} onChange={e => setField('audio_transcript', e.target.value)} rows={3}
+          placeholder="Transcript audio (script tiếng Nhật)"
+          className="w-full px-3 py-2 border border-outline rounded-lg text-xs outline-none focus:border-sumire-purple resize-y" />
+      )}
+      <div className="space-y-1.5">
+        {q.options.map((o, k) => (
+          <div key={k} className="flex items-center gap-2">
+            <input type="radio" name={radioName} checked={q.correct_index === k}
+              onChange={() => setField('correct_index', k)} title="Đáp án đúng" />
+            <div className="flex-1 space-y-0.5">
+              <input value={o} onChange={e => setOpt(k, e.target.value)} placeholder={`Lựa chọn ${k + 1}`}
+                className={`w-full px-3 py-1.5 border rounded-lg text-sm outline-none focus:border-sumire-purple ${q.correct_index === k ? 'border-green-400 bg-green-50/50' : 'border-outline'}`} />
+              <input value={q.option_translations?.[k] || ''} onChange={e => setOptTrans(k, e.target.value)}
+                placeholder="Dịch tiếng Việt (tùy chọn)"
+                className="w-full px-3 py-1 border border-outline/60 rounded-lg text-[11px] italic outline-none focus:border-sumire-purple" />
+            </div>
+          </div>
+        ))}
+      </div>
+      <textarea value={q.explanation || ''} onChange={e => setField('explanation', e.target.value)} rows={2}
+        placeholder="Giải thích đáp án (tiếng Việt)"
+        className="w-full px-3 py-2 border border-outline rounded-lg text-xs outline-none focus:border-sumire-purple resize-y" />
+      <div className="flex justify-end gap-2">
+        <Button variant="secondary" size="sm" onClick={onCancel}>Hủy</Button>
+        <Button size="sm" disabled={!valid} onClick={() => onApply({
+          ...q,
+          question_text: q.question_text?.trim() || null,
+          options: q.options.map(s => s.trim()),
+        })}>Áp dụng</Button>
+      </div>
+    </div>
   );
 }
 
