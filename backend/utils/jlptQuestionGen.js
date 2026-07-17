@@ -82,7 +82,8 @@ function translationRuleBlock(isListening, optCount) {
   return `\nMỗi câu phải có trường "translation_vi": bản dịch tiếng Việt tự nhiên của ${
     isListening ? 'nội dung audio (tóm tắt script) + câu hỏi' : 'câu hỏi'
   } — KHÔNG kèm bản dịch các lựa chọn ở đây.
-Mỗi câu phải có thêm trường "option_translations": mảng ĐÚNG ${optCount} chuỗi, là bản dịch tiếng Việt của từng lựa chọn theo đúng thứ tự.`;
+Mỗi câu phải có thêm trường "option_translations": mảng ĐÚNG ${optCount} chuỗi, là bản dịch tiếng Việt của từng lựa chọn theo đúng thứ tự.
+⚠️  NGÔN NGỮ BẮT BUỘC: "explanation", "translation_vi", "option_translations" phải viết bằng TIẾNG VIỆT — dành cho người học Việt Nam đọc, chỉ được chèn từ/cụm tiếng Nhật ngắn trong 「」khi trích dẫn. TUYỆT ĐỐI KHÔNG viết cả câu giải thích bằng tiếng Nhật.`;
 }
 
 function questionSchemaBlock(meta, { withPassage }) {
