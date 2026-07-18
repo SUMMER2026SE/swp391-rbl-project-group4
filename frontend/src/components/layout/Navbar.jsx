@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { useLang } from '../../contexts/LangContext';
@@ -8,6 +8,13 @@ export default function Navbar() {
   const { t } = useLang();
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
+
+  useEffect(() => {
+    const handleScroll = () => setScrolled(window.scrollY > 20);
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
 
   const handleLogout = async () => {
     await logout();
@@ -15,17 +22,16 @@ export default function Navbar() {
   };
 
   return (
-    <nav className="fixed top-0 w-full z-50 bg-white/80 backdrop-blur-md border-b border-outline/30 shadow-sm">
-      <div className="max-w-7xl mx-auto flex justify-between items-center px-6 py-4">
+    <nav className={`fixed top-0 w-full z-50 transition-all duration-300 ${scrolled ? 'bg-white/90 backdrop-blur-md shadow-sm border-b border-outline/20' : 'bg-transparent'}`}>
+      <div className={`max-w-7xl mx-auto flex justify-between items-center px-6 transition-all duration-300 ${scrolled ? 'py-3' : 'py-5'}`}>
         <Link to="/" className="font-display text-2xl font-bold text-tsubaki-red tracking-tight">
           Kizuna Nihongo
         </Link>
 
         {/* Desktop */}
         <div className="hidden md:flex gap-8 items-center">
-          <Link to="/#features" className="text-sm font-semibold text-tsubaki-red border-b-2 border-tsubaki-red pb-0.5">{t('nav.features')}</Link>
-          <Link to="/#courses" className="text-sm text-on-muted hover:text-tsubaki-red transition-colors">{t('nav.courses')}</Link>
-          <Link to="/#about" className="text-sm text-on-muted hover:text-tsubaki-red transition-colors">{t('nav.about')}</Link>
+          <a href="#path" className="text-sm font-semibold text-tsubaki-red border-b-2 border-tsubaki-red pb-0.5">{t('nav.features')}</a>
+          <a href="#footer" className="text-sm text-on-muted hover:text-tsubaki-red transition-colors">{t('nav.about')}</a>
           <div className="flex items-center gap-4">
             {user ? (
               <>
@@ -58,8 +64,8 @@ export default function Navbar() {
       {/* Mobile menu */}
       {menuOpen && (
         <div className="md:hidden bg-white border-t border-outline/30 px-6 py-4 flex flex-col gap-4">
-          <Link to="/#features" className="text-sm font-semibold text-tsubaki-red" onClick={() => setMenuOpen(false)}>{t('nav.features')}</Link>
-          <Link to="/#courses" className="text-sm text-on-muted" onClick={() => setMenuOpen(false)}>{t('nav.courses')}</Link>
+          <a href="#path" className="text-sm font-semibold text-tsubaki-red" onClick={() => setMenuOpen(false)}>{t('nav.features')}</a>
+          <a href="#footer" className="text-sm text-on-muted" onClick={() => setMenuOpen(false)}>{t('nav.about')}</a>
           {user ? (
             <>
               <Link to="/dashboard" className="text-sm text-on-muted" onClick={() => setMenuOpen(false)}>{t('nav.dashboard')}</Link>
