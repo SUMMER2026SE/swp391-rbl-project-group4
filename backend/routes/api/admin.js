@@ -327,6 +327,7 @@ router.put('/mock-exams/:id',             mock.updateExam);
 router.patch('/mock-exams/:id/publish',   mock.publishExam);
 router.delete('/mock-exams/:id',          mock.deleteExam);
 router.get('/mock-exams/:id/attempts',    mock.listExamAttempts);
+router.post('/mock-exams/:id/fill-from-bank', mock.fillFromBank);
 router.post('/mock-exams/:examId/sections',        mock.createSection);
 router.patch('/mock-sections/reorder',             mock.reorderSections);
 router.put('/mock-sections/:id',                   mock.updateSection);

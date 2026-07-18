@@ -495,6 +495,23 @@ exports.reorderQuestions = async (req, res) => {
 
 // ─── Import từ ngân hàng đề JLPT riêng (copy snapshot, không reference) ───────
 
+// Copy snapshot 1 câu bank → row mock_questions. bank_question_id chỉ là dấu vết
+// (không FK) để tính năng random ưu tiên câu chưa dùng — sửa/xóa bank không ảnh hưởng đề.
+function bankQuestionToRow(bq) {
+  return {
+    question_text:       bq.question_text,
+    image_url:           bq.image_url,
+    audio_url:           bq.audio_url,
+    audio_transcript:    bq.audio_transcript,
+    options:             bq.options,
+    correct_index:       bq.correct_index,
+    explanation:         bq.explanation,
+    translation_vi:      bq.translation_vi,
+    option_translations: bq.option_translations,
+    bank_question_id:    bq.id,
+  };
+}
+
 // POST /api/admin/mock-groups/:groupId/import-from-bank — body { question_ids: [...] }
 // Nguồn: jlpt_module.jlpt_bank_questions — copy đủ field (dịch/transcript/media).
 // Sửa bank sau này KHÔNG ảnh hưởng câu đã import vào đề (snapshot).
@@ -524,17 +541,7 @@ exports.importFromBank = async (req, res) => {
       }
       const msg = validateQuestionPayload(bq);
       if (msg) { skipped.push({ id: bq.id, reason: msg }); continue; }
-      rows.push({
-        question_text:       bq.question_text,
-        image_url:           bq.image_url,
-        audio_url:           bq.audio_url,
-        audio_transcript:    bq.audio_transcript,
-        options:             bq.options,
-        correct_index:       bq.correct_index,
-        explanation:         bq.explanation,
-        translation_vi:      bq.translation_vi,
-        option_translations: bq.option_translations,
-      });
+      rows.push(bankQuestionToRow(bq));
     }
     (question_ids.filter(id => !(bankQs || []).some(b => b.id === id)))
       .forEach(id => skipped.push({ id, reason: 'Không tìm thấy trong ngân hàng.' }));
@@ -551,6 +558,162 @@ exports.importFromBank = async (req, res) => {
     }
     res.json({ saved: saved.length, skipped, data: saved });
   } catch (err) { handleError(res, err, 'Không thể import câu hỏi.'); }
+};
+
+// Xáo trộn Fisher–Yates (không mutate mảng gốc)
+function shuffle(arr) {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+// POST /api/admin/mock-exams/:id/fill-from-bank
+// Rút NGẪU NHIÊN câu từ ngân hàng JLPT lấp các mondai còn thiếu câu so với blueprint.
+// Không đè câu đã có. Ưu tiên câu/nhóm bank CHƯA từng dùng ở đề nào (dấu vết
+// bank_question_id/bank_group_id); pool cạn mới lấy lại câu đã dùng (báo reused).
+exports.fillFromBank = async (req, res) => {
+  try {
+    const exam = await assertEditableExam(req.params.id);
+    const bp = BLUEPRINTS[exam.level];
+    const { isPassageType } = require('../utils/jlptBankImport');
+
+    const { data: sections, error: sErr } = await jlptDb.from('mock_exam_sections')
+      .select('id, position').eq('exam_id', exam.id).order('position');
+    if (sErr) throw sErr;
+    const sectionIds = (sections || []).map(s => s.id);
+    let groups = [];
+    if (sectionIds.length) {
+      const { data: g, error: gErr } = await jlptDb.from('mock_question_groups')
+        .select('id, section_id, position, mondai_number, mondai_type, score_category, bank_group_id')
+        .in('section_id', sectionIds).order('position');
+      if (gErr) throw gErr;
+      groups = g || [];
+    }
+    const groupIds = groups.map(g => g.id);
+    const countByGroup = {};
+    const maxPosByGroup = {};
+    // Bank ids đã có trong CHÍNH đề này — tuyệt đối không rút lại (tránh trùng câu trong 1 đề)
+    const inThisExamQ = new Set();
+    const inThisExamG = new Set();
+    groupIds.forEach(id => { countByGroup[id] = 0; maxPosByGroup[id] = 0; });
+    if (groupIds.length) {
+      const { data: qs, error: qErr } = await jlptDb.from('mock_questions')
+        .select('group_id, position, bank_question_id').in('group_id', groupIds);
+      if (qErr) throw qErr;
+      (qs || []).forEach(q => {
+        countByGroup[q.group_id] += 1;
+        maxPosByGroup[q.group_id] = Math.max(maxPosByGroup[q.group_id], q.position || 0);
+        if (q.bank_question_id) inThisExamQ.add(q.bank_question_id);
+      });
+    }
+    groups.forEach(g => { if (g.bank_group_id) inThisExamG.add(g.bank_group_id); });
+
+    // Số câu chuẩn theo "vị trí phần : dạng mondai" (giống publishExam)
+    const sectionPos = {};
+    (sections || []).forEach(s => { sectionPos[s.id] = s.position; });
+    const stdCount = {};
+    (bp?.sections || []).forEach((s, si) => {
+      s.groups.forEach(bg => { stdCount[`${si + 1}:${bg.mondai_type}`] = bg.question_count; });
+    });
+
+    // Dấu vết bank đã dùng ở MỌI đề — để ưu tiên phần tử chưa dùng (chống trùng giữa các đề)
+    const { data: usedQ, error: uqErr } = await jlptDb.from('mock_questions')
+      .select('bank_question_id').not('bank_question_id', 'is', null);
+    if (uqErr) throw uqErr;
+    const { data: usedG, error: ugErr } = await jlptDb.from('mock_question_groups')
+      .select('bank_group_id').not('bank_group_id', 'is', null);
+    if (ugErr) throw ugErr;
+    const usedQuestionIds = new Set((usedQ || []).map(r => r.bank_question_id));
+    const usedGroupIds    = new Set((usedG || []).map(r => r.bank_group_id));
+
+    const report = [];
+    for (const group of groups) {
+      const std = stdCount[`${sectionPos[group.section_id]}:${group.mondai_type}`];
+      const have = countByGroup[group.id] || 0;
+      const needed = Math.max((std || 0) - have, 0);
+      if (!needed) continue;
+      const entry = {
+        section_position: sectionPos[group.section_id],
+        mondai_number:    group.mondai_number,
+        mondai_type:      group.mondai_type,
+        needed, filled: 0, reused: 0, shortage: 0, needs_audio: 0,
+      };
+      report.push(entry);
+
+      if (isPassageType(group.mondai_type)) {
+        // Nhóm passage: chỉ fill khi mondai còn TRỐNG hẳn — không trộn passage bank với câu sẵn có
+        if (have > 0) {
+          entry.shortage = needed;
+          entry.note = 'Mondai đã có câu — không trộn thêm đoạn văn từ ngân hàng, cần bổ sung tay.';
+          continue;
+        }
+        const { data: bankGroups, error: bgErr } = await jlptDb.from('jlpt_bank_groups')
+          .select('*, jlpt_bank_questions(*)')
+          .eq('level', exam.level).eq('mondai_type', group.mondai_type);
+        if (bgErr) throw bgErr;
+        const candidates = (bankGroups || []).filter(bg =>
+          !inThisExamG.has(bg.id)
+          && bg.passage_text?.trim() && (bg.jlpt_bank_questions || []).some(q => !validateQuestionPayload(q)));
+        if (!candidates.length) { entry.shortage = needed; continue; }
+        const fresh = candidates.filter(bg => !usedGroupIds.has(bg.id));
+        const pick = shuffle(fresh.length ? fresh : candidates)[0];
+        const children = (pick.jlpt_bank_questions || [])
+          .filter(q => !validateQuestionPayload(q))
+          .sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+
+        const { error: gUpErr } = await jlptDb.from('mock_question_groups')
+          .update({ passage_text: pick.passage_text, image_url: pick.image_url || null, bank_group_id: pick.id })
+          .eq('id', group.id);
+        if (gUpErr) throw gUpErr;
+        const rows = children.map((bq, i) => ({ ...bankQuestionToRow(bq), group_id: group.id, position: i + 1 }));
+        const { error: insErr } = await jlptDb.from('mock_questions').insert(rows);
+        if (insErr) throw insErr;
+
+        usedGroupIds.add(pick.id); inThisExamG.add(pick.id);
+        children.forEach(c => { usedQuestionIds.add(c.id); inThisExamQ.add(c.id); });
+        entry.filled = rows.length;
+        if (!fresh.length) entry.reused = rows.length;
+        if (rows.length < needed) entry.shortage = needed - rows.length;
+      } else {
+        // Câu đơn (từ vựng/ngữ pháp) + nghe: rút từng câu độc lập
+        const { data: pool, error: pErr } = await jlptDb.from('jlpt_bank_questions')
+          .select('*').eq('level', exam.level).eq('mondai_type', group.mondai_type).is('group_id', null);
+        if (pErr) throw pErr;
+        const validPool = (pool || []).filter(q => !inThisExamQ.has(q.id) && !validateQuestionPayload(q));
+        const fresh = shuffle(validPool.filter(q => !usedQuestionIds.has(q.id)));
+        const used  = shuffle(validPool.filter(q => usedQuestionIds.has(q.id)));
+        const picks = fresh.slice(0, needed);
+        if (picks.length < needed) {
+          const extra = used.slice(0, needed - picks.length);
+          entry.reused = extra.length;
+          picks.push(...extra);
+        }
+        if (!picks.length) { entry.shortage = needed; continue; }
+
+        const base = maxPosByGroup[group.id] || 0;
+        const rows = picks.map((bq, i) => ({ ...bankQuestionToRow(bq), group_id: group.id, position: base + i + 1 }));
+        const { error: insErr } = await jlptDb.from('mock_questions').insert(rows);
+        if (insErr) throw insErr;
+
+        picks.forEach(p => { usedQuestionIds.add(p.id); inThisExamQ.add(p.id); });
+        entry.filled = rows.length;
+        entry.shortage = needed - rows.length;
+        if (group.score_category === 'listening')
+          entry.needs_audio = picks.filter(p => !p.audio_url).length;
+      }
+    }
+
+    const totals = report.reduce((t, e) => ({
+      filled:      t.filled + e.filled,
+      reused:      t.reused + e.reused,
+      shortage:    t.shortage + e.shortage,
+      needs_audio: t.needs_audio + e.needs_audio,
+    }), { filled: 0, reused: 0, shortage: 0, needs_audio: 0 });
+    res.json({ report, ...totals });
+  } catch (err) { handleError(res, err, 'Không thể lấp đầy đề từ ngân hàng.'); }
 };
 
 // ─── AI sinh nháp câu hỏi theo mondai ─────────────────────────────────────────
