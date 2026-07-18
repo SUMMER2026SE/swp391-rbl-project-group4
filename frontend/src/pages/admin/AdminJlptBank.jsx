@@ -180,11 +180,9 @@ function QuestionPanel({ level, type, listening, onChanged }) {
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="font-bold text-charcoal">{mondaiJa(type)} · {mondaiVi(type)} <span className="text-xs text-on-muted font-normal">({total} câu)</span></h2>
         <div className="flex items-center gap-2">
-          {!listening && (
-            <Button variant="secondary" size="sm" onClick={() => setShowImport(true)}>
-              <span className="material-symbols-outlined text-lg">upload_file</span> Nhập file
-            </Button>
-          )}
+          <Button variant="secondary" size="sm" onClick={() => setShowImport(true)}>
+            <span className="material-symbols-outlined text-lg">upload_file</span> Nhập file
+          </Button>
           <Button variant="purple" size="sm" onClick={() => setShowAi(true)}>
             <span className="material-symbols-outlined text-lg">smart_toy</span> AI sinh
           </Button>
@@ -240,7 +238,7 @@ function QuestionPanel({ level, type, listening, onChanged }) {
           onSaved={(n) => { setShowAi(false); setNotice(`Đã thêm ${n} câu vào ngân hàng.`); load(); onChanged(); }} />
       )}
       {showImport && (
-        <ImportFileModal level={level} type={type}
+        <ImportFileModal level={level} type={type} listening={listening}
           onClose={() => setShowImport(false)}
           onSaved={(n) => { setShowImport(false); setNotice(`Đã nhập ${n} câu từ file vào ngân hàng.`); load(); onChanged(); }} />
       )}
@@ -559,8 +557,8 @@ function QuestionFormModal({ level, type, listening, initial, groupId, onClose, 
   );
 }
 
-// ── Modal nhập câu từ file Excel/CSV vào bank (chỉ dạng câu đơn không passage/nghe) ──
-function ImportFileModal({ level, type, onClose, onSaved }) {
+// ── Modal nhập câu từ file Excel/CSV vào bank (câu đơn + dạng nghe; chưa hỗ trợ passage) ──
+function ImportFileModal({ level, type, listening, onClose, onSaved }) {
   const [file, setFile] = useState(null);
   const [parsing, setParsing] = useState(false);
   const [preview, setPreview] = useState(null);  // { valid: [{row, question}], errors, warnings, source }
@@ -619,6 +617,8 @@ function ImportFileModal({ level, type, onClose, onSaved }) {
           <Alert type="info">
             Nhập câu dạng <b>{mondaiJa(type)}</b> ({mondaiVi(type)}) cấp {level} từ file .xlsx/.csv.
             Tải file mẫu bên dưới, điền mỗi câu một dòng rồi upload — hệ thống sẽ kiểm tra và cho xem trước, chưa ghi vào ngân hàng.
+            {listening && <> Với dạng nghe, điền <b>script bài nghe</b> vào cột audio_transcript (nhãn 男：/女： mỗi lượt thoại);
+            file audio tạo sau bằng nút TTS hoặc upload ở từng câu.</>}
           </Alert>
           <button type="button" onClick={downloadTemplate}
             className="text-tsubaki-red font-semibold text-sm hover:underline flex items-center gap-1">
@@ -655,8 +655,9 @@ function ImportFileModal({ level, type, onClose, onSaved }) {
                     <div className="flex-1 text-sm">
                       <p className="font-semibold text-charcoal whitespace-pre-wrap">
                         <span className="text-[10px] text-on-muted font-normal mr-1.5">Dòng {v.row}</span>
-                        {v.question.question_text}
+                        {v.question.question_text || <span className="italic font-normal text-on-muted">(câu hỏi chỉ đọc trong bài nghe)</span>}
                       </p>
+                      {v.question.audio_transcript && <p className="text-xs text-blue-700 mt-1 whitespace-pre-wrap">🎧 {v.question.audio_transcript}</p>}
                       {v.question.translation_vi && <p className="text-xs text-emerald-700 mt-0.5">🇻🇳 {v.question.translation_vi}</p>}
                       <ul className="mt-1 space-y-0.5">
                         {v.question.options.map((o, k) => (

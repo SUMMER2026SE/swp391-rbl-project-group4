@@ -260,8 +260,8 @@ exports.aiGenerate = async (req, res) => {
 };
 
 // ─── Import Excel/CSV vào bank ────────────────────────────────────────────────
-// Đợt đầu chỉ dạng câu đơn không passage/không nghe. Luồng: tải template →
-// upload file (preview, KHÔNG ghi DB) → commit (ghi source='import').
+// Dạng câu đơn (từ vựng/ngữ pháp) + dạng nghe (transcript, audio tạo sau).
+// Luồng: tải template → upload file (preview, KHÔNG ghi DB) → commit (source='import').
 
 // GET /api/admin/jlpt-bank/import-template?level=&mondai_type= — file .xlsx mẫu
 exports.importTemplate = async (req, res) => {
