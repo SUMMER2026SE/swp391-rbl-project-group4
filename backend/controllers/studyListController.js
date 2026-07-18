@@ -164,7 +164,8 @@ async function loadOwnedPost(id, user, { allowAdmin = true } = {}) {
   if (!post) return { post: null, allowed: false };
   const isOwner = post.created_by === user.id;
   const isAdmin = user.user_metadata?.role === 'admin';
-  const allowed = isOwner || (allowAdmin && isAdmin);
+  const isAdminAuthoredPost = post.creator_type === 'admin';
+  const allowed = isOwner || (isAdmin && (allowAdmin || isAdminAuthoredPost));
   return { post, allowed };
 }
 

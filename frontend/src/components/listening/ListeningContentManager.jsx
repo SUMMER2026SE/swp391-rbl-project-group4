@@ -20,6 +20,13 @@ const SOURCES = [
   { key: 'youtube', icon: 'smart_display',     label: 'Link YouTube' },
 ];
 
+// Kiểu hiển thị theo loại thông báo (editor transcript gửi cả success/info, không chỉ error).
+const NOTICE_STYLE = {
+  error:   'text-red-600 bg-red-50',
+  success: 'text-emerald-700 bg-emerald-50',
+  info:    'text-on-muted bg-surface-low',
+};
+
 // onOpen(item): nếu cha truyền (trang học viên) → mở bằng player 3 tab (Nghe/Chép/Shadowing)
 // của trang đó. Không truyền (admin) → dùng play view nội bộ để xem trước.
 export default function ListeningContentManager({ admin = false, onOpen = null }) {
@@ -28,7 +35,7 @@ export default function ListeningContentManager({ admin = false, onOpen = null }
   const [quota, setQuota]     = useState(null);
   const [view, setView]       = useState('list'); // 'list' | 'create' | 'edit' | 'play'
   const [busy, setBusy]       = useState(false);
-  const [err, setErr]         = useState('');
+  const [notice, setNotice]   = useState(null);   // { type, msg }
   const [form, setForm]       = useState({ source_type: 'tts', title: '', level: 'N5', youtube_url: '', tts_text: '' });
   const [current, setCurrent] = useState(null);   // content đang sửa/nghe
   const [rows, setRows]       = useState([]);
@@ -52,7 +59,7 @@ export default function ListeningContentManager({ admin = false, onOpen = null }
 
   const startCreate = () => {
     setForm({ source_type: 'tts', title: '', level: 'N5', youtube_url: '', tts_text: '' });
-    setFileName(''); setErr(''); setView('create');
+    setFileName(''); setNotice(null); setView('create');
   };
 
   const pickSource = (key) => {
@@ -62,7 +69,7 @@ export default function ListeningContentManager({ admin = false, onOpen = null }
   };
 
   const submitCreate = async () => {
-    setErr(''); setBusy(true);
+    setNotice(null); setBusy(true);
     try {
       const fd = new FormData();
       fd.append('source_type', form.source_type);
@@ -72,7 +79,7 @@ export default function ListeningContentManager({ admin = false, onOpen = null }
       else if (form.source_type === 'tts') fd.append('transcript', form.tts_text);
       else {
         const file = fileRef.current?.files?.[0];
-        if (!file) { setErr('Chưa chọn file.'); setBusy(false); return; }
+        if (!file) { setNotice({ type: 'error', msg: 'Chưa chọn file.' }); setBusy(false); return; }
         fd.append('media', file);
       }
       const r = await api.post('/listening/content', fd, {
@@ -81,8 +88,8 @@ export default function ListeningContentManager({ admin = false, onOpen = null }
       refresh();
       openEditor(r.data);
     } catch (e) {
-      if (e.data?.error === 'quota_exceeded') setErr(e.data.message + (e.data.upgradeRequired ? ' Hãy nâng cấp Premium để tạo không giới hạn.' : ''));
-      else setErr(e.data?.error || e.message || 'Không thể tạo bài nghe.');
+      if (e.data?.error === 'quota_exceeded') setNotice({ type: 'error', msg: e.data.message + (e.data.upgradeRequired ? ' Hãy nâng cấp Premium để tạo không giới hạn.' : '') });
+      else setNotice({ type: 'error', msg: e.data?.error || e.message || 'Không thể tạo bài nghe.' });
     } finally { setBusy(false); }
   };
 
@@ -91,8 +98,8 @@ export default function ListeningContentManager({ admin = false, onOpen = null }
       const r = await api.get(`/listening/content/${item.id}`);
       setCurrent(r.data);
       setRows(segsToRows(r.data.segments));
-      setErr(''); setView('edit');
-    } catch (e) { setErr(e.data?.error || e.message); }
+      setNotice(null); setView('edit');
+    } catch (e) { setNotice({ type: 'error', msg: e.data?.error || e.message }); }
   };
 
   const openPlayer = async (item) => {
@@ -100,13 +107,13 @@ export default function ListeningContentManager({ admin = false, onOpen = null }
       const r = await api.get(`/listening/content/${item.id}`);
       setCurrent(r.data); setView('play');
       window.scrollTo({ top: 0, behavior: 'smooth' });
-    } catch (e) { setErr(e.data?.error || e.message); }
+    } catch (e) { setNotice({ type: 'error', msg: e.data?.error || e.message }); }
   };
 
   const saveEdit = async () => {
     const { segments, error } = rowsToSegments(rows);
-    if (error) { setErr(error); return; }
-    setBusy(true); setErr('');
+    if (error) { setNotice({ type: 'error', msg: error }); return; }
+    setBusy(true); setNotice(null);
     try {
       await api.put(`/listening/content/${current.id}`, {
         title: current.title, title_vi: current.title_vi, level: current.level,
@@ -114,7 +121,7 @@ export default function ListeningContentManager({ admin = false, onOpen = null }
         segments,
       });
       refresh(); setView('list'); setCurrent(null);
-    } catch (e) { setErr(e.data?.error || e.message); }
+    } catch (e) { setNotice({ type: 'error', msg: e.data?.error || e.message }); }
     finally { setBusy(false); }
   };
 
@@ -159,7 +166,7 @@ export default function ListeningContentManager({ admin = false, onOpen = null }
     return (
       <div className="space-y-4">
         <BackBtn />
-        {err && <div className="text-sm text-red-600 bg-red-50 rounded-xl px-3 py-2">{err}</div>}
+        {notice?.msg && <div className={`text-sm rounded-xl px-3 py-2 ${NOTICE_STYLE[notice.type] || NOTICE_STYLE.error}`}>{notice.msg}</div>}
         <div className="glass-card rounded-2xl p-4 space-y-3">
           <div className="grid grid-cols-3 gap-3">
             <div className="col-span-2">
@@ -188,7 +195,7 @@ export default function ListeningContentManager({ admin = false, onOpen = null }
             isYouTube={yt}
             previewMediaRef={previewRef}
             canTranscribe={!!mediaUrl}
-            onAlert={({ msg }) => setErr(msg)}
+            onAlert={setNotice}
             onTranscribe={mediaUrl ? (async () => (await api.post(`/listening/content/${current.id}/transcribe`, {}, { timeout: 300000 })).data) : null}
             onAiResult={(segs) => setRows(segsToRows(segs))}
           />
@@ -203,7 +210,7 @@ export default function ListeningContentManager({ admin = false, onOpen = null }
     return (
       <div className="space-y-4">
         <BackBtn />
-        {err && <div className="text-sm text-red-600 bg-red-50 rounded-xl px-3 py-2">{err}</div>}
+        {notice?.msg && <div className={`text-sm rounded-xl px-3 py-2 ${NOTICE_STYLE[notice.type] || NOTICE_STYLE.error}`}>{notice.msg}</div>}
         <div className="glass-card rounded-2xl p-4 space-y-4">
           <div>
             <label className="text-xs font-semibold text-on-muted mb-1 block">Nguồn tạo</label>

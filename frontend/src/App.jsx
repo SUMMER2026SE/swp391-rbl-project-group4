@@ -31,14 +31,11 @@ import Pricing              from './pages/student/Pricing';
 import SubscriptionStatus   from './pages/student/SubscriptionStatus';
 import BillingHistory       from './pages/student/BillingHistory';
 import MyCoursePurchases     from './pages/student/MyCoursePurchases';
-// import Classes      from './pages/student/Classes'; // HIDDEN
 import Quiz         from './pages/student/Quiz';
 import Dictionary   from './pages/student/Dictionary';
 import ReadingList   from './pages/student/ReadingList';
 import ReadingReader from './pages/student/ReadingReader';
 import LessonReadingView from './pages/student/LessonReadingView';
-import Exams        from './pages/student/Exams';
-import TakeExam     from './pages/student/TakeExam';
 import MockExamList    from './pages/student/MockExamList';
 import MockExamDetail  from './pages/student/MockExamDetail';
 import MockExamRoom    from './pages/student/MockExamRoom';
@@ -66,11 +63,8 @@ import UnitEditPage      from './pages/shared/UnitEditPage';
 import TeacherVocabulary from './pages/teacher/TeacherVocabulary';
 import TeacherKanji      from './pages/teacher/TeacherKanji';
 import TeacherGrammar    from './pages/teacher/TeacherGrammar';
-// import TeacherClasses    from './pages/teacher/TeacherClasses'; // HIDDEN
 import TeacherDictionary from './pages/teacher/TeacherDictionary';
 import TeacherQuestionBank from './pages/teacher/TeacherQuestionBank';
-import TeacherExams      from './pages/teacher/TeacherExams';
-import ExamEditor        from './pages/teacher/ExamEditor';
 import TeacherStudyLists from './pages/teacher/TeacherStudyLists';
 import TeacherListening  from './pages/teacher/TeacherListening';
 import TeacherEarnings   from './pages/teacher/TeacherEarnings';
@@ -84,10 +78,7 @@ import AdminLessonReadingView from './pages/admin/AdminLessonReadingView';
 import AdminQuizPreview from './pages/admin/AdminQuizPreview';
 import AdminVocabulary from './pages/admin/AdminVocabulary';
 import AdminKanji      from './pages/admin/AdminKanji';
-import AdminQuizzes      from './pages/admin/AdminQuizzes';
-import AdminSubmissions  from './pages/admin/AdminSubmissions';
 import AdminTeacherApplications from './pages/admin/AdminTeacherApplications';
-// import AdminClasses      from './pages/admin/AdminClasses'; // HIDDEN
 import AdminSystemStatus  from './pages/admin/AdminSystemStatus';
 import AdminQuestionBank       from './pages/admin/AdminQuestionBank';
 import AdminMockExams          from './pages/admin/AdminMockExams';
@@ -114,7 +105,6 @@ import AdminGrammarPoints      from './pages/admin/AdminGrammarPoints';
 
 import ChatPage from './pages/ChatPage';
 import AiAssistantBubble from './components/ai/AiAssistantBubble';
-// import ClassBoard from './pages/ClassBoard'; // HIDDEN
 
 // 404
 function NotFound() {
@@ -164,13 +154,10 @@ export default function App() {
             <Route path="/subscription"   element={<StudentRoute><SubscriptionStatus /></StudentRoute>} />
             <Route path="/billing"        element={<StudentRoute><BillingHistory /></StudentRoute>} />
             <Route path="/my-purchases"   element={<StudentRoute><MyCoursePurchases /></StudentRoute>} />
-            {/* <Route path="/classes"    element={<StudentRoute><Classes /></StudentRoute>} /> */}{/* HIDDEN */}
             <Route path="/quizzes/:id" element={<StudentRoute adminRedirectTo="/admin/quizzes/preview/:id" teacherRedirectTo="/teacher/quizzes/preview/:id"><Quiz /></StudentRoute>} />
             <Route path="/dictionary" element={<StudentRoute><Dictionary /></StudentRoute>} />
             <Route path="/reading"     element={<StudentRoute><ReadingList /></StudentRoute>} />
             <Route path="/reading/:id" element={<StudentRoute><ReadingReader /></StudentRoute>} />
-            <Route path="/exams"      element={<StudentRoute><Exams /></StudentRoute>} />
-            <Route path="/exams/:assignmentId" element={<StudentRoute><TakeExam /></StudentRoute>} />
             <Route path="/mock-exams"          element={<StudentRoute allowTeacher><MockExamList /></StudentRoute>} />
             <Route path="/mock-exams/history"  element={<StudentRoute allowTeacher><MockExamHistory /></StudentRoute>} />
             <Route path="/mock-exams/:id"      element={<StudentRoute allowTeacher><MockExamDetail /></StudentRoute>} />
@@ -187,7 +174,6 @@ export default function App() {
             <Route path="/profile"    element={<ProtectedRoute><Profile /></ProtectedRoute>} />
             <Route path="/chat"       element={<ProtectedRoute><ChatPage /></ProtectedRoute>} />
             <Route path="/teacher-application" element={<ProtectedRoute><TeacherApplication /></ProtectedRoute>} />
-            {/* <Route path="/classes/:id" element={<ProtectedRoute><ClassBoard /></ProtectedRoute>} /> */}{/* HIDDEN */}
 
             {/* Teacher (teacher + admin) */}
             <Route path="/teacher"       element={<TeacherRoute><TeacherDashboard /></TeacherRoute>} />
@@ -212,11 +198,8 @@ export default function App() {
             <Route path="/teacher/study-lists" element={<TeacherRoute><TeacherStudyLists /></TeacherRoute>} />
             <Route path="/teacher/listening" element={<TeacherRoute><TeacherListening /></TeacherRoute>} />
             <Route path="/teacher/earnings"  element={<TeacherRoute><TeacherEarnings /></TeacherRoute>} />
-            {/* <Route path="/teacher/classes"  element={<TeacherRoute><TeacherClasses /></TeacherRoute>} /> */}{/* HIDDEN */}
             <Route path="/teacher/dictionary" element={<TeacherRoute><TeacherDictionary /></TeacherRoute>} />
             <Route path="/teacher/question-bank" element={<TeacherRoute><TeacherQuestionBank /></TeacherRoute>} />
-            <Route path="/teacher/quizzes"       element={<TeacherRoute><TeacherExams /></TeacherRoute>} />
-            <Route path="/teacher/quizzes/:id"   element={<TeacherRoute><ExamEditor /></TeacherRoute>} />
             {/* Admin (admin only) */}
             <Route path="/admin"             element={<AdminRoute><AdminDashboard /></AdminRoute>} />
             <Route path="/admin/users"       element={<AdminRoute><AdminUsers /></AdminRoute>} />
@@ -229,10 +212,7 @@ export default function App() {
             <Route path="/admin/study-lists" element={<AdminRoute><AdminStudyLists /></AdminRoute>} />
             <Route path="/admin/kanji"        element={<AdminRoute><AdminKanji /></AdminRoute>} />
             <Route path="/admin/grammar-points" element={<AdminRoute><AdminGrammarPoints /></AdminRoute>} />
-            <Route path="/admin/quizzes"      element={<AdminRoute><AdminQuizzes /></AdminRoute>} />
-            <Route path="/admin/submissions" element={<AdminRoute><AdminSubmissions /></AdminRoute>} />
             <Route path="/admin/teacher-applications" element={<AdminRoute><AdminTeacherApplications /></AdminRoute>} />
-            {/* <Route path="/admin/classes"     element={<AdminRoute><AdminClasses /></AdminRoute>} /> */}{/* HIDDEN */}
             <Route path="/admin/system"     element={<AdminRoute><AdminSystemStatus /></AdminRoute>} />
             <Route path="/admin/questions"  element={<AdminRoute><AdminQuestionBank /></AdminRoute>} />
             <Route path="/admin/mock-exams"     element={<AdminRoute><AdminMockExams /></AdminRoute>} />

@@ -314,7 +314,8 @@ exports.adminListDialogues = async (req, res) => {
   if (e1) return res.status(500).json({ error: e1.message || 'Không tải được.' });
   if (e2) return res.status(500).json({ error: e2.message || 'Không tải được lines.' });
   const map = {};
-  (dlgs || []).forEach(d => { map[d.id] = { ...d, dialogue_lines: [] }; });
+  // Bảo vệ nội dung GV: trang quản lý của admin chỉ hiện hội thoại admin tạo (ẩn của giáo viên).
+  (dlgs || []).filter(d => d.creator_type !== 'teacher').forEach(d => { map[d.id] = { ...d, dialogue_lines: [] }; });
   (dlgLines || []).forEach(l => { if (map[l.dialogue_id]) map[l.dialogue_id].dialogue_lines.push(l); });
   res.json(Object.values(map));
 };
@@ -323,13 +324,30 @@ exports.adminCreateDialogue = async (req, res) => {
   const { title, title_vi, level, topic, thumbnail_icon } = req.body;
   if (!title || !level) return res.status(400).json({ error: 'Cần tiêu đề và cấp độ.' });
   const { data, error } = await dlg()
-    .insert({ title, title_vi, level, topic, thumbnail_icon: thumbnail_icon || 'headphones' })
+    .insert({ title, title_vi, level, topic, thumbnail_icon: thumbnail_icon || 'headphones', creator_type: 'admin' })
     .select().single();
   if (error) return res.status(500).json({ error: error.message || 'Không thể tạo hội thoại.' });
   res.json({ ...data, dialogue_lines: [] });
 };
 
+// Bảo vệ nội dung giáo viên: admin không được sửa/xóa hội thoại do GV tạo
+// (creator_type='teacher'). Hội thoại admin tạo (creator_type 'admin' hoặc null cũ) thì
+// mọi admin đều sửa được — giống quy tắc ở khóa học/bài đăng.
+const TEACHER_DLG_MSG = 'Không thể sửa hội thoại do giáo viên tạo.';
+async function isTeacherDialogue(id) {
+  const { data } = await dlg().select('creator_type').eq('id', id).single();
+  return data?.creator_type === 'teacher';
+}
+// Chặn thao tác line theo lineId; trả false + đã gửi response nếu không được phép.
+async function guardAdminLineByLineId(lineId, res) {
+  const { data: line } = await lines().select('dialogue_id').eq('id', lineId).single();
+  if (!line) { res.status(404).json({ error: 'Không tìm thấy câu.' }); return false; }
+  if (await isTeacherDialogue(line.dialogue_id)) { res.status(403).json({ error: TEACHER_DLG_MSG }); return false; }
+  return true;
+}
+
 exports.adminUpdateDialogue = async (req, res) => {
+  if (await isTeacherDialogue(req.params.id)) return res.status(403).json({ error: TEACHER_DLG_MSG });
   const { title, title_vi, level, topic, thumbnail_icon } = req.body;
   const { data, error } = await dlg()
     .update({ title, title_vi, level, topic, thumbnail_icon })
@@ -339,6 +357,7 @@ exports.adminUpdateDialogue = async (req, res) => {
 };
 
 exports.adminDeleteDialogue = async (req, res) => {
+  if (await isTeacherDialogue(req.params.id)) return res.status(403).json({ error: TEACHER_DLG_MSG });
   const { error } = await dlg().delete().eq('id', req.params.id);
   if (error) return res.status(500).json({ error: error.message || 'Không thể xóa.' });
   res.json({ ok: true });
@@ -378,6 +397,22 @@ exports.adminDeleteLine = async (req, res) => {
   const { error } = await lines().delete().eq('id', req.params.lineId);
   if (error) return res.status(500).json({ error: error.message || 'Không thể xóa câu.' });
   res.json({ ok: true });
+};
+
+// Route admin thêm/sửa/xóa câu: chặn hội thoại của giáo viên trước khi tái dùng core.
+// (Core adminAddLine/adminUpdateLine/adminDeleteLine còn được teacher tái dùng nên
+// không gắn guard trực tiếp vào đó.)
+exports.adminAddLineGuarded = async (req, res) => {
+  if (await isTeacherDialogue(req.params.id)) return res.status(403).json({ error: TEACHER_DLG_MSG });
+  return exports.adminAddLine(req, res);
+};
+exports.adminUpdateLineGuarded = async (req, res) => {
+  if (!(await guardAdminLineByLineId(req.params.lineId, res))) return;
+  return exports.adminUpdateLine(req, res);
+};
+exports.adminDeleteLineGuarded = async (req, res) => {
+  if (!(await guardAdminLineByLineId(req.params.lineId, res))) return;
+  return exports.adminDeleteLine(req, res);
 };
 
 // ── Teacher: own dialogue CRUD (created_by scoped) ────────────────────────────

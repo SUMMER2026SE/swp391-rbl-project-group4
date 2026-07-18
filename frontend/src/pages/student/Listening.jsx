@@ -335,17 +335,25 @@ function AudioListenTab({ audioUrl, segments }) {
 
 function AudioDictationTab({ audioUrl, segments }) {
   const audioRef = useRef(null);
+  const stopAtEndRef = useRef(null);   // listener tự-pause của đoạn đang phát (gỡ khi đổi đoạn/unmount)
   const [idx, setIdx]     = useState(0);
   const [input, setInput] = useState('');
   const [checked, setChecked] = useState(false);
   const [scores, setScores]   = useState([]);
   const [done, setDone]       = useState(false);
+  useEffect(() => () => { if (stopAtEndRef.current && audioRef.current) audioRef.current.removeEventListener('timeupdate', stopAtEndRef.current); }, []);
 
   if (!segments.length) return <p className="text-sm text-on-muted text-center py-12">Cần có transcript để luyện chính tả.</p>;
   const seg = segments[idx];
-  const playSegment = () => { if (!audioRef.current) return; audioRef.current.currentTime = seg.start; audioRef.current.play();
-    const check = () => { if (audioRef.current.currentTime >= seg.end) { audioRef.current.pause(); audioRef.current.removeEventListener('timeupdate', check); }};
-    audioRef.current.addEventListener('timeupdate', check); };
+  const playSegment = () => {
+    const el = audioRef.current;
+    if (!el) return;
+    if (stopAtEndRef.current) el.removeEventListener('timeupdate', stopAtEndRef.current);
+    el.currentTime = seg.start; el.play();
+    const check = () => { if (el.currentTime >= seg.end) { el.pause(); el.removeEventListener('timeupdate', check); stopAtEndRef.current = null; } };
+    stopAtEndRef.current = check;
+    el.addEventListener('timeupdate', check);
+  };
   const checkAnswer = () => { setScores(p => [...p, charSim(input.trim(), seg.text)]); setChecked(true); };
   const next = () => { if (idx+1>=segments.length) { setDone(true); return; } setIdx(i=>i+1); setInput(''); setChecked(false); };
   const reset = () => { setIdx(0); setInput(''); setChecked(false); setScores([]); setDone(false); };
@@ -391,17 +399,22 @@ function AudioDictationTab({ audioUrl, segments }) {
 
 function AudioShadowingTab({ audioUrl, segments }) {
   const audioRef = useRef(null);
+  const stopAtEndRef = useRef(null);   // listener tự-pause của đoạn đang phát (gỡ khi đổi đoạn/unmount)
   const [idx, setIdx]     = useState(0);
   const [scores, setScores] = useState({});
   const { recording, scoring, recErr, start, stop } = useRecorder(data => setScores(p => ({ ...p, [idx]: data })));
+  useEffect(() => () => { if (stopAtEndRef.current && audioRef.current) audioRef.current.removeEventListener('timeupdate', stopAtEndRef.current); }, []);
 
   if (!segments.length) return <p className="text-sm text-on-muted text-center py-12">Cần có transcript để luyện shadowing.</p>;
   const seg = segments[idx];
   const playSegment = () => {
-    if (!audioRef.current) return;
-    audioRef.current.currentTime = seg.start; audioRef.current.play();
-    const check = () => { if (audioRef.current.currentTime >= seg.end) { audioRef.current.pause(); audioRef.current.removeEventListener('timeupdate', check); }};
-    audioRef.current.addEventListener('timeupdate', check);
+    const el = audioRef.current;
+    if (!el) return;
+    if (stopAtEndRef.current) el.removeEventListener('timeupdate', stopAtEndRef.current);
+    el.currentTime = seg.start; el.play();
+    const check = () => { if (el.currentTime >= seg.end) { el.pause(); el.removeEventListener('timeupdate', check); stopAtEndRef.current = null; } };
+    stopAtEndRef.current = check;
+    el.addEventListener('timeupdate', check);
   };
 
   return (
