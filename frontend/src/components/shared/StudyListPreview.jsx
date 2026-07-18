@@ -253,6 +253,7 @@ export default function StudyListPreview({ type }) {
   );
 
   return (
+    <>
     <div className="mb-8">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-4">
         <h2 className="font-display text-lg font-bold flex items-center gap-2">
@@ -336,5 +337,6 @@ export default function StudyListPreview({ type }) {
     </div>
 
     {gatedPost && <PremiumGateModal post={gatedPost} onClose={() => setGatedPost(null)} />}
+    </>
   );
 }
