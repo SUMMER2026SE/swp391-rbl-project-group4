@@ -10,13 +10,17 @@ const { reconcilePendingOrders } = require('../services/paymentMatchingService')
  * Webhook key verification: SePay includes apiKey in the payload body.
  */
 async function sePayWebhook(req, res) {
-  // Verify webhook key
+  // Verify webhook key — FAIL CLOSED: thiếu key cấu hình thì từ chối, tuyệt đối không
+  // bỏ qua bước xác thực (nếu bỏ qua, bất kỳ ai cũng POST được giao dịch giả để tự
+  // cộng VIP / mua khóa học miễn phí). Cùng nguyên tắc với sepayClient.js.
   const webhookKey = process.env.SEPAY_WEBHOOK_KEY;
-  if (webhookKey) {
-    const provided = req.body?.apiKey || req.headers['authorization']?.replace('Apikey ', '');
-    if (provided !== webhookKey) {
-      return res.status(401).json({ error: 'Invalid webhook key.' });
-    }
+  if (!webhookKey) {
+    console.error('[webhook/sepay] SEPAY_WEBHOOK_KEY chưa cấu hình — từ chối webhook.');
+    return res.status(500).json({ error: 'Webhook chưa được cấu hình.' });
+  }
+  const provided = req.body?.apiKey || req.headers['authorization']?.replace('Apikey ', '');
+  if (provided !== webhookKey) {
+    return res.status(401).json({ error: 'Invalid webhook key.' });
   }
 
   const payload = req.body;

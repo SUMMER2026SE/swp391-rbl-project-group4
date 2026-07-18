@@ -1,14 +1,17 @@
 'use strict';
 
 const { supabaseAdmin } = require('../config/supabase');
-const { BLUEPRINTS, MONDAI_TYPES, SCORE_COLUMNS } = require('../utils/jlptMock');
+const { BLUEPRINTS, MONDAI_TYPES, SCORE_COLUMNS, validateQuestionPayload } = require('../utils/jlptMock');
+
+// Toàn bộ bảng mock_* nằm trong schema jlpt_module (migration 024)
+const jlptDb = supabaseAdmin.schema('jlpt_module');
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 // Đề đã publish là snapshot bất biến — chặn mọi sửa đổi nội dung.
 // Trả về exam row nếu còn sửa được, ném lỗi 400 nếu đã publish.
 async function assertEditableExam(examId) {
-  const { data: exam, error } = await supabaseAdmin
+  const { data: exam, error } = await jlptDb
     .from('mock_exams').select('id, level, is_published').eq('id', examId).single();
   if (error || !exam) { const e = new Error('Không tìm thấy đề thi.'); e.httpStatus = 404; throw e; }
   if (exam.is_published) {
@@ -19,14 +22,14 @@ async function assertEditableExam(examId) {
 }
 
 async function examIdOfSection(sectionId) {
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await jlptDb
     .from('mock_exam_sections').select('id, exam_id').eq('id', sectionId).single();
   if (error || !data) { const e = new Error('Không tìm thấy phần thi.'); e.httpStatus = 404; throw e; }
   return data.exam_id;
 }
 
 async function groupWithExamId(groupId) {
-  const { data: group, error } = await supabaseAdmin
+  const { data: group, error } = await jlptDb
     .from('mock_question_groups').select('*').eq('id', groupId).single();
   if (error || !group) { const e = new Error('Không tìm thấy mondai.'); e.httpStatus = 404; throw e; }
   const examId = await examIdOfSection(group.section_id);
@@ -34,28 +37,11 @@ async function groupWithExamId(groupId) {
 }
 
 async function examIdOfQuestion(questionId) {
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await jlptDb
     .from('mock_questions').select('id, group_id').eq('id', questionId).single();
   if (error || !data) { const e = new Error('Không tìm thấy câu hỏi.'); e.httpStatus = 404; throw e; }
   const { examId } = await groupWithExamId(data.group_id);
   return examId;
-}
-
-// Validate payload 1 câu hỏi mock (trắc nghiệm 3–4 lựa chọn theo chuẩn JLPT)
-function validateQuestionPayload(q) {
-  if (!Array.isArray(q.options) || q.options.length < 3 || q.options.length > 4)
-    return 'Mỗi câu phải có 3 hoặc 4 lựa chọn.';
-  if (q.options.some(o => typeof o !== 'string' || !o.trim()))
-    return 'Lựa chọn không được để trống.';
-  const ci = Number(q.correct_index);
-  if (!Number.isInteger(ci) || ci < 0 || ci >= q.options.length)
-    return 'Đáp án đúng (correct_index) không hợp lệ.';
-  if (q.option_translations != null) {
-    if (!Array.isArray(q.option_translations) || q.option_translations.length !== q.options.length
-        || q.option_translations.some(t => typeof t !== 'string'))
-      return 'Bản dịch lựa chọn (option_translations) phải là mảng chuỗi cùng số lượng với lựa chọn.';
-  }
-  return null;
 }
 
 function handleError(res, err, fallback) {
@@ -74,7 +60,7 @@ exports.listExams = async (req, res) => {
   const { level, is_published, search, page = 1, limit = 15 } = req.query;
   const offset = (page - 1) * limit;
   try {
-    let query = supabaseAdmin.from('mock_exams')
+    let query = jlptDb.from('mock_exams')
       .select('id, level, title, description, is_published, is_free, created_at, published_at', { count: 'exact' })
       .order('created_at', { ascending: false })
       .range(offset, offset + Number(limit) - 1);
@@ -90,24 +76,24 @@ exports.listExams = async (req, res) => {
     const counts = {};
     examIds.forEach(id => { counts[id] = { questions: 0, attempts: 0 }; });
     if (examIds.length) {
-      const { data: sections } = await supabaseAdmin
+      const { data: sections } = await jlptDb
         .from('mock_exam_sections').select('id, exam_id').in('exam_id', examIds);
       const sectionToExam = {};
       (sections || []).forEach(s => { sectionToExam[s.id] = s.exam_id; });
       const sectionIds = Object.keys(sectionToExam);
       if (sectionIds.length) {
-        const { data: groups } = await supabaseAdmin
+        const { data: groups } = await jlptDb
           .from('mock_question_groups').select('id, section_id').in('section_id', sectionIds);
         const groupToExam = {};
         (groups || []).forEach(g => { groupToExam[g.id] = sectionToExam[g.section_id]; });
         const groupIds = Object.keys(groupToExam);
         if (groupIds.length) {
-          const { data: qs } = await supabaseAdmin
+          const { data: qs } = await jlptDb
             .from('mock_questions').select('group_id').in('group_id', groupIds);
           (qs || []).forEach(q => { counts[groupToExam[q.group_id]].questions += 1; });
         }
       }
-      const { data: attempts } = await supabaseAdmin
+      const { data: attempts } = await jlptDb
         .from('mock_attempts').select('exam_id').in('exam_id', examIds);
       (attempts || []).forEach(a => { counts[a.exam_id].attempts += 1; });
     }
@@ -126,7 +112,7 @@ exports.createExam = async (req, res) => {
   if (!level || !BLUEPRINTS[level]) return res.status(400).json({ error: 'Cấp độ JLPT không hợp lệ.' });
   if (!title?.trim())               return res.status(400).json({ error: 'Tên đề thi là bắt buộc.' });
   try {
-    const { data: exam, error } = await supabaseAdmin.from('mock_exams')
+    const { data: exam, error } = await jlptDb.from('mock_exams')
       .insert({ level, title: title.trim(), description: description || null, created_by: req.user?.id })
       .select().single();
     if (error) throw error;
@@ -135,7 +121,7 @@ exports.createExam = async (req, res) => {
     const bp = BLUEPRINTS[level];
     for (let si = 0; si < bp.sections.length; si++) {
       const s = bp.sections[si];
-      const { data: section, error: sErr } = await supabaseAdmin.from('mock_exam_sections')
+      const { data: section, error: sErr } = await jlptDb.from('mock_exam_sections')
         .insert({ exam_id: exam.id, position: si + 1, section_type: s.section_type, title: s.title, time_limit_minutes: s.time_limit_minutes })
         .select('id').single();
       if (sErr) throw sErr;
@@ -147,7 +133,7 @@ exports.createExam = async (req, res) => {
         mondai_type:      g.mondai_type,
         score_category:   g.score_category,
       }));
-      const { error: gErr } = await supabaseAdmin.from('mock_question_groups').insert(groupRows);
+      const { error: gErr } = await jlptDb.from('mock_question_groups').insert(groupRows);
       if (gErr) throw gErr;
     }
     res.status(201).json(exam);
@@ -157,24 +143,24 @@ exports.createExam = async (req, res) => {
 // GET /api/admin/mock-exams/:id — full tree kèm đáp án (admin được xem)
 exports.getExam = async (req, res) => {
   try {
-    const { data: exam, error } = await supabaseAdmin
+    const { data: exam, error } = await jlptDb
       .from('mock_exams').select('*').eq('id', req.params.id).single();
     if (error || !exam) return res.status(404).json({ error: 'Không tìm thấy đề thi.' });
 
-    const { data: sections, error: sErr } = await supabaseAdmin
+    const { data: sections, error: sErr } = await jlptDb
       .from('mock_exam_sections').select('*').eq('exam_id', exam.id).order('position');
     if (sErr) throw sErr;
 
     const sectionIds = (sections || []).map(s => s.id);
     let groups = [], questions = [];
     if (sectionIds.length) {
-      const { data: g, error: gErr } = await supabaseAdmin
+      const { data: g, error: gErr } = await jlptDb
         .from('mock_question_groups').select('*').in('section_id', sectionIds).order('position');
       if (gErr) throw gErr;
       groups = g || [];
       const groupIds = groups.map(x => x.id);
       if (groupIds.length) {
-        const { data: q, error: qErr } = await supabaseAdmin
+        const { data: q, error: qErr } = await jlptDb
           .from('mock_questions').select('*').in('group_id', groupIds).order('position');
         if (qErr) throw qErr;
         questions = q || [];
@@ -203,12 +189,12 @@ exports.updateExam = async (req, res) => {
   if ('is_free' in updates) updates.is_free = !!updates.is_free;
   if (updates.level && !BLUEPRINTS[updates.level]) return res.status(400).json({ error: 'Cấp độ JLPT không hợp lệ.' });
   try {
-    const { data: exam } = await supabaseAdmin.from('mock_exams').select('id, is_published, level').eq('id', req.params.id).single();
+    const { data: exam } = await jlptDb.from('mock_exams').select('id, is_published, level').eq('id', req.params.id).single();
     if (!exam) return res.status(404).json({ error: 'Không tìm thấy đề thi.' });
     if (exam.is_published && (updates.level && updates.level !== exam.level))
       return res.status(400).json({ error: 'Không thể đổi cấp độ của đề đã xuất bản.' });
 
-    const { data, error } = await supabaseAdmin.from('mock_exams')
+    const { data, error } = await jlptDb.from('mock_exams')
       .update({ ...updates, updated_at: new Date().toISOString() })
       .eq('id', req.params.id).select().single();
     if (error) throw error;
@@ -220,13 +206,13 @@ exports.updateExam = async (req, res) => {
 exports.publishExam = async (req, res) => {
   const publish = !!req.body.publish;
   try {
-    const { data: exam } = await supabaseAdmin.from('mock_exams').select('id, level, is_published').eq('id', req.params.id).single();
+    const { data: exam } = await jlptDb.from('mock_exams').select('id, level, is_published').eq('id', req.params.id).single();
     if (!exam) return res.status(404).json({ error: 'Không tìm thấy đề thi.' });
 
     if (!publish) {
-      const { count } = await supabaseAdmin.from('mock_attempts')
+      const { count } = await jlptDb.from('mock_attempts')
         .select('id', { count: 'exact', head: true }).eq('exam_id', exam.id);
-      const { data, error } = await supabaseAdmin.from('mock_exams')
+      const { data, error } = await jlptDb.from('mock_exams')
         .update({ is_published: false, updated_at: new Date().toISOString() })
         .eq('id', exam.id).select().single();
       if (error) throw error;
@@ -238,19 +224,19 @@ exports.publishExam = async (req, res) => {
 
     // ── Validate trước khi publish ──
     const errors = [];
-    const { data: sections } = await supabaseAdmin
+    const { data: sections } = await jlptDb
       .from('mock_exam_sections').select('id, title, position').eq('exam_id', exam.id).order('position');
     if (!sections?.length) errors.push('Đề chưa có phần thi nào.');
 
     const sectionIds = (sections || []).map(s => s.id);
     let groups = [], questions = [];
     if (sectionIds.length) {
-      ({ data: groups } = await supabaseAdmin.from('mock_question_groups')
+      ({ data: groups } = await jlptDb.from('mock_question_groups')
         .select('id, section_id, mondai_number, mondai_type, score_category').in('section_id', sectionIds));
       groups = groups || [];
       const groupIds = groups.map(g => g.id);
       if (groupIds.length) {
-        ({ data: questions } = await supabaseAdmin.from('mock_questions')
+        ({ data: questions } = await jlptDb.from('mock_questions')
           .select('id, group_id, question_text, image_url, audio_url, options, correct_index').in('group_id', groupIds));
         questions = questions || [];
       }
@@ -318,7 +304,7 @@ exports.publishExam = async (req, res) => {
       }
     }
 
-    const { data, error } = await supabaseAdmin.from('mock_exams')
+    const { data, error } = await jlptDb.from('mock_exams')
       .update({ is_published: true, published_at: new Date().toISOString(), updated_at: new Date().toISOString() })
       .eq('id', exam.id).select().single();
     if (error) throw error;
@@ -329,11 +315,11 @@ exports.publishExam = async (req, res) => {
 // DELETE /api/admin/mock-exams/:id
 exports.deleteExam = async (req, res) => {
   try {
-    const { count } = await supabaseAdmin.from('mock_attempts')
+    const { count } = await jlptDb.from('mock_attempts')
       .select('id', { count: 'exact', head: true }).eq('exam_id', req.params.id);
     if (count > 0)
       return res.status(409).json({ error: `Đề đã có ${count} lượt làm, không thể xóa. Hãy gỡ xuất bản để ẩn đề.` });
-    const { error } = await supabaseAdmin.from('mock_exams').delete().eq('id', req.params.id);
+    const { error } = await jlptDb.from('mock_exams').delete().eq('id', req.params.id);
     if (error) throw error;
     res.json({ message: 'Đã xóa đề thi.' });
   } catch (err) { handleError(res, err, 'Không thể xóa đề thi.'); }
@@ -344,7 +330,7 @@ exports.listExamAttempts = async (req, res) => {
   const { page = 1, limit = 20 } = req.query;
   const offset = (page - 1) * limit;
   try {
-    const { data, error, count } = await supabaseAdmin.from('mock_attempts')
+    const { data, error, count } = await jlptDb.from('mock_attempts')
       .select('id, user_id, attempt_number, status, scores, total_score, passed, duration_seconds, started_at, submitted_at', { count: 'exact' })
       .eq('exam_id', req.params.id)
       .order('started_at', { ascending: false })
@@ -376,7 +362,7 @@ exports.updateSection = async (req, res) => {
   try {
     const examId = await examIdOfSection(req.params.id);
     await assertEditableExam(examId);
-    const { data, error } = await supabaseAdmin.from('mock_exam_sections')
+    const { data, error } = await jlptDb.from('mock_exam_sections')
       .update(updates).eq('id', req.params.id).select().single();
     if (error) throw error;
     res.json(data);
@@ -406,7 +392,7 @@ exports.updateGroup = async (req, res) => {
     if (!Object.keys(updates).length)
       return res.status(400).json({ error: 'Không có trường nào để cập nhật.' });
 
-    const { data, error } = await supabaseAdmin.from('mock_question_groups')
+    const { data, error } = await jlptDb.from('mock_question_groups')
       .update(updates).eq('id', group.id).select().single();
     if (error) throw error;
     res.json(data);
@@ -433,7 +419,7 @@ exports.createQuestions = async (req, res) => {
       const msg = validateQuestionPayload(questions[i]);
       if (msg) return res.status(400).json({ error: `Câu ${i + 1}: ${msg}` });
     }
-    const { data: last } = await supabaseAdmin.from('mock_questions')
+    const { data: last } = await jlptDb.from('mock_questions')
       .select('position').eq('group_id', group.id).order('position', { ascending: false }).limit(1);
     const base = last?.[0]?.position || 0;
     const rows = questions.map((q, i) => ({
@@ -449,7 +435,7 @@ exports.createQuestions = async (req, res) => {
       audio_transcript:    q.audio_transcript?.trim() || null,
       option_translations: q.option_translations || null,
     }));
-    const { data, error } = await supabaseAdmin.from('mock_questions').insert(rows).select();
+    const { data, error } = await jlptDb.from('mock_questions').insert(rows).select();
     if (error) throw error;
     res.status(201).json({ saved: data.length, data });
   } catch (err) { handleError(res, err, 'Không thể tạo câu hỏi.'); }
@@ -458,10 +444,10 @@ exports.createQuestions = async (req, res) => {
 // PUT /api/admin/mock-questions/:id
 exports.updateQuestion = async (req, res) => {
   try {
-    const { data: q } = await supabaseAdmin.from('mock_questions').select('*').eq('id', req.params.id).single();
+    const { data: q } = await jlptDb.from('mock_questions').select('*').eq('id', req.params.id).single();
     if (!q) return res.status(404).json({ error: 'Không tìm thấy câu hỏi.' });
     const { examId } = await groupWithExamId(q.group_id);
-    const { data: exam } = await supabaseAdmin.from('mock_exams').select('id, is_published').eq('id', examId).single();
+    const { data: exam } = await jlptDb.from('mock_exams').select('id, is_published').eq('id', examId).single();
     // Đề đã publish: chỉ cho sửa giải thích/bản dịch/transcript (không đổi nội dung/đáp án)
     const allowed = exam?.is_published
       ? ['explanation', 'translation_vi', 'option_translations', 'audio_transcript']
@@ -474,7 +460,7 @@ exports.updateQuestion = async (req, res) => {
     const msg = validateQuestionPayload(merged);
     if (msg) return res.status(400).json({ error: msg });
 
-    const { data, error } = await supabaseAdmin.from('mock_questions')
+    const { data, error } = await jlptDb.from('mock_questions')
       .update(updates).eq('id', q.id).select().single();
     if (error) throw error;
     res.json(data);
@@ -486,7 +472,7 @@ exports.deleteQuestion = async (req, res) => {
   try {
     const examId = await examIdOfQuestion(req.params.id);
     await assertEditableExam(examId);
-    const { error } = await supabaseAdmin.from('mock_questions').delete().eq('id', req.params.id);
+    const { error } = await jlptDb.from('mock_questions').delete().eq('id', req.params.id);
     if (error) throw error;
     res.json({ message: 'Đã xóa câu hỏi.' });
   } catch (err) { handleError(res, err, 'Không thể xóa câu hỏi.'); }
@@ -500,47 +486,54 @@ exports.reorderQuestions = async (req, res) => {
     const examId = await examIdOfQuestion(ids[0]);
     await assertEditableExam(examId);
     for (let i = 0; i < ids.length; i++) {
-      const { error } = await supabaseAdmin.from('mock_questions').update({ position: i + 1 }).eq('id', ids[i]);
+      const { error } = await jlptDb.from('mock_questions').update({ position: i + 1 }).eq('id', ids[i]);
       if (error) throw error;
     }
     res.json({ message: 'Đã sắp xếp lại.' });
   } catch (err) { handleError(res, err, 'Không thể sắp xếp câu hỏi.'); }
 };
 
-// ─── Import từ ngân hàng câu hỏi (copy snapshot, không reference) ─────────────
+// ─── Import từ ngân hàng đề JLPT riêng (copy snapshot, không reference) ───────
 
 // POST /api/admin/mock-groups/:groupId/import-from-bank — body { question_ids: [...] }
+// Nguồn: jlpt_module.jlpt_bank_questions — copy đủ field (dịch/transcript/media).
+// Sửa bank sau này KHÔNG ảnh hưởng câu đã import vào đề (snapshot).
 exports.importFromBank = async (req, res) => {
   const { question_ids } = req.body;
   if (!Array.isArray(question_ids) || !question_ids.length)
     return res.status(400).json({ error: 'Chọn ít nhất 1 câu hỏi để import.' });
   try {
     const { group, examId } = await groupWithExamId(req.params.groupId);
-    await assertEditableExam(examId);
+    const exam = await assertEditableExam(examId);
 
-    const { data: bankQs, error } = await supabaseAdmin.from('question_bank')
-      .select('id, question_text, question_type, options, correct_answer, explanation')
+    const { data: bankQs, error } = await jlptDb.from('jlpt_bank_questions')
+      .select('id, level, mondai_type, question_text, image_url, audio_url, audio_transcript, options, correct_index, explanation, translation_vi, option_translations')
       .in('id', question_ids);
     if (error) throw error;
 
     const skipped = [];
     const rows = [];
     for (const bq of bankQs || []) {
-      if (bq.question_type !== 'single_choice') {
-        skipped.push({ id: bq.id, reason: `Loại "${bq.question_type}" không dùng được cho đề JLPT (chỉ single_choice).` });
+      if (bq.level !== exam.level) {
+        skipped.push({ id: bq.id, reason: `Câu cấp ${bq.level} không khớp đề ${exam.level}.` });
         continue;
       }
-      const options = (Array.isArray(bq.options) ? bq.options : []).map(o => String(o).trim());
-      const correctIndex = options.findIndex(o => o === String(bq.correct_answer || '').trim());
-      if (options.length < 3 || options.length > 4 || correctIndex < 0) {
-        skipped.push({ id: bq.id, reason: 'Options/đáp án không khớp định dạng 3–4 lựa chọn.' });
+      if (bq.mondai_type !== group.mondai_type) {
+        skipped.push({ id: bq.id, reason: 'Dạng mondai không khớp với mondai đang soạn.' });
         continue;
       }
+      const msg = validateQuestionPayload(bq);
+      if (msg) { skipped.push({ id: bq.id, reason: msg }); continue; }
       rows.push({
-        question_text: bq.question_text,
-        options,
-        correct_index: correctIndex,
-        explanation:   bq.explanation || null,
+        question_text:       bq.question_text,
+        image_url:           bq.image_url,
+        audio_url:           bq.audio_url,
+        audio_transcript:    bq.audio_transcript,
+        options:             bq.options,
+        correct_index:       bq.correct_index,
+        explanation:         bq.explanation,
+        translation_vi:      bq.translation_vi,
+        option_translations: bq.option_translations,
       });
     }
     (question_ids.filter(id => !(bankQs || []).some(b => b.id === id)))
@@ -548,10 +541,10 @@ exports.importFromBank = async (req, res) => {
 
     let saved = [];
     if (rows.length) {
-      const { data: last } = await supabaseAdmin.from('mock_questions')
+      const { data: last } = await jlptDb.from('mock_questions')
         .select('position').eq('group_id', group.id).order('position', { ascending: false }).limit(1);
       const base = last?.[0]?.position || 0;
-      const { data, error: insErr } = await supabaseAdmin.from('mock_questions')
+      const { data, error: insErr } = await jlptDb.from('mock_questions')
         .insert(rows.map((r, i) => ({ ...r, group_id: group.id, position: base + i + 1 }))).select();
       if (insErr) throw insErr;
       saved = data;
@@ -562,22 +555,66 @@ exports.importFromBank = async (req, res) => {
 
 // ─── AI sinh nháp câu hỏi theo mondai ─────────────────────────────────────────
 
-// POST /api/admin/mock-groups/:groupId/ai-generate — body { count } → trả NHÁP, không ghi DB
+// Gom toàn bộ câu đã có của CẢ ĐỀ thành mảng chuỗi mô tả (câu hỏi → đáp án đúng)
+// để đưa vào prompt chống trùng lặp.
+async function existingQuestionSummaries(examId) {
+  const { data: sections, error } = await jlptDb.from('mock_exam_sections')
+    .select('id, mock_question_groups(id, mock_questions(question_text, options, correct_index, audio_transcript))')
+    .eq('exam_id', examId);
+  if (error) throw error;
+  const lines = [];
+  for (const s of sections || []) {
+    for (const g of s.mock_question_groups || []) {
+      for (const q of g.mock_questions || []) {
+        const answer = Array.isArray(q.options) ? q.options[q.correct_index] : '';
+        const text = q.question_text || (q.audio_transcript ? String(q.audio_transcript).slice(0, 80) : '');
+        if (text || answer) lines.push(`${text}${answer ? ` → ${answer}` : ''}`);
+      }
+    }
+  }
+  return lines;
+}
+
+// POST /api/admin/mock-groups/:groupId/ai-generate — body { count, topic, instruction } → trả NHÁP, không ghi DB
 exports.aiGenerateDrafts = async (req, res) => {
   const count = Math.min(Math.max(Number(req.body.count) || 5, 1), 15);
   try {
     const { group, examId } = await groupWithExamId(req.params.groupId);
-    const { data: exam } = await supabaseAdmin.from('mock_exams').select('id, level').eq('id', examId).single();
-    const { generateMondaiQuestions } = require('../utils/questionGen');
+    const { data: exam } = await jlptDb.from('mock_exams').select('id, level').eq('id', examId).single();
+    const { generateMondaiQuestions } = require('../utils/jlptQuestionGen');
     const result = await generateMondaiQuestions({
-      level:       exam.level,
-      mondaiType:  group.mondai_type,
+      level:             exam.level,
+      mondaiType:        group.mondai_type,
       count,
-      passageText: group.passage_text || '',
-      topic:       req.body.topic || '',
+      passageText:       group.passage_text || '',
+      topic:             req.body.topic || '',
+      instruction:       req.body.instruction || '',
+      existingQuestions: await existingQuestionSummaries(examId),
     });
     res.json(result);
   } catch (err) { handleError(res, err, 'Không thể sinh câu hỏi bằng AI.'); }
+};
+
+// POST /api/admin/mock-groups/:groupId/ai-regenerate-one
+// body { instruction, current_question, sibling_questions } → trả 1 câu NHÁP mới, không ghi DB
+exports.aiRegenerateOne = async (req, res) => {
+  try {
+    const { group, examId } = await groupWithExamId(req.params.groupId);
+    const { data: exam } = await jlptDb.from('mock_exams').select('id, level').eq('id', examId).single();
+    const siblings = Array.isArray(req.body.sibling_questions)
+      ? req.body.sibling_questions.map(s => String(s).slice(0, 200)).slice(0, 50)
+      : [];
+    const { regenerateOneQuestion } = require('../utils/jlptQuestionGen');
+    const result = await regenerateOneQuestion({
+      level:            exam.level,
+      mondaiType:       group.mondai_type,
+      instruction:      req.body.instruction || '',
+      currentQuestion:  req.body.current_question || {},
+      siblingQuestions: siblings,
+      passageText:      group.passage_text || '',
+    });
+    res.json(result);
+  } catch (err) { handleError(res, err, 'Không thể sinh lại câu hỏi bằng AI.'); }
 };
 
 // ─── Upload media ─────────────────────────────────────────────────────────────
@@ -612,7 +649,7 @@ exports.uploadImage = (req, res) => uploadToBucket(req, res, 'passage-images', '
 // POST /api/admin/mock-questions/:id/tts — đọc audio_transcript của câu → mp3 → gán audio_url
 exports.generateQuestionAudio = async (req, res) => {
   try {
-    const { data: q } = await supabaseAdmin.from('mock_questions')
+    const { data: q } = await jlptDb.from('mock_questions')
       .select('id, group_id, audio_transcript').eq('id', req.params.id).single();
     if (!q) return res.status(404).json({ error: 'Không tìm thấy câu hỏi.' });
     const { examId } = await groupWithExamId(q.group_id);
@@ -629,7 +666,7 @@ exports.generateQuestionAudio = async (req, res) => {
     }
 
     const url = await uploadBuffer('mock-exam-audio', buffer, 'audio/mpeg', 'mp3');
-    const { data, error } = await supabaseAdmin.from('mock_questions')
+    const { data, error } = await jlptDb.from('mock_questions')
       .update({ audio_url: url }).eq('id', q.id).select().single();
     if (error) throw error;
     res.json(data);

@@ -15,7 +15,10 @@ exports.list = async (req, res) => {
       .range(offset, offset + Number(limit) - 1);
 
     if (level)  query = query.eq('level', level);
-    if (search) query = query.or(`character.ilike.%${search}%,meaning_vi.ilike.%${search}%,han_viet.ilike.%${search}%`);
+    if (search) {
+      const safe = String(search).replace(/[,()%*]/g, ' ').trim();
+      if (safe) query = query.or(`character.ilike.%${safe}%,meaning_vi.ilike.%${safe}%,han_viet.ilike.%${safe}%`);
+    }
 
     const { data, error, count } = await query;
     if (error) throw error;

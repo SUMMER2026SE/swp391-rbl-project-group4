@@ -16,10 +16,8 @@ const TEACHER_LINKS = [
   // { to: '/teacher/reading',       icon: 'menu_book',     label: 'Luyện đọc' },
   { to: '/teacher/earnings',      icon: 'payments',      label: 'Thu nhập' },
   { to: '/teacher/dictionary',    icon: 'auto_stories',  label: 'Từ điển' },
-  { to: '/teacher/quizzes',       icon: 'quiz',          label: 'Bài kiểm tra' },
   { to: '/teacher/question-bank', icon: 'inventory_2',   label: 'Ngân hàng câu hỏi' },
-  // Ẩn khỏi sidebar theo yêu cầu (giữ nguyên route/API/component để bật lại sau)
-  // { to: '/teacher/classes',       icon: 'groups',        label: 'Lớp học' },
+  { to: '/mock-exams',            icon: 'fact_check',    label: 'Thi thử JLPT' },
   { to: '/chat',                  icon: 'smart_toy',     label: 'Trợ lý AI' },
   { to: '/profile',               icon: 'person',        label: 'Hồ sơ' },
 ];

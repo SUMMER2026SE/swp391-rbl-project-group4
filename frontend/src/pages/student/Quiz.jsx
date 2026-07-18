@@ -4,6 +4,7 @@ import StudentLayout from '../../components/layout/StudentLayout';
 import Button from '../../components/ui/Button';
 import Alert from '../../components/ui/Alert';
 import FuriganaText from '../../components/ui/FuriganaText';
+import PassageBlock from '../../components/question/PassageBlock';
 import api from '../../lib/api';
 import { useFullscreenLockdown, MAX_FULLSCREEN_VIOLATIONS } from '../../lib/useFullscreenLockdown';
 
@@ -39,6 +40,7 @@ export default function Quiz({ Layout = StudentLayout }) {
   const [lockedUntil, setLockedUntil] = useState(null); // strict fullscreen: bị khóa đến lúc nào
   const [kicked, setKicked]           = useState(false); // bị khóa ngay giữa lúc làm bài
   const [nowTs, setNowTs]             = useState(Date.now());
+  const [furigana, setFurigana] = useState(false);   // bật/tắt furigana cho câu hỏi + bài đọc/nghe
 
   const isStrictFs  = quiz?.strict_fullscreen === true;
   const lockdown    = useFullscreenLockdown(id, {
@@ -339,8 +341,17 @@ export default function Quiz({ Layout = StudentLayout }) {
         {/* Question */}
         {q && (
           <div className="glass-card rounded-2xl p-8">
-            <div className="mb-6">
-              <FuriganaText text={q.question} enabled={false} textClassName="font-display font-bold text-lg" block />
+            {q.passage_snapshot && <PassageBlock snapshot={q.passage_snapshot} furigana={furigana} className="mb-5" />}
+            <div className="flex justify-between items-start gap-4 mb-6">
+              <FuriganaText text={q.question} enabled={furigana} textClassName="font-display font-bold text-lg" block />
+              <button
+                type="button"
+                onClick={() => setFurigana(v => !v)}
+                title={furigana ? 'Ẩn furigana' : 'Hiển thị furigana'}
+                className={`shrink-0 inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-lg border font-medium transition-all select-none ${furigana ? 'bg-amber-100 border-amber-300 text-amber-700' : 'bg-white border-outline/60 text-on-muted hover:border-amber-300 hover:text-amber-600 hover:bg-amber-50'}`}>
+                <span className="font-bold" style={{ fontFamily: 'serif', fontSize: '13px' }}>あ</span>
+                ふりがな
+              </button>
             </div>
             {/* ── Single choice ── */}
             {(!q.question_type || q.question_type === 'single_choice') && (

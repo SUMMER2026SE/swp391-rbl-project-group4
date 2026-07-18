@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import StudentLayout from '../../components/layout/StudentLayout';
+import MockExamShell from '../../components/mockexam/MockExamShell';
 import Alert from '../../components/ui/Alert';
 import { formatDuration, JLPT_LEVELS, LEVEL_BADGE_CLASS } from '../../lib/mockExamConstants';
 import { getMockHistory } from '../../lib/mockExamApi';
@@ -23,7 +23,7 @@ export default function MockExamHistory() {
   const rows = filter ? history.filter(h => h.level === filter) : history;
 
   return (
-    <StudentLayout title="Lịch sử bài làm">
+    <MockExamShell title="Lịch sử bài làm">
       <div className="max-w-4xl mx-auto space-y-6">
         <div className="flex items-center justify-between">
           <h1 className="font-display text-2xl font-bold text-charcoal">Lịch sử bài làm</h1>
@@ -92,6 +92,6 @@ export default function MockExamHistory() {
           </div>
         </>)}
       </div>
-    </StudentLayout>
+    </MockExamShell>
   );
 }

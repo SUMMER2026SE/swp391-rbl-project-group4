@@ -7,6 +7,8 @@ import Button from '../../components/ui/Button';
 import Stars from '../../components/ui/Stars';
 import { useAuth } from '../../contexts/AuthContext';
 import { formatVnd, formatCount } from '../../lib/format';
+import { ReceiptButton } from '../../components/receipt/Receipt';
+import { usePageContext } from '../../contexts/PageContext';
 import api, { enrollCourse, getCourseReviews, createReview, updateReview, deleteReview } from '../../lib/api';
 
 const LEVEL_BADGE = {
@@ -48,12 +50,15 @@ const REVIEW_PAGE_SIZE = 5;
 
 // Modal thanh toán SePay cho khóa có phí — mirror CheckoutModal của premium
 // (SubscriptionStatus.jsx): tạo order → hiện QR → polling trạng thái → paid thì vào học.
-function CoursePaymentModal({ courseId, onClose, onSuccess }) {
+function CoursePaymentModal({ courseId, courseTitle, buyer, onClose, onSuccess }) {
   const [order, setOrder]       = useState(null);
+  const [paidOrder, setPaidOrder] = useState(null);
   const [loading, setLoading]   = useState(true);
   const [error, setError]       = useState(null);
   const [status, setStatus]     = useState('pending'); // pending | paid | expired
   const [timeLeft, setTimeLeft] = useState(0);
+  const [qrError, setQrError]   = useState(false); // QR không tải được (mạng chặn / thiếu cấu hình)
+  useEffect(() => { setQrError(false); }, [order?.qr_url]);
   const pollRef = useRef(null);
 
   // Create/fetch order
@@ -81,7 +86,7 @@ function CoursePaymentModal({ courseId, onClose, onSuccess }) {
         if (s && s !== 'pending') {
           clearInterval(pollRef.current);
           setStatus(s);
-          if (s === 'paid') setTimeout(onSuccess, 1500);
+          if (s === 'paid') setPaidOrder(r.data.order);
         }
       } catch (_) {}
     }, 5000);
@@ -134,16 +139,34 @@ function CoursePaymentModal({ courseId, onClose, onSuccess }) {
               <p className="text-on-muted text-sm">Quét mã QR hoặc chuyển khoản theo thông tin bên dưới</p>
             </div>
 
-            {/* QR code */}
-            <div className="flex justify-center mb-5">
-              <img src={order.qr_url} alt="QR Thanh toán"
-                className="w-52 h-52 border-4 border-amber-300 rounded-2xl object-contain bg-white"
-                onError={(e) => { e.target.style.display = 'none'; }}
-              />
-            </div>
+            {/* QR code — QR lỗi (mạng chặn / thiếu cấu hình) thì hướng dẫn chuyển khoản thủ công */}
+            {order.qr_url && !qrError ? (
+              <div className="flex justify-center mb-5">
+                <img src={order.qr_url} alt="QR Thanh toán"
+                  className="w-52 h-52 border-4 border-amber-300 rounded-2xl object-contain bg-white"
+                  onError={() => setQrError(true)}
+                />
+              </div>
+            ) : (
+              <div className="mb-5 text-center text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
+                Không tải được mã QR. Vui lòng chuyển khoản thủ công theo thông tin bên dưới.
+              </div>
+            )}
 
-            {/* Transfer info */}
+            {/* Transfer info — luôn hiển thị để chuyển khoản thủ công được kể cả khi QR lỗi */}
             <div className="bg-amber-50 rounded-xl p-4 space-y-2 text-sm mb-4">
+              {order.bank_code && (
+                <div className="flex justify-between items-center gap-2">
+                  <span className="text-on-muted">Ngân hàng</span>
+                  <span className="font-bold text-amber-800">{order.bank_code}</span>
+                </div>
+              )}
+              {order.account_number && (
+                <div className="flex justify-between items-center gap-2">
+                  <span className="text-on-muted">Số tài khoản</span>
+                  <span className="font-mono font-bold bg-amber-100 px-2 py-0.5 rounded text-amber-800 select-all">{order.account_number}</span>
+                </div>
+              )}
               <div className="flex justify-between">
                 <span className="text-on-muted">Số tiền</span>
                 <span className="font-bold text-amber-700">{Number(order.amount).toLocaleString('vi-VN')}₫</span>
@@ -168,10 +191,30 @@ function CoursePaymentModal({ courseId, onClose, onSuccess }) {
         )}
 
         {status === 'paid' && (
-          <div className="text-center py-8">
-            <span className="material-symbols-outlined text-6xl text-emerald-500 mb-4 block">check_circle</span>
-            <h3 className="font-display text-2xl font-bold mb-2">Thanh toán thành công!</h3>
-            <p className="text-on-muted">Bạn đã sở hữu khóa học. Chúc bạn học tốt!</p>
+          <div className="text-center py-6">
+            <span className="material-symbols-outlined text-6xl text-emerald-500 mb-3 block">check_circle</span>
+            <h3 className="font-display text-2xl font-bold mb-1">Thanh toán thành công!</h3>
+            <p className="text-on-muted mb-5">Bạn đã sở hữu khóa học. Chúc bạn học tốt!</p>
+            <div className="flex flex-col gap-2 items-center">
+              <ReceiptButton
+                data={{
+                  type: 'course', typeLabel: 'Khóa học',
+                  buyerName: buyer?.name, buyerEmail: buyer?.email,
+                  itemName: courseTitle,
+                  amount: paidOrder?.amount ?? order?.amount,
+                  currency: paidOrder?.currency || 'VND',
+                  orderCode: paidOrder?.order_code || order?.order_code,
+                  paymentCode: paidOrder?.payment_code || order?.payment_code,
+                  paidAt: paidOrder?.paid_at || new Date().toISOString(),
+                }}
+                filename={`bien-lai-${paidOrder?.order_code || order?.order_code || 'khoahoc'}.pdf`}
+                className="w-full"
+              />
+              <button onClick={onSuccess}
+                className="w-full px-6 py-3 bg-amber-400 hover:bg-amber-500 text-white rounded-xl font-semibold transition-colors">
+                Vào học ngay
+              </button>
+            </div>
           </div>
         )}
 
@@ -238,6 +281,17 @@ export default function CourseDetail({ Layout = StudentLayout, backTo = '/course
   const [enrollModal, setEnrollModal] = useState(false); // modal xác nhận khóa miễn phí
   const [showPayment, setShowPayment] = useState(false); // modal QR SePay khóa có phí
   const [enrolling, setEnrolling]     = useState(false);
+
+  // Cho trợ lý AI biết đang xem khoá học nào
+  usePageContext({
+    tab: 'Chi tiết khóa học',
+    title: course?.title,
+    data: course ? {
+      courseId: course.id, level: course.level, is_free: course.is_free,
+      price: course.price, enrolled, progress_pct: course.progress_pct,
+      units: (course.units || []).length,
+    } : null,
+  }, [course, enrolled]);
   const [expanded, setExpanded]       = useState(() => new Set());
 
   // Reviews — tải toàn bộ một lần, phân trang client-side để tối ưu optimistic update.
@@ -767,6 +821,8 @@ export default function CourseDetail({ Layout = StudentLayout, backTo = '/course
       {showPayment && (
         <CoursePaymentModal
           courseId={id}
+          courseTitle={course?.title}
+          buyer={{ name: user?.user_metadata?.full_name || user?.email, email: user?.email }}
           onClose={() => setShowPayment(false)}
           onSuccess={handlePaymentSuccess}
         />

@@ -17,4 +17,14 @@ const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
   db: { schema: 'public' },
 });
 
-module.exports = { supabase, supabaseAdmin };
+// updateUserById GHI ĐÈ toàn bộ user_metadata — helper này đọc metadata hiện tại
+// rồi merge patch vào, tránh làm mất role/full_name/avatar_url.
+async function updateUserMetadata(userId, patch) {
+  const { data, error } = await supabaseAdmin.auth.admin.getUserById(userId);
+  if (error) return { data: null, error };
+  return supabaseAdmin.auth.admin.updateUserById(userId, {
+    user_metadata: { ...data.user.user_metadata, ...patch },
+  });
+}
+
+module.exports = { supabase, supabaseAdmin, updateUserMetadata };

@@ -13,6 +13,7 @@ import GrammarItemCard from '../../components/shared/GrammarItemCard';
 import SyncedVideoTranscript from '../../components/shared/SyncedVideoTranscript';
 import api from '../../lib/api';
 import { renderMarkdown } from '../../lib/renderPreview';
+import { usePageContext } from '../../contexts/PageContext';
 
 function toEmbed(url) {
   if (!url) return null;
@@ -59,6 +60,16 @@ export default function LessonView({ Layout = StudentLayout, previewBase = '' })
   const [working, setWorking] = useState(false);
   const [writingOpen, setWritingOpen] = useState(false); // modal luyện viết kanji
   const [pdfOpen, setPdfOpen] = useState(false);         // panel tạo PDF luyện viết
+
+  // Cho trợ lý AI biết đang học bài nào
+  usePageContext({
+    tab: 'Bài học',
+    title: lesson?.title,
+    data: lesson ? {
+      lessonId: lesson.id, courseId: lesson.course_id, lesson_type: lesson.lesson_type,
+      completed: lesson.completed, hasQuiz: !!lesson.quiz,
+    } : null,
+  }, [lesson]);
 
   // Chọn vocab/kanji để thêm vào flashcard cá nhân. Key: `v-<id>` | `k-<id>`.
   const [selecting, setSelecting] = useState(false); // bật/tắt chế độ chọn (hiện checkbox)

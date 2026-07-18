@@ -1,7 +1,8 @@
 'use strict';
 
-const { supabaseAdmin } = require('../config/supabase');
+const { supabaseAdmin, updateUserMetadata } = require('../config/supabase');
 const { validateThreshold } = require('../services/passThreshold');
+const { snapshotsForBankRows } = require('../utils/passageSnapshot');
 
 // Bảng quiz đã chuyển sang schema exam_module (question_bank/users vẫn ở public)
 const examDb = supabaseAdmin.schema('exam_module');
@@ -33,40 +34,77 @@ exports.getStats = async (req, res) => {
   }
 };
 
+// POST /api/admin/test-receipt-email — gửi biên lai mẫu tới email của chính admin
+// (dùng ở tab "Hoạt động hệ thống" để kiểm tra SMTP + mẫu biên lai)
+exports.testReceiptEmail = async (req, res) => {
+  const type = req.body?.type === 'subscription' ? 'subscription' : 'course';
+  const to = req.user.email;
+  if (!to) return res.status(400).json({ error: 'Tài khoản admin không có email.' });
+  try {
+    const { sendReceiptEmail } = require('../config/mailer');
+    await sendReceiptEmail(to, {
+      typeLabel:   type === 'course' ? 'Khóa học' : 'Gói',
+      itemName:    type === 'course' ? 'Khóa học tiếng Nhật N5 cơ bản (mẫu)' : 'Premium 1 tháng (mẫu)',
+      amount:      type === 'course' ? 499000 : 100000,
+      currency:    'VND',
+      orderCode:   type === 'course' ? 'CRS-TEST-000001' : 'SUB-TEST-000001',
+      paymentCode: type === 'course' ? 'COURSETEST01' : 'PREMTEST01',
+      paidAt:      new Date().toISOString(),
+      buyerName:   req.user.user_metadata?.full_name || to,
+    });
+    res.json({ message: `Đã gửi biên lai thử tới ${to}.` });
+  } catch (err) {
+    console.error('testReceiptEmail error:', err.message);
+    res.status(500).json({ error: err.message || 'Không gửi được email. Kiểm tra cấu hình SMTP.' });
+  }
+};
+
 // ── Users ────────────────────────────────────────────────────────────────────
+const USER_ROLES = ['student', 'teacher', 'admin'];
+
+// Mật khẩu phải ≥ 8 ký tự và chứa cả chữ cái lẫn số. Trả về chuỗi lỗi hoặc null.
+function validatePassword(password) {
+  if (!password || password.length < 8) return 'Mật khẩu phải có ít nhất 8 ký tự.';
+  if (!/[A-Za-z]/.test(password) || !/[0-9]/.test(password))
+    return 'Mật khẩu phải chứa cả chữ cái và số.';
+  return null;
+}
+
+// GET /api/admin/users
 exports.listUsers = async (req, res) => {
-  const { search, page = 1, limit = 20 } = req.query;
-  const offset = (Number(page) - 1) * Number(limit);
+  const { search } = req.query;
+  const page  = Math.max(1, Number(req.query.page) || 1);
+  const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 20));
+  const offset = (page - 1) * limit;
   try {
     let query = supabaseAdmin.from('users')
       .select('id,full_name,email,phone,avatar_url,created_at', { count: 'exact' })
       .order('created_at', { ascending: false })
-      .range(offset, offset + Number(limit) - 1);
-    if (search) query = query.or(`full_name.ilike.%${search}%,email.ilike.%${search}%`);
+      .range(offset, offset + limit - 1);
+    const safe = search ? String(search).replace(/[,()%*]/g, ' ').trim() : '';
+    if (safe) query = query.or(`full_name.ilike.%${safe}%,email.ilike.%${safe}%`);
     const { data, error, count } = await query;
     if (error) throw error;
 
-    // Enrich with role from auth.users metadata
-    const roleMap = {};
-    if (data && data.length > 0) {
-      const { data: authData } = await supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 1000 });
-      const ids = new Set(data.map(u => u.id));
-      (authData?.users || []).forEach(u => {
-        if (ids.has(u.id)) roleMap[u.id] = u.user_metadata?.role || 'student';
-      });
-    }
-
-    const enriched = (data || []).map(u => ({ ...u, role: roleMap[u.id] || 'student' }));
-    res.json({ data: enriched, total: count, page: Number(page), limit: Number(limit) });
+    // Enrich role từ auth metadata — chỉ lấy đúng các user đang hiển thị (tối đa
+    // `limit`), tránh fetch cả bảng auth và tránh sai role với user thứ 1001+.
+    const enriched = await Promise.all((data || []).map(async (u) => {
+      const { data: authUser } = await supabaseAdmin.auth.admin.getUserById(u.id);
+      return { ...u, role: authUser?.user?.user_metadata?.role || 'student' };
+    }));
+    res.json({ data: enriched, total: count, page, limit });
   } catch (err) {
     console.error('List users error:', err);
     res.status(500).json({ error: 'Không thể tải danh sách.' });
   }
 };
 
+// GET /api/admin/users/:id
 exports.getUser = async (req, res) => {
   try {
-    const { data, error } = await supabaseAdmin.from('users').select('*').eq('id', req.params.id).single();
+    const { data, error } = await supabaseAdmin.from('users')
+      .select('id,full_name,email,phone,avatar_url,created_at,updated_at')
+      .eq('id', req.params.id).single();
     if (error || !data) return res.status(404).json({ error: 'Không tìm thấy.' });
     res.json(data);
   } catch (err) {
@@ -74,35 +112,56 @@ exports.getUser = async (req, res) => {
   }
 };
 
+// PUT /api/admin/users/:id
 exports.updateUser = async (req, res) => {
   const { full_name, phone, role } = req.body;
+
+  if (role !== undefined && !USER_ROLES.includes(role))
+    return res.status(400).json({ error: 'Vai trò không hợp lệ.' });
+  // Không cho admin tự hạ quyền của chính mình → tránh khóa mình ra khỏi panel.
+  if (role !== undefined && req.params.id === req.user.id && role !== 'admin')
+    return res.status(400).json({ error: 'Không thể tự hạ quyền admin của chính mình.' });
+
   try {
     const updates = {};
     if (full_name !== undefined) updates.full_name = full_name;
     if (phone     !== undefined) updates.phone     = phone;
-    await supabaseAdmin.from('users').update(updates).eq('id', req.params.id);
+    if (Object.keys(updates).length > 0) {
+      updates.updated_at = new Date().toISOString();
+      const { error } = await supabaseAdmin.from('users').update(updates).eq('id', req.params.id);
+      if (error) throw error;
+    }
     if (role !== undefined) {
-      await supabaseAdmin.auth.admin.updateUserById(req.params.id, { user_metadata: { role } });
+      // updateUserMetadata spread metadata cũ → không mất full_name/avatar_url của user Google.
+      const { error } = await updateUserMetadata(req.params.id, { role });
+      if (error) throw error;
     }
     res.json({ message: 'Đã cập nhật.' });
   } catch (err) {
+    console.error('Update user error:', err);
     res.status(500).json({ error: 'Không thể cập nhật.' });
   }
 };
 
+// DELETE /api/admin/users/:id
 exports.deleteUser = async (req, res) => {
+  if (req.params.id === req.user.id)
+    return res.status(400).json({ error: 'Không thể xóa tài khoản của chính mình.' });
   try {
-    await supabaseAdmin.auth.admin.deleteUser(req.params.id);
+    const { error } = await supabaseAdmin.auth.admin.deleteUser(req.params.id);
+    if (error) throw error;
     res.json({ message: 'Đã xóa người dùng.' });
   } catch (err) {
+    console.error('Delete user error:', err);
     res.status(500).json({ error: 'Không thể xóa.' });
   }
 };
 
+// PUT /api/admin/users/:id/password
 exports.resetUserPassword = async (req, res) => {
   const { password } = req.body;
-  if (!password || password.length < 8)
-    return res.status(400).json({ error: 'Mật khẩu phải có ít nhất 8 ký tự.' });
+  const pwErr = validatePassword(password);
+  if (pwErr) return res.status(400).json({ error: pwErr });
   try {
     const { error } = await supabaseAdmin.auth.admin.updateUserById(req.params.id, { password });
     if (error) throw error;
@@ -646,7 +705,10 @@ exports.listVocab = async (req, res) => {
       .order('created_at', { ascending: true })
       .range(offset, offset + Number(limit) - 1);
     if (level)  q = q.eq('level', level);
-    if (search) q = q.or(`kanji.ilike.%${search}%,reading.ilike.%${search}%,meaning_vi.ilike.%${search}%`);
+    if (search) {
+      const safe = String(search).replace(/[,()%*]/g, ' ').trim();
+      if (safe) q = q.or(`kanji.ilike.%${safe}%,reading.ilike.%${safe}%,meaning_vi.ilike.%${safe}%`);
+    }
     const { data, error, count } = await q;
     if (error) throw error;
     res.json({ data: data || [], total: count || 0 });
@@ -816,7 +878,10 @@ exports.listGrammarPoints = async (req, res) => {
       .order('created_at', { ascending: true })
       .range(offset, offset + Number(limit) - 1);
     if (level)  q = q.eq('level', level);
-    if (search) q = q.or(`title.ilike.%${search}%,meaning_vi.ilike.%${search}%`);
+    if (search) {
+      const safe = String(search).replace(/[,()%*]/g, ' ').trim();
+      if (safe) q = q.or(`title.ilike.%${safe}%,meaning_vi.ilike.%${safe}%`);
+    }
     const { data, error, count } = await q;
     if (error) throw error;
     res.json({ data: data || [], total: count || 0 });
@@ -1065,7 +1130,10 @@ exports.listKanji = async (req, res) => {
       .order('created_at', { ascending: true })
       .range(offset, offset + Number(limit) - 1);
     if (level)     q = q.eq('level', level);
-    if (search)    q = q.or(`character.ilike.%${search}%,meaning_vi.ilike.%${search}%,han_viet.ilike.%${search}%`);
+    if (search) {
+      const safe = String(search).replace(/[,()%*]/g, ' ').trim();
+      if (safe) q = q.or(`character.ilike.%${safe}%,meaning_vi.ilike.%${safe}%,han_viet.ilike.%${safe}%`);
+    }
     const { data, error, count } = await q;
     if (error) throw error;
     res.json({ data: data || [], total: count || 0 });
@@ -1582,97 +1650,6 @@ exports.deleteListeningPassage = async (req, res) => {
   } catch (err) { res.status(500).json({ error: 'Không thể xóa bài nghe.' }); }
 };
 
-// ── Content Submissions (teacher → system) ────────────────────────────────────
-exports.listSubmissions = async (req, res) => {
-  const { type, status = 'pending' } = req.query;
-  try {
-    const fetchType = async (table, kind) => {
-      let q = supabaseAdmin.from(table).select('*').order('updated_at', { ascending: false });
-      if (status !== 'all') q = q.eq('status', status);
-      const { data, error } = await q;
-      if (error) throw error;
-      return (data || []).map(r => ({ ...r, _kind: kind }));
-    };
-    let rows = [];
-    if (!type || type === 'vocab') rows = rows.concat(await fetchType('teacher_vocabulary', 'vocab'));
-    if (!type || type === 'kanji') rows = rows.concat(await fetchType('teacher_kanji', 'kanji'));
-
-    // Enrich with teacher name
-    const teacherIds = [...new Set(rows.map(r => r.teacher_id))];
-    const { data: teachers } = await supabaseAdmin.from('users').select('id,full_name,email').in('id', teacherIds);
-    const tMap = Object.fromEntries((teachers || []).map(t => [t.id, t]));
-    rows = rows.map(r => ({ ...r, teacher: tMap[r.teacher_id] || { email: r.teacher_id } }));
-
-    res.json(rows);
-  } catch (err) {
-    console.error('List submissions error:', err);
-    res.status(500).json({ error: 'Không thể tải yêu cầu.' });
-  }
-};
-
-exports.reviewVocab = async (req, res) => {
-  const { action, note } = req.body; // action: 'approve' | 'reject'
-  try {
-    const { data: row, error: fetchErr } = await supabaseAdmin
-      .from('teacher_vocabulary').select('*').eq('id', req.params.id).single();
-    if (fetchErr || !row) return res.status(404).json({ error: 'Không tìm thấy.' });
-
-    if (action === 'approve') {
-      const { error: insertErr } = await supabaseAdmin.from('vocabulary').insert({
-        kanji: row.kanji, reading: row.reading, meaning_vi: row.meaning_vi,
-        meaning_ja: row.meaning_ja, level: row.level, type: row.type,
-        example_sentence: row.example_sentence,
-      });
-      if (insertErr) throw insertErr;
-      await supabaseAdmin.from('teacher_vocabulary')
-        .update({ status: 'approved', admin_note: note || null, updated_at: new Date().toISOString() })
-        .eq('id', req.params.id);
-      return res.json({ message: 'Đã duyệt và thêm vào hệ thống.' });
-    }
-    if (action === 'reject') {
-      await supabaseAdmin.from('teacher_vocabulary')
-        .update({ status: 'rejected', admin_note: note || null, updated_at: new Date().toISOString() })
-        .eq('id', req.params.id);
-      return res.json({ message: 'Đã từ chối.' });
-    }
-    res.status(400).json({ error: 'action phải là approve hoặc reject.' });
-  } catch (err) {
-    console.error('Review vocab error:', err);
-    res.status(500).json({ error: 'Không thể xử lý yêu cầu.' });
-  }
-};
-
-exports.reviewKanji = async (req, res) => {
-  const { action, note } = req.body;
-  try {
-    const { data: row, error: fetchErr } = await supabaseAdmin
-      .from('teacher_kanji').select('*').eq('id', req.params.id).single();
-    if (fetchErr || !row) return res.status(404).json({ error: 'Không tìm thấy.' });
-
-    if (action === 'approve') {
-      const { error: insertErr } = await supabaseAdmin.from('kanji').upsert({
-        character: row.character, reading_on: row.reading_on, reading_kun: row.reading_kun,
-        meaning_vi: row.meaning_vi, stroke_count: row.stroke_count, level: row.level,
-      }, { onConflict: 'character' });
-      if (insertErr) throw insertErr;
-      await supabaseAdmin.from('teacher_kanji')
-        .update({ status: 'approved', admin_note: note || null, updated_at: new Date().toISOString() })
-        .eq('id', req.params.id);
-      return res.json({ message: 'Đã duyệt và thêm vào hệ thống.' });
-    }
-    if (action === 'reject') {
-      await supabaseAdmin.from('teacher_kanji')
-        .update({ status: 'rejected', admin_note: note || null, updated_at: new Date().toISOString() })
-        .eq('id', req.params.id);
-      return res.json({ message: 'Đã từ chối.' });
-    }
-    res.status(400).json({ error: 'action phải là approve hoặc reject.' });
-  } catch (err) {
-    console.error('Review kanji error:', err);
-    res.status(500).json({ error: 'Không thể xử lý yêu cầu.' });
-  }
-};
-
 // ── Quizzes CRUD ─────────────────────────────────────────────────────────────
 exports.listQuizzes = async (req, res) => {
   const { lesson_id, course_id, page, limit = 20 } = req.query;
@@ -1748,7 +1725,7 @@ exports.listQuizQuestions = async (req, res) => {
   try {
     const { data, error } = await examDb
       .from('quiz_questions')
-      .select('id,question,options,correct_answer,correct_answer_data,question_type,bank_question_id,explanation,order_index')
+      .select('id,question,options,correct_answer,correct_answer_data,question_type,bank_question_id,explanation,passage_snapshot,order_index')
       .eq('quiz_id', req.params.quizId)
       .order('order_index');
     if (error) throw error;
@@ -1830,6 +1807,9 @@ exports.importFromBank = async (req, res) => {
       .from('question_bank').select('*').in('id', question_ids);
     if (fetchErr) throw fetchErr;
 
+    // Đóng băng bài đọc/nghe của câu hỏi để mang theo khi nhập vào quiz.
+    const getSnap = await snapshotsForBankRows(bankRows);
+
     const rows = bankRows.map((bq, i) => ({
       quiz_id:            quizId,
       bank_question_id:   bq.id,
@@ -1839,6 +1819,7 @@ exports.importFromBank = async (req, res) => {
       correct_answer:     typeof bq.correct_answer === 'string' ? bq.correct_answer : null,
       correct_answer_data: typeof bq.correct_answer !== 'string' ? bq.correct_answer : null,
       explanation:        bq.explanation || null,
+      passage_snapshot:   getSnap(bq),
       order_index:        nextIdx + i,
     }));
 

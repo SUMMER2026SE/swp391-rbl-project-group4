@@ -3,6 +3,8 @@ import { Link } from 'react-router-dom';
 import StudentLayout from '../../components/layout/StudentLayout';
 import api from '../../lib/api';
 import { useSubscription } from '../../hooks/useSubscription';
+import { useAuth } from '../../contexts/AuthContext';
+import { ReceiptButton } from '../../components/receipt/Receipt';
 
 const FEATURE_LABELS = {
   placement_test_monthly:     'Kiểm tra năng lực',
@@ -41,12 +43,15 @@ function QuotaBar({ used, limit, label, periodType }) {
 
 // ── Checkout / QR modal ──────────────────────────────────────────────────────
 
-function CheckoutModal({ plan, onClose, onSuccess }) {
+function CheckoutModal({ plan, buyer, onClose, onSuccess }) {
   const [order, setOrder]       = useState(null);
+  const [paidOrder, setPaidOrder] = useState(null);
   const [loading, setLoading]   = useState(true);
   const [error, setError]       = useState(null);
   const [status, setStatus]     = useState('pending'); // pending | paid | expired
   const [timeLeft, setTimeLeft] = useState(0);
+  const [qrError, setQrError]   = useState(false); // QR không tải được (mạng chặn / thiếu cấu hình)
+  useEffect(() => { setQrError(false); }, [order?.qr_url]);
   const pollRef = useRef(null);
 
   // Create/fetch order
@@ -74,7 +79,7 @@ function CheckoutModal({ plan, onClose, onSuccess }) {
         if (s && s !== 'pending') {
           clearInterval(pollRef.current);
           setStatus(s);
-          if (s === 'paid') setTimeout(onSuccess, 1500);
+          if (s === 'paid') setPaidOrder(r.data.order);
         }
       } catch (_) {}
     }, 5000);
@@ -127,16 +132,35 @@ function CheckoutModal({ plan, onClose, onSuccess }) {
               <p className="text-on-muted text-sm">Quét mã QR hoặc chuyển khoản theo thông tin bên dưới</p>
             </div>
 
-            {/* QR code */}
-            <div className="flex justify-center mb-5">
-              <img src={order.qr_url} alt="QR Thanh toán"
-                className="w-52 h-52 border-4 border-amber-300 rounded-2xl object-contain bg-white"
-                onError={(e) => { e.target.style.display = 'none'; }}
-              />
-            </div>
+            {/* QR code — nếu ảnh QR không tải được (mạng chặn qr.sepay.vn / thiếu cấu hình)
+                thì hiện hướng dẫn chuyển khoản thủ công thay vì để trống */}
+            {order.qr_url && !qrError ? (
+              <div className="flex justify-center mb-5">
+                <img src={order.qr_url} alt="QR Thanh toán"
+                  className="w-52 h-52 border-4 border-amber-300 rounded-2xl object-contain bg-white"
+                  onError={() => setQrError(true)}
+                />
+              </div>
+            ) : (
+              <div className="mb-5 text-center text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
+                Không tải được mã QR. Vui lòng chuyển khoản thủ công theo thông tin bên dưới.
+              </div>
+            )}
 
-            {/* Transfer info */}
+            {/* Transfer info — luôn hiển thị để chuyển khoản thủ công được kể cả khi QR lỗi */}
             <div className="bg-amber-50 rounded-xl p-4 space-y-2 text-sm mb-4">
+              {order.bank_code && (
+                <div className="flex justify-between items-center gap-2">
+                  <span className="text-on-muted">Ngân hàng</span>
+                  <span className="font-bold text-amber-800">{order.bank_code}</span>
+                </div>
+              )}
+              {order.account_number && (
+                <div className="flex justify-between items-center gap-2">
+                  <span className="text-on-muted">Số tài khoản</span>
+                  <span className="font-mono font-bold bg-amber-100 px-2 py-0.5 rounded text-amber-800 select-all">{order.account_number}</span>
+                </div>
+              )}
               <div className="flex justify-between">
                 <span className="text-on-muted">Số tiền</span>
                 <span className="font-bold text-amber-700">{Number(order.amount).toLocaleString('vi-VN')}₫</span>
@@ -161,10 +185,30 @@ function CheckoutModal({ plan, onClose, onSuccess }) {
         )}
 
         {status === 'paid' && (
-          <div className="text-center py-8">
-            <span className="material-symbols-outlined text-6xl text-emerald-500 mb-4 block">check_circle</span>
-            <h3 className="font-display text-2xl font-bold mb-2">Thanh toán thành công!</h3>
-            <p className="text-on-muted">Tài khoản của bạn đã được nâng cấp lên Premium.</p>
+          <div className="text-center py-6">
+            <span className="material-symbols-outlined text-6xl text-emerald-500 mb-3 block">check_circle</span>
+            <h3 className="font-display text-2xl font-bold mb-1">Thanh toán thành công!</h3>
+            <p className="text-on-muted mb-5">Tài khoản của bạn đã được nâng cấp lên Premium.</p>
+            <div className="flex flex-col gap-2 items-center">
+              <ReceiptButton
+                data={{
+                  type: 'subscription', typeLabel: 'Gói',
+                  buyerName: buyer?.name, buyerEmail: buyer?.email,
+                  itemName: plan?.name || 'Premium',
+                  amount: paidOrder?.amount ?? order?.amount,
+                  currency: paidOrder?.currency || 'VND',
+                  orderCode: paidOrder?.order_code || order?.order_code,
+                  paymentCode: paidOrder?.payment_code || order?.payment_code,
+                  paidAt: paidOrder?.paid_at || new Date().toISOString(),
+                }}
+                filename={`bien-lai-${paidOrder?.order_code || order?.order_code || 'premium'}.pdf`}
+                className="w-full"
+              />
+              <button onClick={onSuccess}
+                className="w-full px-6 py-3 bg-amber-400 hover:bg-amber-500 text-white rounded-xl font-semibold transition-colors">
+                Hoàn tất
+              </button>
+            </div>
           </div>
         )}
 
@@ -185,6 +229,7 @@ function CheckoutModal({ plan, onClose, onSuccess }) {
 
 export default function SubscriptionStatus() {
   const { data, loading, refetch } = useSubscription();
+  const { user } = useAuth();
   const [showCheckout, setShowCheckout] = useState(false);
   const [premiumPlan, setPremiumPlan]   = useState(null);
 
@@ -285,6 +330,7 @@ export default function SubscriptionStatus() {
       {showCheckout && premiumPlan && (
         <CheckoutModal
           plan={premiumPlan}
+          buyer={{ name: user?.user_metadata?.full_name || user?.email, email: user?.email }}
           onClose={() => setShowCheckout(false)}
           onSuccess={handleUpgradeSuccess}
         />

@@ -4,6 +4,9 @@ const { supabaseAdmin }  = require('../config/supabase');
 const { incrementUsage } = require('../services/quotaService');
 const { chatCompletion } = require('../config/ai');
 
+// Bảng mock_exams nằm trong schema jlpt_module (migration 024)
+const jlptDb = supabaseAdmin.schema('jlpt_module');
+
 const LEVELS      = ['N5', 'N4', 'N3', 'N2', 'N1'];
 const SKILL_FOCUS = ['vocabulary', 'kanji', 'grammar', 'reading', 'listening', 'mixed'];
 const CATALOG_CAP = 40;       // max items per resource type sent to the AI
@@ -31,7 +34,7 @@ async function buildCatalog(span) {
       .select('id, title, level, description').in('level', span).eq('is_published', true).limit(CATALOG_CAP),
     supabaseAdmin.from('study_list_posts')
       .select('id, title, list_type, level, description').in('level', span).limit(CATALOG_CAP),
-    supabaseAdmin.from('mock_exams')
+    jlptDb.from('mock_exams')
       .select('id, title, level').in('level', span).eq('is_published', true).limit(CATALOG_CAP),
   ]);
 
@@ -174,7 +177,7 @@ async function enrichSteps(steps) {
   const [courses, lists, mocks] = await Promise.all([
     byType.course.length     ? supabaseAdmin.from('courses').select('id, title, level').in('id', byType.course)               : { data: [] },
     byType.study_list.length ? supabaseAdmin.from('study_list_posts').select('id, title, level, list_type').in('id', byType.study_list) : { data: [] },
-    byType.mock_exam.length  ? supabaseAdmin.from('mock_exams').select('id, title, level').in('id', byType.mock_exam)         : { data: [] },
+    byType.mock_exam.length  ? jlptDb.from('mock_exams').select('id, title, level').in('id', byType.mock_exam)         : { data: [] },
   ]);
   for (const c of (courses.data || [])) meta.set(c.id, { title: c.title, level: c.level });
   for (const p of (lists.data || []))   meta.set(p.id, { title: p.title, level: p.level, list_type: p.list_type });
