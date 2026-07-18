@@ -13,8 +13,9 @@ exports.enroll = async (req, res) => {
   const studentId = req.user.id;
   try {
     const { data: course, error: cErr } = await contentDb.from('courses')
-      .select('id,is_free,price').eq('id', courseId).single();
+      .select('id,is_free,price,is_published').eq('id', courseId).single();
     if (cErr || !course) return res.status(404).json({ error: 'Không tìm thấy khóa học.' });
+    if (!course.is_published) return res.status(404).json({ error: 'Không tìm thấy khóa học.' });
 
     const { data: existing } = await contentDb.from('course_enrollments')
       .select('id').eq('course_id', courseId).eq('student_id', studentId).maybeSingle();

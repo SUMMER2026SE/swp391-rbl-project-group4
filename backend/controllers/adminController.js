@@ -1,6 +1,6 @@
 'use strict';
 
-const { supabaseAdmin } = require('../config/supabase');
+const { supabaseAdmin, updateUserMetadata } = require('../config/supabase');
 const { validateThreshold } = require('../services/passThreshold');
 const { snapshotsForBankRows } = require('../utils/passageSnapshot');
 
@@ -132,15 +132,9 @@ exports.updateUser = async (req, res) => {
       if (error) throw error;
     }
     if (role !== undefined) {
-      // Admin API REPLACE toàn bộ user_metadata → phải spread cái cũ, nếu không
-      // sẽ mất full_name/avatar_url của user đăng nhập Google.
-      const { data: target, error: getErr } = await supabaseAdmin.auth.admin.getUserById(req.params.id);
-      if (getErr) throw getErr;
-      const { error: roleErr } = await supabaseAdmin.auth.admin.updateUserById(
-        req.params.id,
-        { user_metadata: { ...(target?.user?.user_metadata || {}), role } },
-      );
-      if (roleErr) throw roleErr;
+      // updateUserMetadata spread metadata cũ → không mất full_name/avatar_url của user Google.
+      const { error } = await updateUserMetadata(req.params.id, { role });
+      if (error) throw error;
     }
     res.json({ message: 'Đã cập nhật.' });
   } catch (err) {
@@ -711,7 +705,10 @@ exports.listVocab = async (req, res) => {
       .order('created_at', { ascending: true })
       .range(offset, offset + Number(limit) - 1);
     if (level)  q = q.eq('level', level);
-    if (search) q = q.or(`kanji.ilike.%${search}%,reading.ilike.%${search}%,meaning_vi.ilike.%${search}%`);
+    if (search) {
+      const safe = String(search).replace(/[,()%*]/g, ' ').trim();
+      if (safe) q = q.or(`kanji.ilike.%${safe}%,reading.ilike.%${safe}%,meaning_vi.ilike.%${safe}%`);
+    }
     const { data, error, count } = await q;
     if (error) throw error;
     res.json({ data: data || [], total: count || 0 });
@@ -881,7 +878,10 @@ exports.listGrammarPoints = async (req, res) => {
       .order('created_at', { ascending: true })
       .range(offset, offset + Number(limit) - 1);
     if (level)  q = q.eq('level', level);
-    if (search) q = q.or(`title.ilike.%${search}%,meaning_vi.ilike.%${search}%`);
+    if (search) {
+      const safe = String(search).replace(/[,()%*]/g, ' ').trim();
+      if (safe) q = q.or(`title.ilike.%${safe}%,meaning_vi.ilike.%${safe}%`);
+    }
     const { data, error, count } = await q;
     if (error) throw error;
     res.json({ data: data || [], total: count || 0 });
@@ -1130,7 +1130,10 @@ exports.listKanji = async (req, res) => {
       .order('created_at', { ascending: true })
       .range(offset, offset + Number(limit) - 1);
     if (level)     q = q.eq('level', level);
-    if (search)    q = q.or(`character.ilike.%${search}%,meaning_vi.ilike.%${search}%,han_viet.ilike.%${search}%`);
+    if (search) {
+      const safe = String(search).replace(/[,()%*]/g, ' ').trim();
+      if (safe) q = q.or(`character.ilike.%${safe}%,meaning_vi.ilike.%${safe}%,han_viet.ilike.%${safe}%`);
+    }
     const { data, error, count } = await q;
     if (error) throw error;
     res.json({ data: data || [], total: count || 0 });

@@ -1,6 +1,6 @@
 'use strict';
 
-const { supabaseAdmin } = require('../config/supabase');
+const { supabaseAdmin, updateUserMetadata } = require('../config/supabase');
 const { extractAllDocs, reviewApplication } = require('../utils/teacherDocReview');
 
 const BUCKET = 'teacher-documents';
@@ -91,10 +91,7 @@ exports.submitApplication = async (req, res) => {
     const status = autoApprove ? 'approved' : 'pending';
 
     if (autoApprove) {
-      // Spread metadata cũ — Admin API REPLACE toàn bộ, nếu không sẽ mất full_name/avatar_url.
-      const { data: t } = await supabaseAdmin.auth.admin.getUserById(userId);
-      await supabaseAdmin.auth.admin.updateUserById(userId,
-        { user_metadata: { ...(t?.user?.user_metadata || {}), role: 'teacher' } });
+      await updateUserMetadata(userId, { role: 'teacher' });
     }
 
     const { data: appRow, error: insErr } = await supabaseAdmin.from('teacher_applications').insert({
@@ -194,18 +191,14 @@ exports.adminReviewApplication = async (req, res) => {
       updated_at: new Date().toISOString(),
     };
 
-    // Spread metadata cũ — Admin API REPLACE toàn bộ, nếu không sẽ mất full_name/avatar_url.
-    const { data: t } = await supabaseAdmin.auth.admin.getUserById(row.user_id);
-    const prevMeta = t?.user?.user_metadata || {};
-
     if (action === 'approve') {
-      await supabaseAdmin.auth.admin.updateUserById(row.user_id, { user_metadata: { ...prevMeta, role: 'teacher' } });
+      await updateUserMetadata(row.user_id, { role: 'teacher' });
       await supabaseAdmin.from('teacher_applications').update({ ...base, status: 'approved' }).eq('id', row.id);
       return res.json({ message: 'Đã duyệt và cấp quyền giáo viên.' });
     }
 
     // reject or revoke → ensure the account is (or stays) a student.
-    await supabaseAdmin.auth.admin.updateUserById(row.user_id, { user_metadata: { ...prevMeta, role: 'student' } });
+    await updateUserMetadata(row.user_id, { role: 'student' });
     await supabaseAdmin.from('teacher_applications').update({ ...base, status: 'rejected' }).eq('id', row.id);
     return res.json({ message: action === 'revoke' ? 'Đã thu hồi quyền giáo viên.' : 'Đã từ chối đơn.' });
   } catch (err) {

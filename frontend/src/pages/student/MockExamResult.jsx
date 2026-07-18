@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import StudentLayout from '../../components/layout/StudentLayout';
+import MockExamShell from '../../components/mockexam/MockExamShell';
 import Button from '../../components/ui/Button';
 import Alert from '../../components/ui/Alert';
 import ScoreColumns from '../../components/mockexam/ScoreColumns';
@@ -42,8 +42,8 @@ export default function MockExamResult() {
     getMockResult(attemptId).then(setResult).catch(e => setError(e.message)).finally(() => setLoading(false));
   }, [attemptId]);
 
-  if (loading) return <StudentLayout title="Kết quả"><div className="flex justify-center py-20"><span className="material-symbols-outlined animate-spin text-tsubaki-red text-4xl">progress_activity</span></div></StudentLayout>;
-  if (!result) return <StudentLayout title="Kết quả"><Alert type="error">{error}</Alert></StudentLayout>;
+  if (loading) return <MockExamShell title="Kết quả"><div className="flex justify-center py-20"><span className="material-symbols-outlined animate-spin text-tsubaki-red text-4xl">progress_activity</span></div></MockExamShell>;
+  if (!result) return <MockExamShell title="Kết quả"><Alert type="error">{error}</Alert></MockExamShell>;
 
   const passed = result.passed;
   const userName = user?.user_metadata?.full_name || user?.email || 'Học viên';
@@ -52,7 +52,7 @@ export default function MockExamResult() {
     : '';
 
   return (
-    <StudentLayout title="Kết quả thi thử">
+    <MockExamShell title="Kết quả thi thử">
       <div className="max-w-5xl mx-auto space-y-5">
         {/* Về danh sách đề — góc trái trên cùng */}
         <Link to="/mock-exams" className="text-sm text-on-muted hover:text-tsubaki-red flex items-center gap-1 w-fit">
@@ -98,6 +98,6 @@ export default function MockExamResult() {
         {/* Phiếu báo điểm full-width, kích thước thật */}
         <MockExamCertificate result={result} userName={userName} />
       </div>
-    </StudentLayout>
+    </MockExamShell>
   );
 }

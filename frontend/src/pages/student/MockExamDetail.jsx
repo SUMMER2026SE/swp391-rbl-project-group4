@@ -1,17 +1,20 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import StudentLayout from '../../components/layout/StudentLayout';
+import MockExamShell from '../../components/mockexam/MockExamShell';
 import Button from '../../components/ui/Button';
 import Alert from '../../components/ui/Alert';
 import Modal from '../../components/ui/Modal';
 import LeaderboardTable from '../../components/mockexam/LeaderboardTable';
 import { sectionDisplay, PASS_TOTAL, mondaiJa, mondaiVi, formatDuration } from '../../lib/mockExamConstants';
 import { getMockExamMeta, getMockLeaderboard, startMockAttempt, getMockHistory } from '../../lib/mockExamApi';
+import { useAuth } from '../../contexts/AuthContext';
 
 export default function MockExamDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
+  const { isTeacher } = useAuth();
+  const teacher = isTeacher();
   const [exam, setExam] = useState(null);
   const [board, setBoard] = useState(null);
   const [history, setHistory] = useState([]);
@@ -42,14 +45,14 @@ export default function MockExamDetail() {
     } catch (e) { setError(e.message); setStarting(false); }
   };
 
-  if (loading) return <StudentLayout title="Thi thử JLPT"><div className="flex justify-center py-20"><span className="material-symbols-outlined animate-spin text-tsubaki-red text-4xl">progress_activity</span></div></StudentLayout>;
-  if (!exam) return <StudentLayout title="Thi thử JLPT"><Alert type="error">{error || 'Không tìm thấy đề.'}</Alert></StudentLayout>;
+  if (loading) return <MockExamShell title="Thi thử JLPT"><div className="flex justify-center py-20"><span className="material-symbols-outlined animate-spin text-tsubaki-red text-4xl">progress_activity</span></div></MockExamShell>;
+  if (!exam) return <MockExamShell title="Thi thử JLPT"><Alert type="error">{error || 'Không tìm thấy đề.'}</Alert></MockExamShell>;
 
   // Đề premium bị khóa: chỉ được tiếp tục attempt dở (nếu có), không bắt đầu mới
   const lockedNoResume = exam.locked && !exam.active_attempt_id;
 
   return (
-    <StudentLayout title={exam.title}>
+    <MockExamShell title={exam.title}>
       <div className="space-y-5 max-w-3xl mx-auto">
         <button onClick={() => navigate('/mock-exams')} className="text-sm text-on-muted hover:text-tsubaki-red flex items-center gap-1">
           <span className="material-symbols-outlined text-lg">arrow_back</span> Danh sách đề
@@ -69,10 +72,17 @@ export default function MockExamDetail() {
             {exam.description && <p className="text-sm text-on-muted mt-1">{exam.description}</p>}
           </div>
           {lockedNoResume ? (
-            <button onClick={() => navigate('/subscription')}
-              className="shrink-0 inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-500 text-white text-sm font-bold transition-colors">
-              <span className="material-symbols-outlined text-lg">workspace_premium</span> Nâng cấp Premium
-            </button>
+            // Teacher không mua được gói premium → badge khóa thay vì CTA nâng cấp
+            teacher ? (
+              <span className="shrink-0 inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-outline/30 text-on-muted text-sm font-bold">
+                <span className="material-symbols-outlined text-lg">lock</span> Chỉ dành cho học viên Premium
+              </span>
+            ) : (
+              <button onClick={() => navigate('/subscription')}
+                className="shrink-0 inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-500 text-white text-sm font-bold transition-colors">
+                <span className="material-symbols-outlined text-lg">workspace_premium</span> Nâng cấp Premium
+              </button>
+            )
           ) : (
             <Button onClick={() => setConfirmStart(true)}>
               {exam.active_attempt_id ? 'Tiếp tục làm' : 'Bắt đầu thi'}
@@ -82,10 +92,15 @@ export default function MockExamDetail() {
 
         {lockedNoResume && (
           <Alert type="warning">
-            Đề này dành cho tài khoản <b>Premium</b>.
-            {exam.submitted_attempts > 0
-              ? <> Bạn vẫn xem lại được kết quả các lần thi trước trong <button onClick={() => navigate('/mock-exams/history')} className="font-semibold text-tsubaki-red hover:underline">Lịch sử bài làm</button>, nhưng cần nâng cấp để làm lại.</>
-              : <> Nâng cấp để bắt đầu làm bài.</>}
+            {teacher ? (
+              <>Đề này chỉ dành cho <b>học viên Premium</b> — giáo viên chỉ làm được các đề miễn phí.
+              {exam.submitted_attempts > 0 && <> Bạn vẫn xem lại được kết quả các lần thi trước trong <button onClick={() => navigate('/mock-exams/history')} className="font-semibold text-tsubaki-red hover:underline">Lịch sử bài làm</button>.</>}</>
+            ) : (
+              <>Đề này dành cho tài khoản <b>Premium</b>.
+              {exam.submitted_attempts > 0
+                ? <> Bạn vẫn xem lại được kết quả các lần thi trước trong <button onClick={() => navigate('/mock-exams/history')} className="font-semibold text-tsubaki-red hover:underline">Lịch sử bài làm</button>, nhưng cần nâng cấp để làm lại.</>
+                : <> Nâng cấp để bắt đầu làm bài.</>}</>
+            )}
           </Alert>
         )}
 
@@ -174,6 +189,6 @@ export default function MockExamDetail() {
           Bài thi gồm <b>{exam.sections.length} phần</b>, tổng <b>{totalMinutes} phút</b>. Mỗi phần tính giờ riêng, hết giờ tự nộp và không quay lại. Hãy đảm bảo bạn có đủ thời gian trước khi bắt đầu.
         </p>
       </Modal>
-    </StudentLayout>
+    </MockExamShell>
   );
 }

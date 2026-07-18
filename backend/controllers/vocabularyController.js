@@ -16,7 +16,10 @@ exports.list = async (req, res) => {
     if (level)     query = query.eq('level', level);
     if (lesson_id) query = query.eq('lesson_id', lesson_id);
     if (topic)     query = query.eq('topic', topic);
-    if (search)    query = query.or(`kanji.ilike.%${search}%,reading.ilike.%${search}%,meaning_vi.ilike.%${search}%`);
+    if (search) {
+      const safe = String(search).replace(/[,()%*]/g, ' ').trim();
+      if (safe) query = query.or(`kanji.ilike.%${safe}%,reading.ilike.%${safe}%,meaning_vi.ilike.%${safe}%`);
+    }
 
     const { data, error, count } = await query;
     if (error) throw error;

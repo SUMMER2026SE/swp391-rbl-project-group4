@@ -2,12 +2,19 @@
 
 const path = require('path');
 const multer = require('multer');
-const { supabase, supabaseAdmin } = require('../config/supabase');
+const { supabase, supabaseAdmin, updateUserMetadata } = require('../config/supabase');
 
 // Bảng quiz đã chuyển sang schema exam_module (class/user vẫn ở public)
 const examDb = supabaseAdmin.schema('exam_module');
 
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
+// Whitelist ảnh bitmap — không nhận image/svg+xml (SVG có thể chứa script).
+const ALLOWED_AVATAR_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) =>
+    ALLOWED_AVATAR_TYPES.includes(file.mimetype) ? cb(null, true) : cb(new Error('Chỉ chấp nhận file ảnh JPEG, PNG, WebP hoặc GIF.')),
+});
 exports.uploadMiddleware = upload.single('avatar');
 
 // GET /api/users/profile
@@ -49,15 +56,18 @@ exports.updateProfile = async (req, res) => {
   if (currentLevel) profileUpdate.current_level = currentLevel;
 
   try {
-    // Admin API REPLACE toàn bộ user_metadata → spread cái cũ, nếu không sẽ mất
-    // avatar_url và (nguy hiểm) role của user.
-    const { data: authTarget } = await supabaseAdmin.auth.admin.getUserById(userId);
-    await Promise.all([
+    const results = await Promise.all([
       supabaseAdmin.from('users').update({ full_name: fullname, phone }).eq('id', userId),
       supabaseAdmin.from('student_profiles').update(profileUpdate).eq('user_id', userId),
-      supabaseAdmin.auth.admin.updateUserById(userId,
-        { user_metadata: { ...(authTarget?.user?.user_metadata || {}), full_name: fullname } }),
+      updateUserMetadata(userId, { full_name: fullname }),
     ]);
+    // supabase-js không throw khi query lỗi — phải tự kiểm tra .error từng kết quả.
+    const labels = ['users', 'student_profiles', 'auth user_metadata'];
+    const failed = results.map((r, i) => (r.error ? `${labels[i]}: ${r.error.message}` : null)).filter(Boolean);
+    if (failed.length) {
+      console.error('Update profile partial failure:', failed.join('; '));
+      return res.status(500).json({ error: 'Không thể lưu thay đổi.' });
+    }
     res.json({ message: 'Đã lưu thay đổi.' });
   } catch (err) {
     console.error('Update profile error:', err);
@@ -81,12 +91,17 @@ exports.uploadAvatar = async (req, res) => {
     const { data: urlData } = supabaseAdmin.storage.from('avatars').getPublicUrl(fileName);
     const avatarUrl = `${urlData.publicUrl}?t=${Date.now()}`;
 
-    const { data: authTarget } = await supabaseAdmin.auth.admin.getUserById(userId);
-    await Promise.all([
+    const results = await Promise.all([
       supabaseAdmin.from('users').update({ avatar_url: avatarUrl }).eq('id', userId),
-      supabaseAdmin.auth.admin.updateUserById(userId,
-        { user_metadata: { ...(authTarget?.user?.user_metadata || {}), avatar_url: avatarUrl } }),
+      updateUserMetadata(userId, { avatar_url: avatarUrl }),
     ]);
+    // supabase-js không throw khi query lỗi — phải tự kiểm tra .error từng kết quả.
+    const labels = ['users', 'auth user_metadata'];
+    const failed = results.map((r, i) => (r.error ? `${labels[i]}: ${r.error.message}` : null)).filter(Boolean);
+    if (failed.length) {
+      console.error('Avatar update partial failure:', failed.join('; '));
+      return res.status(500).json({ error: 'Không thể tải ảnh lên.' });
+    }
     res.json({ avatar_url: avatarUrl });
   } catch (err) {
     console.error('Avatar upload error:', err);
