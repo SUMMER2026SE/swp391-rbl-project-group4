@@ -9,6 +9,8 @@ const payment = require('../../controllers/coursePaymentController');
 
 // Public listing/detail — optionalAuth để khách xem được, user đăng nhập thấy is_enrolled/tiến độ.
 router.get('/',    optionalAuth, c.list);
+// Lịch sử mua khóa học của học viên — đặt TRƯỚC '/:id' để không bị route param nuốt.
+router.get('/my-purchases', requireAuth, payment.myPurchases);
 router.get('/:id', optionalAuth, c.getOne);
 
 // Enrollment

@@ -111,6 +111,9 @@ function formatUptime(sec) {
 router.get('/stats',    c.getStats);
 router.get('/activity', c.getRecentActivity);
 
+// Test biên lai (tab Hoạt động hệ thống)
+router.post('/test-receipt-email', c.testReceiptEmail);
+
 // Request metrics theo giờ (lưu lượng + hiệu năng) cho chart dashboard
 router.get('/metrics', (req, res) => {
   const { getMetrics } = require('../../middleware/metrics');
@@ -211,11 +214,6 @@ router.put('/study-lists/:id', sl.update);
 router.put('/study-lists/:id/lock', c.lockStudyList);
 router.delete('/study-lists/:id', sl.remove);
 
-// Content submissions
-router.get('/submissions',                    c.listSubmissions);
-router.post('/submissions/vocab/:id/review',  c.reviewVocab);
-router.post('/submissions/kanji/:id/review',  c.reviewKanji);
-
 // Teacher applications
 router.get('/teacher-applications',             ta.adminListApplications);
 router.post('/teacher-applications/:id/review', ta.adminReviewApplication);
@@ -273,9 +271,9 @@ router.get('/listening/dialogues',              lc.adminListDialogues);
 router.post('/listening/dialogues',             lc.adminCreateDialogue);
 router.put('/listening/dialogues/:id',          lc.adminUpdateDialogue);
 router.delete('/listening/dialogues/:id',       lc.adminDeleteDialogue);
-router.post('/listening/dialogues/:id/lines',   lc.adminAddLine);
-router.put('/listening/lines/:lineId',          lc.adminUpdateLine);
-router.delete('/listening/lines/:lineId',       lc.adminDeleteLine);
+router.post('/listening/dialogues/:id/lines',   lc.adminAddLineGuarded);
+router.put('/listening/lines/:lineId',          lc.adminUpdateLineGuarded);
+router.delete('/listening/lines/:lineId',       lc.adminDeleteLineGuarded);
 
 // Reading (Luyện đọc)
 router.post('/reading/generate-article',       reading.generateArticle);

@@ -11,21 +11,18 @@ const ADMIN_LINKS = (t) => [
   { to: '/admin/study-lists', icon: 'library_books', label: 'Bài đăng' },
   { to: '/admin/kanji',       icon: 'font_download', label: t('admin.kanji') },
   { to: '/admin/grammar-points', icon: 'menu_book',  label: 'Ngữ pháp (từ điển)' },
-  { to: '/admin/quizzes',      icon: 'quiz',          label: t('admin.quizzes') },
   { to: '/admin/questions',    icon: 'inventory_2',   label: 'Ngân hàng câu hỏi' },
   { to: '/admin/mock-exams',   icon: 'fact_check',    label: 'Thi thử JLPT' },
   { to: '/admin/jlpt-bank',    icon: 'inventory',     label: 'Ngân hàng JLPT' },
   { to: '/admin/listening',    icon: 'headphones',      label: 'Hội thoại nghe' },
   { to: '/admin/placement',   icon: 'assignment_ind',  label: 'Kiểm tra NL' },
   { to: '/admin/reading',      icon: 'auto_stories',  label: 'Luyện đọc' },
-  { to: '/admin/submissions',  icon: 'pending_actions', label: 'Yêu cầu duyệt' },
   { to: '/admin/teacher-applications', icon: 'verified_user', label: 'Đơn giáo viên' },
-  // { to: '/admin/classes',      icon: 'groups',          label: 'Lớp học' }, // HIDDEN
-  { to: '/chat',               icon: 'smart_toy',       label: 'Trợ lý AI' },
   { to: '/admin/subscriptions', icon: 'workspace_premium', label: 'Đăng ký' },
   { to: '/admin/payments',      icon: 'payments',          label: 'Thanh toán' },
   { to: '/admin/revenue-pool',  icon: 'savings',           label: 'Quỹ doanh thu' },
   { to: '/admin/system',        icon: 'monitor_heart',     label: 'Hoạt động HT' },
+  { to: '/chat',               icon: 'smart_toy',       label: 'Trợ lý AI' },
   { to: '/profile',            icon: 'person',          label: 'Hồ sơ' },
 ];
 

@@ -5,6 +5,7 @@ import Alert from '../../components/ui/Alert';
 import { useAuth } from '../../contexts/AuthContext';
 import { useLang } from '../../contexts/LangContext';
 import api, { getLearningPath } from '../../lib/api';
+import { usePageContext } from '../../contexts/PageContext';
 
 function StatCard({ label, value, icon, color = 'text-tsubaki-red', loading }) {
   return (
@@ -60,8 +61,18 @@ export default function Dashboard() {
   const dash    = dashData?.dashboard || {};
   const profile = dashData?.profile   || {};
   const streak  = dash.current_streak ?? 0;
+
+  // Cho trợ lý AI biết tổng quan đang hiển thị
+  usePageContext({
+    tab: 'Bảng điều khiển học viên',
+    title: 'Tổng quan học tập',
+    data: dashData ? {
+      streak, current_level: profile.current_level, jlpt_target: profile.jlpt_target_level,
+      vocab_learned: dash.total_vocab_learned, kanji_learned: dash.total_kanji_learned,
+      grammar_learned: dash.total_grammar_learned, study_minutes: dash.total_study_minutes,
+    } : null,
+  }, [dashData]);
   const recentActivity = dashData?.recentActivity || [];
-  const myClasses      = dashData?.myClasses || [];
   return (
     <StudentLayout title={t('dashboard.title')}>
       {error && <Alert type="error" onClose={() => setError('')}>{error}</Alert>}
@@ -234,8 +245,8 @@ export default function Dashboard() {
           </div>
         )}
       </div>
-        {/* Recent activity & My classes */}
-        <div className="mt-6 grid md:grid-cols-2 gap-6">
+        {/* Recent activity */}
+        <div className="mt-6 grid gap-6">
             {/* Recent Activity Log */}
             {loading ? <CardSkeleton /> : (
                 <div className="glass-card rounded-2xl p-6">
@@ -268,35 +279,6 @@ export default function Dashboard() {
                 </div>
             )}
 
-            {/* My Classes */}
-            {loading ? <CardSkeleton /> : (
-                <div className="glass-card rounded-2xl p-6">
-                    <div className="flex items-center gap-2 mb-4">
-                        <span className="material-symbols-outlined text-sumire-purple text-2xl">school</span>
-                        <h2 className="font-display font-bold text-lg">{t('dashboard.my_classes')}</h2>
-                    </div>
-                    {myClasses.length > 0 ? (
-                        <div className="space-y-2">
-                            {myClasses.map(e => (
-                                <Link key={e.id} to="/classes" className="flex items-center justify-between gap-3 p-3 rounded-xl bg-surface-low/40 hover:bg-surface-low transition-colors">
-                                    <div className="min-w-0">
-                                        <p className="font-semibold text-sm truncate">{e.class?.name || '—'}</p>
-                                        {e.class?.description && <p className="text-xs text-on-muted mt-0.5 truncate">{e.class.description}</p>}
-                                    </div>
-                                    <span className="material-symbols-outlined text-on-muted shrink-0">chevron_right</span>
-                                </Link>
-                            ))}
-                        </div>
-                    ) : (
-                        <div>
-                            <p className="text-sm text-on-muted mb-3">{t('dashboard.no_classes')}</p>
-                            <Link to="/classes" className="inline-flex items-center gap-1 text-sm text-sumire-purple font-semibold hover:underline">
-                                {t('dashboard.classes')} <span className="material-symbols-outlined text-base">arrow_forward</span>
-                            </Link>
-                        </div>
-                    )}
-                </div>
-            )}
         </div>
       {/* Quick links */}
       <div className="mt-8 grid grid-cols-2 md:grid-cols-4 gap-3">

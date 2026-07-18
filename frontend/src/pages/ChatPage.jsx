@@ -1,5 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
+import { useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { useCurrentPage } from '../contexts/PageContext';
 import AdminLayout from '../components/layout/AdminLayout';
 import TeacherLayout from '../components/layout/TeacherLayout';
 import StudentLayout from '../components/layout/StudentLayout';
@@ -138,6 +140,45 @@ function KanjiDetail({ kanji, onClose }) {
         )}
       </div>
     </DetailOverlay>
+  );
+}
+
+// ── thẻ xác nhận thao tác ghi do AI đề xuất ────────────────────────────────
+function ActionConfirmCard({ action, state, onConfirm, onCancel }) {
+  if (state === 'done')      return <StatusNote icon="check_circle" tone="emerald" text="Đã thực hiện." />;
+  if (state === 'cancelled') return <StatusNote icon="cancel" tone="muted" text="Bạn đã huỷ thao tác này." />;
+  if (state === 'failed')    return <StatusNote icon="error" tone="red" text="Thao tác thất bại." />;
+
+  const running = state === 'running';
+  return (
+    <div className="ml-11 mt-2 rounded-2xl border-2 border-amber-300 bg-amber-50 p-3.5">
+      <div className="flex items-start gap-2 mb-2.5">
+        <span className="material-symbols-outlined text-amber-600 text-[20px] shrink-0">edit_note</span>
+        <div className="min-w-0">
+          <p className="text-xs font-bold text-amber-800 uppercase tracking-wide">Cần bạn xác nhận</p>
+          <p className="text-sm text-charcoal mt-0.5 break-words">{action.summary}</p>
+        </div>
+      </div>
+      <div className="flex gap-2">
+        <button onClick={onConfirm} disabled={running}
+          className="px-4 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold disabled:opacity-50 transition-colors">
+          {running ? 'Đang thực hiện...' : 'Xác nhận'}
+        </button>
+        <button onClick={onCancel} disabled={running}
+          className="px-4 py-1.5 rounded-xl border border-outline bg-white text-xs font-semibold hover:bg-surface-low disabled:opacity-50 transition-colors">
+          Huỷ
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function StatusNote({ icon, tone, text }) {
+  const cls = tone === 'emerald' ? 'text-emerald-700' : tone === 'red' ? 'text-red-600' : 'text-on-muted';
+  return (
+    <div className={`ml-11 mt-1.5 flex items-center gap-1.5 text-xs font-medium ${cls}`}>
+      <span className="material-symbols-outlined text-[15px]">{icon}</span>{text}
+    </div>
   );
 }
 
@@ -309,7 +350,7 @@ function MessageBubble({ item, onSelectDetail }) {
 }
 
 // ── sessions sidebar ───────────────────────────────────────────────────────
-function SessionSidebar({ sessions, activeId, onSelect, onDelete, onNew, loading }) {
+function SessionSidebar({ sessions, activeId, onSelect, onDelete, onNew, loading, embedded }) {
   const fmtDate = (iso) => {
     const d = new Date(iso);
     const now = new Date();
@@ -322,7 +363,7 @@ function SessionSidebar({ sessions, activeId, onSelect, onDelete, onNew, loading
   };
 
   return (
-    <div className="flex flex-col w-64 flex-shrink-0 border-r border-outline/30 bg-white/60 h-full overflow-hidden">
+    <div className={`${embedded ? 'hidden' : 'flex'} flex-col w-64 flex-shrink-0 border-r border-outline/30 bg-white/60 h-full overflow-hidden`}>
       <div className="p-3 border-b border-outline/20 flex-shrink-0">
         <button onClick={onNew}
           className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-sm font-semibold transition-colors">
@@ -368,10 +409,10 @@ function SessionSidebar({ sessions, activeId, onSelect, onDelete, onNew, loading
 }
 
 // ── main page ──────────────────────────────────────────────────────────────
-export default function ChatPage() {
-  const { user, isAdmin, isTeacher } = useAuth();
-  // Mỗi role dùng layout riêng — admin/teacher/student đều thấy sidebar của mình
-  const Layout = isAdmin() ? AdminLayout : isTeacher() ? TeacherLayout : StudentLayout;
+export function AiAssistant({ embedded = false }) {
+  const { user } = useAuth();
+  const location = useLocation();
+  const currentPage = useCurrentPage();
 
   // sessions
   const [sessions, setSessions]         = useState([]);
@@ -508,13 +549,18 @@ export default function ChatPage() {
         sessionId: activeSessionId,
         imageBase64: imageSnapshot?.base64,
         imageType:   imageSnapshot?.type,
+        // Ngữ cảnh trang: route tự động + phần trang tự khai báo (nếu có)
+        pageContext: {
+          path: location.pathname,
+          ...(currentPage || {}),
+        },
       });
 
-      const { reply, contextItems, sessionId } = r.data;
+      const { reply, contextItems, sessionId, pendingAction } = r.data;
       const assistantMsg = { role: 'assistant', content: reply };
 
       setApiMessages(prev => [...prev, assistantMsg]);
-      setDisplayItems(prev => [...prev, { ...assistantMsg, contextItems }]);
+      setDisplayItems(prev => [...prev, { ...assistantMsg, contextItems, pendingAction }]);
 
       // if new session was created, register it
       if (sessionId && !activeSessionId) {
@@ -534,7 +580,7 @@ export default function ChatPage() {
     } catch (e) {
       setApiMessages(prev => prev.slice(0, -1));
       setDisplayItems(prev => prev.slice(0, -1));
-      setError(e.response?.data?.error || e.message || 'Lỗi kết nối AI.');
+      setError(e.data?.message || e.response?.data?.error || e.message || 'Lỗi kết nối AI.');
     } finally {
       setLoading(false);
     }
@@ -544,11 +590,34 @@ export default function ChatPage() {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
   };
 
+  // ── Xác nhận thao tác ghi do AI đề xuất ───────────────────────────────────
+  const resolveAction = (idx, patch) =>
+    setDisplayItems(prev => prev.map((it, i) => (i === idx ? { ...it, ...patch } : it)));
+
+  const confirmAction = async (idx, item) => {
+    const act = item.pendingAction;
+    if (!act) return;
+    resolveAction(idx, { actionState: 'running' });
+    try {
+      const r = await api.post('/ai/action/confirm', {
+        name: act.name, args: act.args, sessionId: activeSessionId,
+      });
+      resolveAction(idx, { actionState: 'done' });
+      setDisplayItems(prev => [...prev, { role: 'assistant', content: r.data.message }]);
+    } catch (e) {
+      const msg = e.response?.data?.message || e.response?.data?.error || e.message;
+      resolveAction(idx, { actionState: 'failed' });
+      setDisplayItems(prev => [...prev, { role: 'assistant', content: `❌ ${msg}` }]);
+    }
+  };
+
+  const cancelAction = (idx) => resolveAction(idx, { actionState: 'cancelled' });
+
   // ── render ────────────────────────────────────────────────────────────────
   return (
-    <Layout title="Trợ lý AI">
-      <div className="flex max-w-5xl mx-auto rounded-2xl overflow-hidden border border-outline/30 shadow-sm bg-white/40"
-        style={{ height: 'calc(100vh - 8rem)' }}>
+    <>
+      <div className={`flex overflow-hidden bg-white/40 ${embedded ? 'h-full' : 'max-w-5xl mx-auto rounded-2xl border border-outline/30 shadow-sm'}`}
+        style={embedded ? undefined : { height: 'calc(100vh - 8rem)' }}>
 
         {/* Sessions sidebar */}
         <SessionSidebar
@@ -558,23 +627,26 @@ export default function ChatPage() {
           onDelete={deleteSession}
           onNew={newChat}
           loading={sessionsLoading}
+          embedded={embedded}
         />
 
         {/* Chat area */}
         <div className="flex-1 flex flex-col min-w-0">
           {/* Header */}
-          <div className="flex items-center justify-between px-5 py-3 border-b border-outline/20 flex-shrink-0 bg-white/80">
-            <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-lg bg-violet-100 flex items-center justify-center">
-                <span className="material-symbols-outlined text-violet-600 text-[18px]"
-                  style={{ fontVariationSettings: "'FILL' 1" }}>smart_toy</span>
-              </div>
-              <div>
-                <p className="font-display text-sm font-bold leading-tight">Kizuna AI</p>
-                <p className="text-[10px] text-on-muted">Trợ lý học tiếng Nhật</p>
+          {!embedded && (
+            <div className="flex items-center justify-between px-5 py-3 border-b border-outline/20 flex-shrink-0 bg-white/80">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-violet-100 flex items-center justify-center">
+                  <span className="material-symbols-outlined text-violet-600 text-[18px]"
+                    style={{ fontVariationSettings: "'FILL' 1" }}>smart_toy</span>
+                </div>
+                <div>
+                  <p className="font-display text-sm font-bold leading-tight">Kizuna AI</p>
+                  <p className="text-[10px] text-on-muted">Trợ lý học tiếng Nhật</p>
+                </div>
               </div>
             </div>
-          </div>
+          )}
 
           {/* Messages */}
           <div className="flex-1 overflow-y-auto space-y-4 p-4">
@@ -600,7 +672,17 @@ export default function ChatPage() {
             ) : (
               <>
                 {displayItems.map((item, i) => (
-                  <MessageBubble key={i} item={item} onSelectDetail={setDetailItem} />
+                  <div key={i}>
+                    <MessageBubble item={item} onSelectDetail={setDetailItem} />
+                    {item.pendingAction && (
+                      <ActionConfirmCard
+                        action={item.pendingAction}
+                        state={item.actionState}
+                        onConfirm={() => confirmAction(i, item)}
+                        onCancel={() => cancelAction(i)}
+                      />
+                    )}
+                  </div>
                 ))}
                 {loading && (
                   <div className="flex gap-3">
@@ -678,6 +760,17 @@ export default function ChatPage() {
       {/* Detail modals */}
       {detailItem?.type === 'vocab' && <VocabDetail vocab={detailItem.data} onClose={() => setDetailItem(null)} />}
       {detailItem?.type === 'kanji' && <KanjiDetail kanji={detailItem.data} onClose={() => setDetailItem(null)} />}
+    </>
+  );
+}
+
+// Trang AI đầy đủ (tab ở sidebar) — bọc AiAssistant trong layout theo role, có lịch sử chat.
+export default function ChatPage() {
+  const { isAdmin, isTeacher } = useAuth();
+  const Layout = isAdmin() ? AdminLayout : isTeacher() ? TeacherLayout : StudentLayout;
+  return (
+    <Layout title="Trợ lý AI">
+      <AiAssistant />
     </Layout>
   );
 }
