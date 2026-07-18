@@ -526,4 +526,9 @@ function appendListeningAudioWarning(meta, valid, warnings) {
     warnings.push('Câu nghe sau khi nhập CHƯA có file audio — vào từng câu trong ngân hàng để bấm "Tạo audio từ transcript (TTS)" hoặc tải file thu âm lên.');
 }
 
-module.exports = { IMPORTABLE_TYPES, PASSAGE_IMPORT_TYPES, isPassageType, assertImportableType, buildImportTemplate, parseJlptBankImport };
+module.exports = {
+  IMPORTABLE_TYPES, PASSAGE_IMPORT_TYPES, isPassageType, assertImportableType,
+  buildImportTemplate, parseJlptBankImport,
+  // Dùng lại cho import NGUYÊN ĐỀ (jlptExamImport.js)
+  templateHeaders, buildMapping, rowToQuestion, SAMPLE_PASSAGE,
+};

@@ -320,6 +320,18 @@ const mockAudioUpload = multer({
 });
 router.post('/mock-exams/upload-audio',   mockAudioUpload.single('audio'), mock.uploadAudio);
 router.post('/mock-exams/upload-image',   upload.single('image'), mock.uploadImage);
+// Import Excel tạo NGUYÊN ĐỀ → đề nháp (khai báo TRƯỚC '/mock-exams/:id')
+const examImportUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const ok = /\.(xlsx|xls)$/i.test(file.originalname);
+    ok ? cb(null, true) : cb(new Error('Chỉ chấp nhận file .xlsx hoặc .xls.'));
+  },
+});
+router.get('/mock-exams/import-template', mock.examImportTemplate);
+router.post('/mock-exams/import-file',    examImportUpload.single('file'), mock.examImportFile);
+router.post('/mock-exams/import-commit',  mock.examImportCommit);
 router.get('/mock-exams',                 mock.listExams);
 router.post('/mock-exams',                mock.createExam);
 router.get('/mock-exams/:id',             mock.getExam);
