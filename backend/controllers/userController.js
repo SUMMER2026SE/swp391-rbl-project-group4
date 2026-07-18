@@ -49,10 +49,14 @@ exports.updateProfile = async (req, res) => {
   if (currentLevel) profileUpdate.current_level = currentLevel;
 
   try {
+    // Admin API REPLACE toàn bộ user_metadata → spread cái cũ, nếu không sẽ mất
+    // avatar_url và (nguy hiểm) role của user.
+    const { data: authTarget } = await supabaseAdmin.auth.admin.getUserById(userId);
     await Promise.all([
       supabaseAdmin.from('users').update({ full_name: fullname, phone }).eq('id', userId),
       supabaseAdmin.from('student_profiles').update(profileUpdate).eq('user_id', userId),
-      supabaseAdmin.auth.admin.updateUserById(userId, { user_metadata: { full_name: fullname } }),
+      supabaseAdmin.auth.admin.updateUserById(userId,
+        { user_metadata: { ...(authTarget?.user?.user_metadata || {}), full_name: fullname } }),
     ]);
     res.json({ message: 'Đã lưu thay đổi.' });
   } catch (err) {
@@ -77,9 +81,11 @@ exports.uploadAvatar = async (req, res) => {
     const { data: urlData } = supabaseAdmin.storage.from('avatars').getPublicUrl(fileName);
     const avatarUrl = `${urlData.publicUrl}?t=${Date.now()}`;
 
+    const { data: authTarget } = await supabaseAdmin.auth.admin.getUserById(userId);
     await Promise.all([
       supabaseAdmin.from('users').update({ avatar_url: avatarUrl }).eq('id', userId),
-      supabaseAdmin.auth.admin.updateUserById(userId, { user_metadata: { avatar_url: avatarUrl } }),
+      supabaseAdmin.auth.admin.updateUserById(userId,
+        { user_metadata: { ...(authTarget?.user?.user_metadata || {}), avatar_url: avatarUrl } }),
     ]);
     res.json({ avatar_url: avatarUrl });
   } catch (err) {

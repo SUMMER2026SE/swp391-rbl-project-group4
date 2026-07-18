@@ -24,9 +24,10 @@ export default function AdminUsers() {
   const [pwTarget, setPwTarget] = useState(null);
   const [pwForm, setPwForm]     = useState({ password: '', confirm: '' });
   const [pwSaving, setPwSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState(null);
   const LIMIT = 20;
 
-  const fetch = async () => {
+  const fetchUsers = async () => {
     setLoading(true);
     try {
       const params = new URLSearchParams({ page, limit: LIMIT });
@@ -41,7 +42,7 @@ export default function AdminUsers() {
     }
   };
 
-  useEffect(() => { fetch(); }, [page]);
+  useEffect(() => { fetchUsers(); }, [page]);
 
   const openEdit = (row) => {
     setEditRow(row);
@@ -55,7 +56,7 @@ export default function AdminUsers() {
       await api.put(`/admin/users/${editRow.id}`, editForm);
       setAlert({ type: 'success', msg: 'Đã cập nhật.' });
       setEditModal(false);
-      fetch();
+      fetchUsers();
     } catch (e) {
       setAlert({ type: 'error', msg: e.message });
     } finally {
@@ -72,6 +73,8 @@ export default function AdminUsers() {
   const handleResetPassword = async () => {
     if (pwForm.password.length < 8)
       return setAlert({ type: 'error', msg: 'Mật khẩu phải có ít nhất 8 ký tự.' });
+    if (!/[A-Za-z]/.test(pwForm.password) || !/[0-9]/.test(pwForm.password))
+      return setAlert({ type: 'error', msg: 'Mật khẩu phải chứa cả chữ cái và số.' });
     if (pwForm.password !== pwForm.confirm)
       return setAlert({ type: 'error', msg: 'Mật khẩu xác nhận không khớp.' });
     setPwSaving(true);
@@ -87,13 +90,17 @@ export default function AdminUsers() {
   };
 
   const handleDelete = async (row) => {
+    if (deletingId) return;                       // chặn xóa trùng khi đang có 1 request chạy
     if (!confirm(t('admin.confirm_delete'))) return;
+    setDeletingId(row.id);
     try {
       await api.delete(`/admin/users/${row.id}`);
       setAlert({ type: 'success', msg: 'Đã xóa.' });
-      fetch();
+      fetchUsers();
     } catch (e) {
       setAlert({ type: 'error', msg: e.message });
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -126,7 +133,7 @@ export default function AdminUsers() {
 
       <div className="flex items-center justify-between mb-6">
         <h1 className="font-display text-2xl font-bold">{t('admin.users')} <span className="text-on-muted text-lg font-normal">({total})</span></h1>
-        <form onSubmit={e => { e.preventDefault(); setPage(1); fetch(); }} className="flex gap-2">
+        <form onSubmit={e => { e.preventDefault(); if (page === 1) fetchUsers(); else setPage(1); }} className="flex gap-2">
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Tìm kiếm..." className="px-3 py-2 border border-outline rounded-xl text-sm outline-none focus:border-tsubaki-red" />
           <button type="submit" className="p-2 bg-tsubaki-red text-white rounded-xl"><span className="material-symbols-outlined text-lg">search</span></button>
         </form>
@@ -166,7 +173,7 @@ export default function AdminUsers() {
           </p>
           <Input label="Mật khẩu mới" type="password" value={pwForm.password}
             onChange={e => setPwForm({ ...pwForm, password: e.target.value })}
-            placeholder="Tối thiểu 8 ký tự" />
+            placeholder="Tối thiểu 8 ký tự, gồm chữ và số" />
           <Input label="Xác nhận mật khẩu" type="password" value={pwForm.confirm}
             onChange={e => setPwForm({ ...pwForm, confirm: e.target.value })}
             placeholder="Nhập lại mật khẩu mới" />

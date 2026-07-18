@@ -60,39 +60,51 @@ exports.testReceiptEmail = async (req, res) => {
 };
 
 // ── Users ────────────────────────────────────────────────────────────────────
+const USER_ROLES = ['student', 'teacher', 'admin'];
+
+// Mật khẩu phải ≥ 8 ký tự và chứa cả chữ cái lẫn số. Trả về chuỗi lỗi hoặc null.
+function validatePassword(password) {
+  if (!password || password.length < 8) return 'Mật khẩu phải có ít nhất 8 ký tự.';
+  if (!/[A-Za-z]/.test(password) || !/[0-9]/.test(password))
+    return 'Mật khẩu phải chứa cả chữ cái và số.';
+  return null;
+}
+
+// GET /api/admin/users
 exports.listUsers = async (req, res) => {
-  const { search, page = 1, limit = 20 } = req.query;
-  const offset = (Number(page) - 1) * Number(limit);
+  const { search } = req.query;
+  const page  = Math.max(1, Number(req.query.page) || 1);
+  const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 20));
+  const offset = (page - 1) * limit;
   try {
     let query = supabaseAdmin.from('users')
       .select('id,full_name,email,phone,avatar_url,created_at', { count: 'exact' })
       .order('created_at', { ascending: false })
-      .range(offset, offset + Number(limit) - 1);
-    if (search) query = query.or(`full_name.ilike.%${search}%,email.ilike.%${search}%`);
+      .range(offset, offset + limit - 1);
+    const safe = search ? String(search).replace(/[,()%*]/g, ' ').trim() : '';
+    if (safe) query = query.or(`full_name.ilike.%${safe}%,email.ilike.%${safe}%`);
     const { data, error, count } = await query;
     if (error) throw error;
 
-    // Enrich with role from auth.users metadata
-    const roleMap = {};
-    if (data && data.length > 0) {
-      const { data: authData } = await supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 1000 });
-      const ids = new Set(data.map(u => u.id));
-      (authData?.users || []).forEach(u => {
-        if (ids.has(u.id)) roleMap[u.id] = u.user_metadata?.role || 'student';
-      });
-    }
-
-    const enriched = (data || []).map(u => ({ ...u, role: roleMap[u.id] || 'student' }));
-    res.json({ data: enriched, total: count, page: Number(page), limit: Number(limit) });
+    // Enrich role từ auth metadata — chỉ lấy đúng các user đang hiển thị (tối đa
+    // `limit`), tránh fetch cả bảng auth và tránh sai role với user thứ 1001+.
+    const enriched = await Promise.all((data || []).map(async (u) => {
+      const { data: authUser } = await supabaseAdmin.auth.admin.getUserById(u.id);
+      return { ...u, role: authUser?.user?.user_metadata?.role || 'student' };
+    }));
+    res.json({ data: enriched, total: count, page, limit });
   } catch (err) {
     console.error('List users error:', err);
     res.status(500).json({ error: 'Không thể tải danh sách.' });
   }
 };
 
+// GET /api/admin/users/:id
 exports.getUser = async (req, res) => {
   try {
-    const { data, error } = await supabaseAdmin.from('users').select('*').eq('id', req.params.id).single();
+    const { data, error } = await supabaseAdmin.from('users')
+      .select('id,full_name,email,phone,avatar_url,created_at,updated_at')
+      .eq('id', req.params.id).single();
     if (error || !data) return res.status(404).json({ error: 'Không tìm thấy.' });
     res.json(data);
   } catch (err) {
@@ -100,35 +112,62 @@ exports.getUser = async (req, res) => {
   }
 };
 
+// PUT /api/admin/users/:id
 exports.updateUser = async (req, res) => {
   const { full_name, phone, role } = req.body;
+
+  if (role !== undefined && !USER_ROLES.includes(role))
+    return res.status(400).json({ error: 'Vai trò không hợp lệ.' });
+  // Không cho admin tự hạ quyền của chính mình → tránh khóa mình ra khỏi panel.
+  if (role !== undefined && req.params.id === req.user.id && role !== 'admin')
+    return res.status(400).json({ error: 'Không thể tự hạ quyền admin của chính mình.' });
+
   try {
     const updates = {};
     if (full_name !== undefined) updates.full_name = full_name;
     if (phone     !== undefined) updates.phone     = phone;
-    await supabaseAdmin.from('users').update(updates).eq('id', req.params.id);
+    if (Object.keys(updates).length > 0) {
+      updates.updated_at = new Date().toISOString();
+      const { error } = await supabaseAdmin.from('users').update(updates).eq('id', req.params.id);
+      if (error) throw error;
+    }
     if (role !== undefined) {
-      await supabaseAdmin.auth.admin.updateUserById(req.params.id, { user_metadata: { role } });
+      // Admin API REPLACE toàn bộ user_metadata → phải spread cái cũ, nếu không
+      // sẽ mất full_name/avatar_url của user đăng nhập Google.
+      const { data: target, error: getErr } = await supabaseAdmin.auth.admin.getUserById(req.params.id);
+      if (getErr) throw getErr;
+      const { error: roleErr } = await supabaseAdmin.auth.admin.updateUserById(
+        req.params.id,
+        { user_metadata: { ...(target?.user?.user_metadata || {}), role } },
+      );
+      if (roleErr) throw roleErr;
     }
     res.json({ message: 'Đã cập nhật.' });
   } catch (err) {
+    console.error('Update user error:', err);
     res.status(500).json({ error: 'Không thể cập nhật.' });
   }
 };
 
+// DELETE /api/admin/users/:id
 exports.deleteUser = async (req, res) => {
+  if (req.params.id === req.user.id)
+    return res.status(400).json({ error: 'Không thể xóa tài khoản của chính mình.' });
   try {
-    await supabaseAdmin.auth.admin.deleteUser(req.params.id);
+    const { error } = await supabaseAdmin.auth.admin.deleteUser(req.params.id);
+    if (error) throw error;
     res.json({ message: 'Đã xóa người dùng.' });
   } catch (err) {
+    console.error('Delete user error:', err);
     res.status(500).json({ error: 'Không thể xóa.' });
   }
 };
 
+// PUT /api/admin/users/:id/password
 exports.resetUserPassword = async (req, res) => {
   const { password } = req.body;
-  if (!password || password.length < 8)
-    return res.status(400).json({ error: 'Mật khẩu phải có ít nhất 8 ký tự.' });
+  const pwErr = validatePassword(password);
+  if (pwErr) return res.status(400).json({ error: pwErr });
   try {
     const { error } = await supabaseAdmin.auth.admin.updateUserById(req.params.id, { password });
     if (error) throw error;
