@@ -64,7 +64,7 @@ async function createOrder(userId, planId) {
       status:         'pending',
       expires_at:     expiresAt,
     })
-    .select('id, order_code, payment_code, amount, currency, qr_url, expires_at, status')
+    .select('id, order_code, payment_code, amount, currency, qr_url, bank_code, account_number, expires_at, status')
     .single();
 
   if (error) throw new Error(error.message);
@@ -75,7 +75,7 @@ async function getOrder(orderId, userId = null) {
   let query = supabaseAdmin
     .from('payment_orders')
     .select(`
-      id, order_code, payment_code, amount, currency, qr_url,
+      id, order_code, payment_code, amount, currency, qr_url, bank_code, account_number,
       status, expires_at, paid_at, created_at,
       plan:subscription_plans(code, name, tier, price)
     `)
@@ -113,7 +113,7 @@ async function expireOldOrders() {
 async function getUserPendingOrder(userId, planId) {
   const { data } = await supabaseAdmin
     .from('payment_orders')
-    .select('id, order_code, payment_code, amount, currency, qr_url, expires_at, status, plan:subscription_plans(code,name)')
+    .select('id, order_code, payment_code, amount, currency, qr_url, bank_code, account_number, expires_at, status, plan:subscription_plans(code,name)')
     .eq('user_id', userId)
     .eq('plan_id', planId)
     .eq('status', 'pending')

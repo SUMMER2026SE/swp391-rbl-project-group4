@@ -50,6 +50,8 @@ function CheckoutModal({ plan, buyer, onClose, onSuccess }) {
   const [error, setError]       = useState(null);
   const [status, setStatus]     = useState('pending'); // pending | paid | expired
   const [timeLeft, setTimeLeft] = useState(0);
+  const [qrError, setQrError]   = useState(false); // QR không tải được (mạng chặn / thiếu cấu hình)
+  useEffect(() => { setQrError(false); }, [order?.qr_url]);
   const pollRef = useRef(null);
 
   // Create/fetch order
@@ -130,16 +132,35 @@ function CheckoutModal({ plan, buyer, onClose, onSuccess }) {
               <p className="text-on-muted text-sm">Quét mã QR hoặc chuyển khoản theo thông tin bên dưới</p>
             </div>
 
-            {/* QR code */}
-            <div className="flex justify-center mb-5">
-              <img src={order.qr_url} alt="QR Thanh toán"
-                className="w-52 h-52 border-4 border-amber-300 rounded-2xl object-contain bg-white"
-                onError={(e) => { e.target.style.display = 'none'; }}
-              />
-            </div>
+            {/* QR code — nếu ảnh QR không tải được (mạng chặn qr.sepay.vn / thiếu cấu hình)
+                thì hiện hướng dẫn chuyển khoản thủ công thay vì để trống */}
+            {order.qr_url && !qrError ? (
+              <div className="flex justify-center mb-5">
+                <img src={order.qr_url} alt="QR Thanh toán"
+                  className="w-52 h-52 border-4 border-amber-300 rounded-2xl object-contain bg-white"
+                  onError={() => setQrError(true)}
+                />
+              </div>
+            ) : (
+              <div className="mb-5 text-center text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
+                Không tải được mã QR. Vui lòng chuyển khoản thủ công theo thông tin bên dưới.
+              </div>
+            )}
 
-            {/* Transfer info */}
+            {/* Transfer info — luôn hiển thị để chuyển khoản thủ công được kể cả khi QR lỗi */}
             <div className="bg-amber-50 rounded-xl p-4 space-y-2 text-sm mb-4">
+              {order.bank_code && (
+                <div className="flex justify-between items-center gap-2">
+                  <span className="text-on-muted">Ngân hàng</span>
+                  <span className="font-bold text-amber-800">{order.bank_code}</span>
+                </div>
+              )}
+              {order.account_number && (
+                <div className="flex justify-between items-center gap-2">
+                  <span className="text-on-muted">Số tài khoản</span>
+                  <span className="font-mono font-bold bg-amber-100 px-2 py-0.5 rounded text-amber-800 select-all">{order.account_number}</span>
+                </div>
+              )}
               <div className="flex justify-between">
                 <span className="text-on-muted">Số tiền</span>
                 <span className="font-bold text-amber-700">{Number(order.amount).toLocaleString('vi-VN')}₫</span>

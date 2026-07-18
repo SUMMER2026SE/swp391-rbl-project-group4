@@ -2,8 +2,33 @@
 
 const { supabaseAdmin } = require('../config/supabase');
 const { whisperTranscribe } = require('../config/ai');
-const { incrementUsage } = require('../services/quotaService');
+const { incrementUsage, checkAccess } = require('../services/quotaService');
+const { runVideoTranscription } = require('../services/lessonTranscribe');
+const { synthesizeWithTimings } = require('../utils/ttsJa');
 const { logContentUse } = require('../utils/usageTracker');
+
+const BUCKET = 'listening-passages-audio';
+const isAdmin = (u) => u?.user_metadata?.role === 'admin';
+const SOURCE_TYPES = ['tts', 'audio', 'video', 'youtube'];
+
+// Upload buffer → bucket, trả { publicUrl, storagePath }. Ném lỗi nếu upload hỏng.
+async function uploadToBucket(userId, buffer, ext, contentType) {
+  const storagePath = `content/${userId}/${Date.now()}.${ext}`;
+  const { error } = await supabaseAdmin.storage.from(BUCKET)
+    .upload(storagePath, buffer, { contentType, upsert: false });
+  if (error) { const e = new Error('Không thể tải file lên storage.'); e.httpStatus = 500; throw e; }
+  const { data: { publicUrl } } = supabaseAdmin.storage.from(BUCKET).getPublicUrl(storagePath);
+  return { publicUrl, storagePath };
+}
+
+// Chủ sở hữu (theo student_id) hoặc admin mới được sửa/xóa.
+async function ownsContent(id, user) {
+  const { data } = await supabaseAdmin.from('listening_user_audios')
+    .select('student_id, storage_path, is_public').eq('id', id).single();
+  if (!data) return null;
+  if (data.student_id === user.id || isAdmin(user)) return data;
+  return false;
+}
 
 // Tables are in public schema with listening_ prefix (schema exposure workaround)
 const dlg   = () => supabaseAdmin.from('listening_dialogues');
@@ -13,11 +38,154 @@ const uadb  = () => supabaseAdmin.from('listening_user_audios');
 // ── Public: Dialogue list / detail ────────────────────────────────────────────
 
 exports.list = async (req, res) => {
-  let q = dlg().select('id, title, title_vi, level, topic, thumbnail_icon').order('level').order('created_at');
-  if (req.query.level) q = q.eq('level', req.query.level);
-  const { data, error } = await q;
-  if (error) return res.status(500).json({ error: 'Không tải được danh sách.' });
+  let dq = dlg().select('id, title, title_vi, level, topic, thumbnail_icon').order('level').order('created_at');
+  // Nội dung media công khai (admin tạo) hiển thị cạnh hội thoại kịch bản, theo cấp độ.
+  let mq = uadb().select('id, title, title_vi, level, source_type, created_at')
+    .eq('is_public', true).order('created_at', { ascending: false });
+  if (req.query.level) { dq = dq.eq('level', req.query.level); mq = mq.eq('level', req.query.level); }
+
+  const [{ data: dialogues, error: e1 }, { data: media, error: e2 }] = await Promise.all([dq, mq]);
+  if (e1 || e2) return res.status(500).json({ error: 'Không tải được danh sách.' });
+
+  const items = [
+    ...(dialogues || []).map(d => ({ ...d, kind: 'dialogue' })),
+    ...(media || []).map(m => ({ id: m.id, title: m.title, title_vi: m.title_vi, level: m.level,
+      source_type: m.source_type, thumbnail_icon: 'graphic_eq', kind: 'media' })),
+  ];
+  res.json(items);
+};
+
+// ── Listening content (tts/audio/video/youtube) — admin công khai, học sinh riêng tư ──
+
+// GET /listening/content/mine — nội dung riêng của người dùng
+exports.listMyContent = async (req, res) => {
+  const { data, error } = await uadb()
+    .select('id, title, title_vi, level, source_type, audio_url, content_url, transcript, segments, is_public, created_at')
+    .eq('student_id', req.user.id).order('created_at', { ascending: false });
+  if (error) return res.status(500).json({ error: 'Không tải được.' });
+  res.json(data || []);
+};
+
+// GET /listening/content/:id — mở 1 bài (công khai, hoặc của chính mình)
+exports.getContent = async (req, res) => {
+  const { data, error } = await uadb()
+    .select('id, title, title_vi, level, source_type, audio_url, content_url, transcript, segments, is_public, student_id')
+    .eq('id', req.params.id).single();
+  if (error || !data) return res.status(404).json({ error: 'Không tìm thấy bài nghe.' });
+  if (!data.is_public && data.student_id !== req.user.id && !isAdmin(req.user))
+    return res.status(403).json({ error: 'Không có quyền.' });
+  logContentUse({ userId: req.user?.id, contentType: 'listening', contentId: data.id,
+    creatorType: data.is_public ? 'admin' : 'student', ownerId: data.student_id });
   res.json(data);
+};
+
+// POST /listening/content — tạo nội dung. Học sinh bị giới hạn 2 bài/tháng (free);
+// admin không giới hạn và nội dung công khai. multipart: field 'media' (audio/video).
+exports.createContent = async (req, res) => {
+  const admin = isAdmin(req.user);
+  const source_type = req.body.source_type;
+  if (!SOURCE_TYPES.includes(source_type))
+    return res.status(400).json({ error: 'Nguồn không hợp lệ.' });
+
+  // Quota chỉ áp cho học sinh (mọi bài tự tạo tính 1 lượt).
+  if (!admin) {
+    try {
+      const access = await checkAccess(req.user.id, 'listening_create_monthly');
+      if (!access.allowed) {
+        return res.status(403).json({
+          error: 'quota_exceeded',
+          message: `Bạn đã tạo hết ${access.used}/${access.limit} bài nghe tháng này. ${access.resetInfo}`,
+          feature: 'listening_create_monthly', used: access.used, limit: access.limit,
+          tier: access.tier, resetInfo: access.resetInfo, upgradeRequired: access.tier === 'free',
+        });
+      }
+    } catch (e) { /* fail-open như checkQuota */ }
+  }
+
+  const title    = (req.body.title || 'Bài nghe').trim();
+  const title_vi = (req.body.title_vi || '').trim() || null;
+  const level    = req.body.level || 'N5';
+
+  const row = {
+    student_id: req.user.id, creator_type: admin ? 'admin' : 'student', is_public: admin,
+    title, title_vi, level, source_type,
+    transcript: '', segments: [],
+  };
+
+  try {
+    if (source_type === 'youtube') {
+      const url = (req.body.content_url || '').trim();
+      if (!/(?:youtube\.com|youtu\.be)\//i.test(url))
+        return res.status(400).json({ error: 'Link YouTube không hợp lệ.' });
+      row.content_url = url;
+    } else if (source_type === 'tts') {
+      const transcript = (req.body.transcript || '').trim();
+      if (!transcript) return res.status(400).json({ error: 'Cần nội dung để đọc (TTS).' });
+      const { buffer, segments } = await synthesizeWithTimings(transcript);
+      const { publicUrl, storagePath } = await uploadToBucket(req.user.id, buffer, 'mp3', 'audio/mpeg');
+      row.audio_url = publicUrl; row.storage_path = storagePath;
+      row.transcript = transcript; row.segments = segments;
+    } else { // audio | video
+      if (!req.file) return res.status(400).json({ error: 'Chưa chọn file.' });
+      const ext = (req.file.originalname.split('.').pop() || (source_type === 'audio' ? 'mp3' : 'mp4')).toLowerCase();
+      const { publicUrl, storagePath } = await uploadToBucket(req.user.id, req.file.buffer, ext, req.file.mimetype);
+      row.storage_path = storagePath;
+      if (source_type === 'audio') row.audio_url = publicUrl; else row.content_url = publicUrl;
+    }
+
+    const { data, error } = await uadb().insert(row).select().single();
+    if (error) throw error;
+    if (!admin) incrementUsage(req.user.id, 'listening_create_monthly').catch(() => {});
+    res.status(201).json(data);
+  } catch (err) {
+    console.error('createContent error:', err.message);
+    res.status(err.httpStatus || 500).json({ error: err.httpStatus ? err.message : 'Không thể tạo bài nghe.' });
+  }
+};
+
+// POST /listening/content/:id/transcribe — sinh transcript AI (bản nháp, KHÔNG tự lưu).
+exports.transcribeContent = async (req, res) => {
+  const owned = await ownsContent(req.params.id, req.user);
+  if (owned === null) return res.status(404).json({ error: 'Không tìm thấy.' });
+  if (owned === false) return res.status(403).json({ error: 'Không có quyền.' });
+  const { data: row } = await uadb().select('audio_url, content_url').eq('id', req.params.id).single();
+  const url = row?.content_url || row?.audio_url;
+  if (!url) return res.status(400).json({ error: 'Bài nghe chưa có nguồn audio/video.' });
+  try {
+    const { segments, transcript } = await runVideoTranscription(url);
+    res.json({ segments, transcript, count: segments.length });
+  } catch (err) {
+    console.error('transcribeContent error:', err.message);
+    res.status(502).json({ error: 'Không thể tạo transcript tự động. Hãy thử lại hoặc nhập tay.' });
+  }
+};
+
+// PUT /listening/content/:id — sửa thông tin + transcript/segments (chủ sở hữu / admin).
+exports.updateContent = async (req, res) => {
+  const owned = await ownsContent(req.params.id, req.user);
+  if (owned === null) return res.status(404).json({ error: 'Không tìm thấy.' });
+  if (owned === false) return res.status(403).json({ error: 'Không có quyền.' });
+  const { title, title_vi, level, transcript, segments } = req.body;
+  const updates = { updated_at: new Date().toISOString() };
+  if (title     !== undefined) updates.title     = String(title).trim() || 'Bài nghe';
+  if (title_vi  !== undefined) updates.title_vi  = String(title_vi).trim() || null;
+  if (level     !== undefined) updates.level     = level;
+  if (transcript !== undefined) updates.transcript = transcript;
+  if (segments  !== undefined) updates.segments  = Array.isArray(segments) ? segments : [];
+  const { data, error } = await uadb().update(updates).eq('id', req.params.id).select().single();
+  if (error) return res.status(500).json({ error: 'Không thể cập nhật.' });
+  res.json(data);
+};
+
+// DELETE /listening/content/:id — chủ sở hữu / admin
+exports.deleteContent = async (req, res) => {
+  const owned = await ownsContent(req.params.id, req.user);
+  if (owned === null) return res.status(404).json({ error: 'Không tìm thấy.' });
+  if (owned === false) return res.status(403).json({ error: 'Không có quyền.' });
+  if (owned.storage_path) await supabaseAdmin.storage.from(BUCKET).remove([owned.storage_path]);
+  const { error } = await uadb().delete().eq('id', req.params.id);
+  if (error) return res.status(500).json({ error: 'Không thể xóa.' });
+  res.json({ ok: true });
 };
 
 exports.getOne = async (req, res) => {

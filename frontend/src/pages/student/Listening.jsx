@@ -3,6 +3,8 @@ import StudentLayout from '../../components/layout/StudentLayout';
 import Button from '../../components/ui/Button';
 import api from '../../lib/api';
 import { usePageContext } from '../../contexts/PageContext';
+import SyncedVideoTranscript from '../../components/shared/SyncedVideoTranscript';
+import ListeningContentManager from '../../components/listening/ListeningContentManager';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const LEVELS = ['N5','N4','N3','N2','N1'];
@@ -443,127 +445,6 @@ function AudioShadowingTab({ audioUrl, segments }) {
   );
 }
 
-// ─── User audio upload section ────────────────────────────────────────────────
-function UserAudioSection({ onOpen }) {
-  const [audios, setAudios]   = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [uploading, setUploading] = useState(false);
-  const [form, setForm]       = useState({ title:'', level:'N5', language:'ja' });
-  const [showUpload, setShowUpload] = useState(false);
-  const fileRef = useRef(null);
-
-  useEffect(() => {
-    api.get('/listening/user-audio').then(r => setAudios(r.data)).finally(() => setLoading(false));
-  }, []);
-
-  const upload = async () => {
-    const file = fileRef.current?.files?.[0];
-    if (!file) return;
-    setUploading(true);
-    try {
-      const fd = new FormData();
-      fd.append('audio', file);
-      fd.append('title', form.title || file.name.replace(/\.[^.]+$/, ''));
-      fd.append('level', form.level);
-      fd.append('language', form.language);
-      const r = await api.post('/listening/user-audio', fd, { headers:{ 'Content-Type':'multipart/form-data' }, timeout: 120000 });
-      setAudios(prev => [r.data, ...prev]);
-      setShowUpload(false); setForm({ title:'', level:'N5', language:'ja' });
-      if (fileRef.current) fileRef.current.value = '';
-    } catch (e) { alert(e.response?.data?.error || 'Tải lên thất bại.'); }
-    finally { setUploading(false); }
-  };
-
-  const remove = async (id) => {
-    if (!confirm('Xóa bài nghe này?')) return;
-    await api.delete(`/listening/user-audio/${id}`);
-    setAudios(prev => prev.filter(a => a.id !== id));
-  };
-
-  return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <p className="text-sm text-on-muted">Tải lên file âm thanh của bạn — AI tự động tạo transcript.</p>
-        <button onClick={()=>setShowUpload(v=>!v)}
-          className="flex items-center gap-1.5 px-4 py-2 bg-tsubaki-red text-white text-sm font-semibold rounded-xl">
-          <span className="material-symbols-outlined text-base">{showUpload?'close':'upload'}</span>
-          {showUpload?'Hủy':'Tải lên'}
-        </button>
-      </div>
-
-      {showUpload && (
-        <div className="glass-card rounded-2xl p-4 space-y-3">
-          <div className="border-2 border-dashed border-outline rounded-xl p-6 text-center cursor-pointer hover:border-tsubaki-red/40 transition-colors"
-            onClick={()=>fileRef.current?.click()}>
-            <span className="material-symbols-outlined text-3xl text-on-muted/40 block mb-2">audio_file</span>
-            <p className="text-sm text-on-muted">Chọn file âm thanh (MP3, WAV, M4A, WebM)</p>
-            <p className="text-xs text-on-muted/60 mt-1">Tối đa 50MB</p>
-            <input ref={fileRef} type="file" accept="audio/*" className="hidden"/>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="col-span-2">
-              <label className="text-xs font-semibold text-on-muted">Tên bài nghe</label>
-              <input value={form.title} onChange={e=>setForm(p=>({...p,title:e.target.value}))} placeholder="VD: JLPT N5 Hội thoại 1"
-                className="w-full mt-1 px-3 py-2 border border-outline rounded-xl text-sm outline-none focus:border-tsubaki-red"/>
-            </div>
-            <div>
-              <label className="text-xs font-semibold text-on-muted">Cấp độ</label>
-              <select value={form.level} onChange={e=>setForm(p=>({...p,level:e.target.value}))}
-                className="w-full mt-1 px-3 py-2 border border-outline rounded-xl text-sm bg-white outline-none focus:border-tsubaki-red">
-                {['N5','N4','N3','N2','N1'].map(l=><option key={l}>{l}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="text-xs font-semibold text-on-muted">Ngôn ngữ trong file</label>
-              <select value={form.language} onChange={e=>setForm(p=>({...p,language:e.target.value}))}
-                className="w-full mt-1 px-3 py-2 border border-outline rounded-xl text-sm bg-white outline-none focus:border-tsubaki-red">
-                <option value="ja">Tiếng Nhật</option>
-                <option value="vi">Tiếng Việt</option>
-                <option value="en">Tiếng Anh</option>
-              </select>
-            </div>
-          </div>
-          <Button onClick={upload} loading={uploading} disabled={uploading} className="w-full">
-            {uploading ? 'Đang tải & nhận dạng (có thể mất 30–60s)...' : 'Tải lên & tạo transcript'}
-          </Button>
-        </div>
-      )}
-
-      {loading && <div className="space-y-3">{[1,2].map(i=><div key={i} className="glass-card rounded-xl h-16 animate-pulse"/>)}</div>}
-      {!loading && audios.length === 0 && (
-        <div className="glass-card rounded-2xl py-12 text-center">
-          <span className="material-symbols-outlined text-4xl text-on-muted/20 block mb-2">audio_file</span>
-          <p className="text-sm text-on-muted">Chưa có bài nghe nào. Tải lên file âm thanh để bắt đầu.</p>
-        </div>
-      )}
-      <div className="space-y-2">
-        {audios.map(a => (
-          <button key={a.id} onClick={()=>onOpen(a)}
-            className="w-full glass-card rounded-xl p-3 text-left hover:shadow-md transition-all flex items-center gap-3 group">
-            <div className="w-10 h-10 rounded-xl bg-surface-low flex items-center justify-center shrink-0">
-              <span className="material-symbols-outlined text-xl text-on-muted">audio_file</span>
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="font-semibold text-sm truncate">{a.title}</p>
-              <div className="flex items-center gap-2 mt-0.5">
-                {a.level && <span className="text-xs px-1.5 py-0.5 rounded font-bold" style={{background:LEVEL_BG[a.level],color:LEVEL_COLOR[a.level]}}>{a.level}</span>}
-                <span className="text-xs text-on-muted">{a.segments?.length || 0} đoạn</span>
-                <span className="text-xs text-on-muted">{new Date(a.created_at).toLocaleDateString('vi-VN')}</span>
-              </div>
-            </div>
-            <div className="flex gap-1 shrink-0">
-              <span className="material-symbols-outlined text-on-muted group-hover:text-tsubaki-red transition-colors">play_circle</span>
-              <button onClick={e=>{e.stopPropagation();remove(a.id);}} className="w-7 h-7 rounded-lg hover:bg-red-50 hover:text-tsubaki-red flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all">
-                <span className="material-symbols-outlined text-sm">delete</span>
-              </button>
-            </div>
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 // ─── Main ─────────────────────────────────────────────────────────────────────
 export default function Listening() {
   const [levelFilter, setLevelFilter] = useState('N5');
@@ -599,8 +480,9 @@ export default function Listening() {
     window.scrollTo({ top:0, behavior:'smooth' });
   };
 
-  const openUserAudio = (audio) => {
-    setSelected({ ...audio, _type:'user_audio' }); setTab('listen');
+  const openContent = async (item) => {
+    const r = await api.get(`/listening/content/${item.id}`);
+    setSelected({ ...r.data, _type: 'content' }); setTab('listen');
     window.scrollTo({ top:0, behavior:'smooth' });
   };
 
@@ -611,6 +493,18 @@ export default function Listening() {
   ];
 
   const isDialogue = selected?._type === 'dialogue';
+  const isContent  = selected?._type === 'content';
+  // Chép/Shadowing dùng chung tab audio (cần seg.text) → rút text tiếng Nhật từ parts.
+  const contentSegs = (selected?.segments || []).map(s => ({
+    start: s.start, end: s.end,
+    text: (s.parts?.find(p => p.lang === 'ja') || s.parts?.[0])?.text || s.text || '',
+  }));
+  // Audio phát theo đoạn: audio (tts/audio) ở audio_url; video ở content_url (<audio> đọc
+  // được track audio của mp4/webm). YouTube không phát qua <audio> nên chỉ có tab Nghe.
+  const contentAudioUrl = selected?.audio_url || (isContent && !/youtube\.com|youtu\.be/i.test(selected?.content_url || '') ? selected?.content_url : null);
+  const contentTabs = isContent && contentAudioUrl
+    ? TABS
+    : [{ key:'listen', icon:'headphones', label:'Nghe' }];
 
   return (
     <StudentLayout title="Luyện nghe">
@@ -644,7 +538,7 @@ export default function Listening() {
               </div>
             </div>
             <div className="flex rounded-xl border border-outline p-1 mb-5 bg-surface-low gap-1">
-              {TABS.map(({key,icon,label}) => (
+              {(isContent ? contentTabs : TABS).map(({key,icon,label}) => (
                 <button key={key} onClick={()=>setTab(key)}
                   className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold transition-all ${tab===key?'bg-white shadow text-charcoal':'text-on-muted hover:text-charcoal'}`}>
                   <span className="material-symbols-outlined text-sm">{icon}</span>
@@ -652,7 +546,22 @@ export default function Listening() {
                 </button>
               ))}
             </div>
-            {isDialogue ? (
+            {isContent ? (
+              <>
+                {tab==='listen' && (
+                  <div className="glass-card rounded-2xl overflow-hidden">
+                    <SyncedVideoTranscript
+                      videoUrl={selected.content_url || selected.audio_url}
+                      audio={!selected.content_url}
+                      segments={selected.segments || []}
+                      title={selected.title}
+                    />
+                  </div>
+                )}
+                {tab==='dictation' && <AudioDictationTab audioUrl={contentAudioUrl} segments={contentSegs}/>}
+                {tab==='shadowing' && <AudioShadowingTab audioUrl={contentAudioUrl} segments={contentSegs}/>}
+              </>
+            ) : isDialogue ? (
               <>
                 {tab==='listen'    && <ListenTab    lines={selected.lines}/>}
                 {tab==='dictation' && <DictationTab lines={selected.lines}/>}
@@ -683,7 +592,7 @@ export default function Listening() {
             </div>
 
             {levelFilter === 'user' ? (
-              <UserAudioSection onOpen={openUserAudio}/>
+              <ListeningContentManager onOpen={openContent} />
             ) : (
               <>
                 {loading && <div className="space-y-3">{[1,2,3].map(i=><div key={i} className="glass-card rounded-2xl h-20 animate-pulse"/>)}</div>}
@@ -695,7 +604,7 @@ export default function Listening() {
                 )}
                 <div className="space-y-3">
                   {dialogues.map(dlg => (
-                    <button key={dlg.id} onClick={()=>openDialogue(dlg)}
+                    <button key={dlg.id} onClick={()=> dlg.kind === 'media' ? openContent(dlg) : openDialogue(dlg)}
                       className="w-full glass-card rounded-2xl p-4 text-left hover:shadow-md transition-all flex items-center gap-4 group">
                       <div className="w-12 h-12 rounded-xl flex items-center justify-center shrink-0"
                         style={{background:LEVEL_BG[dlg.level]}}>

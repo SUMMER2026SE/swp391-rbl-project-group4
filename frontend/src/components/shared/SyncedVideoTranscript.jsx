@@ -31,7 +31,7 @@ const LANG_META = {
   en: { label: 'EN', badge: 'bg-sumire-purple/10 text-sumire-purple' },
 };
 
-export default function SyncedVideoTranscript({ videoUrl, segments, title }) {
+export default function SyncedVideoTranscript({ videoUrl, segments, title, audio = false }) {
   const ytId = useMemo(() => videoUrl?.match(YT_ID_RE)?.[1] || null, [videoUrl]);
   const videoRef  = useRef(null);   // <video> native
   const ytHostRef = useRef(null);   // div chứa YT.Player
@@ -130,17 +130,29 @@ export default function SyncedVideoTranscript({ videoUrl, segments, title }) {
     <div className="lg:grid lg:grid-cols-3">
       {/* ── Video + phụ đề câu đang phát ──────────────────────────────── */}
       <div className="lg:col-span-2 flex flex-col">
-        <div className="aspect-video bg-black">
-          {ytId
-            ? <div ref={ytHostRef} className="w-full h-full" title={title} />
-            : <video
-                ref={videoRef}
-                src={videoUrl}
-                controls
-                className="w-full h-full"
-                onTimeUpdate={e => setCurrentTime(e.target.currentTime)}
-              />}
-        </div>
+        {audio && !ytId ? (
+          <div className="bg-surface-low flex items-center justify-center px-6 py-8">
+            <audio
+              ref={videoRef}
+              src={videoUrl}
+              controls
+              className="w-full"
+              onTimeUpdate={e => setCurrentTime(e.target.currentTime)}
+            />
+          </div>
+        ) : (
+          <div className="aspect-video bg-black">
+            {ytId
+              ? <div ref={ytHostRef} className="w-full h-full" title={title} />
+              : <video
+                  ref={videoRef}
+                  src={videoUrl}
+                  controls
+                  className="w-full h-full"
+                  onTimeUpdate={e => setCurrentTime(e.target.currentTime)}
+                />}
+          </div>
+        )}
         {/* Chỉ hiện ở desktop — mobile danh sách bản chép đã nằm ngay dưới video */}
         <div
           onClick={() => captionIdx !== -1 && seekTo(safeSegments[captionIdx].start)}
