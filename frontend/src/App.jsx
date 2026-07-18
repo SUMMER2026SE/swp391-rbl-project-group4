@@ -76,7 +76,6 @@ import AdminLessonReadingView from './pages/admin/AdminLessonReadingView';
 import AdminQuizPreview from './pages/admin/AdminQuizPreview';
 import AdminVocabulary from './pages/admin/AdminVocabulary';
 import AdminKanji      from './pages/admin/AdminKanji';
-import AdminSubmissions  from './pages/admin/AdminSubmissions';
 import AdminTeacherApplications from './pages/admin/AdminTeacherApplications';
 import AdminSystemStatus  from './pages/admin/AdminSystemStatus';
 import AdminQuestionBank       from './pages/admin/AdminQuestionBank';
@@ -208,7 +207,6 @@ export default function App() {
             <Route path="/admin/study-lists" element={<AdminRoute><AdminStudyLists /></AdminRoute>} />
             <Route path="/admin/kanji"        element={<AdminRoute><AdminKanji /></AdminRoute>} />
             <Route path="/admin/grammar-points" element={<AdminRoute><AdminGrammarPoints /></AdminRoute>} />
-            <Route path="/admin/submissions" element={<AdminRoute><AdminSubmissions /></AdminRoute>} />
             <Route path="/admin/teacher-applications" element={<AdminRoute><AdminTeacherApplications /></AdminRoute>} />
             <Route path="/admin/system"     element={<AdminRoute><AdminSystemStatus /></AdminRoute>} />
             <Route path="/admin/questions"  element={<AdminRoute><AdminQuestionBank /></AdminRoute>} />

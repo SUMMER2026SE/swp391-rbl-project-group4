@@ -211,11 +211,6 @@ router.put('/study-lists/:id', sl.update);
 router.put('/study-lists/:id/lock', c.lockStudyList);
 router.delete('/study-lists/:id', sl.remove);
 
-// Content submissions
-router.get('/submissions',                    c.listSubmissions);
-router.post('/submissions/vocab/:id/review',  c.reviewVocab);
-router.post('/submissions/kanji/:id/review',  c.reviewKanji);
-
 // Teacher applications
 router.get('/teacher-applications',             ta.adminListApplications);
 router.post('/teacher-applications/:id/review', ta.adminReviewApplication);

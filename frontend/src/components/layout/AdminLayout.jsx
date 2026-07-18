@@ -17,7 +17,6 @@ const ADMIN_LINKS = (t) => [
   { to: '/admin/listening',    icon: 'headphones',      label: 'Hội thoại nghe' },
   { to: '/admin/placement',   icon: 'assignment_ind',  label: 'Kiểm tra NL' },
   { to: '/admin/reading',      icon: 'auto_stories',  label: 'Luyện đọc' },
-  { to: '/admin/submissions',  icon: 'pending_actions', label: 'Yêu cầu duyệt' },
   { to: '/admin/teacher-applications', icon: 'verified_user', label: 'Đơn giáo viên' },
   { to: '/chat',               icon: 'smart_toy',       label: 'Trợ lý AI' },
   { to: '/admin/subscriptions', icon: 'workspace_premium', label: 'Đăng ký' },
