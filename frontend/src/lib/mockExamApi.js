@@ -22,6 +22,16 @@ export const adminUpdateExam = (id, body) => api.put(`/admin/mock-exams/${id}`, 
 export const adminPublishExam = (id, publish) => api.patch(`/admin/mock-exams/${id}/publish`, { publish }).then(r => r.data);
 export const adminDeleteExam = (id)     => api.delete(`/admin/mock-exams/${id}`).then(r => r.data);
 export const adminExamAttempts = (id, params) => api.get(`/admin/mock-exams/${id}/attempts`, { params }).then(r => r.data);
+// Import Excel tạo nguyên đề → đề nháp
+export const adminExamImportTemplate = (level) =>
+  api.get('/admin/mock-exams/import-template', { params: { level }, responseType: 'blob' }).then(r => r.data);
+export const adminExamImportFile = (level, file) => {
+  const fd = new FormData();
+  fd.append('file', file);
+  fd.append('level', level);
+  return api.post('/admin/mock-exams/import-file', fd).then(r => r.data);
+};
+export const adminExamImportCommit = (body) => api.post('/admin/mock-exams/import-commit', body).then(r => r.data);
 
 export const adminCreateSection = (examId, body) => api.post(`/admin/mock-exams/${examId}/sections`, body).then(r => r.data);
 export const adminUpdateSection = (id, body) => api.put(`/admin/mock-sections/${id}`, body).then(r => r.data);
@@ -39,6 +49,7 @@ export const adminUpdateQuestion = (id, body) => api.put(`/admin/mock-questions/
 export const adminDeleteQuestion = (id) => api.delete(`/admin/mock-questions/${id}`).then(r => r.data);
 export const adminReorderQuestions = (ids) => api.patch('/admin/mock-questions/reorder', { ids }).then(r => r.data);
 export const adminImportFromBank = (groupId, question_ids) => api.post(`/admin/mock-groups/${groupId}/import-from-bank`, { question_ids }).then(r => r.data);
+export const adminFillFromBank = (id) => api.post(`/admin/mock-exams/${id}/fill-from-bank`).then(r => r.data);
 export const adminAiGenerate = (groupId, count, topic, instruction) => api.post(`/admin/mock-groups/${groupId}/ai-generate`, { count, topic, instruction }).then(r => r.data);
 export const adminAiRegenerateOne = (groupId, body) => api.post(`/admin/mock-groups/${groupId}/ai-regenerate-one`, body).then(r => r.data);
 // ─── Ngân hàng đề JLPT riêng (jlpt-bank) ──────────────────────────────────────
