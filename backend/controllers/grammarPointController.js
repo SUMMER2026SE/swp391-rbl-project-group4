@@ -18,7 +18,17 @@ exports.list = async (req, res) => {
 
     const { data, error, count } = await query;
     if (error) throw error;
-    res.json({ data, total: count, page: Number(page), limit: Number(limit) });
+
+    // Gắn tên giáo viên tạo (nếu có) — để phân biệt ai sửa được cái nào.
+    const creatorIds = [...new Set((data || []).map(g => g.created_by).filter(Boolean))];
+    const creatorMap = {};
+    if (creatorIds.length) {
+      const { data: creators } = await supabaseAdmin.from('users').select('id,full_name').in('id', creatorIds);
+      (creators || []).forEach(u => { creatorMap[u.id] = u.full_name; });
+    }
+    const enriched = (data || []).map(g => ({ ...g, creator_name: g.created_by ? (creatorMap[g.created_by] || null) : null }));
+
+    res.json({ data: enriched, total: count, page: Number(page), limit: Number(limit) });
   } catch (err) {
     console.error('List grammar points error:', err);
     res.status(500).json({ error: 'Không thể tải ngữ pháp.' });

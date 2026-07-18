@@ -132,6 +132,10 @@ export default function AdminKanji() {
               {row.level && (
                 <span className={`px-2 py-0.5 text-xs font-bold rounded-full shrink-0 ${LEVEL_BADGE[row.level] || 'bg-gray-100 text-gray-600'}`}>{row.level}</span>
               )}
+              <span className="hidden lg:flex items-center gap-1 text-xs text-on-muted w-28 shrink-0 truncate" title={row.creator_name ? `Tạo bởi ${row.creator_name}` : 'Hệ thống — mọi giáo viên đều sửa được'}>
+                <span className="material-symbols-outlined text-[15px]">{row.creator_name ? 'person' : 'public'}</span>
+                {row.creator_name || 'Hệ thống'}
+              </span>
               <div className="flex items-center gap-0.5 shrink-0">
                 <button onClick={() => openEdit(row)} title="Sửa"
                   className="p-1.5 text-on-muted hover:text-tsubaki-red hover:bg-tsubaki-red/10 rounded-lg transition-colors">

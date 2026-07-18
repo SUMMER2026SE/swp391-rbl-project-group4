@@ -57,21 +57,21 @@ router.post('/lessons/:id/transcribe-video', c.transcribeLessonVideo);
 // attach/detach kiểm tra sở hữu khóa (teacher handler).
 router.get('/vocabulary',                              ac.listVocab);
 router.post('/vocabulary',                             c.createVocabForLesson);
-router.put('/vocabulary/:id',                          ac.updateVocab);
+router.put('/vocabulary/:id',                          c.updateSharedVocab);
 router.post('/vocabulary/upload-image',                upload.single('image'), ac.uploadVocabImage);
 router.post('/lessons/:lessonId/vocabulary/attach',    c.attachVocab);
 router.delete('/lessons/:lessonId/vocabulary/:vocabId', c.detachVocab);
 
 router.get('/kanji',                                   ac.listKanji);
 router.post('/kanji',                                  c.createKanjiForLesson);
-router.put('/kanji/:id',                               ac.updateKanji);
+router.put('/kanji/:id',                               c.updateSharedKanji);
 router.post('/lessons/:lessonId/kanji/attach',         c.attachKanji);
 router.delete('/lessons/:lessonId/kanji/:kanjiId',     c.detachKanji);
 
 // Ngữ pháp (từ điển ngữ pháp chuẩn) — giáo viên thêm/sửa trực tiếp, không cần admin duyệt
 router.get('/grammar-points',                                 ac.listGrammarPoints);
 router.post('/grammar-points',                                c.createGrammarForLesson);
-router.put('/grammar-points/:id',                             ac.updateGrammarPoint);
+router.put('/grammar-points/:id',                             c.updateSharedGrammarPoint);
 router.post('/lessons/:lessonId/grammar-points/attach',       c.attachGrammar);
 router.delete('/lessons/:lessonId/grammar-points/:grammarId', c.detachGrammar);
 

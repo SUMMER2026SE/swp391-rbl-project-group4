@@ -63,13 +63,13 @@ function SystemTab() {
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-surface-low border-b border-outline/40">
-              <tr>{['Chữ','Nghĩa VI','On-yomi','Kun-yomi','Nét','Level'].map(h =>
+              <tr>{['Chữ','Nghĩa VI','On-yomi','Kun-yomi','Nét','Level','Người tạo'].map(h =>
                 <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-on-muted uppercase tracking-wide">{h}</th>)}</tr>
             </thead>
             <tbody>
               {loading ? Array.from({length:8}).map((_,i) => (
                 <tr key={i} className="border-t border-outline/40 animate-pulse">
-                  {[40,100,80,80,40,50].map((w,j) => <td key={j} className="px-4 py-3"><div className="h-3 bg-surface-low rounded" style={{width:w}}/></td>)}
+                  {[40,100,80,80,40,50,60].map((w,j) => <td key={j} className="px-4 py-3"><div className="h-3 bg-surface-low rounded" style={{width:w}}/></td>)}
                 </tr>
               )) : items.map((k,i) => (
                 <tr key={k.id} className={`border-t border-outline/40 hover:bg-tsubaki-red/5 transition-colors ${i%2===1?'bg-surface-low/30':''}`}>
@@ -79,10 +79,11 @@ function SystemTab() {
                   <td className="px-4 py-2.5 text-xs text-on-muted">{joinArr(k.reading_kun)}</td>
                   <td className="px-4 py-2.5 text-center">{k.stroke_count ?? '—'}</td>
                   <td className="px-4 py-2.5">{k.level ? <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${LEVEL_COLORS[k.level]}`}>{k.level}</span> : '—'}</td>
+                  <td className="px-4 py-2.5 text-xs text-on-muted">{k.creator_name || 'Hệ thống'}</td>
                 </tr>
               ))}
               {!loading && items.length === 0 && (
-                <tr><td colSpan={6} className="px-4 py-12 text-center text-on-muted">Không có dữ liệu</td></tr>
+                <tr><td colSpan={7} className="px-4 py-12 text-center text-on-muted">Không có dữ liệu</td></tr>
               )}
             </tbody>
           </table>
