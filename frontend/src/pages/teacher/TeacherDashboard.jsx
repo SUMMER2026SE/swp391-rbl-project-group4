@@ -10,14 +10,13 @@ const PERF_BARS = [
 ];
 
 const PENDING = [
-  { icon: 'groups',         iconCls: 'text-tsubaki-red',   bg: 'bg-tsubaki-red/10',   title: 'Quản lý lớp học',  desc: 'Tạo lớp và quản lý học viên của bạn.' },
-  { icon: 'quiz',           iconCls: 'text-sumire-purple', bg: 'bg-sumire-purple/10', title: 'Bài kiểm tra',     desc: 'Soạn bài kiểm tra mới cho học viên.' },
+  { icon: 'menu_book',      iconCls: 'text-sumire-purple', bg: 'bg-sumire-purple/10', title: 'Khóa học',         desc: 'Tạo và quản lý khóa học của bạn.' },
   { icon: 'font_download',  iconCls: 'text-on-muted',      bg: 'bg-surface-low',      title: 'Thêm Kanji',       desc: 'Bổ sung Kanji vào kho học liệu.' },
 ];
 
 // ── Thẻ điều hướng nhanh tới các khu vực thật của giáo viên ──────────────────
 const QUICK_NAV = [
-  { to: '/teacher/classes',       label: 'Lớp học',          icon: 'groups',      iconCls: 'text-tsubaki-red',   bg: 'bg-tsubaki-red/10' },
+  { to: '/teacher/courses',       label: 'Khóa học',         icon: 'menu_book',   iconCls: 'text-tsubaki-red',   bg: 'bg-tsubaki-red/10' },
   { to: '/teacher/question-bank', label: 'Ngân hàng câu hỏi', icon: 'inventory_2', iconCls: 'text-sumire-purple', bg: 'bg-sumire-purple/10' },
   { to: '/teacher/vocab',         label: 'Học liệu',         icon: 'translate',   iconCls: 'text-amber-600',     bg: 'bg-amber-100' },
 ];
@@ -37,15 +36,8 @@ export default function TeacherDashboard() {
               <span className="opacity-50 font-medium text-2xl">おはようございます</span>
             </h1>
             <p className="text-on-muted leading-relaxed max-w-xl">
-              Quản lý lớp học và nội dung học liệu của bạn từ đây.
+              Quản lý nội dung học liệu của bạn từ đây.
             </p>
-          </div>
-          <div className="flex gap-3">
-            <Link to="/teacher/classes"
-              className="px-5 py-2.5 bg-tsubaki-red text-white rounded-xl text-sm font-semibold hover:opacity-90 flex items-center gap-1.5 shadow-md shadow-tsubaki-red/20 transition-all">
-              <span className="material-symbols-outlined text-[18px]">groups</span>
-              Quản lý lớp học
-            </Link>
           </div>
         </div>
       </section>
@@ -118,7 +110,7 @@ export default function TeacherDashboard() {
                 </div>
               ))}
             </div>
-            <Link to="/teacher/classes"
+            <Link to="/teacher/courses"
               className="w-full mt-6 py-2.5 border border-outline/30 rounded-xl text-xs font-bold text-on-muted hover:bg-surface-low transition-all flex items-center justify-center">
               Đến khu vực quản lý
             </Link>

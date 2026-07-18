@@ -145,7 +145,7 @@ exports.changePassword = async (req, res) => {
 exports.getDashboard = async (req, res) => {
   const userId = req.user.id;
   try {
-    const [profRes, dashRes, attemptsRes, enrollRes] = await Promise.allSettled([
+    const [profRes, dashRes, attemptsRes] = await Promise.allSettled([
       supabaseAdmin.from('student_profiles')
         .select('jlpt_target_level,current_level,streak_days,last_study_date,daily_study_minutes,study_goal')
         .eq('user_id', userId).single(),
@@ -155,9 +155,6 @@ exports.getDashboard = async (req, res) => {
       examDb.from('quiz_attempts')
           .select('id,quiz_id,score,total_questions,completed_at')
           .eq('user_id', userId).order('completed_at', { ascending: false }).limit(5),
-      supabaseAdmin.from('class_enrollments')
-          .select('id,class_id,enrolled_at')
-          .eq('student_id', userId).eq('status', 'active').order('enrolled_at', { ascending: false }).limit(5),
     ]);
     const attempts = attemptsRes.status === 'fulfilled' ? (attemptsRes.value.data || []) : [];
     const quizIds  = [...new Set(attempts.map(a => a.quiz_id).filter(Boolean))];
@@ -167,20 +164,11 @@ exports.getDashboard = async (req, res) => {
     const quizMap = Object.fromEntries((quizzes || []).map(q => [q.id, q.title]));
     const recentActivity = attempts.map(a => ({ ...a, quiz_title: quizMap[a.quiz_id] || 'Bài kiểm tra' }));
 
-    const enrollments = enrollRes.status === 'fulfilled' ? (enrollRes.value.data || []) : [];
-    const classIds     = [...new Set(enrollments.map(e => e.class_id).filter(Boolean))];
-    const { data: classes } = classIds.length > 0
-        ? await supabaseAdmin.from('classes').select('id,name,description').in('id', classIds)
-        : { data: [] };
-    const classMap = Object.fromEntries((classes || []).map(c => [c.id, c]));
-    const myClasses = enrollments.map(e => ({ ...e, class: classMap[e.class_id] || {} }));
     res.json({
       profile:   profRes.status  === 'fulfilled' ? (profRes.value.data  || {}) : {},
       dashboard: dashRes.status  === 'fulfilled' ? (dashRes.value.data  || {}) : {},
-      //trả thêm `recentActivity` (lịch sử làm quiz gần nhất) và `myClasses`
-      //   (lớp học sinh đang tham gia)
+      // trả thêm `recentActivity` (lịch sử làm quiz gần nhất)
       recentActivity,
-      myClasses,
     });
   } catch (err) {
     console.error('Dashboard error:', err);
