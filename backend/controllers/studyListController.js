@@ -12,9 +12,9 @@ const toArr = (v) => {
   return v.split(/[,、]\s*/).map(s => s.trim()).filter(Boolean);
 };
 
-// GET /api/study-lists?type=&sort=newest|popular&search=&page=&limit=
+// GET /api/study-lists?type=&sort=newest|popular&search=&page=&limit=&access_type=free|premium
 exports.list = async (req, res) => {
-  const { type, sort = 'newest', search, mine, level, topic } = req.query;
+  const { type, sort = 'newest', search, mine, level, topic, access_type } = req.query;
   if (!LIST_TYPES.includes(type)) return res.status(400).json({ error: 'type phải là vocabulary, kanji hoặc grammar.' });
 
   const p   = Math.max(1, Number(req.query.page) || 1);
@@ -28,6 +28,8 @@ exports.list = async (req, res) => {
 
     if (level) query = query.eq('level', level);
     if (topic) query = query.eq('topic', topic);
+    if (access_type === 'free')    query = query.eq('creator_type', 'admin');
+    else if (access_type === 'premium') query = query.eq('creator_type', 'teacher');
 
     // mine=true — chỉ giáo viên/admin xem bài đăng của chính mình (trang quản lý,
     // vẫn thấy cả bài bị khóa để sửa theo yêu cầu). Duyệt công khai thì ẩn bài bị khóa.
@@ -78,6 +80,28 @@ exports.getOne = async (req, res) => {
     // Bài bị khóa (admin ẩn để yêu cầu sửa) — chỉ chủ bài và admin xem được.
     const isOwnerOrAdmin = req.user && (req.user.id === post.created_by || req.user.user_metadata?.role === 'admin');
     if (post.is_locked && !isOwnerOrAdmin) return res.status(404).json({ error: 'Không tìm thấy.' });
+
+    // Premium gate: bài do giáo viên đăng chỉ dành cho học viên có premium.
+    // Giáo viên và admin luôn được xem; học viên cần kiểm tra subscription.
+    if (post.creator_type === 'teacher') {
+      const role = req.user?.user_metadata?.role;
+      if (role !== 'teacher' && role !== 'admin') {
+        let hasPremium = false;
+        if (req.user) {
+          const { data: sub } = await supabaseAdmin
+            .from('user_subscriptions')
+            .select('plan:subscription_plans(tier)')
+            .eq('user_id', req.user.id)
+            .in('status', ['active', 'grace_period'])
+            .limit(1)
+            .maybeSingle();
+          hasPremium = sub?.plan?.tier === 'premium';
+        }
+        if (!hasPremium) {
+          return res.status(403).json({ error: 'Bài đăng này chỉ dành cho thành viên Premium.' });
+        }
+      }
+    }
 
     const { data: itemRows } = await supabaseAdmin.from('study_list_items')
       .select('item_id,sort_order').eq('post_id', post.id).order('sort_order', { ascending: true });
