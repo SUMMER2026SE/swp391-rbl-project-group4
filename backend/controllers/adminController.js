@@ -2,6 +2,7 @@
 
 const { supabaseAdmin, updateUserMetadata } = require('../config/supabase');
 const { validateThreshold } = require('../services/passThreshold');
+const { snapshotsForBankRows } = require('../utils/passageSnapshot');
 
 // Bảng quiz đã chuyển sang schema exam_module (question_bank/users vẫn ở public)
 const examDb = supabaseAdmin.schema('exam_module');
@@ -33,43 +34,77 @@ exports.getStats = async (req, res) => {
   }
 };
 
+// POST /api/admin/test-receipt-email — gửi biên lai mẫu tới email của chính admin
+// (dùng ở tab "Hoạt động hệ thống" để kiểm tra SMTP + mẫu biên lai)
+exports.testReceiptEmail = async (req, res) => {
+  const type = req.body?.type === 'subscription' ? 'subscription' : 'course';
+  const to = req.user.email;
+  if (!to) return res.status(400).json({ error: 'Tài khoản admin không có email.' });
+  try {
+    const { sendReceiptEmail } = require('../config/mailer');
+    await sendReceiptEmail(to, {
+      typeLabel:   type === 'course' ? 'Khóa học' : 'Gói',
+      itemName:    type === 'course' ? 'Khóa học tiếng Nhật N5 cơ bản (mẫu)' : 'Premium 1 tháng (mẫu)',
+      amount:      type === 'course' ? 499000 : 100000,
+      currency:    'VND',
+      orderCode:   type === 'course' ? 'CRS-TEST-000001' : 'SUB-TEST-000001',
+      paymentCode: type === 'course' ? 'COURSETEST01' : 'PREMTEST01',
+      paidAt:      new Date().toISOString(),
+      buyerName:   req.user.user_metadata?.full_name || to,
+    });
+    res.json({ message: `Đã gửi biên lai thử tới ${to}.` });
+  } catch (err) {
+    console.error('testReceiptEmail error:', err.message);
+    res.status(500).json({ error: err.message || 'Không gửi được email. Kiểm tra cấu hình SMTP.' });
+  }
+};
+
 // ── Users ────────────────────────────────────────────────────────────────────
+const USER_ROLES = ['student', 'teacher', 'admin'];
+
+// Mật khẩu phải ≥ 8 ký tự và chứa cả chữ cái lẫn số. Trả về chuỗi lỗi hoặc null.
+function validatePassword(password) {
+  if (!password || password.length < 8) return 'Mật khẩu phải có ít nhất 8 ký tự.';
+  if (!/[A-Za-z]/.test(password) || !/[0-9]/.test(password))
+    return 'Mật khẩu phải chứa cả chữ cái và số.';
+  return null;
+}
+
+// GET /api/admin/users
 exports.listUsers = async (req, res) => {
-  const { search, page = 1, limit = 20 } = req.query;
-  const offset = (Number(page) - 1) * Number(limit);
+  const { search } = req.query;
+  const page  = Math.max(1, Number(req.query.page) || 1);
+  const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 20));
+  const offset = (page - 1) * limit;
   try {
     let query = supabaseAdmin.from('users')
       .select('id,full_name,email,phone,avatar_url,created_at', { count: 'exact' })
       .order('created_at', { ascending: false })
-      .range(offset, offset + Number(limit) - 1);
-    if (search) {
-      const safe = String(search).replace(/[,()%*]/g, ' ').trim();
-      if (safe) query = query.or(`full_name.ilike.%${safe}%,email.ilike.%${safe}%`);
-    }
+      .range(offset, offset + limit - 1);
+    const safe = search ? String(search).replace(/[,()%*]/g, ' ').trim() : '';
+    if (safe) query = query.or(`full_name.ilike.%${safe}%,email.ilike.%${safe}%`);
     const { data, error, count } = await query;
     if (error) throw error;
 
-    // Enrich with role from auth.users metadata
-    const roleMap = {};
-    if (data && data.length > 0) {
-      const { data: authData } = await supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 1000 });
-      const ids = new Set(data.map(u => u.id));
-      (authData?.users || []).forEach(u => {
-        if (ids.has(u.id)) roleMap[u.id] = u.user_metadata?.role || 'student';
-      });
-    }
-
-    const enriched = (data || []).map(u => ({ ...u, role: roleMap[u.id] || 'student' }));
-    res.json({ data: enriched, total: count, page: Number(page), limit: Number(limit) });
+    // Enrich role từ auth metadata — chỉ lấy đúng các user đang hiển thị (tối đa
+    // `limit`), tránh fetch cả bảng auth và tránh sai role với user thứ 1001+.
+    const enriched = await Promise.all((data || []).map(async (u) => {
+      const { data: authUser } = await supabaseAdmin.auth.admin.getUserById(u.id);
+      return { ...u, role: authUser?.user?.user_metadata?.role || 'student' };
+    }));
+    res.json({ data: enriched, total: count, page, limit });
   } catch (err) {
     console.error('List users error:', err);
     res.status(500).json({ error: 'Không thể tải danh sách.' });
   }
 };
 
+// GET /api/admin/users/:id
 exports.getUser = async (req, res) => {
   try {
-    const { data, error } = await supabaseAdmin.from('users').select('*').eq('id', req.params.id).single();
+    const { data, error } = await supabaseAdmin.from('users')
+      .select('id,full_name,email,phone,avatar_url,created_at,updated_at')
+      .eq('id', req.params.id).single();
     if (error || !data) return res.status(404).json({ error: 'Không tìm thấy.' });
     res.json(data);
   } catch (err) {
@@ -77,17 +112,27 @@ exports.getUser = async (req, res) => {
   }
 };
 
+// PUT /api/admin/users/:id
 exports.updateUser = async (req, res) => {
   const { full_name, phone, role } = req.body;
+
+  if (role !== undefined && !USER_ROLES.includes(role))
+    return res.status(400).json({ error: 'Vai trò không hợp lệ.' });
+  // Không cho admin tự hạ quyền của chính mình → tránh khóa mình ra khỏi panel.
+  if (role !== undefined && req.params.id === req.user.id && role !== 'admin')
+    return res.status(400).json({ error: 'Không thể tự hạ quyền admin của chính mình.' });
+
   try {
     const updates = {};
     if (full_name !== undefined) updates.full_name = full_name;
     if (phone     !== undefined) updates.phone     = phone;
     if (Object.keys(updates).length > 0) {
+      updates.updated_at = new Date().toISOString();
       const { error } = await supabaseAdmin.from('users').update(updates).eq('id', req.params.id);
       if (error) throw error;
     }
     if (role !== undefined) {
+      // updateUserMetadata spread metadata cũ → không mất full_name/avatar_url của user Google.
       const { error } = await updateUserMetadata(req.params.id, { role });
       if (error) throw error;
     }
@@ -98,19 +143,25 @@ exports.updateUser = async (req, res) => {
   }
 };
 
+// DELETE /api/admin/users/:id
 exports.deleteUser = async (req, res) => {
+  if (req.params.id === req.user.id)
+    return res.status(400).json({ error: 'Không thể xóa tài khoản của chính mình.' });
   try {
-    await supabaseAdmin.auth.admin.deleteUser(req.params.id);
+    const { error } = await supabaseAdmin.auth.admin.deleteUser(req.params.id);
+    if (error) throw error;
     res.json({ message: 'Đã xóa người dùng.' });
   } catch (err) {
+    console.error('Delete user error:', err);
     res.status(500).json({ error: 'Không thể xóa.' });
   }
 };
 
+// PUT /api/admin/users/:id/password
 exports.resetUserPassword = async (req, res) => {
   const { password } = req.body;
-  if (!password || password.length < 8)
-    return res.status(400).json({ error: 'Mật khẩu phải có ít nhất 8 ký tự.' });
+  const pwErr = validatePassword(password);
+  if (pwErr) return res.status(400).json({ error: pwErr });
   try {
     const { error } = await supabaseAdmin.auth.admin.updateUserById(req.params.id, { password });
     if (error) throw error;
@@ -1674,7 +1725,7 @@ exports.listQuizQuestions = async (req, res) => {
   try {
     const { data, error } = await examDb
       .from('quiz_questions')
-      .select('id,question,options,correct_answer,correct_answer_data,question_type,bank_question_id,explanation,order_index')
+      .select('id,question,options,correct_answer,correct_answer_data,question_type,bank_question_id,explanation,passage_snapshot,order_index')
       .eq('quiz_id', req.params.quizId)
       .order('order_index');
     if (error) throw error;
@@ -1756,6 +1807,9 @@ exports.importFromBank = async (req, res) => {
       .from('question_bank').select('*').in('id', question_ids);
     if (fetchErr) throw fetchErr;
 
+    // Đóng băng bài đọc/nghe của câu hỏi để mang theo khi nhập vào quiz.
+    const getSnap = await snapshotsForBankRows(bankRows);
+
     const rows = bankRows.map((bq, i) => ({
       quiz_id:            quizId,
       bank_question_id:   bq.id,
@@ -1765,6 +1819,7 @@ exports.importFromBank = async (req, res) => {
       correct_answer:     typeof bq.correct_answer === 'string' ? bq.correct_answer : null,
       correct_answer_data: typeof bq.correct_answer !== 'string' ? bq.correct_answer : null,
       explanation:        bq.explanation || null,
+      passage_snapshot:   getSnap(bq),
       order_index:        nextIdx + i,
     }));
 

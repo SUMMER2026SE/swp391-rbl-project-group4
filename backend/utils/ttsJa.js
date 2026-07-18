@@ -57,9 +57,14 @@ function collect(stream) {
   });
 }
 
-// transcript → Buffer mp3 (các lượt thoại nối tiếp, chèn khoảng lặng ở giữa).
-// Ném lỗi nếu transcript rỗng hoặc dịch vụ TTS không phản hồi.
-async function synthesizeTranscript(transcript) {
+// mp3 CBR 24kHz/48kbps mono ⇒ 48000 bit/s = 6000 byte/s. Suy thời lượng từ số byte
+// (đủ chính xác cho đồng bộ câu — cùng định dạng với SILENT_FRAME nên byte cộng dồn khớp).
+const BYTES_PER_SEC = 6000;
+const round2 = n => Math.round(n * 100) / 100;
+
+// transcript → { buffer: mp3, segments: [{start,end,parts:[{lang:'ja',text}]}] }.
+// Đọc từng dòng, chèn khoảng lặng GAP_MS ở giữa; start/end mỗi câu suy từ vị trí byte.
+async function synthesizeWithTimings(transcript) {
   const lines = parseTranscript(transcript);
   if (!lines.length) { const e = new Error('Transcript trống — không có nội dung để đọc.'); e.httpStatus = 400; throw e; }
   if (lines.length > MAX_LINES) {
@@ -77,16 +82,33 @@ async function synthesizeTranscript(transcript) {
   };
 
   try {
-    const parts = [];
+    const parts = [];       // buffer chunks nối lại thành mp3 cuối
+    const segments = [];
+    let offset = 0;         // vị trí byte hiện tại trong file
     for (const [i, line] of lines.entries()) {
       const tts = await clientFor(line.voice);
-      parts.push(await collect(tts.toStream(escapeXml(line.text)).audioStream));
-      if (i < lines.length - 1) parts.push(silence(GAP_MS));
+      const buf = await collect(tts.toStream(escapeXml(line.text)).audioStream);
+      const start = offset / BYTES_PER_SEC;
+      offset += buf.length;
+      const end = offset / BYTES_PER_SEC;
+      parts.push(buf);
+      segments.push({ start: round2(start), end: round2(end), parts: [{ lang: 'ja', text: line.text }] });
+      if (i < lines.length - 1) {
+        const gap = silence(GAP_MS);
+        parts.push(gap);
+        offset += gap.length;
+      }
     }
-    return Buffer.concat(parts);
+    return { buffer: Buffer.concat(parts), segments };
   } finally {
     Object.values(clients).forEach(c => c.close());
   }
 }
 
-module.exports = { synthesizeTranscript, parseTranscript };
+// transcript → Buffer mp3 (bỏ timestamp). Dùng cho phần Nghe của đề thi thử JLPT.
+async function synthesizeTranscript(transcript) {
+  const { buffer } = await synthesizeWithTimings(transcript);
+  return buffer;
+}
+
+module.exports = { synthesizeTranscript, synthesizeWithTimings, parseTranscript };

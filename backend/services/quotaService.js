@@ -188,6 +188,7 @@ async function getAllQuotas(userId) {
     'kanji_file_monthly',
     'kanji_chars_per_file',
     'listening_practice_monthly',
+    'listening_create_monthly',
     'ai_chat_daily',
     'flashcard_ai_suggest_daily',
     'learning_path_generate_monthly',

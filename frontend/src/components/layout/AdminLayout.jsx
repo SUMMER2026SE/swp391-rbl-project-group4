@@ -18,11 +18,11 @@ const ADMIN_LINKS = (t) => [
   { to: '/admin/placement',   icon: 'assignment_ind',  label: 'Kiểm tra NL' },
   { to: '/admin/reading',      icon: 'auto_stories',  label: 'Luyện đọc' },
   { to: '/admin/teacher-applications', icon: 'verified_user', label: 'Đơn giáo viên' },
-  { to: '/chat',               icon: 'smart_toy',       label: 'Trợ lý AI' },
   { to: '/admin/subscriptions', icon: 'workspace_premium', label: 'Đăng ký' },
   { to: '/admin/payments',      icon: 'payments',          label: 'Thanh toán' },
   { to: '/admin/revenue-pool',  icon: 'savings',           label: 'Quỹ doanh thu' },
   { to: '/admin/system',        icon: 'monitor_heart',     label: 'Hoạt động HT' },
+  { to: '/chat',               icon: 'smart_toy',       label: 'Trợ lý AI' },
   { to: '/profile',            icon: 'person',          label: 'Hồ sơ' },
 ];
 

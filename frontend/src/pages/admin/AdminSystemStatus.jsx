@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import AdminLayout from '../../components/layout/AdminLayout';
 import FaceDetectionTest from '../../components/admin/FaceDetectionTest';
+import ReceiptTest from '../../components/admin/ReceiptTest';
 import api from '../../lib/api';
 
 const AUTO_REFRESH_S = 30;
@@ -256,6 +257,11 @@ export default function AdminSystemStatus() {
       {/* Face detection test (proctored exam) */}
       <div className="mb-6">
         <FaceDetectionTest />
+      </div>
+
+      {/* Receipt test (PDF + email biên lai) */}
+      <div className="mb-6">
+        <ReceiptTest />
       </div>
 
       {/* System info table */}

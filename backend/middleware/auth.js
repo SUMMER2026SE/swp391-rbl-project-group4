@@ -6,29 +6,29 @@ const { supabaseAdmin } = require('../config/supabase');
 exports.requireAuth = async (req, res, next) => {
   const header = req.headers.authorization;
   if (!header || !header.startsWith('Bearer ')) {
-    return res.status(401).json({ error: 'Unauthorized' });
+    return res.status(401).json({ error: 'Bạn chưa đăng nhập.' });
   }
   const token = header.slice(7);
   try {
     const { data: { user }, error } = await supabaseAdmin.auth.getUser(token);
-    if (error || !user) return res.status(401).json({ error: 'Invalid or expired token' });
+    if (error || !user) return res.status(401).json({ error: 'Phiên đăng nhập đã hết hạn.' });
     req.user = user;
     next();
   } catch {
-    res.status(401).json({ error: 'Unauthorized' });
+    res.status(401).json({ error: 'Bạn chưa đăng nhập.' });
   }
 };
 
 exports.requireAdmin = (req, res, next) => {
-  if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
-  if (req.user.user_metadata?.role !== 'admin') return res.status(403).json({ error: 'Forbidden: admin only' });
+  if (!req.user) return res.status(401).json({ error: 'Bạn chưa đăng nhập.' });
+  if (req.user.user_metadata?.role !== 'admin') return res.status(403).json({ error: 'Bạn không có quyền truy cập.' });
   next();
 };
 
 exports.requireTeacher = (req, res, next) => {
-  if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
+  if (!req.user) return res.status(401).json({ error: 'Bạn chưa đăng nhập.' });
   const role = req.user.user_metadata?.role;
-  if (role !== 'teacher' && role !== 'admin') return res.status(403).json({ error: 'Forbidden: teacher access required' });
+  if (role !== 'teacher' && role !== 'admin') return res.status(403).json({ error: 'Bạn không có quyền truy cập.' });
   next();
 };
 

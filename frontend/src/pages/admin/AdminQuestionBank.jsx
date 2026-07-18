@@ -367,6 +367,11 @@ function PreviewModal({ item, onClose }) {
           {/* Passages (collapsible) */}
           {passage && <PassageCard passage={passage} compact furigana={furigana} />}
           {listeningPassage && <ListeningPassageCard passage={listeningPassage} compact />}
+          {/* Bài đã đóng băng (câu copy từ ngân hàng chung) */}
+          {!passage && !listeningPassage && item.passage_snapshot?.kind === 'reading' &&
+            <PassageCard passage={item.passage_snapshot} compact furigana={furigana} />}
+          {!passage && !listeningPassage && item.passage_snapshot?.kind === 'listening' &&
+            <ListeningPassageCard passage={item.passage_snapshot} compact />}
 
           {/* Question text */}
           <FuriganaText

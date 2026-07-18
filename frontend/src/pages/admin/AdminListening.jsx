@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import AdminLayout from '../../components/layout/AdminLayout';
+import ListeningContentManager from '../../components/listening/ListeningContentManager';
 import api from '../../lib/api';
 
 const LEVELS = ['N5','N4','N3','N2','N1'];
@@ -257,12 +258,13 @@ const ADMIN_EP = {
   removeLine: (lineId) => `/admin/listening/lines/${lineId}`,
 };
 
-export function ListeningManager({ Layout = AdminLayout, ep = ADMIN_EP, title = 'Hội thoại luyện nghe' }) {
+export function ListeningManager({ Layout = AdminLayout, ep = ADMIN_EP, title = 'Hội thoại luyện nghe', mediaManager = false }) {
   const [dialogues, setDialogues] = useState([]);
   const [loading, setLoading]     = useState(true);
   const [creating, setCreating]   = useState(false);
   const [saving, setSaving]       = useState(false);
   const [levelFilter, setLevelFilter] = useState('');
+  const [mode, setMode] = useState('dialogue'); // 'dialogue' | 'media'
 
   useEffect(() => {
     api.get(ep.list).then(r => setDialogues(r.data)).finally(() => setLoading(false));
@@ -278,9 +280,21 @@ export function ListeningManager({ Layout = AdminLayout, ep = ADMIN_EP, title = 
 
   const filtered = levelFilter ? dialogues.filter(d => d.level === levelFilter) : dialogues;
 
+  if (mediaManager && mode === 'media') {
+    return (
+      <Layout title={title}>
+        <div className="max-w-3xl mx-auto">
+          <ModeTabs mode={mode} setMode={setMode} />
+          <ListeningContentManager admin />
+        </div>
+      </Layout>
+    );
+  }
+
   return (
     <Layout title={title}>
       <div className="max-w-3xl mx-auto">
+        {mediaManager && <ModeTabs mode={mode} setMode={setMode} />}
         <div className="flex items-center justify-between mb-5">
           <div>
             <h1 className="text-2xl font-bold">{title}</h1>
@@ -335,6 +349,19 @@ export function ListeningManager({ Layout = AdminLayout, ep = ADMIN_EP, title = 
   );
 }
 
+function ModeTabs({ mode, setMode }) {
+  return (
+    <div className="flex gap-1 mb-5 p-1 bg-surface-low rounded-xl w-fit">
+      {[['dialogue', 'Hội thoại kịch bản'], ['media', 'Bài nghe (audio/video/YouTube)']].map(([k, label]) => (
+        <button key={k} onClick={() => setMode(k)}
+          className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${mode === k ? 'bg-white shadow text-charcoal' : 'text-on-muted hover:text-charcoal'}`}>
+          {label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export default function AdminListening() {
-  return <ListeningManager />;
+  return <ListeningManager mediaManager title="Luyện nghe" />;
 }

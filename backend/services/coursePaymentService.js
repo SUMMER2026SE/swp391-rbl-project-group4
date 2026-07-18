@@ -14,7 +14,19 @@ function generatePaymentCode() {
   return COURSE_PREFIX + crypto.randomBytes(4).toString('hex').toUpperCase();
 }
 
-const ORDER_FIELDS = 'id, order_code, payment_code, amount, currency, qr_url, expires_at, status, course_id';
+const ORDER_FIELDS = 'id, order_code, payment_code, amount, currency, qr_url, bank_code, account_number, expires_at, status, course_id';
+
+// Lịch sử khóa học đã mua (đã thanh toán) của một học viên — kèm tên khóa.
+async function listMyCoursePurchases(studentId) {
+  const { data, error } = await contentDb
+    .from('course_payment_orders')
+    .select('id, order_code, payment_code, amount, currency, paid_at, course:courses(title)')
+    .eq('student_id', studentId)
+    .eq('status', 'paid')
+    .order('paid_at', { ascending: false });
+  if (error) throw error;
+  return data || [];
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -137,4 +149,5 @@ module.exports = {
   cancelCourseOrder,
   getPendingCourseOrder,
   completeCoursePayment,
+  listMyCoursePurchases,
 };

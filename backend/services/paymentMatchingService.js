@@ -4,8 +4,24 @@ const { supabaseAdmin }       = require('../config/supabase');
 const { activateSubscription } = require('./subscriptionService');
 const { normalizeTransaction }  = require('./sepayClient');
 const { COURSE_PREFIX, completeCoursePayment } = require('./coursePaymentService');
+const { sendReceiptEmail } = require('../config/mailer');
 
 const contentDb = supabaseAdmin.schema('content_module');
+
+// Gửi biên lai qua email — best-effort, không được làm hỏng luồng khớp thanh toán.
+async function emailReceiptSafe({ userId, typeLabel, itemName, amount, currency, orderCode, paymentCode, paidAt }) {
+  try {
+    const { data: u } = await supabaseAdmin.from('users').select('email, full_name').eq('id', userId).maybeSingle();
+    if (!u?.email) return;
+    await sendReceiptEmail(u.email, {
+      typeLabel, itemName, amount, currency,
+      orderCode, paymentCode, paidAt,
+      buyerName: u.full_name || u.email,
+    });
+  } catch (err) {
+    console.error('[paymentMatching] sendReceiptEmail failed:', err.message);
+  }
+}
 
 /**
  * Idempotent transaction processor.
@@ -67,7 +83,7 @@ async function processTransaction(rawPayload) {
 
   const { data: order, error: oErr } = await supabaseAdmin
     .from('payment_orders')
-    .select('id, user_id, plan_id, amount, status, expires_at')
+    .select('id, user_id, plan_id, amount, status, expires_at, order_code, payment_code')
     .eq('payment_code', paymentCode)
     .eq('status', 'pending')
     .gt('expires_at', new Date().toISOString())
@@ -112,6 +128,13 @@ async function processTransaction(rawPayload) {
     // Order is marked paid but subscription failed — log for manual review
   }
 
+  // 6. Email biên lai (best-effort)
+  const { data: plan } = await supabaseAdmin.from('subscription_plans').select('name').eq('id', order.plan_id).maybeSingle();
+  await emailReceiptSafe({
+    userId: order.user_id, typeLabel: 'Gói', itemName: plan?.name || 'Premium',
+    amount: order.amount, currency: 'VND', orderCode: order.order_code, paymentCode: order.payment_code, paidAt: now,
+  });
+
   console.log(`[paymentMatching] matched order ${order.id} ← tx ${tx.externalId}`);
   return 'matched';
 }
@@ -124,7 +147,7 @@ async function processTransaction(rawPayload) {
 async function matchCourseOrder(paymentCode, tx, txRecord, rawPayload) {
   const { data: order, error: oErr } = await contentDb
     .from('course_payment_orders')
-    .select('id, student_id, course_id, amount, status, expires_at')
+    .select('id, student_id, course_id, amount, status, expires_at, order_code, payment_code')
     .eq('payment_code', paymentCode)
     .eq('status', 'pending')
     .gt('expires_at', new Date().toISOString())
@@ -165,6 +188,13 @@ async function matchCourseOrder(paymentCode, tx, txRecord, rawPayload) {
     console.error('[paymentMatching] completeCoursePayment error', err.message);
     // Order is marked paid but enrollment failed — log for manual review
   }
+
+  // Email biên lai (best-effort)
+  const { data: course } = await contentDb.from('courses').select('title').eq('id', order.course_id).maybeSingle();
+  await emailReceiptSafe({
+    userId: order.student_id, typeLabel: 'Khóa học', itemName: course?.title || 'Khóa học',
+    amount: order.amount, currency: 'VND', orderCode: order.order_code, paymentCode: order.payment_code, paidAt: now,
+  });
 
   console.log(`[paymentMatching] matched course order ${order.id} ← tx ${tx.externalId}`);
   return 'matched';
