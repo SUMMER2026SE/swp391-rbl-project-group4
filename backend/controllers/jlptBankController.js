@@ -294,16 +294,59 @@ exports.importFile = async (req, res) => {
   } catch (err) { handleError(res, err, 'Không thể đọc file nhập.'); }
 };
 
-// POST /api/admin/jlpt-bank/import-commit — body { level, mondai_type, questions[] } → ghi bank source='import'
+// POST /api/admin/jlpt-bank/import-commit — ghi bank source='import'
+// Câu đơn/nghe: body { level, mondai_type, questions[] }.
+// Dạng passage:  body { level, mondai_type, groups: [{title, passage_text, questions[]}] }.
 exports.importCommit = (req, res) => {
   try {
-    const { assertImportableType } = require('../utils/jlptBankImport');
+    const { assertImportableType, isPassageType } = require('../utils/jlptBankImport');
     assertImportableType(req.body.mondai_type);
+    if (isPassageType(req.body.mondai_type)) return importCommitGroups(req, res);
   } catch (err) { return handleError(res, err, 'Không thể nhập câu hỏi.'); }
   req.body.source = 'import';
-  req.body.group_id = undefined; // dạng import không có nhóm passage
+  req.body.group_id = undefined; // câu đơn/nghe không có nhóm passage
   return exports.createQuestions(req, res); // validate lại server-side + insert
 };
+
+// Nhập dạng passage: mỗi group = 1 dòng jlpt_bank_groups + các câu con (validate lại server-side)
+async function importCommitGroups(req, res) {
+  const { level, mondai_type, groups } = req.body;
+  if (!Array.isArray(groups) || !groups.length)
+    return res.status(400).json({ error: 'Danh sách nhóm đoạn văn không được rỗng.' });
+  try {
+    const meta = assertLevelType(level, mondai_type);
+    for (let gi = 0; gi < groups.length; gi++) {
+      const g = groups[gi];
+      if (!g.passage_text?.trim())
+        return res.status(400).json({ error: `Nhóm ${gi + 1}: thiếu nội dung đoạn văn.` });
+      if (!Array.isArray(g.questions) || !g.questions.length)
+        return res.status(400).json({ error: `Nhóm ${gi + 1}: phải có ít nhất 1 câu hỏi.` });
+      for (let i = 0; i < g.questions.length; i++) {
+        const msg = validateQuestionPayload(g.questions[i]);
+        if (msg) return res.status(400).json({ error: `Nhóm ${gi + 1}, câu ${i + 1}: ${msg}` });
+      }
+    }
+
+    let savedGroups = 0;
+    let savedQuestions = 0;
+    for (const g of groups) {
+      const { data: group, error } = await jlptDb.from('jlpt_bank_groups')
+        .insert({
+          level, mondai_type,
+          title:        g.title?.trim() || null,
+          passage_text: g.passage_text.trim(),
+          created_by:   req.user?.id || null,
+        }).select().single();
+      if (error) throw error;
+      const rows = g.questions.map(q => toRow(q, { level, mondaiType: mondai_type, meta, groupId: group.id, userId: req.user?.id, source: 'import' }));
+      const { data, error: qErr } = await jlptDb.from('jlpt_bank_questions').insert(rows).select();
+      if (qErr) throw qErr;
+      savedGroups++;
+      savedQuestions += data.length;
+    }
+    res.status(201).json({ saved_groups: savedGroups, saved: savedQuestions });
+  } catch (err) { handleError(res, err, 'Không thể nhập nhóm đoạn văn vào ngân hàng.'); }
+}
 
 // ─── TTS cho câu nghe trong bank ──────────────────────────────────────────────
 
