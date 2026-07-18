@@ -7,6 +7,7 @@ import Modal from '../../components/ui/Modal';
 import api, {
   getLearningPath, generateLearningPath, regenerateLearningPath, completeLearningStep,
 } from '../../lib/api';
+import { usePageContext } from '../../contexts/PageContext';
 
 const LEVELS = ['N5', 'N4', 'N3', 'N2', 'N1'];
 
@@ -43,6 +44,17 @@ export default function LearningPath() {
   const [form, setForm]         = useState({ current_level: '', target_level: '', study_goal: '', daily_minutes: '' });
   const [generating, setGenerating] = useState(false);
   const [confirmRegen, setConfirmRegen] = useState(false);
+
+  // Cho trợ lý AI biết lộ trình đang hiển thị
+  usePageContext({
+    tab: 'Lộ trình học',
+    title: data?.path ? `Lộ trình ${data.path.current_level} → ${data.path.target_level}` : 'Chưa có lộ trình',
+    data: data?.path ? {
+      current_level: data.path.current_level, target_level: data.path.target_level,
+      progress: data.progress,
+      nextStep: (data.steps || []).find(s => s.status !== 'completed')?.title || null,
+    } : { hasPath: false },
+  }, [data]);
 
   const loadPath = async () => {
     setLoading(true);

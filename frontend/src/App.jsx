@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
 import { LangProvider } from './contexts/LangContext';
+import { PageContextProvider } from './contexts/PageContext';
 import ProtectedRoute from './components/shared/ProtectedRoute';
 import StudentRoute from './components/shared/StudentRoute';
 import AdminRoute from './components/shared/AdminRoute';
@@ -29,6 +30,7 @@ import PlacementTest        from './pages/student/PlacementTest';
 import Pricing              from './pages/student/Pricing';
 import SubscriptionStatus   from './pages/student/SubscriptionStatus';
 import BillingHistory       from './pages/student/BillingHistory';
+import MyCoursePurchases     from './pages/student/MyCoursePurchases';
 // import Classes      from './pages/student/Classes'; // HIDDEN
 import Quiz         from './pages/student/Quiz';
 import Dictionary   from './pages/student/Dictionary';
@@ -111,6 +113,7 @@ import LessonGrammarItemDetail from './pages/student/LessonGrammarItemDetail';
 import AdminGrammarPoints      from './pages/admin/AdminGrammarPoints';
 
 import ChatPage from './pages/ChatPage';
+import AiAssistantBubble from './components/ai/AiAssistantBubble';
 // import ClassBoard from './pages/ClassBoard'; // HIDDEN
 
 // 404
@@ -130,6 +133,7 @@ export default function App() {
     <BrowserRouter>
       <LangProvider>
         <AuthProvider>
+          <PageContextProvider>
           <Routes>
             {/* Public */}
             <Route path="/"                element={<Home />} />
@@ -159,6 +163,7 @@ export default function App() {
             <Route path="/pricing"        element={<StudentRoute><Pricing /></StudentRoute>} />
             <Route path="/subscription"   element={<StudentRoute><SubscriptionStatus /></StudentRoute>} />
             <Route path="/billing"        element={<StudentRoute><BillingHistory /></StudentRoute>} />
+            <Route path="/my-purchases"   element={<StudentRoute><MyCoursePurchases /></StudentRoute>} />
             {/* <Route path="/classes"    element={<StudentRoute><Classes /></StudentRoute>} /> */}{/* HIDDEN */}
             <Route path="/quizzes/:id" element={<StudentRoute adminRedirectTo="/admin/quizzes/preview/:id" teacherRedirectTo="/teacher/quizzes/preview/:id"><Quiz /></StudentRoute>} />
             <Route path="/dictionary" element={<StudentRoute><Dictionary /></StudentRoute>} />
@@ -254,6 +259,8 @@ export default function App() {
             {/* Fallback */}
             <Route path="*" element={<NotFound />} />
           </Routes>
+          <AiAssistantBubble />
+          </PageContextProvider>
         </AuthProvider>
       </LangProvider>
     </BrowserRouter>

@@ -1,8 +1,13 @@
 import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import StudentLayout from '../../components/layout/StudentLayout';
 import api from '../../lib/api';
+import { useAuth } from '../../contexts/AuthContext';
+import { ReceiptButton } from '../../components/receipt/Receipt';
 
 export default function BillingHistory() {
+  const { user } = useAuth();
+  const buyer = { name: user?.user_metadata?.full_name || user?.email, email: user?.email };
   const [orders,  setOrders]  = useState([]);
   const [total,   setTotal]   = useState(0);
   const [page,    setPage]    = useState(1);
@@ -22,7 +27,13 @@ export default function BillingHistory() {
   return (
     <StudentLayout title="Lịch sử thanh toán">
       <div className="max-w-3xl mx-auto p-6">
-        <h1 className="font-display text-2xl font-bold mb-6">Lịch sử thanh toán</h1>
+        <div className="flex items-center justify-between mb-6 gap-3 flex-wrap">
+          <h1 className="font-display text-2xl font-bold">Lịch sử thanh toán VIP</h1>
+          <Link to="/my-purchases"
+            className="inline-flex items-center gap-1.5 text-sm font-semibold text-tsubaki-red hover:underline">
+            <span className="material-symbols-outlined text-base">menu_book</span>Khóa học đã mua
+          </Link>
+        </div>
 
         {loading ? (
           <div className="flex justify-center py-16">
@@ -43,6 +54,7 @@ export default function BillingHistory() {
                     <th className="px-5 py-4 font-semibold">Gói</th>
                     <th className="px-5 py-4 font-semibold text-right">Số tiền</th>
                     <th className="px-5 py-4 font-semibold">Ngày thanh toán</th>
+                    <th className="px-5 py-4 font-semibold text-right">Biên lai</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -57,6 +69,20 @@ export default function BillingHistory() {
                         {order.paid_at
                           ? new Date(order.paid_at).toLocaleString('vi-VN', { dateStyle: 'short', timeStyle: 'short' })
                           : '—'}
+                      </td>
+                      <td className="px-5 py-4 text-right">
+                        <ReceiptButton
+                          variant="ghost" size="sm" label="Tải" className="!px-3 !py-1.5"
+                          data={{
+                            type: 'subscription', typeLabel: 'Gói',
+                            buyerName: buyer.name, buyerEmail: buyer.email,
+                            itemName: order.plan?.name || 'Premium',
+                            amount: order.amount, currency: order.currency || 'VND',
+                            orderCode: order.order_code, paymentCode: order.payment_code,
+                            paidAt: order.paid_at,
+                          }}
+                          filename={`bien-lai-${order.order_code}.pdf`}
+                        />
                       </td>
                     </tr>
                   ))}

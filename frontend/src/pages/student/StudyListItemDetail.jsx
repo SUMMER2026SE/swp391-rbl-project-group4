@@ -6,6 +6,7 @@ import AdminLayout from '../../components/layout/AdminLayout';
 import Alert from '../../components/ui/Alert';
 import GrammarItemDetailCard from '../../components/shared/GrammarItemDetailCard';
 import { useAuth } from '../../contexts/AuthContext';
+import { usePageContext } from '../../contexts/PageContext';
 import api from '../../lib/api';
 
 const LEVEL_COLORS = {
@@ -45,6 +46,19 @@ export default function StudyListItemDetail() {
   const goTo = (i) => {
     if (i >= 0 && i < items.length) navigate(`/study-lists/${type}/${id}/${items[i].id}`);
   };
+
+  // Cho trợ lý AI biết đang xem mục nào (nội dung đầy đủ để AI giải thích ngay)
+  usePageContext({
+    tab: type === 'grammar' ? 'Chi tiết ngữ pháp' : type === 'kanji' ? 'Chi tiết kanji' : 'Chi tiết từ vựng',
+    title: item?.title,
+    data: item ? {
+      post: post?.title, level: item.level, viTri: `${index + 1}/${items.length}`,
+      title: item.title, title_ja: item.title_ja,
+      meaning_vi: item.meaning_vi,
+      explanation: item.explanation,
+      example_sentence: item.example_sentence,
+    } : null,
+  }, [item, post]);
 
   const saveGrammarItem = async (patch) => {
     await api.put(`/teacher/grammar-points/${itemId}`, patch);

@@ -111,6 +111,9 @@ function formatUptime(sec) {
 router.get('/stats',    c.getStats);
 router.get('/activity', c.getRecentActivity);
 
+// Test biên lai (tab Hoạt động hệ thống)
+router.post('/test-receipt-email', c.testReceiptEmail);
+
 // Request metrics theo giờ (lưu lượng + hiệu năng) cho chart dashboard
 router.get('/metrics', (req, res) => {
   const { getMetrics } = require('../../middleware/metrics');

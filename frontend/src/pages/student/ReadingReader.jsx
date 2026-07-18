@@ -7,6 +7,7 @@ import Button from '../../components/ui/Button';
 import WordLookupPopup from '../../components/reading/WordLookupPopup';
 import AddCardsToFlashcardModal from '../../components/reading/AddCardsToFlashcardModal';
 import api from '../../lib/api';
+import { usePageContext } from '../../contexts/PageContext';
 
 const FONT_STEPS = ['text-base', 'text-lg', 'text-xl', 'text-2xl', 'text-3xl'];
 
@@ -46,6 +47,17 @@ export default function ReadingReader({
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState('');
   const [quotaBlock, setQuotaBlock] = useState(null);  // set khi hết lượt đọc miễn phí
+
+  // Cho trợ lý AI biết đang đọc bài nào (kèm nội dung để giải thích ngay)
+  usePageContext({
+    tab: 'Luyện đọc — bài đọc',
+    title: article?.title_vi || article?.title,
+    data: article ? {
+      articleId: article.id, level: article.level,
+      title: article.title, title_vi: article.title_vi,
+      content: String(article.content || '').slice(0, 1500),
+    } : null,
+  }, [article]);
 
   // Toolbar state
   const [furiganaOn, setFuriganaOn]       = useState(true);

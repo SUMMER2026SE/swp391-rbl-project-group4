@@ -7,6 +7,7 @@
 // handlers so the same frontend can drive both via an apiBase prop.
 
 const { supabaseAdmin } = require('../config/supabase');
+const { snapshotsForBankRows } = require('../utils/passageSnapshot');
 
 // Embed teacher's own passages but expose them under the `reading_passages` key
 // so the shared frontend (which reads item.reading_passages) works unchanged.
@@ -196,6 +197,9 @@ exports.importFromGlobal = async (req, res) => {
     if (fetchErr) throw fetchErr;
     if (!bankRows || !bankRows.length) return res.status(404).json({ error: 'Không tìm thấy câu hỏi.' });
 
+    // Không link passage của admin (khác chủ sở hữu) — thay vào đó đóng băng snapshot.
+    const getSnap = await snapshotsForBankRows(bankRows);
+
     const rows = bankRows.map(bq => ({
       teacher_id:      req.user.id,
       source_bank_id:  bq.id,
@@ -211,6 +215,7 @@ exports.importFromGlobal = async (req, res) => {
       status:          'approved',
       is_ai_generated: !!bq.is_ai_generated,
       passage_id:      null, // global passages belong to admin; don't link
+      passage_snapshot: getSnap(bq),
     }));
 
     const { data, error } = await supabaseAdmin.schema('exam_module').from('teacher_question_bank').insert(rows).select();
