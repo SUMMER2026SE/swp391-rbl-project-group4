@@ -707,17 +707,7 @@ export default function CourseDetail({ Layout = StudentLayout, backTo = '/course
             <div className="bg-white rounded-2xl border border-outline-variant/60 shadow-sm p-5 space-y-4">
               {!viewerOnly && (
                 <>
-                  {enrolled && totalItems > 0 ? (
-                    <div>
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-sm font-medium text-on-surface">Tiến độ của bạn</span>
-                        <span className="text-sm font-bold text-sumire-purple">{progressPct}%</span>
-                      </div>
-                      <div className="h-2 rounded-full bg-surface-container overflow-hidden">
-                        <div className="h-full bg-sumire-purple rounded-full transition-all" style={{ width: `${progressPct}%` }} />
-                      </div>
-                    </div>
-                  ) : (
+                  {!enrolled && (
                     <div>
                       {course.is_free ? (
                         <p className="text-2xl font-display font-bold text-green-600">Miễn phí</p>
