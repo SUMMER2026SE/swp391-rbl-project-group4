@@ -3,8 +3,9 @@
 const { supabaseAdmin } = require('../config/supabase');
 const { whisperTranscribe } = require('../config/ai');
 const { incrementUsage, checkAccess } = require('../services/quotaService');
-const { runVideoTranscription } = require('../services/lessonTranscribe');
+const { runAudioTranscription } = require('../services/lessonTranscribe');
 const { synthesizeWithTimings } = require('../utils/ttsJa');
+const { toRubyHtml } = require('../services/furiganaService');
 const { logContentUse } = require('../utils/usageTracker');
 
 const BUCKET = 'listening-passages-audio';
@@ -19,6 +20,20 @@ async function uploadToBucket(userId, buffer, ext, contentType) {
   if (error) { const e = new Error('Không thể tải file lên storage.'); e.httpStatus = 500; throw e; }
   const { data: { publicUrl } } = supabaseAdmin.storage.from(BUCKET).getPublicUrl(storagePath);
   return { publicUrl, storagePath };
+}
+
+// Sinh sẵn furigana (ruby HTML, kuroshiro offline) cho part 'ja' của mỗi segment để
+// frontend hiện tức thì, không phải chờ gọi /ai/furigana. Fail-open nếu kuroshiro lỗi.
+async function annotateFurigana(segments) {
+  if (!Array.isArray(segments)) return segments;
+  return Promise.all(segments.map(async (seg) => {
+    const parts = await Promise.all((seg?.parts || []).map(async (p) => {
+      if (p?.lang !== 'ja' || !p?.text) return p;
+      try { return { ...p, furigana: await toRubyHtml(p.text) }; }
+      catch { return p; }
+    }));
+    return { ...seg, parts };
+  }));
 }
 
 // Chủ sở hữu (theo student_id) hoặc admin mới được sửa/xóa.
@@ -124,7 +139,7 @@ exports.createContent = async (req, res) => {
       const { buffer, segments } = await synthesizeWithTimings(transcript);
       const { publicUrl, storagePath } = await uploadToBucket(req.user.id, buffer, 'mp3', 'audio/mpeg');
       row.audio_url = publicUrl; row.storage_path = storagePath;
-      row.transcript = transcript; row.segments = segments;
+      row.transcript = transcript; row.segments = await annotateFurigana(segments);
     } else { // audio | video
       if (!req.file) return res.status(400).json({ error: 'Chưa chọn file.' });
       const ext = (req.file.originalname.split('.').pop() || (source_type === 'audio' ? 'mp3' : 'mp4')).toLowerCase();
@@ -152,8 +167,8 @@ exports.transcribeContent = async (req, res) => {
   const url = row?.content_url || row?.audio_url;
   if (!url) return res.status(400).json({ error: 'Bài nghe chưa có nguồn audio/video.' });
   try {
-    const { segments, transcript } = await runVideoTranscription(url);
-    res.json({ segments, transcript, count: segments.length });
+    const { segments, transcript, confidence, flagged, dropped } = await runAudioTranscription(url);
+    res.json({ segments, transcript, count: segments.length, confidence, flagged, dropped });
   } catch (err) {
     console.error('transcribeContent error:', err.message);
     res.status(502).json({ error: 'Không thể tạo transcript tự động. Hãy thử lại hoặc nhập tay.' });
@@ -171,7 +186,7 @@ exports.updateContent = async (req, res) => {
   if (title_vi  !== undefined) updates.title_vi  = String(title_vi).trim() || null;
   if (level     !== undefined) updates.level     = level;
   if (transcript !== undefined) updates.transcript = transcript;
-  if (segments  !== undefined) updates.segments  = Array.isArray(segments) ? segments : [];
+  if (segments  !== undefined) updates.segments  = await annotateFurigana(Array.isArray(segments) ? segments : []);
   const { data, error } = await uadb().update(updates).eq('id', req.params.id).select().single();
   if (error) return res.status(500).json({ error: 'Không thể cập nhật.' });
   res.json(data);

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import parseSubtitles from '../../lib/parseSubtitles';
 
 // ── Editor bản chép đồng bộ thời gian (dùng chung cho video bài giảng & luyện nghe) ──
@@ -29,11 +29,13 @@ export function parseTime(str) {
   return null;
 }
 
-// segments (đã lưu) → rows (đang soạn). needsReview: cờ tạm từ AI, không lưu DB.
+// segments (đã lưu) → rows (đang soạn). needsReview/confidence/note: cờ tạm từ AI, không lưu DB.
 export function segsToRows(segs) {
   return (segs || []).map(s => ({
     start: fmtTime(s.start), end: fmtTime(s.end),
     needsReview: !!s.needsReview,
+    ...(s.confidence != null ? { confidence: s.confidence } : {}),
+    ...(s.note ? { note: s.note } : {}),
     parts: (s.parts && s.parts.length ? s.parts : [{ lang: 'ja', text: s.text || '' }])
       .map(p => ({ lang: p.lang || 'ja', text: p.text || '' })),
   }));
@@ -83,13 +85,24 @@ async function decodeSubtitleFile(file) {
 //  isYouTube, previewMediaRef — để cảnh báo YouTube & lấy thời gian đang phát (nếu có player)
 export default function TranscriptSegmentsEditor({
   rows, setRows, onAlert, onTranscribe, canTranscribe = false, onAiResult,
-  isYouTube = false, previewMediaRef = null,
+  isYouTube = false, previewMediaRef = null, simple = false, defaultMode = 'manual',
 }) {
-  const [inputMode, setInputMode] = useState('manual'); // 'manual' | 'paste' | 'ai'
+  const [inputMode, setInputMode] = useState(defaultMode); // 'manual' | 'paste' | 'ai'
   const [pasteText, setPasteText] = useState('');
   const [pasteLang, setPasteLang] = useState('ja');
   const [pasteFileName, setPasteFileName] = useState('');
   const [transcribing, setTranscribing] = useState(false);
+  const [elapsed, setElapsed] = useState(0);     // giây đã trôi khi đang chép lời
+  const [qa, setQa] = useState(null);            // { confidence, flagged, dropped } sau khi AI xong
+  const abortRef    = useRef(null);
+  const canceledRef = useRef(false);
+  const timerRef    = useRef(null);
+
+  // Dọn timer/abort khi unmount (tránh setState sau khi rời trang).
+  useEffect(() => () => {
+    if (timerRef.current) clearInterval(timerRef.current);
+    abortRef.current?.abort();
+  }, []);
 
   const updateRow = (i, patch) => setRows(rs => rs.map((r, idx) => idx === i ? { ...r, ...patch } : r));
   const updatePart = (i, j, patch) => setRows(rs => rs.map((r, idx) =>
@@ -161,21 +174,39 @@ export default function TranscriptSegmentsEditor({
   const handleTranscribe = async () => {
     if (transcribing || !onTranscribe) return;
     if (rows.length && !window.confirm(`Kết quả AI sẽ thay thế ${rows.length} dòng hiện có. Tiếp tục?`)) return;
+    canceledRef.current = false;
+    setQa(null);
+    const controller = new AbortController();
+    abortRef.current = controller;
+    setElapsed(0);
+    timerRef.current = setInterval(() => setElapsed(s => s + 1), 1000);
     setTranscribing(true);
     try {
-      const data = await onTranscribe();
+      const data = await onTranscribe(controller.signal);
       if (!data) return;
       onAiResult(data.segments || [], data.transcript || '');
       setInputMode('manual');
-      onAlert({ type: 'success', msg: `AI đã chép ${data.count ?? (data.segments || []).length} dòng. Đây là bản nháp — hãy kiểm tra và sửa lại trước khi lưu.` });
+      if (data.confidence != null)
+        setQa({ confidence: data.confidence, flagged: data.flagged || 0, dropped: data.dropped || 0 });
+      const pct = data.confidence != null ? ` Độ tự tin ${data.confidence}%.` : '';
+      onAlert({ type: 'success', msg: `AI đã chép ${data.count ?? (data.segments || []).length} dòng.${pct} Đây là bản nháp — hãy kiểm tra và sửa lại các dòng được đánh dấu trước khi lưu.` });
     } catch (e) {
-      onAlert({ type: 'error', msg: e.response?.data?.error || e.data?.error || e.message });
+      if (canceledRef.current) onAlert({ type: 'info', msg: 'Đã huỷ chép lời tự động.' });
+      else onAlert({ type: 'error', msg: e.response?.data?.error || e.data?.error || e.message });
     } finally {
+      if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+      abortRef.current = null;
       setTranscribing(false);
     }
   };
 
-  const modes = [['manual', 'edit', 'Nhập tay'], ['paste', 'content_paste', 'Dán SRT/VTT']];
+  const cancelTranscribe = () => {
+    canceledRef.current = true;
+    abortRef.current?.abort();
+  };
+
+  const modes = [['manual', 'edit', 'Nhập tay']];
+  if (!simple) modes.push(['paste', 'content_paste', 'Dán SRT/VTT']);
   if (onTranscribe) modes.push(['ai', 'auto_awesome', 'Tự động (AI)']);
 
   return (
@@ -226,30 +257,69 @@ export default function TranscriptSegmentsEditor({
         <div className="mb-4 p-4 rounded-xl border border-outline/40 bg-surface-low/50 space-y-3">
           {!canTranscribe ? (
             <p className="text-xs text-on-muted">Cần có nguồn audio/video trước khi dùng chép lời tự động.</p>
+          ) : transcribing ? (
+            <>
+              {/* Thanh loading indeterminate + đồng hồ + nút Huỷ (backend không phát tiến trình thật) */}
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs font-medium text-sumire-purple flex items-center gap-1.5">
+                  <span className="material-symbols-outlined text-sm animate-spin">progress_activity</span>
+                  Đang chép lời… {Math.floor(elapsed / 60)}:{String(elapsed % 60).padStart(2, '0')} — có thể mất vài phút, đừng đóng trang
+                </span>
+                <button type="button" onClick={cancelTranscribe}
+                  className="shrink-0 flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold text-red-600 border border-red-200 hover:bg-red-50 transition-colors">
+                  <span className="material-symbols-outlined text-sm">close</span> Huỷ
+                </button>
+              </div>
+              <div className="h-1.5 w-full rounded-full bg-sumire-purple/15 overflow-hidden">
+                <div className="h-full w-1/3 rounded-full bg-sumire-purple animate-loadingbar" />
+              </div>
+            </>
           ) : (
             <>
               <p className="text-xs text-on-muted">
                 AI sẽ nghe nội dung, tách lời thoại theo thời gian và dịch bổ sung. Kết quả là <strong>bản nháp</strong> — hãy kiểm tra và sửa lại trước khi lưu.
                 {isYouTube && <> Với YouTube: chỉ dùng video <strong>công khai</strong> và bạn có quyền sử dụng.</>}
               </p>
-              <button type="button" onClick={handleTranscribe} disabled={transcribing}
-                className="flex items-center gap-2 px-4 py-2 bg-sumire-purple text-white rounded-xl text-xs font-medium hover:shadow-md transition-all disabled:opacity-60">
-                <span className={`material-symbols-outlined text-sm ${transcribing ? 'animate-spin' : ''}`}>{transcribing ? 'progress_activity' : 'auto_awesome'}</span>
-                {transcribing ? 'Đang chép lời... có thể mất vài phút, đừng đóng trang' : 'Tự động chép lời (AI)'}
+              <button type="button" onClick={handleTranscribe}
+                className="flex items-center gap-2 px-4 py-2 bg-sumire-purple text-white rounded-xl text-xs font-medium hover:shadow-md transition-all">
+                <span className="material-symbols-outlined text-sm">auto_awesome</span>
+                Tự động chép lời (AI)
               </button>
             </>
           )}
         </div>
       )}
 
+      {/* Bảng điểm độ tự tin sau khi AI chép lời */}
+      {qa && (
+        <div className={`mb-3 rounded-xl px-3 py-2 text-xs flex items-center gap-2 flex-wrap ${
+          qa.confidence >= 85 ? 'bg-emerald-50 text-emerald-700'
+          : qa.confidence >= 70 ? 'bg-amber-50 text-amber-700'
+          : 'bg-red-50 text-red-700'}`}>
+          <span className="material-symbols-outlined text-sm">verified</span>
+          <strong>Độ tự tin tổng thể: {qa.confidence}%</strong>
+          {qa.flagged > 0 && <span>· {qa.flagged} dòng cần kiểm tra (đánh dấu bên dưới)</span>}
+          {qa.dropped > 0 && <span>· đã bỏ {qa.dropped} đoạn âm thanh nền</span>}
+        </div>
+      )}
+
       <div className="space-y-2">
         {rows.map((row, i) => (
-          <div key={i} className="p-3 rounded-xl border border-outline/40 bg-white space-y-2">
+          <div key={i} className={`p-3 rounded-xl border space-y-2 ${row.needsReview ? 'border-amber-300 bg-amber-50/40' : 'border-outline/40 bg-white'}`}>
             <div className="flex items-center gap-2 flex-wrap">
               <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-surface-container text-on-muted">#{i + 1}</span>
+              {row.confidence != null && (
+                <span title="Độ tự tin của AI cho dòng này"
+                  className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                    row.confidence >= 85 ? 'bg-emerald-100 text-emerald-700'
+                    : row.confidence >= 70 ? 'bg-amber-100 text-amber-700'
+                    : 'bg-red-100 text-red-700'}`}>
+                  {row.confidence}%
+                </span>
+              )}
               {row.needsReview && (
-                <span title="AI không chắc chắn về đoạn này — nghe lại để xác nhận" className="flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700">
-                  <span className="material-symbols-outlined text-xs">warning</span> Cần kiểm tra
+                <span title={row.note || 'AI không chắc chắn về đoạn này — nghe lại để xác nhận'} className="flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700">
+                  <span className="material-symbols-outlined text-xs">warning</span> {row.note || 'Cần kiểm tra'}
                 </span>
               )}
               {['start', 'end'].map(field => (

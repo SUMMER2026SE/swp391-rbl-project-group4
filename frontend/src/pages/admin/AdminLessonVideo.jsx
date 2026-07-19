@@ -210,8 +210,8 @@ export default function AdminLessonVideo() {
           canTranscribe={!!contentUrl}
           previewMediaRef={previewVideoRef}
           onAlert={setAlert}
-          onTranscribe={async () => {
-            const r = await api.post(`${apiBase}/lessons/${lessonId}/transcribe-video`);
+          onTranscribe={async (signal) => {
+            const r = await api.post(`${apiBase}/lessons/${lessonId}/transcribe-video`, {}, { signal });
             return r.data;
           }}
           onAiResult={(segs, flatText) => {
