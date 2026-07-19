@@ -6,6 +6,7 @@ import Button from '../../components/ui/Button';
 import Input from '../../components/ui/Input';
 import Alert from '../../components/ui/Alert';
 import ImportFileModal from '../../components/admin/ImportFileModal';
+import { useConfirm } from '../../contexts/ConfirmContext';
 import api from '../../lib/api';
 
 const EMPTY  = { title: '', title_ja: '', meaning_vi: '', explanation: '', example_sentence: '', level: '' };
@@ -17,6 +18,7 @@ const LEVEL_BADGE = {
 };
 
 export default function AdminGrammarPoints() {
+  const confirm = useConfirm();
   const [data, setData]       = useState([]);
   const [total, setTotal]     = useState(0);
   const [loading, setLoading] = useState(true);
@@ -66,7 +68,7 @@ export default function AdminGrammarPoints() {
   };
 
   const handleDelete = async (row) => {
-    if (!confirm('Xóa mẫu ngữ pháp này?')) return;
+    if (!await confirm('Xóa mẫu ngữ pháp này?')) return;
     try { await api.delete(`/admin/grammar-points/${row.id}`); setAlert({ type: 'success', msg: 'Đã xóa.' }); fetchData(); }
     catch (e) { setAlert({ type: 'error', msg: e.message }); }
   };

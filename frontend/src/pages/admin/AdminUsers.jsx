@@ -6,10 +6,12 @@ import Button from '../../components/ui/Button';
 import Input from '../../components/ui/Input';
 import Alert from '../../components/ui/Alert';
 import { useLang } from '../../contexts/LangContext';
+import { useConfirm } from '../../contexts/ConfirmContext';
 import api from '../../lib/api';
 
 export default function AdminUsers() {
   const { t } = useLang();
+  const confirm = useConfirm();
   const [data, setData]     = useState([]);
   const [total, setTotal]   = useState(0);
   const [loading, setLoading] = useState(true);
@@ -91,7 +93,7 @@ export default function AdminUsers() {
 
   const handleDelete = async (row) => {
     if (deletingId) return;                       // chặn xóa trùng khi đang có 1 request chạy
-    if (!confirm(t('admin.confirm_delete'))) return;
+    if (!await confirm(t('admin.confirm_delete'))) return;
     setDeletingId(row.id);
     try {
       await api.delete(`/admin/users/${row.id}`);

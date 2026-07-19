@@ -5,6 +5,7 @@ import Modal from '../../components/ui/Modal';
 import Button from '../../components/ui/Button';
 import Alert from '../../components/ui/Alert';
 import CourseForm, { EMPTY } from '../../components/teacher/CourseForm';
+import { useConfirm } from '../../contexts/ConfirmContext';
 import api from '../../lib/api';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -192,6 +193,7 @@ function UnitCard({ unit, index, onUnitEdit, onUnitDelete, onItemAdd, onItemEdit
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function ManageCourseContent() {
+  const confirm = useConfirm();
   const { courseId } = useParams();
   const navigate = useNavigate();
 
@@ -308,7 +310,7 @@ export default function ManageCourseContent() {
   };
 
   const deleteUnit = async (u) => {
-    if (!confirm(`Xóa bài học "${u.title}" và tất cả mục bên trong?`)) return;
+    if (!await confirm(`Xóa bài học "${u.title}" và tất cả mục bên trong?`)) return;
     try {
       await api.delete(`/admin/units/${u.id}`);
       await loadCourse();
@@ -354,7 +356,7 @@ export default function ManageCourseContent() {
   };
 
   const deleteItem = async (item) => {
-    if (!confirm(`Xóa mục "${item.title}"?`)) return;
+    if (!await confirm(`Xóa mục "${item.title}"?`)) return;
     try {
       await api.delete(`/admin/lessons/${item.id}`);
       await loadCourse();

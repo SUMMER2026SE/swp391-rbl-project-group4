@@ -5,6 +5,7 @@ import Button from '../../components/ui/Button';
 import Input from '../../components/ui/Input';
 import Alert from '../../components/ui/Alert';
 import ImportFileModal from '../../components/admin/ImportFileModal';
+import { useConfirm } from '../../contexts/ConfirmContext';
 import api from '../../lib/api';
 
 const LEVELS = ['N5','N4','N3','N2','N1'];
@@ -102,6 +103,7 @@ function SystemTab() {
 
 // ── My tab ────────────────────────────────────────────────────────────────────
 function MyTab() {
+  const confirm = useConfirm();
   const [items, setItems]     = useState([]);
   const [loading, setLoading] = useState(true);
   const [alert, setAlert]     = useState({ type:'', msg:'' });
@@ -142,7 +144,7 @@ function MyTab() {
   };
 
   const handleDelete = async (id) => {
-    if (!confirm('Xóa kanji này?')) return;
+    if (!await confirm('Xóa kanji này?')) return;
     try { await api.delete(`/teacher/my-kanji/${id}`); load(); }
     catch(e) { setAlert({ type:'error', msg:e.message }); }
   };

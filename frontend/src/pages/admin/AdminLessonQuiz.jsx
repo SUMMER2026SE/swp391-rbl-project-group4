@@ -12,6 +12,7 @@ import {
   formToPayload, rowToForm,
 } from '../../utils/questionFormHelpers';
 import { useEditorArea } from '../../lib/useEditorArea';
+import { useConfirm } from '../../contexts/ConfirmContext';
 import api from '../../lib/api';
 
 // ── Type badge ────────────────────────────────────────────────────────────────
@@ -196,6 +197,7 @@ function BankImportModal({ open, onClose, onImport, saving, apiBase }) {
 export default function AdminLessonQuiz() {
   const { lessonId } = useParams();
   const navigate     = useNavigate();
+  const confirm      = useConfirm();
   // Dùng chung giữa admin và giáo viên: URL quyết định apiBase (/admin | /teacher) và layout.
   const { apiBase, Layout } = useEditorArea();
 
@@ -336,7 +338,7 @@ export default function AdminLessonQuiz() {
   };
 
   const deleteQuestion = async (q) => {
-    if (!confirm(`Xóa câu hỏi này?`)) return;
+    if (!await confirm(`Xóa câu hỏi này?`)) return;
     try {
       await api.delete(`${apiBase}/questions/${q.id}`);
       setQuestions(qs => qs.filter(x => x.id !== q.id));

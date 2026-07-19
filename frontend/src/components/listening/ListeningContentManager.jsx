@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import Button from '../ui/Button';
+import { useConfirm } from '../../contexts/ConfirmContext';
 import api from '../../lib/api';
 import SyncedVideoTranscript from '../shared/SyncedVideoTranscript';
 import TranscriptSegmentsEditor, { segsToRows, rowsToSegments } from '../shared/TranscriptSegmentsEditor';
@@ -36,6 +37,7 @@ const NOTICE_STYLE = {
 // onOpen(item): nếu cha truyền (trang học viên) → mở bằng player 3 tab (Nghe/Chép/Shadowing)
 // của trang đó. Không truyền (admin) → dùng play view nội bộ để xem trước.
 export default function ListeningContentManager({ admin = false, onOpen = null }) {
+  const confirm = useConfirm();
   const [items, setItems]     = useState([]);
   const [loading, setLoading] = useState(true);
   const [quota, setQuota]     = useState(null);
@@ -135,7 +137,7 @@ export default function ListeningContentManager({ admin = false, onOpen = null }
   };
 
   const remove = async (id) => {
-    if (!confirm('Xóa bài nghe này?')) return;
+    if (!await confirm('Xóa bài nghe này?')) return;
     await api.delete(`/listening/content/${id}`);
     setItems(prev => prev.filter(a => a.id !== id));
     refresh();

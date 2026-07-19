@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
 import { LangProvider } from './contexts/LangContext';
 import { PageContextProvider } from './contexts/PageContext';
+import { ConfirmProvider } from './contexts/ConfirmContext';
 import ProtectedRoute from './components/shared/ProtectedRoute';
 import StudentRoute from './components/shared/StudentRoute';
 import AdminRoute from './components/shared/AdminRoute';
@@ -124,6 +125,7 @@ export default function App() {
       <LangProvider>
         <AuthProvider>
           <PageContextProvider>
+          <ConfirmProvider>
           <Routes>
             {/* Public */}
             <Route path="/"                element={<Home />} />
@@ -240,6 +242,7 @@ export default function App() {
             <Route path="*" element={<NotFound />} />
           </Routes>
           <AiAssistantBubble />
+          </ConfirmProvider>
           </PageContextProvider>
         </AuthProvider>
       </LangProvider>
