@@ -3,6 +3,7 @@ import Button from '../ui/Button';
 import api from '../../lib/api';
 import SyncedVideoTranscript from '../shared/SyncedVideoTranscript';
 import TranscriptSegmentsEditor, { segsToRows, rowsToSegments } from '../shared/TranscriptSegmentsEditor';
+import ContentCard from './ContentCard';
 
 // Quản lý nội dung nghe tự tạo (TTS / audio / video / YouTube) — dùng chung cho học
 // sinh (riêng tư, có quota) và admin (công khai, không quota). Backend tự quyết
@@ -13,6 +14,11 @@ const LEVEL_COLOR = { N5: '#059669', N4: '#0284c7', N3: '#7c3aed', N2: '#d97706'
 const LEVEL_BG    = { N5: '#d1fae5', N4: '#dbeafe', N3: '#ede9fe', N2: '#fef3c7', N1: '#fde8e8' };
 
 const isYouTube = (u) => /(?:youtube\.com|youtu\.be)\//i.test(u || '');
+// URL YouTube → link nhúng (chỉ khớp khi id đủ 11 ký tự nên không reload iframe mỗi lần gõ).
+const ytEmbed = (u) => {
+  const m = (u || '').match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([\w-]{11})/);
+  return m ? `https://www.youtube.com/embed/${m[1]}` : null;
+};
 const SOURCES = [
   { key: 'tts',     icon: 'record_voice_over', label: 'TTS (gõ chữ)' },
   { key: 'audio',   icon: 'audio_file',        label: 'File âm thanh' },
@@ -101,6 +107,9 @@ export default function ListeningContentManager({ admin = false, onOpen = null }
       setNotice(null); setView('edit');
     } catch (e) { setNotice({ type: 'error', msg: e.data?.error || e.message }); }
   };
+  // Nguồn media chưa có transcript → mở thẳng chế độ AI để thấy nút chép lời; TTS đã có
+  // transcript sẵn → mở bảng dòng (manual).
+  const editorMode = (c) => ((c?.content_url || c?.audio_url) && !(c?.segments?.length) && c?.source_type !== 'tts') ? 'ai' : 'manual';
 
   const openPlayer = async (item) => {
     try {
@@ -184,7 +193,9 @@ export default function ListeningContentManager({ admin = false, onOpen = null }
           </div>
 
           {mediaUrl && (yt
-            ? <p className="text-xs text-on-muted">Nguồn YouTube: {current.content_url}</p>
+            ? <div className="aspect-video rounded-xl overflow-hidden border border-outline/30">
+                <iframe src={ytEmbed(current.content_url)} title={current.title} className="w-full h-full" allowFullScreen />
+              </div>
             : isVideo
               ? <video ref={previewRef} src={mediaUrl} controls className="w-full rounded-xl max-h-56" />
               : <audio ref={previewRef} src={mediaUrl} controls className="w-full" />)}
@@ -193,10 +204,12 @@ export default function ListeningContentManager({ admin = false, onOpen = null }
             rows={rows}
             setRows={setRows}
             isYouTube={yt}
+            simple={!admin}
+            defaultMode={editorMode(current)}
             previewMediaRef={previewRef}
             canTranscribe={!!mediaUrl}
             onAlert={setNotice}
-            onTranscribe={mediaUrl ? (async () => (await api.post(`/listening/content/${current.id}/transcribe`, {}, { timeout: 300000 })).data) : null}
+            onTranscribe={mediaUrl ? (async (signal) => (await api.post(`/listening/content/${current.id}/transcribe`, {}, { signal, timeout: 900000 })).data) : null}
             onAiResult={(segs) => setRows(segsToRows(segs))}
           />
           <Button onClick={saveEdit} loading={busy} disabled={busy} className="w-full">Lưu bài nghe</Button>
@@ -253,7 +266,13 @@ export default function ListeningContentManager({ admin = false, onOpen = null }
               <input type="url" value={form.youtube_url} onChange={e => setForm(f => ({ ...f, youtube_url: e.target.value }))}
                 placeholder="https://www.youtube.com/watch?v=..."
                 className="w-full mt-1 px-3 py-2 border border-outline rounded-xl text-sm outline-none focus:border-tsubaki-red" />
-              <p className="text-xs text-on-muted mt-1">Chỉ dùng video công khai. Sau khi tạo, bấm "Tự động chép lời (AI)" ở bước sau.</p>
+              {ytEmbed(form.youtube_url) ? (
+                <div className="mt-2 aspect-video rounded-xl overflow-hidden border border-outline/30">
+                  <iframe src={ytEmbed(form.youtube_url)} title="Xem trước" className="w-full h-full" allowFullScreen />
+                </div>
+              ) : (
+                <p className="text-xs text-on-muted mt-1">Chỉ dùng video công khai. Dán link hợp lệ để xem trước; sau khi tạo, bấm "Tự động chép lời (AI)".</p>
+              )}
             </div>
           )}
           {(form.source_type === 'audio' || form.source_type === 'video') && (
@@ -272,7 +291,9 @@ export default function ListeningContentManager({ admin = false, onOpen = null }
               <p className="text-xs text-on-muted mt-1">Sau khi tạo, bấm "Tự động chép lời (AI)" ở bước sau để sinh transcript.</p>
             </div>
           )}
-          <Button onClick={submitCreate} loading={busy} disabled={busy} className="w-full">
+          <Button onClick={submitCreate} loading={busy}
+            disabled={busy || (form.source_type === 'youtube' && !ytEmbed(form.youtube_url))}
+            className="w-full">
             {busy ? 'Đang xử lý...' : 'Tạo & chỉnh sửa transcript'}
           </Button>
         </div>
@@ -308,30 +329,10 @@ export default function ListeningContentManager({ admin = false, onOpen = null }
       )}
       <div className="space-y-2">
         {items.map(a => (
-          <div key={a.id} className="glass-card rounded-xl p-3 flex items-center gap-3 group">
-            <button onClick={() => onOpen ? onOpen(a) : openPlayer(a)} className="flex items-center gap-3 flex-1 min-w-0 text-left">
-              <div className="w-10 h-10 rounded-xl bg-surface-low flex items-center justify-center shrink-0">
-                <span className="material-symbols-outlined text-xl text-on-muted">
-                  {a.source_type === 'youtube' ? 'smart_display' : a.source_type === 'video' ? 'movie' : 'graphic_eq'}
-                </span>
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="font-semibold text-sm truncate">{a.title}</p>
-                <div className="flex items-center gap-2 mt-0.5">
-                  {a.level && <span className="text-xs px-1.5 py-0.5 rounded font-bold" style={{ background: LEVEL_BG[a.level], color: LEVEL_COLOR[a.level] }}>{a.level}</span>}
-                  <span className="text-xs text-on-muted">{a.segments?.length || 0} đoạn</span>
-                </div>
-              </div>
-            </button>
-            <div className="flex gap-1 shrink-0">
-              <button onClick={() => openEditor(a)} title="Sửa" className="w-8 h-8 rounded-lg hover:bg-surface-low flex items-center justify-center text-on-muted hover:text-tsubaki-red transition-colors">
-                <span className="material-symbols-outlined text-lg">edit</span>
-              </button>
-              <button onClick={() => remove(a.id)} title="Xóa" className="w-8 h-8 rounded-lg hover:bg-red-50 hover:text-tsubaki-red flex items-center justify-center text-on-muted transition-colors">
-                <span className="material-symbols-outlined text-lg">delete</span>
-              </button>
-            </div>
-          </div>
+          <ContentCard key={a.id} item={a}
+            onClick={() => onOpen ? onOpen(a) : openPlayer(a)}
+            onEdit={() => openEditor(a)}
+            onDelete={() => remove(a.id)} />
         ))}
       </div>
     </div>

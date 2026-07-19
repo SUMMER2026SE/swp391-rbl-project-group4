@@ -60,13 +60,15 @@ function parseSRT(srt) {
   return segments;
 }
 
-async function whisperTranscribe(audioBuffer, filename, mimeType, language) {
+async function whisperTranscribe(audioBuffer, filename, mimeType, language, { verbose = false } = {}) {
   const formData = new FormData();
   formData.append('file', new Blob([audioBuffer], { type: mimeType }), filename);
   // FPT AI Cloud không có whisper-large-v3 bản đầy đủ (đã kiểm tra GET /v1/models
   // 2026-07: chỉ có turbo và medium) — turbo là bản chính xác nhất hiện có.
   formData.append('model', process.env.FPT_AI_WHISPER_MODEL || 'whisper-large-v3-turbo');
-  formData.append('response_format', 'srt');
+  // verbose_json: lấy avg_logprob/no_speech_prob mỗi câu (dùng để chấm độ tin cậy &
+  // lọc âm thanh nền). SRT: đường cũ cho các caller khác (không đổi hành vi).
+  formData.append('response_format', verbose ? 'verbose_json' : 'srt');
   // temperature 0: bám sát audio, giảm "sáng tác" nội dung khi nghe không rõ.
   formData.append('temperature', '0');
   if (language) formData.append('language', language);
@@ -83,7 +85,25 @@ async function whisperTranscribe(audioBuffer, filename, mimeType, language) {
   }
 
   const raw = await res.text();
-  console.log('[Whisper SRT raw (first 300)]:', raw.slice(0, 300));
+
+  // verbose_json / JSON: giữ avg_logprob + no_speech_prob theo câu.
+  const parseJson = (jsonStr) => {
+    const json = JSON.parse(jsonStr);
+    const jsonSegs = json.segments || json.chunks || [];
+    const segments = jsonSegs.map(s => ({
+      start: Math.round(Number(s.start) * 100) / 100,
+      end:   Math.round(Number(s.end)   * 100) / 100,
+      text:  String(s.text).trim(),
+      ...(s.avg_logprob    != null ? { avgLogprob:  Number(s.avg_logprob) }    : {}),
+      ...(s.no_speech_prob != null ? { noSpeechProb: Number(s.no_speech_prob) } : {}),
+    })).filter(s => s.text);
+    return { text: json.text || segments.map(s => s.text).join(' '), segments, language: json.language || language || 'ja' };
+  };
+
+  if (verbose) {
+    try { return parseJson(raw); }
+    catch { /* rơi xuống SRT/plain bên dưới */ }
+  }
 
   // Try SRT parse
   let segments = parseSRT(raw);
@@ -91,18 +111,7 @@ async function whisperTranscribe(audioBuffer, filename, mimeType, language) {
   // If SRT parse failed, API may have returned JSON
   if (segments.length === 0) {
     try {
-      const json = JSON.parse(raw);
-      const text = json.text || '';
-      const jsonSegs = json.segments || json.chunks || [];
-      if (jsonSegs.length > 0) {
-        segments = jsonSegs.map(s => ({
-          start: Math.round(Number(s.start) * 100) / 100,
-          end:   Math.round(Number(s.end)   * 100) / 100,
-          text:  String(s.text).trim(),
-        })).filter(s => s.text);
-      }
-      // No estimation fallback — frontend estimates using real audio duration
-      return { text, segments, language: json.language || language || 'ja' };
+      return parseJson(raw);
     } catch {
       return { text: raw.trim(), segments: [], language: language || 'ja' };
     }

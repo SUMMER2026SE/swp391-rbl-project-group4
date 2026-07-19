@@ -6,18 +6,28 @@
 // chặn/đổi cơ chế bất kỳ lúc nào — lỗi tải về là rủi ro biết trước, phải fail mềm
 // với message rõ ràng, không crash server.
 
-const { spawn } = require('child_process');
+const { spawn, execSync } = require('child_process');
 const path = require('path');
 const os = require('os');
 
-// ── yt-dlp (cached check, pattern giống ffmpegAvailable trong audio.js) ───────
-let _ytDlpOk = null;
-function ytDlpAvailable() {
-  if (_ytDlpOk !== null) return _ytDlpOk;
-  try { require('child_process').execSync('yt-dlp --version', { stdio: 'ignore' }); _ytDlpOk = true; }
-  catch { _ytDlpOk = false; }
-  return _ytDlpOk;
+// ── Giải quyết cách gọi yt-dlp ────────────────────────────────────────────────
+// Ưu tiên binary `yt-dlp` trên PATH; nếu không có thì thử module Python (`python -m
+// yt_dlp`) — pip cài module nhưng không phải lúc nào cũng tạo exe trên PATH. Nhờ vậy
+// chạy được cả trên máy dev (Windows) lẫn server deploy mà không phụ thuộc PATH.
+// Cache kết quả: undefined = chưa dò, null = không có, [bin, ...prefixArgs] = có.
+let _ytDlpCmd;
+function resolveYtDlp() {
+  if (_ytDlpCmd !== undefined) return _ytDlpCmd;
+  const candidates = [['yt-dlp'], ['python', '-m', 'yt_dlp'], ['python3', '-m', 'yt_dlp'], ['py', '-m', 'yt_dlp']];
+  for (const c of candidates) {
+    try { execSync([...c, '--version'].join(' '), { stdio: 'ignore' }); _ytDlpCmd = c; return c; }
+    catch { /* thử cách tiếp theo */ }
+  }
+  _ytDlpCmd = null;
+  return null;
 }
+
+function ytDlpAvailable() { return resolveYtDlp() !== null; }
 
 // Dịch stderr của yt-dlp sang message tiếng Việt dễ hiểu cho giáo viên.
 function friendlyError(stderr) {
@@ -37,12 +47,15 @@ function friendlyError(stderr) {
 // Tải audio-only (mp3) của 1 video YouTube về file tạm. Trả về đường dẫn file —
 // caller chịu trách nhiệm xóa sau khi dùng (cả khi thành công lẫn lỗi).
 function downloadYouTubeAudio(url) {
-  if (!ytDlpAvailable()) {
+  const cmd = resolveYtDlp();
+  if (!cmd) {
     throw new Error('yt-dlp chưa được cài trên server — chép lời tự động cho YouTube không khả dụng.');
   }
+  const [bin, ...prefix] = cmd;
   const outPath = path.join(os.tmpdir(), `kn_yt_${Date.now()}_${Math.random().toString(36).slice(2)}.mp3`);
   return new Promise((resolve, reject) => {
-    const proc = spawn('yt-dlp', [
+    const proc = spawn(bin, [
+      ...prefix,
       '-x', '--audio-format', 'mp3', '--audio-quality', '5',
       '--no-playlist',
       '-o', outPath,

@@ -86,6 +86,15 @@ export default {
         '3xl':   '1.75rem',
         full:    '9999px',
       },
+      keyframes: {
+        loadingbar: {
+          '0%':   { transform: 'translateX(-120%)' },
+          '100%': { transform: 'translateX(420%)' },
+        },
+      },
+      animation: {
+        loadingbar: 'loadingbar 1.1s ease-in-out infinite',
+      },
     },
   },
   plugins: [],
