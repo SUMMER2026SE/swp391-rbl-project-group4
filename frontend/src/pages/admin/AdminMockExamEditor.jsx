@@ -11,7 +11,7 @@ import {
   adminGetExam, adminPublishExam, adminUpdateExam, adminUpdateSection,
   adminUpdateGroup,
   adminCreateQuestions, adminUpdateQuestion, adminDeleteQuestion,
-  adminAiGenerate, adminAiRegenerateOne, adminImportFromBank, adminJlptBankListQuestions, adminUploadMedia,
+  adminAiGenerate, adminAiRegenerateOne, adminImportFromBank, adminFillFromBank, adminJlptBankListQuestions, adminUploadMedia,
 } from '../../lib/mockExamApi';
 
 const blankQuestion = () => ({ question_text: '', options: ['', '', '', ''], correct_index: 0, explanation: '', translation_vi: '' });
@@ -97,6 +97,30 @@ export default function AdminMockExamEditor() {
       if (invalid) { setConfirm({ type: 'switch-group', id: gid, count: invalid }); return; }
     } catch (e) { setError(e.message); return; }
     setSelectedGroupId(gid);
+  };
+
+  // Rút random câu từ ngân hàng lấp các mondai còn thiếu so với chuẩn blueprint
+  const [filling, setFilling] = useState(false);
+  const handleFillFromBank = async () => {
+    setError(''); setNotice(''); setWarning(''); setFilling(true);
+    try {
+      await flushDrafts();
+      const r = await adminFillFromBank(id);
+      const issues = [];
+      for (const e of r.report || []) {
+        const label = `問題${e.mondai_number} (${mondaiVi(e.mondai_type)})`;
+        if (e.note)        issues.push(`${label}: ${e.note}`);
+        if (e.shortage)    issues.push(`${label}: còn thiếu ${e.shortage} câu — ngân hàng chưa đủ câu phù hợp.`);
+        if (e.reused)      issues.push(`${label}: ${e.reused} câu lấy lại từ đề khác (ngân hàng cạn câu chưa dùng).`);
+        if (e.needs_audio) issues.push(`${label}: ${e.needs_audio} câu nghe chưa có audio — cần TTS hoặc tải file lên.`);
+      }
+      setNotice(r.filled > 0
+        ? `Đã lấp ${r.filled} câu từ ngân hàng.`
+        : 'Không có câu nào được thêm — các mondai đã đủ câu hoặc ngân hàng chưa có câu phù hợp.');
+      if (issues.length) setWarning(issues.join(' · '));
+      load();
+    } catch (e) { setError(e.message); }
+    finally { setFilling(false); }
   };
 
   const handlePublish = async () => {
@@ -186,6 +210,12 @@ export default function AdminMockExamEditor() {
             <span className={`inline-flex px-2 py-0.5 rounded-md font-bold text-xs ${published ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
               {published ? 'Đã xuất bản' : 'Bản nháp'}
             </span>
+            {!published && (
+              <Button variant="secondary" loading={filling} onClick={() => setConfirm({ type: 'fill-bank' })}>
+                <span className="material-symbols-outlined text-lg">casino</span>
+                Lấp đầy từ ngân hàng
+              </Button>
+            )}
             {!published && (
               <Button variant="secondary" loading={savingDraft} onClick={handleSaveDraft}>
                 <span className="material-symbols-outlined text-lg">save</span>
@@ -346,14 +376,20 @@ export default function AdminMockExamEditor() {
       )}
 
       <ConfirmDialog open={!!confirm} onCancel={() => setConfirm(null)}
-        title={confirm?.type === 'switch-group' ? 'Có câu chưa lưu được' : 'Xóa câu hỏi?'}
+        title={confirm?.type === 'switch-group' ? 'Có câu chưa lưu được'
+          : confirm?.type === 'fill-bank' ? 'Lấp đầy đề từ ngân hàng?'
+          : 'Xóa câu hỏi?'}
         message={confirm?.type === 'switch-group'
           ? `Có ${confirm.count} câu chưa lưu được (câu mới chưa bấm Lưu hoặc thiếu nội dung lựa chọn). Chuyển mondai sẽ mất thay đổi của các câu đó.`
+          : confirm?.type === 'fill-bank'
+          ? 'Hệ thống sẽ rút NGẪU NHIÊN câu từ ngân hàng JLPT để lấp các mondai còn thiếu câu so với chuẩn blueprint. Câu đã có trong đề được giữ nguyên; ưu tiên câu chưa dùng ở đề khác.'
           : 'Thao tác này không thể hoàn tác.'}
-        confirmLabel={confirm?.type === 'switch-group' ? 'Vẫn chuyển' : 'Xóa'}
+        confirmLabel={confirm?.type === 'switch-group' ? 'Vẫn chuyển'
+          : confirm?.type === 'fill-bank' ? 'Lấp đầy' : 'Xóa'}
         onConfirm={() => {
           const c = confirm; setConfirm(null);
           if (c.type === 'switch-group') setSelectedGroupId(c.id);
+          else if (c.type === 'fill-bank') handleFillFromBank();
           else run(() => adminDeleteQuestion(c.id));
         }} />
     </AdminLayout>

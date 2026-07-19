@@ -180,11 +180,9 @@ function QuestionPanel({ level, type, listening, onChanged }) {
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="font-bold text-charcoal">{mondaiJa(type)} · {mondaiVi(type)} <span className="text-xs text-on-muted font-normal">({total} câu)</span></h2>
         <div className="flex items-center gap-2">
-          {!listening && (
-            <Button variant="secondary" size="sm" onClick={() => setShowImport(true)}>
-              <span className="material-symbols-outlined text-lg">upload_file</span> Nhập file
-            </Button>
-          )}
+          <Button variant="secondary" size="sm" onClick={() => setShowImport(true)}>
+            <span className="material-symbols-outlined text-lg">upload_file</span> Nhập file
+          </Button>
           <Button variant="purple" size="sm" onClick={() => setShowAi(true)}>
             <span className="material-symbols-outlined text-lg">smart_toy</span> AI sinh
           </Button>
@@ -240,7 +238,7 @@ function QuestionPanel({ level, type, listening, onChanged }) {
           onSaved={(n) => { setShowAi(false); setNotice(`Đã thêm ${n} câu vào ngân hàng.`); load(); onChanged(); }} />
       )}
       {showImport && (
-        <ImportFileModal level={level} type={type}
+        <ImportFileModal level={level} type={type} listening={listening}
           onClose={() => setShowImport(false)}
           onSaved={(n) => { setShowImport(false); setNotice(`Đã nhập ${n} câu từ file vào ngân hàng.`); load(); onChanged(); }} />
       )}
@@ -263,6 +261,7 @@ function GroupPanel({ level, type, onChanged }) {
   const [groupForm, setGroupForm] = useState(null);  // null | { g } (g null = tạo mới)
   const [qForm, setQForm] = useState(null);          // null | { groupId, q }
   const [showAi, setShowAi] = useState(false);
+  const [showImport, setShowImport] = useState(false);
   const [confirm, setConfirm] = useState(null);      // { kind: 'group'|'question', id }
   const limit = 5;
 
@@ -288,6 +287,9 @@ function GroupPanel({ level, type, onChanged }) {
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="font-bold text-charcoal">{mondaiJa(type)} · {mondaiVi(type)} <span className="text-xs text-on-muted font-normal">({total} nhóm passage)</span></h2>
         <div className="flex items-center gap-2">
+          <Button variant="secondary" size="sm" onClick={() => setShowImport(true)}>
+            <span className="material-symbols-outlined text-lg">upload_file</span> Nhập file
+          </Button>
           <Button variant="purple" size="sm" onClick={() => setShowAi(true)}>
             <span className="material-symbols-outlined text-lg">smart_toy</span> AI sinh nhóm
           </Button>
@@ -369,6 +371,11 @@ function GroupPanel({ level, type, onChanged }) {
         <BankAiModal level={level} type={type} listening={false} isPassage
           onClose={() => setShowAi(false)}
           onSaved={(n) => { setShowAi(false); setNotice(`Đã tạo nhóm passage với ${n} câu.`); load(); onChanged(); }} />
+      )}
+      {showImport && (
+        <ImportFileModal level={level} type={type} listening={false} isPassage
+          onClose={() => setShowImport(false)}
+          onSaved={(r) => { setShowImport(false); setNotice(`Đã nhập ${r.groups} nhóm (${r.questions} câu) từ file vào ngân hàng.`); load(); onChanged(); }} />
       )}
       <ConfirmDialog open={!!confirm} onCancel={() => setConfirm(null)}
         title={confirm?.kind === 'group' ? 'Xóa nhóm passage?' : 'Xóa câu khỏi ngân hàng?'}
@@ -559,14 +566,21 @@ function QuestionFormModal({ level, type, listening, initial, groupId, onClose, 
   );
 }
 
-// ── Modal nhập câu từ file Excel/CSV vào bank (chỉ dạng câu đơn không passage/nghe) ──
-function ImportFileModal({ level, type, onClose, onSaved }) {
+// ── Modal nhập từ file Excel/CSV vào bank ─────────────────────────────────────
+// Câu đơn/nghe: preview.valid (mỗi dòng 1 câu). Dạng passage: preview.groups
+// (mỗi nhóm = đoạn văn + câu con, file .xlsx 2 sheet) — tick chọn theo NHÓM.
+function ImportFileModal({ level, type, listening, isPassage, onClose, onSaved }) {
   const [file, setFile] = useState(null);
   const [parsing, setParsing] = useState(false);
-  const [preview, setPreview] = useState(null);  // { valid: [{row, question}], errors, warnings, source }
-  const [picked, setPicked] = useState([]);      // bool[] song song với preview.valid
+  const [preview, setPreview] = useState(null);  // { valid | groups, errors, warnings, source }
+  const [picked, setPicked] = useState([]);      // bool[] song song với items
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+
+  // Danh sách hiển thị/tick: câu (valid) hoặc nhóm passage có câu con
+  const items = !preview ? []
+    : isPassage ? (preview.groups || []).filter(g => g.questions.length > 0)
+    : (preview.valid || []);
 
   const downloadTemplate = async () => {
     setError('');
@@ -587,7 +601,8 @@ function ImportFileModal({ level, type, onClose, onSaved }) {
     try {
       const r = await adminJlptBankImportFile(level, type, file);
       setPreview(r);
-      setPicked((r.valid || []).map(() => true));
+      const list = isPassage ? (r.groups || []).filter(g => g.questions.length > 0) : (r.valid || []);
+      setPicked(list.map(() => true));
     } catch (e) { setError(e.message); }
     finally { setParsing(false); }
   };
@@ -595,12 +610,19 @@ function ImportFileModal({ level, type, onClose, onSaved }) {
   const pickedCount = picked.filter(Boolean).length;
 
   const commit = async () => {
-    const questions = preview.valid.filter((_, i) => picked[i]).map(v => v.question);
-    if (!questions.length) { setError('Chọn ít nhất 1 câu để nhập.'); return; }
+    const chosen = items.filter((_, i) => picked[i]);
+    if (!chosen.length) { setError(`Chọn ít nhất 1 ${isPassage ? 'nhóm' : 'câu'} để nhập.`); return; }
     setSaving(true); setError('');
     try {
-      const r = await adminJlptBankImportCommit({ level, mondai_type: type, questions });
-      onSaved(r.saved ?? questions.length);
+      if (isPassage) {
+        const groups = chosen.map(g => ({ title: g.title, passage_text: g.passage_text, questions: g.questions.map(q => q.question) }));
+        const r = await adminJlptBankImportCommit({ level, mondai_type: type, groups });
+        onSaved({ groups: r.saved_groups ?? groups.length, questions: r.saved ?? 0 });
+      } else {
+        const questions = chosen.map(v => v.question);
+        const r = await adminJlptBankImportCommit({ level, mondai_type: type, questions });
+        onSaved(r.saved ?? questions.length);
+      }
     } catch (e) { setError(e.message); setSaving(false); }
   };
 
@@ -608,7 +630,7 @@ function ImportFileModal({ level, type, onClose, onSaved }) {
     <Modal open onClose={onClose} size="xl" title={`Nhập câu từ file · ${mondaiJa(type)} (${level})`}
       footer={preview ? <>
         <Button variant="secondary" onClick={() => { setPreview(null); setPicked([]); }}>Chọn file khác</Button>
-        <Button onClick={commit} loading={saving} disabled={!pickedCount}>Nhập {pickedCount} câu vào ngân hàng</Button>
+        <Button onClick={commit} loading={saving} disabled={!pickedCount}>Nhập {pickedCount} {isPassage ? 'nhóm' : 'câu'} vào ngân hàng</Button>
       </> : <>
         <Button variant="secondary" onClick={onClose}>Hủy</Button>
         <Button onClick={parseFile} loading={parsing} disabled={!file}>Đọc file</Button>
@@ -617,8 +639,16 @@ function ImportFileModal({ level, type, onClose, onSaved }) {
       {!preview ? (
         <div className="space-y-4">
           <Alert type="info">
-            Nhập câu dạng <b>{mondaiJa(type)}</b> ({mondaiVi(type)}) cấp {level} từ file .xlsx/.csv.
-            Tải file mẫu bên dưới, điền mỗi câu một dòng rồi upload — hệ thống sẽ kiểm tra và cho xem trước, chưa ghi vào ngân hàng.
+            {isPassage ? <>
+              Nhập nhóm đọc hiểu dạng <b>{mondaiJa(type)}</b> ({mondaiVi(type)}) cấp {level} từ file <b>.xlsx có 2 sheet</b>:
+              sheet "Đoạn văn" (mỗi dòng 1 đoạn, có số đoạn) và sheet "Câu hỏi" (mỗi câu ghi số đoạn nó thuộc về).
+              Tải file mẫu bên dưới để có đúng cấu trúc — hệ thống kiểm tra và cho xem trước, chưa ghi vào ngân hàng.
+            </> : <>
+              Nhập câu dạng <b>{mondaiJa(type)}</b> ({mondaiVi(type)}) cấp {level} từ file .xlsx/.csv.
+              Tải file mẫu bên dưới, điền mỗi câu một dòng rồi upload — hệ thống sẽ kiểm tra và cho xem trước, chưa ghi vào ngân hàng.
+              {listening && <> Với dạng nghe, điền <b>script bài nghe</b> vào cột audio_transcript (nhãn 男：/女： mỗi lượt thoại);
+              file audio tạo sau bằng nút TTS hoặc upload ở từng câu.</>}
+            </>}
           </Alert>
           <button type="button" onClick={downloadTemplate}
             className="text-tsubaki-red font-semibold text-sm hover:underline flex items-center gap-1">
@@ -626,8 +656,8 @@ function ImportFileModal({ level, type, onClose, onSaved }) {
           </button>
           <label className="block border border-dashed border-outline/60 rounded-2xl p-6 text-center cursor-pointer hover:bg-surface-low">
             <span className="material-symbols-outlined text-4xl text-on-muted block mb-1">upload_file</span>
-            <span className="text-sm font-semibold text-charcoal">{file ? file.name : 'Chọn file .xlsx / .xls / .csv'}</span>
-            <input type="file" accept=".xlsx,.xls,.csv" className="hidden"
+            <span className="text-sm font-semibold text-charcoal">{file ? file.name : isPassage ? 'Chọn file .xlsx / .xls' : 'Chọn file .xlsx / .xls / .csv'}</span>
+            <input type="file" accept={isPassage ? '.xlsx,.xls' : '.xlsx,.xls,.csv'} className="hidden"
               onChange={e => setFile(e.target.files[0] || null)} />
           </label>
         </div>
@@ -642,12 +672,41 @@ function ImportFileModal({ level, type, onClose, onSaved }) {
               ))}
             </div>
           )}
-          {preview.valid.length === 0 ? (
-            <p className="text-sm text-on-muted text-center py-6">Không có dòng hợp lệ nào trong file.</p>
+          {items.length === 0 ? (
+            <p className="text-sm text-on-muted text-center py-6">Không có {isPassage ? 'nhóm' : 'dòng'} hợp lệ nào trong file.</p>
+          ) : isPassage ? (
+            <div className="space-y-2">
+              <p className="text-xs text-on-muted">{items.length} nhóm hợp lệ — bỏ tick nhóm không muốn nhập:</p>
+              {items.map((g, i) => (
+                <label key={i} className={`block border rounded-xl p-3 cursor-pointer ${picked[i] ? 'border-sumire-purple/40 bg-sumire-purple/5' : 'border-outline/40 opacity-60'}`}>
+                  <div className="flex items-start gap-2">
+                    <input type="checkbox" checked={!!picked[i]} className="mt-1"
+                      onChange={e => setPicked(p => p.map((x, j) => j === i ? e.target.checked : x))} />
+                    <div className="flex-1 text-sm space-y-2 min-w-0">
+                      <p className="font-bold text-charcoal">
+                        <span className="text-[10px] text-on-muted font-normal mr-1.5">Đoạn {g.passage_no}</span>
+                        {g.title || <em className="font-normal text-on-muted">(nhóm không tên)</em>}
+                        <span className="text-xs text-on-muted font-normal"> · {g.questions.length} câu</span>
+                      </p>
+                      <p className="text-xs text-charcoal bg-surface-low border border-outline/30 rounded-lg px-2.5 py-1.5 whitespace-pre-wrap max-h-32 overflow-y-auto">{g.passage_text}</p>
+                      <ul className="space-y-1">
+                        {g.questions.map((v, k) => (
+                          <li key={k} className="text-xs">
+                            <span className="font-semibold text-charcoal whitespace-pre-wrap">{k + 1}. {v.question.question_text}</span>
+                            <span className="text-green-700"> — Đáp án: {v.question.options[v.question.correct_index]}</span>
+                            {v.question.translation_vi && <span className="block pl-4 italic text-emerald-700">🇻🇳 {v.question.translation_vi}</span>}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+                </label>
+              ))}
+            </div>
           ) : (
             <div className="space-y-2">
-              <p className="text-xs text-on-muted">{preview.valid.length} câu hợp lệ — bỏ tick câu không muốn nhập:</p>
-              {preview.valid.map((v, i) => (
+              <p className="text-xs text-on-muted">{items.length} câu hợp lệ — bỏ tick câu không muốn nhập:</p>
+              {items.map((v, i) => (
                 <label key={i} className={`block border rounded-xl p-3 cursor-pointer ${picked[i] ? 'border-sumire-purple/40 bg-sumire-purple/5' : 'border-outline/40 opacity-60'}`}>
                   <div className="flex items-start gap-2">
                     <input type="checkbox" checked={!!picked[i]} className="mt-1"
@@ -655,8 +714,9 @@ function ImportFileModal({ level, type, onClose, onSaved }) {
                     <div className="flex-1 text-sm">
                       <p className="font-semibold text-charcoal whitespace-pre-wrap">
                         <span className="text-[10px] text-on-muted font-normal mr-1.5">Dòng {v.row}</span>
-                        {v.question.question_text}
+                        {v.question.question_text || <span className="italic font-normal text-on-muted">(câu hỏi chỉ đọc trong bài nghe)</span>}
                       </p>
+                      {v.question.audio_transcript && <p className="text-xs text-blue-700 mt-1 whitespace-pre-wrap">🎧 {v.question.audio_transcript}</p>}
                       {v.question.translation_vi && <p className="text-xs text-emerald-700 mt-0.5">🇻🇳 {v.question.translation_vi}</p>}
                       <ul className="mt-1 space-y-0.5">
                         {v.question.options.map((o, k) => (
