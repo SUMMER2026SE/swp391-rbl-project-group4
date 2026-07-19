@@ -6,6 +6,7 @@ import Input from '../../components/ui/Input';
 import Alert from '../../components/ui/Alert';
 import ImportFileModal from '../../components/admin/ImportFileModal';
 import { useLang } from '../../contexts/LangContext';
+import { useConfirm } from '../../contexts/ConfirmContext';
 import api from '../../lib/api';
 
 const EMPTY  = { character: '', reading_on: '', reading_kun: '', meaning_vi: '', stroke_count: '', level: '', han_viet: '' };
@@ -18,6 +19,7 @@ const LEVEL_BADGE = {
 
 export default function AdminKanji() {
   const { t } = useLang();
+  const confirm = useConfirm();
 
   const [data, setData]       = useState([]);
   const [total, setTotal]     = useState(0);
@@ -71,7 +73,7 @@ export default function AdminKanji() {
   };
 
   const handleDelete = async (row) => {
-    if (!confirm(t('admin.confirm_delete'))) return;
+    if (!await confirm(t('admin.confirm_delete'))) return;
     try { await api.delete(`/admin/kanji/${row.id}`); setAlert({ type: 'success', msg: 'Đã xóa.' }); fetch(); }
     catch (e) { setAlert({ type: 'error', msg: e.message }); }
   };

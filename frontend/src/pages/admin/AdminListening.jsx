@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import AdminLayout from '../../components/layout/AdminLayout';
 import ListeningContentManager from '../../components/listening/ListeningContentManager';
+import { useConfirm, useNotify } from '../../contexts/ConfirmContext';
 import api from '../../lib/api';
 
 const LEVELS = ['N5','N4','N3','N2','N1'];
@@ -140,6 +141,8 @@ function LineForm({ init = EMPTY_LINE, onSave, onCancel, saving }) {
 }
 
 function DialogueCard({ dlg, onUpdated, onDeleted, ep }) {
+  const confirm = useConfirm();
+  const notify = useNotify();
   const [expanded, setExpanded]   = useState(false);
   const [editing, setEditing]     = useState(false);
   const [saving, setSaving]       = useState(false);
@@ -152,11 +155,11 @@ function DialogueCard({ dlg, onUpdated, onDeleted, ep }) {
     try {
       const r = await api.put(ep.update(dlg.id), f);
       onUpdated(r.data); setEditing(false);
-    } catch { alert('Lỗi cập nhật.'); } finally { setSaving(false); }
+    } catch { notify('Lỗi cập nhật.'); } finally { setSaving(false); }
   };
 
   const deleteDlg = async () => {
-    if (!confirm('Xóa hội thoại này và toàn bộ câu thoại?')) return;
+    if (!await confirm('Xóa hội thoại này và toàn bộ câu thoại?')) return;
     await api.delete(ep.remove(dlg.id));
     onDeleted(dlg.id);
   };
@@ -166,7 +169,7 @@ function DialogueCard({ dlg, onUpdated, onDeleted, ep }) {
     try {
       const r = await api.post(ep.addLine(dlg.id), f);
       setLines(prev => [...prev, r.data]); setAddingLine(false);
-    } catch { alert('Lỗi thêm câu.'); } finally { setSaving(false); }
+    } catch { notify('Lỗi thêm câu.'); } finally { setSaving(false); }
   };
 
   const updateLine = async (f) => {
@@ -175,11 +178,11 @@ function DialogueCard({ dlg, onUpdated, onDeleted, ep }) {
       const r = await api.put(ep.updateLine(editingLine.id), f);
       setLines(prev => prev.map(l => l.id === r.data.id ? r.data : l));
       setEditingLine(null);
-    } catch { alert('Lỗi cập nhật câu.'); } finally { setSaving(false); }
+    } catch { notify('Lỗi cập nhật câu.'); } finally { setSaving(false); }
   };
 
   const deleteLine = async (id) => {
-    if (!confirm('Xóa câu này?')) return;
+    if (!await confirm('Xóa câu này?')) return;
     await api.delete(ep.removeLine(id));
     setLines(prev => prev.filter(l => l.id !== id));
   };
@@ -259,6 +262,7 @@ const ADMIN_EP = {
 };
 
 export function ListeningManager({ Layout = AdminLayout, ep = ADMIN_EP, title = 'Hội thoại luyện nghe', mediaManager = false }) {
+  const notify = useNotify();
   const [dialogues, setDialogues] = useState([]);
   const [loading, setLoading]     = useState(true);
   const [creating, setCreating]   = useState(false);
@@ -275,7 +279,7 @@ export function ListeningManager({ Layout = AdminLayout, ep = ADMIN_EP, title = 
     try {
       const r = await api.post(ep.create, f);
       setDialogues(prev => [r.data, ...prev]); setCreating(false);
-    } catch { alert('Lỗi tạo hội thoại.'); } finally { setSaving(false); }
+    } catch { notify('Lỗi tạo hội thoại.'); } finally { setSaving(false); }
   };
 
   const filtered = levelFilter ? dialogues.filter(d => d.level === levelFilter) : dialogues;

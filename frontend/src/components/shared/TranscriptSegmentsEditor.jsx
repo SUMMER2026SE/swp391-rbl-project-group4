@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import parseSubtitles from '../../lib/parseSubtitles';
+import { useConfirm } from '../../contexts/ConfirmContext';
 
 // ── Editor bản chép đồng bộ thời gian (dùng chung cho video bài giảng & luyện nghe) ──
 // 3 chế độ nhập đổ chung vào cùng bảng rows: "manual" (bảng dòng start/end + 1-3 part
@@ -87,6 +88,7 @@ export default function TranscriptSegmentsEditor({
   rows, setRows, onAlert, onTranscribe, canTranscribe = false, onAiResult,
   isYouTube = false, previewMediaRef = null, simple = false, defaultMode = 'manual',
 }) {
+  const confirm = useConfirm();
   const [inputMode, setInputMode] = useState(defaultMode); // 'manual' | 'paste' | 'ai'
   const [pasteText, setPasteText] = useState('');
   const [pasteLang, setPasteLang] = useState('ja');
@@ -159,13 +161,13 @@ export default function TranscriptSegmentsEditor({
     }
   };
 
-  const handleParse = () => {
+  const handleParse = async () => {
     const cues = parseSubtitles(pasteText);
     if (!cues.length) {
       onAlert({ type: 'error', msg: 'Không nhận diện được nội dung SRT/VTT. Kiểm tra lại định dạng.' });
       return;
     }
-    if (rows.length && !window.confirm(`Thay thế ${rows.length} dòng hiện có bằng ${cues.length} dòng vừa phân tích?`)) return;
+    if (rows.length && !await confirm(`Thay thế ${rows.length} dòng hiện có bằng ${cues.length} dòng vừa phân tích?`)) return;
     setRows(cues.map(c => ({ start: fmtTime(c.start), end: fmtTime(c.end), parts: [{ lang: pasteLang, text: c.text }] })));
     setPasteText(''); setPasteFileName(''); setInputMode('manual');
     onAlert({ type: 'success', msg: `Đã phân tích ${cues.length} dòng. Kiểm tra lại rồi nhấn "Lưu".` });
@@ -173,7 +175,7 @@ export default function TranscriptSegmentsEditor({
 
   const handleTranscribe = async () => {
     if (transcribing || !onTranscribe) return;
-    if (rows.length && !window.confirm(`Kết quả AI sẽ thay thế ${rows.length} dòng hiện có. Tiếp tục?`)) return;
+    if (rows.length && !await confirm(`Kết quả AI sẽ thay thế ${rows.length} dòng hiện có. Tiếp tục?`)) return;
     canceledRef.current = false;
     setQa(null);
     const controller = new AbortController();

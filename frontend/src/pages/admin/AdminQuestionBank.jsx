@@ -5,6 +5,7 @@ import Button from '../../components/ui/Button';
 import Input from '../../components/ui/Input';
 import Alert from '../../components/ui/Alert';
 import FuriganaText from '../../components/ui/FuriganaText';
+import { useConfirm } from '../../contexts/ConfirmContext';
 import api from '../../lib/api';
 
 // ── Constants ────────────────────────────────────────────────────────────────
@@ -940,6 +941,7 @@ function PassagePreviewSheet({ passage, questions, onClose }) {
 
 // ── Passage Editor Sheet ─────────────────────────────────────────────────────
 function PassageEditorSheet({ passageId, initialPassage, onClose, onSaved, setAlert, apiBase = '/admin' }) {
+  const confirm = useConfirm();
   const [form, setForm] = useState(
     initialPassage
       ? { title: initialPassage.title || '', content: initialPassage.content || '', image_url: initialPassage.image_url || '', level: initialPassage.level || '', topic: initialPassage.topic || '', source: initialPassage.source || '' }
@@ -1030,7 +1032,7 @@ function PassageEditorSheet({ passageId, initialPassage, onClose, onSaved, setAl
   };
 
   const handleDeleteQuestion = async (q) => {
-    if (!confirm(`Xóa câu hỏi "${q.question_text?.slice(0, 40) || 'này'}"?`)) return;
+    if (!await confirm(`Xóa câu hỏi "${q.question_text?.slice(0, 40) || 'này'}"?`)) return;
     try {
       await api.delete(`${apiBase}/question-bank/${q.id}`);
       setAlert({ type: 'success', msg: 'Đã xóa câu hỏi.' });
@@ -1039,7 +1041,7 @@ function PassageEditorSheet({ passageId, initialPassage, onClose, onSaved, setAl
   };
 
   const handleUnlinkQuestion = async (q) => {
-    if (!confirm(`Bỏ liên kết câu hỏi này khỏi bài đọc? Câu hỏi vẫn còn trong ngân hàng.`)) return;
+    if (!await confirm(`Bỏ liên kết câu hỏi này khỏi bài đọc? Câu hỏi vẫn còn trong ngân hàng.`)) return;
     try {
       await api.put(`${apiBase}/question-bank/${q.id}`, { passage_id: null });
       setAlert({ type: 'success', msg: 'Đã bỏ liên kết câu hỏi.' });
@@ -1356,11 +1358,12 @@ function PassageEditorSheet({ passageId, initialPassage, onClose, onSaved, setAl
 
 // ── Passage Tab ───────────────────────────────────────────────────────────────
 function PassagesTab({ passages, onRefresh, setAlert, apiBase = '/admin' }) {
+  const confirm = useConfirm();
   const [editorPassage, setEditorPassage] = useState(null); // null = list; { passage: obj|null } = editor
   const [viewPassage, setViewPassage]     = useState(null);
 
   const handleDelete = async (p) => {
-    if (!confirm(`Xóa bài đọc "${p.title || 'này'}"? Các câu hỏi liên kết sẽ bị hủy liên kết.`)) return;
+    if (!await confirm(`Xóa bài đọc "${p.title || 'này'}"? Các câu hỏi liên kết sẽ bị hủy liên kết.`)) return;
     try { await api.delete(`${apiBase}/reading-passages/${p.id}`); setAlert({ type: 'success', msg: 'Đã xóa bài đọc.' }); onRefresh(); }
     catch (e) { setAlert({ type: 'error', msg: e.message }); }
   };
@@ -1893,6 +1896,7 @@ function ListeningPassagePreviewSheet({ passage, questions, onClose }) {
 
 // ── Listening Passage Editor Sheet ────────────────────────────────────────────
 function ListeningPassageEditorSheet({ passageId, initialPassage, onClose, onSaved, setAlert, apiBase = '/admin' }) {
+  const confirm = useConfirm();
   const [form, setForm] = useState(
     initialPassage
       ? { title: initialPassage.title || '', audio_url: initialPassage.audio_url || '', transcript: initialPassage.transcript || '', description: initialPassage.description || '', level: initialPassage.level || '', topic: initialPassage.topic || '', source: initialPassage.source || '', duration_sec: initialPassage.duration_sec || '', image_url: initialPassage.image_url || '' }
@@ -1998,7 +2002,7 @@ function ListeningPassageEditorSheet({ passageId, initialPassage, onClose, onSav
   };
 
   const handleDeleteQuestion = async (q) => {
-    if (!confirm(`Xóa câu hỏi "${q.question_text?.slice(0, 40) || 'này'}"?`)) return;
+    if (!await confirm(`Xóa câu hỏi "${q.question_text?.slice(0, 40) || 'này'}"?`)) return;
     try {
       await api.delete(`${apiBase}/question-bank/${q.id}`);
       setAlert({ type: 'success', msg: 'Đã xóa câu hỏi.' });
@@ -2007,7 +2011,7 @@ function ListeningPassageEditorSheet({ passageId, initialPassage, onClose, onSav
   };
 
   const handleUnlinkQuestion = async (q) => {
-    if (!confirm(`Bỏ liên kết câu hỏi này khỏi bài nghe? Câu hỏi vẫn còn trong ngân hàng.`)) return;
+    if (!await confirm(`Bỏ liên kết câu hỏi này khỏi bài nghe? Câu hỏi vẫn còn trong ngân hàng.`)) return;
     try {
       await api.put(`${apiBase}/question-bank/${q.id}`, { listening_passage_id: null });
       setAlert({ type: 'success', msg: 'Đã bỏ liên kết câu hỏi.' });
@@ -2373,13 +2377,14 @@ function ListeningPassageEditorSheet({ passageId, initialPassage, onClose, onSav
 
 // ── Listening Passages Tab ────────────────────────────────────────────────────
 function ListeningPassagesTab({ passages, onRefresh, setAlert }) {
+  const confirm = useConfirm();
   const [editorPassage, setEditorPassage] = useState(null);
   const [viewPassage, setViewPassage]     = useState(null);
   const [transcribing, setTranscribing]   = useState(null);
   const transcribingRef = useRef(false);
 
   const handleDelete = async (p) => {
-    if (!confirm(`Xóa bài nghe "${p.title || 'này'}"? Các câu hỏi liên kết sẽ bị hủy liên kết.`)) return;
+    if (!await confirm(`Xóa bài nghe "${p.title || 'này'}"? Các câu hỏi liên kết sẽ bị hủy liên kết.`)) return;
     try { await api.delete(`/admin/listening-passages/${p.id}`); setAlert({ type: 'success', msg: 'Đã xóa bài nghe.' }); onRefresh(); }
     catch (e) { setAlert({ type: 'error', msg: e.message }); }
   };
@@ -3091,6 +3096,7 @@ function QuestionBankManager({
   breadcrumb = 'Admin Panel / Ngân hàng câu hỏi',
   showGlobalImport = false,
 }) {
+  const confirm = useConfirm();
   const [activeTab, setActiveTab] = useState('questions');
   const [items, setItems]         = useState([]);
   const [total, setTotal]         = useState(0);
@@ -3194,7 +3200,7 @@ function QuestionBankManager({
   };
 
   const handleDelete = async (row) => {
-    if (!confirm('Xóa câu hỏi này?')) return;
+    if (!await confirm('Xóa câu hỏi này?')) return;
     try { await api.delete(`${apiBase}/question-bank/${row.id}`); setAlert({ type: 'success', msg: 'Đã xóa.' }); refresh(); }
     catch (e) { setAlert({ type: 'error', msg: e.message }); }
   };

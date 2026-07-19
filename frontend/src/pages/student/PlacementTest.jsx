@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import StudentLayout from '../../components/layout/StudentLayout';
+import { useConfirm, useNotify } from '../../contexts/ConfirmContext';
 import api from '../../lib/api';
 
 // ── Level metadata ─────────────────────────────────────────────────────────────
@@ -272,6 +273,8 @@ function LevelSelectView({ levels, status, onStart, onBack }) {
 }
 
 function ExamView({ attempt, questions, savedAnswers: initialAnswers, onSubmit }) {
+  const confirm = useConfirm();
+  const notify = useNotify();
   const [answers, setAnswers] = useState(initialAnswers || {});
   const [current, setCurrent] = useState(0);
   const [submitting, setSubmitting] = useState(false);
@@ -283,7 +286,7 @@ function ExamView({ attempt, questions, savedAnswers: initialAnswers, onSubmit }
     if (submitting) return;
     const answered = Object.values(answers).filter(v => v).length;
     if (!auto && answered < questions.length) {
-      const ok = window.confirm(`Bạn còn ${questions.length - answered} câu chưa trả lời. Nộp bài?`);
+      const ok = await confirm(`Bạn còn ${questions.length - answered} câu chưa trả lời. Nộp bài?`);
       if (!ok) return;
     }
     setSubmitting(true);
@@ -292,7 +295,7 @@ function ExamView({ attempt, questions, savedAnswers: initialAnswers, onSubmit }
       const { data } = await api.post(`/placement/${attempt.id}/submit`);
       onSubmit(data);
     } catch (e) {
-      alert('Lỗi nộp bài: ' + (e.response?.data?.error || e.message));
+      notify('Lỗi nộp bài: ' + (e.response?.data?.error || e.message));
       setSubmitting(false);
     }
   }, [submitting, answers, questions, attempt.id, onSubmit]);
@@ -582,6 +585,7 @@ function HistoryView({ history, onBack }) {
 // ── Main component ─────────────────────────────────────────────────────────────
 
 export default function PlacementTest() {
+  const notify = useNotify();
   const [view, setView]             = useState('loading');
   const [status, setStatus]         = useState(null);
   const [config, setConfig]         = useState(null);
@@ -628,7 +632,7 @@ export default function PlacementTest() {
       setExamData(data);
       setView('exam');
     } catch (e) {
-      alert(e.response?.data?.error || 'Không thể tiếp tục bài thi.');
+      notify(e.response?.data?.error || 'Không thể tiếp tục bài thi.');
     } finally {
       setStarting(false);
     }
@@ -641,7 +645,7 @@ export default function PlacementTest() {
       setExamData(data);
       setView('exam');
     } catch (e) {
-      alert(e.response?.data?.error || 'Không thể bắt đầu bài thi.');
+      notify(e.response?.data?.error || 'Không thể bắt đầu bài thi.');
     } finally {
       setStarting(false);
     }
