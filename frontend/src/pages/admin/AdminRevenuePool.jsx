@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import AdminLayout from '../../components/layout/AdminLayout';
 import Alert from '../../components/ui/Alert';
+import { useConfirm } from '../../contexts/ConfirmContext';
 import api from '../../lib/api';
 
 const vnd = (n) => `${Number(n || 0).toLocaleString('vi-VN')}₫`;
@@ -17,6 +18,7 @@ function recentPeriods() {
 }
 
 export default function AdminRevenuePool() {
+  const confirm = useConfirm();
   const [period, setPeriod]   = useState(curPeriod());
   const [data, setData]       = useState(null);
   const [loading, setLoading] = useState(true);
@@ -53,7 +55,7 @@ export default function AdminRevenuePool() {
   };
 
   const finalize = async () => {
-    if (!confirm(`Chốt sổ kỳ ${period}? Thu nhập giáo viên sẽ được ghi nhận và không tính lại.`)) return;
+    if (!await confirm(`Chốt sổ kỳ ${period}? Thu nhập giáo viên sẽ được ghi nhận và không tính lại.`)) return;
     setWorking('finalize');
     try {
       await api.post(`/admin/revenue-pool/${period}/finalize`);

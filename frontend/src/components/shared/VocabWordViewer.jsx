@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import FuriganaText from '../ui/FuriganaText';
+import { useNotify } from '../../contexts/ConfirmContext';
 
 const LEVEL_COLORS = {
   N5: 'bg-emerald-100 text-emerald-700', N4: 'bg-sky-100 text-sky-700',
@@ -46,6 +47,7 @@ export default function VocabWordViewer({
   renderItemExtra,
   cardActions,
 }) {
+  const notify = useNotify();
   const [levelFilter, setLevelFilter] = useState('');
   const [idx, setIdx] = useState(0);
   const [showExample, setShowExample] = useState(false);
@@ -98,7 +100,7 @@ export default function VocabWordViewer({
     setSaving(true);
     try {
       await saveItem(item.id, patch);
-    } catch (e) { alert(e.message); }
+    } catch (e) { notify(e.message); }
     finally { setSaving(false); }
   };
 
@@ -110,7 +112,7 @@ export default function VocabWordViewer({
     try {
       const url = await uploadImage(file);
       await saveItem(item.id, { image_url: url });
-    } catch (e2) { alert(e2.message); }
+    } catch (e2) { notify(e2.message); }
     finally { setSaving(false); }
   };
 

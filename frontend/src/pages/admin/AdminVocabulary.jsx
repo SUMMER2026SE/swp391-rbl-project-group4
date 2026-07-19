@@ -6,6 +6,7 @@ import Input from '../../components/ui/Input';
 import Alert from '../../components/ui/Alert';
 import ImportFileModal from '../../components/admin/ImportFileModal';
 import { useLang } from '../../contexts/LangContext';
+import { useConfirm } from '../../contexts/ConfirmContext';
 import api from '../../lib/api';
 
 const EMPTY  = { kanji: '', reading: '', meaning_vi: '', meaning_ja: '', level: '', type: '', topic: '', example_sentence: '', han_viet: '' };
@@ -24,6 +25,7 @@ const LEVEL_BADGE = {
 
 export default function AdminVocabulary() {
   const { t } = useLang();
+  const confirm = useConfirm();
 
   const [data, setData]       = useState([]);
   const [total, setTotal]     = useState(0);
@@ -73,7 +75,7 @@ export default function AdminVocabulary() {
   };
 
   const handleDelete = async (row) => {
-    if (!confirm(t('admin.confirm_delete'))) return;
+    if (!await confirm(t('admin.confirm_delete'))) return;
     try { await api.delete(`/admin/vocabulary/${row.id}`); setAlert({ type: 'success', msg: 'Đã xóa.' }); fetch(); }
     catch (e) { setAlert({ type: 'error', msg: e.message }); }
   };

@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useEditorArea } from '../../lib/useEditorArea';
 import Modal from '../../components/ui/Modal';
 import Button from '../../components/ui/Button';
+import { useConfirm } from '../../contexts/ConfirmContext';
 import api from '../../lib/api';
 
 // ── Constants ──────────────────────────────────────────────────────────────────
@@ -146,6 +147,7 @@ function PreviewCard({ unit, items, sortOrder }) {
 // ── Main page ──────────────────────────────────────────────────────────────────
 
 export default function UnitEditPage() {
+  const confirm = useConfirm();
   const { courseId, unitId } = useParams();
   const navigate = useNavigate();
   const { apiBase, Layout } = useEditorArea();
@@ -282,7 +284,7 @@ export default function UnitEditPage() {
   };
 
   const handleDeleteItem = async (item) => {
-    if (!window.confirm(`Xóa mục "${item.title}"?`)) return;
+    if (!await confirm(`Xóa mục "${item.title}"?`)) return;
     try {
       await api.delete(`${apiBase}/lessons/${item.id}`);
       setItems(prev => prev.filter(i => i.id !== item.id));

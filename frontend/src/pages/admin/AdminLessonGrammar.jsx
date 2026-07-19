@@ -9,6 +9,7 @@ import ImportFileModal from '../../components/admin/ImportFileModal';
 import CollapsibleSection from '../../components/shared/CollapsibleSection';
 import GrammarItemCard from '../../components/shared/GrammarItemCard';
 import LessonInfoPanel from '../../components/shared/LessonInfoPanel';
+import { useConfirm } from '../../contexts/ConfirmContext';
 import api from '../../lib/api';
 
 const LEVELS = ['N5', 'N4', 'N3', 'N2', 'N1'];
@@ -17,6 +18,7 @@ const EMPTY_FORM = { title: '', title_ja: '', meaning_vi: '', explanation: '', e
 // Trình soạn Mục ngữ pháp của khóa học — dùng chung admin + teacher (useEditorArea).
 // UI list/search/card tái dùng phong cách Study List (ManagePanel/GrammarItemCard).
 export default function AdminLessonGrammar() {
+  const confirm = useConfirm();
   const { lessonId } = useParams();
   const navigate = useNavigate();
   const { apiBase, Layout } = useEditorArea();
@@ -74,7 +76,7 @@ export default function AdminLessonGrammar() {
   };
 
   const removeItem = async (item) => {
-    if (!window.confirm(`Gỡ "${item.title}" khỏi bài? (mẫu gốc trong thư viện vẫn được giữ)`)) return;
+    if (!await confirm(`Gỡ "${item.title}" khỏi bài? (mẫu gốc trong thư viện vẫn được giữ)`)) return;
     try {
       await api.delete(`${apiBase}/lessons/${lessonId}/grammar-points/${item.id}`);
       setItems(list => list.filter(i => i.id !== item.id));

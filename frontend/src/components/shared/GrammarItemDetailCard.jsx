@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import FuriganaText from '../ui/FuriganaText';
 import FuriganaToggle from '../ui/FuriganaToggle';
+import { useNotify } from '../../contexts/ConfirmContext';
 
 // Dữ liệu nhập từ Mazii đôi khi chứa <br/> (xuống dòng) và <s>...</s> (đánh dấu
 // phần biến cách tùy chọn) — chỉ cho qua 2 thẻ này, strip mọi thứ khác để tránh
@@ -24,6 +25,7 @@ const LEVEL_COLORS = {
 // editable=true (chủ bài đăng/admin) cho sửa tiêu đề/nghĩa/giải thích/ví dụ ngay
 // trên thẻ, theo cùng kiểu onBlur-lưu như VocabWordViewer.
 export default function GrammarItemDetailCard({ item, index, total, onPrev, onNext, editable = false, onSave }) {
+  const notify = useNotify();
   const [title, setTitle]             = useState(item.title || '');
   const [titleJa, setTitleJa]         = useState(item.title_ja || '');
   const [meaning, setMeaning]         = useState(item.meaning_vi || '');
@@ -42,7 +44,7 @@ export default function GrammarItemDetailCard({ item, index, total, onPrev, onNe
 
   const save = async (patch) => {
     setSaving(true);
-    try { await onSave(patch); } catch (e) { alert(e.message); } finally { setSaving(false); }
+    try { await onSave(patch); } catch (e) { notify(e.message); } finally { setSaving(false); }
   };
 
   return (

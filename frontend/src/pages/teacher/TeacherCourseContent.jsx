@@ -8,6 +8,7 @@ import Alert from '../../components/ui/Alert';
 import ImportFileModal from '../../components/admin/ImportFileModal';
 import CourseForm, { EMPTY } from '../../components/teacher/CourseForm';
 import { formatVnd } from '../../lib/format';
+import { useConfirm } from '../../contexts/ConfirmContext';
 import api from '../../lib/api';
 
 const LESSON_TYPES = [
@@ -31,6 +32,7 @@ const EMPTY_UNIT = { title: '', title_ja: '' };
 const EMPTY_ITEM = { title: '', title_ja: '', lesson_type: 'reading', duration_minutes: '', question_count: '' };
 
 export default function TeacherCourseContent() {
+  const confirm = useConfirm();
   const { courseId } = useParams();
   const navigate = useNavigate();
 
@@ -173,7 +175,7 @@ export default function TeacherCourseContent() {
   };
 
   const deleteUnit = async (u) => {
-    if (!window.confirm(`Xóa bài học "${u.title}" và tất cả mục bên trong?`)) return;
+    if (!await confirm(`Xóa bài học "${u.title}" và tất cả mục bên trong?`)) return;
     try { await api.delete(`/teacher/units/${u.id}`); await loadCourse(); showAlert('success', 'Đã xóa bài học.'); }
     catch (e) { showAlert('error', e.message); }
   };
@@ -210,7 +212,7 @@ export default function TeacherCourseContent() {
   };
 
   const deleteItem = async (item) => {
-    if (!window.confirm(`Xóa mục "${item.title}"?`)) return;
+    if (!await confirm(`Xóa mục "${item.title}"?`)) return;
     try { await api.delete(`/teacher/lessons/${item.id}`); await loadCourse(); showAlert('success', 'Đã xóa mục.'); }
     catch (e) { showAlert('error', e.message); }
   };

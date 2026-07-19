@@ -16,6 +16,7 @@ import VocabWordViewer from '../../components/shared/VocabWordViewer';
 import { TOPICS, TOPIC_ICONS } from '../../lib/studyListTopics';
 import { useAuth } from '../../contexts/AuthContext';
 import { usePageContext } from '../../contexts/PageContext';
+import { useConfirm, useNotify } from '../../contexts/ConfirmContext';
 import api from '../../lib/api';
 
 const LEVELS = ['N5', 'N4', 'N3', 'N2', 'N1'];
@@ -42,6 +43,7 @@ function ItemCard({ item, index, type, postId, editable, onRemove }) {
 const toReadingArr = (s) => s.split(/[,、]\s*/).map(x => x.trim()).filter(Boolean);
 
 function KanjiItemCard({ item, index, editable, onRemove, onSave, selected, onToggleSelect }) {
+  const notify = useNotify();
   const [character, setCharacter]   = useState(item.character || '');
   const [readingOn, setReadingOn]   = useState((item.reading_on || []).join('、'));
   const [readingKun, setReadingKun] = useState((item.reading_kun || []).join('、'));
@@ -59,7 +61,7 @@ function KanjiItemCard({ item, index, editable, onRemove, onSave, selected, onTo
 
   const save = async (patch) => {
     setSaving(true);
-    try { await onSave(patch); } catch (e) { alert(e.message); } finally { setSaving(false); }
+    try { await onSave(patch); } catch (e) { notify(e.message); } finally { setSaving(false); }
   };
 
   if (!editable) {
@@ -241,6 +243,7 @@ function ManagePanel({ post, onChanged }) {
 }
 
 export default function StudyListDetail() {
+  const confirm = useConfirm();
   const { type, id } = useParams();
   const navigate = useNavigate();
   const { user, isAdmin, isTeacher } = useAuth();
@@ -295,7 +298,7 @@ export default function StudyListDetail() {
   const [writingOpen, setWritingOpen] = useState(false);
 
   const handleItemRemoved = async (itemId) => {
-    if (!confirm('Xóa mục này khỏi bài đăng?')) return;
+    if (!await confirm('Xóa mục này khỏi bài đăng?')) return;
     try {
       await api.delete(`/study-lists/${id}/items/${itemId}`);
       setPost(p => ({ ...p, items: p.items.filter(it => it.id !== itemId) }));
