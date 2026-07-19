@@ -5,6 +5,8 @@ import api from '../../lib/api';
 import { usePageContext } from '../../contexts/PageContext';
 import SyncedVideoTranscript from '../../components/shared/SyncedVideoTranscript';
 import ListeningContentManager from '../../components/listening/ListeningContentManager';
+import ContentCard from '../../components/listening/ContentCard';
+import SegmentPlayer from '../../components/listening/SegmentPlayer';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const LEVELS = ['N5','N4','N3','N2','N1'];
@@ -296,64 +298,18 @@ function ShadowingTab({ lines }) {
 }
 
 // ─── User audio tabs ──────────────────────────────────────────────────────────
-function AudioListenTab({ audioUrl, segments }) {
-  const audioRef   = useRef(null);
-  const [curSeg, setCurSeg] = useState(-1);
-  const [playing, setPlaying] = useState(false);
 
-  useEffect(() => {
-    const el = audioRef.current; if (!el) return;
-    const onTime = () => {
-      const t = el.currentTime;
-      const i = segments.findIndex(s => t >= s.start && t < s.end);
-      setCurSeg(i);
-    };
-    el.addEventListener('timeupdate', onTime);
-    return () => el.removeEventListener('timeupdate', onTime);
-  }, [segments]);
-
-  return (
-    <div className="space-y-4">
-      <audio ref={audioRef} src={audioUrl} controls className="w-full rounded-xl"
-        onPlay={()=>setPlaying(true)} onPause={()=>setPlaying(false)} onEnded={()=>setPlaying(false)}/>
-      {segments.length > 0 ? (
-        <div className="space-y-2">
-          {segments.map((s, i) => (
-            <div key={i} onClick={() => { if (audioRef.current) { audioRef.current.currentTime = s.start; audioRef.current.play(); }}}
-              className={`glass-card rounded-xl px-3 py-2 cursor-pointer transition-all ${curSeg===i?'ring-2 ring-tsubaki-red/50 bg-tsubaki-red/5':''}`}>
-              <div className="flex items-start gap-2">
-                <span className="text-xs text-on-muted mt-0.5 shrink-0">{fmt(s.start)}</span>
-                <p className="text-sm" style={{fontFamily:"'Noto Sans JP',sans-serif"}}>{s.text}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-      ) : <p className="text-sm text-on-muted text-center py-8">Không có transcript. AI có thể không nhận ra được ngôn ngữ.</p>}
-    </div>
-  );
-}
-
-function AudioDictationTab({ audioUrl, segments }) {
-  const audioRef = useRef(null);
-  const stopAtEndRef = useRef(null);   // listener tự-pause của đoạn đang phát (gỡ khi đổi đoạn/unmount)
+function AudioDictationTab({ audioUrl, youtubeUrl, segments }) {
+  const playerRef = useRef(null);
   const [idx, setIdx]     = useState(0);
   const [input, setInput] = useState('');
   const [checked, setChecked] = useState(false);
   const [scores, setScores]   = useState([]);
   const [done, setDone]       = useState(false);
-  useEffect(() => () => { if (stopAtEndRef.current && audioRef.current) audioRef.current.removeEventListener('timeupdate', stopAtEndRef.current); }, []);
 
   if (!segments.length) return <p className="text-sm text-on-muted text-center py-12">Cần có transcript để luyện chính tả.</p>;
   const seg = segments[idx];
-  const playSegment = () => {
-    const el = audioRef.current;
-    if (!el) return;
-    if (stopAtEndRef.current) el.removeEventListener('timeupdate', stopAtEndRef.current);
-    el.currentTime = seg.start; el.play();
-    const check = () => { if (el.currentTime >= seg.end) { el.pause(); el.removeEventListener('timeupdate', check); stopAtEndRef.current = null; } };
-    stopAtEndRef.current = check;
-    el.addEventListener('timeupdate', check);
-  };
+  const playSegment = () => playerRef.current?.playSegment(seg.start, seg.end);
   const checkAnswer = () => { setScores(p => [...p, charSim(input.trim(), seg.text)]); setChecked(true); };
   const next = () => { if (idx+1>=segments.length) { setDone(true); return; } setIdx(i=>i+1); setInput(''); setChecked(false); };
   const reset = () => { setIdx(0); setInput(''); setChecked(false); setScores([]); setDone(false); };
@@ -370,11 +326,12 @@ function AudioDictationTab({ audioUrl, segments }) {
 
   return (
     <div className="space-y-4">
-      <audio ref={audioRef} src={audioUrl} className="hidden"/>
       <div className="flex items-center gap-3"><span className="text-sm text-on-muted">Đoạn {idx+1}/{segments.length}</span>
         <div className="flex-1 h-1.5 rounded-full bg-surface-low overflow-hidden">
           <div className="h-full bg-tsubaki-red rounded-full" style={{width:`${idx/segments.length*100}%`}}/></div></div>
       <div className="glass-card rounded-2xl p-5 space-y-4">
+        {youtubeUrl && <div className="flex justify-center"><SegmentPlayer ref={playerRef} audioUrl={audioUrl} youtubeUrl={youtubeUrl} cover/></div>}
+        {!youtubeUrl && <SegmentPlayer ref={playerRef} audioUrl={audioUrl} youtubeUrl={null} cover/>}
         <button onClick={playSegment} className="flex items-center gap-2 text-sm text-tsubaki-red hover:underline">
           <span className="material-symbols-outlined text-base">volume_up</span>Nghe đoạn này ({fmt(seg.start)}–{fmt(seg.end)})
         </button>
@@ -397,33 +354,24 @@ function AudioDictationTab({ audioUrl, segments }) {
   );
 }
 
-function AudioShadowingTab({ audioUrl, segments }) {
-  const audioRef = useRef(null);
-  const stopAtEndRef = useRef(null);   // listener tự-pause của đoạn đang phát (gỡ khi đổi đoạn/unmount)
+function AudioShadowingTab({ audioUrl, youtubeUrl, segments }) {
+  const playerRef = useRef(null);
   const [idx, setIdx]     = useState(0);
   const [scores, setScores] = useState({});
   const { recording, scoring, recErr, start, stop } = useRecorder(data => setScores(p => ({ ...p, [idx]: data })));
-  useEffect(() => () => { if (stopAtEndRef.current && audioRef.current) audioRef.current.removeEventListener('timeupdate', stopAtEndRef.current); }, []);
 
   if (!segments.length) return <p className="text-sm text-on-muted text-center py-12">Cần có transcript để luyện shadowing.</p>;
   const seg = segments[idx];
-  const playSegment = () => {
-    const el = audioRef.current;
-    if (!el) return;
-    if (stopAtEndRef.current) el.removeEventListener('timeupdate', stopAtEndRef.current);
-    el.currentTime = seg.start; el.play();
-    const check = () => { if (el.currentTime >= seg.end) { el.pause(); el.removeEventListener('timeupdate', check); stopAtEndRef.current = null; } };
-    stopAtEndRef.current = check;
-    el.addEventListener('timeupdate', check);
-  };
+  const playSegment = () => playerRef.current?.playSegment(seg.start, seg.end);
 
   return (
     <div className="space-y-4">
-      <audio ref={audioRef} src={audioUrl} className="hidden"/>
       <div className="flex items-center gap-3">
         <span className="text-sm text-on-muted ml-auto">Đoạn {idx+1}/{segments.length}</span>
       </div>
       <div className="glass-card rounded-2xl p-5 space-y-4">
+        {youtubeUrl && <div className="flex justify-center"><SegmentPlayer ref={playerRef} audioUrl={audioUrl} youtubeUrl={youtubeUrl}/></div>}
+        {!youtubeUrl && <SegmentPlayer ref={playerRef} audioUrl={audioUrl} youtubeUrl={null}/>}
         <p className="text-lg leading-relaxed" style={{fontFamily:"'Noto Sans JP',sans-serif"}}>{seg.text}</p>
         <p className="text-xs text-on-muted">{fmt(seg.start)} → {fmt(seg.end)}</p>
         <div className="flex gap-2 flex-wrap">
@@ -460,32 +408,35 @@ function AudioShadowingTab({ audioUrl, segments }) {
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
 export default function Listening() {
-  const [levelFilter, setLevelFilter] = useState('N5');
-  const [dialogues, setDialogues]     = useState([]);
-  const [loading, setLoading]         = useState(false);
-  const [selected, setSelected]       = useState(null);
-  const [tab, setTab]                 = useState('listen');
+  const [mode, setMode]           = useState('library'); // 'library' | 'user'
+  const [level, setLevel]         = useState('all');      // 'all' | N5..N1
+  const [dialogues, setDialogues] = useState([]);
+  const [loading, setLoading]     = useState(false);
+  const [selected, setSelected]   = useState(null);
+  const [tab, setTab]             = useState('listen');
+  const [hideVideo, setHideVideo] = useState(false);
+  const [showShortcuts, setShowShortcuts] = useState(false);
 
   // Cho trợ lý AI biết đang nghe bài nào / đang lọc cấp độ nào
   usePageContext({
     tab: 'Luyện nghe',
     title: selected?.title_vi || selected?.title,
     data: {
-      capDoDangLoc: levelFilter,
+      khu: mode === 'user' ? 'Của tôi' : 'Thư viện', capDoDangLoc: level,
       dangMo: selected ? {
         id: selected.id, level: selected.level,
         title: selected.title, title_vi: selected.title_vi,
       } : null,
     },
-  }, [selected, levelFilter]);
+  }, [selected, mode, level]);
 
   useEffect(() => {
-    if (levelFilter === 'user') return;
+    if (mode !== 'library') return;
     setLoading(true);
-    api.get(`/listening?level=${levelFilter}`)
+    api.get(level === 'all' ? '/listening' : `/listening?level=${level}`)
       .then(r => setDialogues(r.data)).catch(() => setDialogues([]))
       .finally(() => setLoading(false));
-  }, [levelFilter]);
+  }, [mode, level]);
 
   const openDialogue = async (dlg) => {
     const r = await api.get(`/listening/${dlg.id}`);
@@ -496,6 +447,7 @@ export default function Listening() {
   const openContent = async (item) => {
     const r = await api.get(`/listening/content/${item.id}`);
     setSelected({ ...r.data, _type: 'content' }); setTab('listen');
+    setHideVideo(false); setShowShortcuts(false);
     window.scrollTo({ top:0, behavior:'smooth' });
   };
 
@@ -512,126 +464,140 @@ export default function Listening() {
     start: s.start, end: s.end,
     text: (s.parts?.find(p => p.lang === 'ja') || s.parts?.[0])?.text || s.text || '',
   }));
-  // Audio phát theo đoạn: audio (tts/audio) ở audio_url; video ở content_url (<audio> đọc
-  // được track audio của mp4/webm). YouTube không phát qua <audio> nên chỉ có tab Nghe.
-  const contentAudioUrl = selected?.audio_url || (isContent && !/youtube\.com|youtu\.be/i.test(selected?.content_url || '') ? selected?.content_url : null);
-  const contentTabs = isContent && contentAudioUrl
-    ? TABS
-    : [{ key:'listen', icon:'headphones', label:'Nghe' }];
+  // Phát theo đoạn: audio (tts/audio) ở audio_url; video ở content_url (<audio> đọc được
+  // track audio của mp4/webm); YouTube phát qua IFrame API (SegmentPlayer). Nội dung luôn
+  // có audio_url hoặc content_url → Chép/Shadowing luôn khả dụng.
+  const isYouTubeContent = isContent && /youtube\.com|youtu\.be/i.test(selected?.content_url || '');
+  const contentYoutubeUrl = isYouTubeContent ? selected.content_url : null;
+  const contentAudioUrl = selected?.audio_url || (isContent && !isYouTubeContent ? selected?.content_url : null);
+  const modeUnavailable = (key) => isContent && !contentAudioUrl && !contentYoutubeUrl && (key === 'dictation' || key === 'shadowing');
+  const activeTab = modeUnavailable(tab) ? 'listen' : tab;   // tab đang mở không dùng được → về Nghe
 
   return (
     <StudentLayout title="Luyện nghe">
-      <div className="max-w-2xl mx-auto">
+      <div className={`mx-auto transition-[max-width] duration-300 ${selected ? (isContent ? 'max-w-5xl' : 'max-w-2xl') : 'max-w-3xl'}`}>
         <div className="mb-5">
-          <h1 className="font-display text-2xl font-bold">Luyện nghe hội thoại</h1>
-          <p className="text-sm text-on-muted">Nghe → Chép chính tả → Shadowing với AI chấm phát âm.</p>
+          <h1 className="font-display text-2xl font-bold">Luyện nghe</h1>
+          <p className="text-sm text-on-muted">Nghe hội thoại & bài nghe của bạn — luyện chép chính tả và shadowing với AI chấm phát âm.</p>
         </div>
 
         {selected ? (
           <div>
-            <button onClick={()=>setSelected(null)} className="text-sm text-on-muted hover:text-tsubaki-red flex items-center gap-1 mb-4">
-              <span className="material-symbols-outlined text-base">arrow_back</span>
-              {levelFilter==='user' ? 'Bài của tôi' : 'Danh sách hội thoại'}
-            </button>
-            <div className="glass-card rounded-2xl p-4 mb-4 flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
-                style={{ background: LEVEL_BG[selected.level] || '#f3f4f6' }}>
-                <span className="material-symbols-outlined text-xl" style={{ color: LEVEL_COLOR[selected.level] || '#6b7280' }}>
-                  {isDialogue ? (selected.thumbnail_icon || 'headphones') : 'audio_file'}
-                </span>
+            {/* Toolbar trên cùng: tabs chế độ (trái) + tiện ích (phải) */}
+            <div className="flex items-center justify-between gap-2 mb-3 flex-wrap">
+              <div className="flex rounded-xl border border-outline p-1 bg-surface-low gap-1">
+                {TABS.map(({key,icon,label}) => {
+                  const disabled = modeUnavailable(key);
+                  return (
+                    <button key={key} onClick={()=>!disabled && setTab(key)} disabled={disabled}
+                      title={disabled ? 'Cần audio để dùng — nội dung YouTube chỉ có phần Nghe' : undefined}
+                      className={`flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                        disabled ? 'text-on-muted/40 cursor-not-allowed'
+                        : activeTab===key ? 'bg-tsubaki-red text-white shadow'
+                        : 'text-on-muted hover:text-charcoal'}`}>
+                      <span className="material-symbols-outlined text-sm">{icon}</span>
+                      <span className="hidden sm:block">{label}</span>
+                    </button>
+                  );
+                })}
               </div>
-              <div>
-                <p className="font-bold text-lg" style={{fontFamily:"'Noto Sans JP',sans-serif"}}>{selected.title}</p>
-                <div className="flex items-center gap-2">
-                  {selected.level && <span className="text-xs px-2 py-0.5 rounded-full font-bold"
-                    style={{background:LEVEL_BG[selected.level],color:LEVEL_COLOR[selected.level]}}>{selected.level}</span>}
-                  {isDialogue && selected.title_vi && <span className="text-xs text-on-muted">{selected.title_vi}</span>}
-                  {!isDialogue && <span className="text-xs text-on-muted">{selected.segments?.length || 0} đoạn</span>}
+              {isContent && activeTab==='listen' && (
+                <div className="flex items-center gap-2 relative">
+                  <button onClick={()=>setShowShortcuts(v=>!v)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-outline/60 text-xs font-semibold text-on-muted hover:border-tsubaki-red hover:text-tsubaki-red transition-colors">
+                    <span className="material-symbols-outlined text-sm">keyboard</span> Phím tắt
+                  </button>
+                  <button onClick={()=>setHideVideo(v=>!v)}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-semibold transition-colors ${hideVideo ? 'bg-tsubaki-red text-white border-tsubaki-red' : 'border-outline/60 text-on-muted hover:border-tsubaki-red hover:text-tsubaki-red'}`}>
+                    <span className="material-symbols-outlined text-sm">{hideVideo ? 'visibility' : 'visibility_off'}</span> {hideVideo ? 'Hiện video' : 'Ẩn video'}
+                  </button>
+                  {showShortcuts && (
+                    <div className="absolute right-0 top-full mt-2 z-20 w-56 glass-card rounded-xl p-3 text-xs shadow-lg space-y-1.5">
+                      <p className="font-bold text-on-surface mb-1">Phím tắt</p>
+                      {[['Space','Phát / Dừng'],['←','Câu trước'],['→','Câu sau'],['R','Lặp câu']].map(([k,d])=>(
+                        <div key={k} className="flex items-center justify-between">
+                          <span className="text-on-muted">{d}</span>
+                          <kbd className="px-1.5 py-0.5 rounded bg-surface-low border border-outline/40 font-mono text-[10px]">{k}</kbd>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
-              </div>
+              )}
             </div>
-            <div className="flex rounded-xl border border-outline p-1 mb-5 bg-surface-low gap-1">
-              {(isContent ? contentTabs : TABS).map(({key,icon,label}) => (
-                <button key={key} onClick={()=>setTab(key)}
-                  className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold transition-all ${tab===key?'bg-white shadow text-charcoal':'text-on-muted hover:text-charcoal'}`}>
-                  <span className="material-symbols-outlined text-sm">{icon}</span>
-                  <span className="hidden sm:block">{label}</span>
-                </button>
-              ))}
+
+            {/* Back · cấp độ · tiêu đề */}
+            <div className="flex items-center gap-2 mb-3 flex-wrap text-sm">
+              <button onClick={()=>setSelected(null)} className="text-on-muted hover:text-tsubaki-red flex items-center gap-1 shrink-0">
+                <span className="material-symbols-outlined text-base">arrow_back</span> Quay lại
+              </button>
+              {selected.level && <span className="text-xs px-2 py-0.5 rounded-full font-bold"
+                style={{background:LEVEL_BG[selected.level],color:LEVEL_COLOR[selected.level]}}>{selected.level}</span>}
+              <span className="font-bold text-charcoal truncate" style={{fontFamily:"'Noto Sans JP',sans-serif"}}>{selected.title}</span>
+              {isContent && <span className="text-xs text-on-muted shrink-0">· {selected.segments?.length || 0} đoạn</span>}
             </div>
-            {isContent ? (
+
+            {isDialogue ? (
               <>
-                {tab==='listen' && (
-                  <div className="glass-card rounded-2xl overflow-hidden">
-                    <SyncedVideoTranscript
-                      videoUrl={selected.content_url || selected.audio_url}
-                      audio={!selected.content_url}
-                      segments={selected.segments || []}
-                      title={selected.title}
-                    />
-                  </div>
-                )}
-                {tab==='dictation' && <AudioDictationTab audioUrl={contentAudioUrl} segments={contentSegs}/>}
-                {tab==='shadowing' && <AudioShadowingTab audioUrl={contentAudioUrl} segments={contentSegs}/>}
-              </>
-            ) : isDialogue ? (
-              <>
-                {tab==='listen'    && <ListenTab    lines={selected.lines}/>}
-                {tab==='dictation' && <DictationTab lines={selected.lines}/>}
-                {tab==='shadowing' && <ShadowingTab lines={selected.lines}/>}
+                {activeTab==='listen'    && <ListenTab    lines={selected.lines}/>}
+                {activeTab==='dictation' && <DictationTab lines={selected.lines}/>}
+                {activeTab==='shadowing' && <ShadowingTab lines={selected.lines}/>}
               </>
             ) : (
               <>
-                {tab==='listen'    && <AudioListenTab    audioUrl={selected.audio_url} segments={selected.segments||[]}/>}
-                {tab==='dictation' && <AudioDictationTab audioUrl={selected.audio_url} segments={selected.segments||[]}/>}
-                {tab==='shadowing' && <AudioShadowingTab audioUrl={selected.audio_url} segments={selected.segments||[]}/>}
+                {activeTab==='listen' && (
+                  <SyncedVideoTranscript
+                    videoUrl={selected.content_url || selected.audio_url}
+                    audio={!selected.content_url}
+                    segments={selected.segments || []}
+                    title={selected.title}
+                    hideVideo={hideVideo}
+                    onToggleVideo={()=>setHideVideo(v=>!v)}
+                  />
+                )}
+                {activeTab==='dictation' && <div className="max-w-2xl mx-auto"><AudioDictationTab audioUrl={contentAudioUrl} youtubeUrl={contentYoutubeUrl} segments={contentSegs}/></div>}
+                {activeTab==='shadowing' && <div className="max-w-2xl mx-auto"><AudioShadowingTab audioUrl={contentAudioUrl} youtubeUrl={contentYoutubeUrl} segments={contentSegs}/></div>}
               </>
             )}
           </div>
         ) : (
           <div>
-            <div className="flex gap-2 mb-5 overflow-x-auto pb-1">
-              {LEVELS.map(lv => (
-                <button key={lv} onClick={()=>setLevelFilter(lv)}
-                  className={`px-4 py-1.5 rounded-full text-sm font-bold shrink-0 border transition-all ${levelFilter===lv?'text-white border-transparent':'border-outline text-on-muted'}`}
-                  style={levelFilter===lv?{background:LEVEL_COLOR[lv]}:{}}>
-                  {lv}
+            {/* Chọn khu: Thư viện (nội dung công khai) vs Của tôi (tự tạo) */}
+            <div className="flex gap-1 mb-5 p-1 bg-surface-low rounded-xl w-fit">
+              {[['library','Thư viện'],['user','Của tôi']].map(([k,label]) => (
+                <button key={k} onClick={()=>setMode(k)}
+                  className={`px-5 py-2 rounded-lg text-sm font-semibold transition-all ${mode===k?'bg-white shadow text-charcoal':'text-on-muted hover:text-charcoal'}`}>
+                  {label}
                 </button>
               ))}
-              <button onClick={()=>setLevelFilter('user')}
-                className={`px-4 py-1.5 rounded-full text-sm font-bold shrink-0 border transition-all ${levelFilter==='user'?'bg-charcoal text-white border-charcoal':'border-outline text-on-muted'}`}>
-                Của tôi
-              </button>
             </div>
 
-            {levelFilter === 'user' ? (
+            {mode === 'user' ? (
               <ListeningContentManager onOpen={openContent} />
             ) : (
               <>
+                {/* Lọc theo cấp độ — chỉ ở Thư viện */}
+                <div className="flex gap-2 mb-5 overflow-x-auto pb-1">
+                  {['all', ...LEVELS].map(lv => (
+                    <button key={lv} onClick={()=>setLevel(lv)}
+                      className={`px-4 py-1.5 rounded-full text-sm font-bold shrink-0 border transition-all ${level===lv?'text-white border-transparent':'border-outline text-on-muted'}`}
+                      style={level===lv?{background: lv==='all' ? '#121c2a' : LEVEL_COLOR[lv]}:{}}>
+                      {lv==='all' ? 'Tất cả' : lv}
+                    </button>
+                  ))}
+                </div>
+
                 {loading && <div className="space-y-3">{[1,2,3].map(i=><div key={i} className="glass-card rounded-2xl h-20 animate-pulse"/>)}</div>}
                 {!loading && dialogues.length===0 && (
                   <div className="glass-card rounded-2xl py-16 text-center">
                     <span className="material-symbols-outlined text-5xl text-on-muted/20 block mb-3">headphones</span>
-                    <p className="font-semibold">Chưa có hội thoại {levelFilter}</p>
+                    <p className="font-semibold">Chưa có bài nghe {level==='all' ? '' : `cấp ${level}`}</p>
                   </div>
                 )}
-                <div className="space-y-3">
+                <div className="space-y-2.5">
                   {dialogues.map(dlg => (
-                    <button key={dlg.id} onClick={()=> dlg.kind === 'media' ? openContent(dlg) : openDialogue(dlg)}
-                      className="w-full glass-card rounded-2xl p-4 text-left hover:shadow-md transition-all flex items-center gap-4 group">
-                      <div className="w-12 h-12 rounded-xl flex items-center justify-center shrink-0"
-                        style={{background:LEVEL_BG[dlg.level]}}>
-                        <span className="material-symbols-outlined text-2xl" style={{color:LEVEL_COLOR[dlg.level]}}>
-                          {dlg.thumbnail_icon||'headphones'}
-                        </span>
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-bold text-lg leading-tight" style={{fontFamily:"'Noto Sans JP',sans-serif"}}>{dlg.title}</p>
-                        <p className="text-sm text-on-muted">{dlg.title_vi}</p>
-                        {dlg.topic && <p className="text-xs text-on-muted/60 mt-0.5">{dlg.topic}</p>}
-                      </div>
-                      <span className="material-symbols-outlined text-on-muted group-hover:text-tsubaki-red transition-colors shrink-0">play_circle</span>
-                    </button>
+                    <ContentCard key={dlg.id} item={dlg}
+                      onClick={()=> dlg.kind === 'media' ? openContent(dlg) : openDialogue(dlg)} />
                   ))}
                 </div>
               </>
