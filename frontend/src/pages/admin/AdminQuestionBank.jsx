@@ -3276,10 +3276,9 @@ function QuestionBankManager({
               </button>
             )}
           </div>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
             {[
               { label: 'Loại',      value: filterType,    onChange: setFilterType,    opts: [['', 'Tất cả loại'], ...QUESTION_TYPES.map(t => [t.value, t.label])] },
-              { label: 'Bài đọc',  value: filterPassage, onChange: setFilterPassage, opts: [['', 'Tất cả'], ...passages.map(p => [p.id, p.title || '(Không tiêu đề)'])] },
               { label: 'Cấp độ',   value: filterLevel,   onChange: setFilterLevel,   opts: [['', 'Tất cả'], ...LEVELS.map(l => [l, l])] },
               { label: 'Kỹ năng',  value: filterSkill,   onChange: setFilterSkill,   opts: [['', 'Tất cả'], ...SKILLS.map(s => [s, s])] },
               { label: 'Độ khó',   value: filterDiff,    onChange: setFilterDiff,    opts: [['', 'Tất cả'], ...DIFFICULTIES.map(d => [d.value, d.label])] },
