@@ -5,6 +5,7 @@ import Modal from '../../components/ui/Modal';
 import Button from '../../components/ui/Button';
 import Input from '../../components/ui/Input';
 import Alert from '../../components/ui/Alert';
+import { useConfirm } from '../../contexts/ConfirmContext';
 import api from '../../lib/api';
 import { TOPICS } from '../../lib/studyListTopics';
 import {
@@ -19,6 +20,7 @@ const TYPES = [
 ];
 
 export default function TeacherStudyLists() {
+  const confirm = useConfirm();
   const [type, setType]       = useState('vocabulary');
   const [items, setItems]     = useState([]);
   const [loading, setLoading] = useState(true);
@@ -130,7 +132,7 @@ export default function TeacherStudyLists() {
 
   /* ── Xoá ── */
   const handleDelete = async (post) => {
-    if (!confirm(`Xóa bài đăng "${post.title}"?`)) return;
+    if (!await confirm(`Xóa bài đăng "${post.title}"?`)) return;
     try { await api.delete(`/study-lists/${post.id}`); load(); }
     catch (e) { setAlert({ type: 'error', msg: e.message }); }
   };

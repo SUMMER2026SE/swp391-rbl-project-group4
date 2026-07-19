@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import Button from '../ui/Button';
 import Alert from '../ui/Alert';
 import ImportFileModal from '../admin/ImportFileModal';
+import { useNotify } from '../../contexts/ConfirmContext';
 import api from '../../lib/api';
 import { TOPIC_ICONS } from '../../lib/studyListTopics';
 
@@ -62,6 +63,7 @@ export function PostPreviewCard({ type, form, base }) {
 }
 
 export function VocabPreviewEditor({ items, idx, setIdx, onItemSaved }) {
+  const notify = useNotify();
   const item = items[idx];
   const [kanji, setKanji]     = useState(item.kanji || '');
   const [reading, setReading] = useState(item.reading || '');
@@ -80,7 +82,7 @@ export function VocabPreviewEditor({ items, idx, setIdx, onItemSaved }) {
     try {
       await api.put(`/teacher/vocabulary/${item.id}`, patch);
       onItemSaved(item.id, patch);
-    } catch (e) { alert(e.message); }
+    } catch (e) { notify(e.message); }
     finally { setSaving(false); }
   };
 
@@ -94,7 +96,7 @@ export function VocabPreviewEditor({ items, idx, setIdx, onItemSaved }) {
       fd.append('image', file);
       const up = await api.post('/teacher/vocabulary/upload-image', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
       await save({ image_url: up.data.url });
-    } catch (e2) { alert(e2.message); setSaving(false); }
+    } catch (e2) { notify(e2.message); setSaving(false); }
   };
 
   const fieldClass = 'w-full text-center bg-transparent border-b border-transparent hover:border-outline focus:border-tsubaki-red outline-none transition-colors';
@@ -139,6 +141,7 @@ const ITEM_LABEL = (type, item) => type === 'kanji' ? item.character : type === 
 const ITEM_SUB   = (type, item) => type === 'grammar' ? item.meaning_vi : item.meaning_vi;
 
 export function VocabImageEdit({ item, onUpdated }) {
+  const notify = useNotify();
   const inputRef = useRef(null);
   const [uploading, setUploading] = useState(false);
 
@@ -153,7 +156,7 @@ export function VocabImageEdit({ item, onUpdated }) {
       const up = await api.post('/teacher/vocabulary/upload-image', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
       await api.put(`/teacher/vocabulary/${item.id}`, { image_url: up.data.url });
       onUpdated();
-    } catch (e2) { alert(e2.message); }
+    } catch (e2) { notify(e2.message); }
     finally { setUploading(false); }
   };
 

@@ -6,6 +6,7 @@ import Input from '../../components/ui/Input';
 import Alert from '../../components/ui/Alert';
 import StudyListPreviewModal from '../../components/shared/StudyListPreviewModal';
 import { useAuth } from '../../contexts/AuthContext';
+import { useConfirm } from '../../contexts/ConfirmContext';
 import api from '../../lib/api';
 import { TOPICS } from '../../lib/studyListTopics';
 import {
@@ -26,6 +27,7 @@ const TYPES = [
 // giống hệt luồng giáo viên — xem loadOwnedPost ở studyListController.js.
 export default function AdminStudyLists() {
   const { user } = useAuth();
+  const confirm = useConfirm();
   const [type, setType]       = useState('vocabulary');
   const [items, setItems]     = useState([]);
   const [total, setTotal]     = useState(0);
@@ -60,7 +62,7 @@ export default function AdminStudyLists() {
 
   const handleDelete = async (post) => {
     const teacherName = post.creator?.name || post.creator?.email || 'giáo viên';
-    if (!confirm(`Xóa bài đăng "${post.title}" của ${teacherName}?`)) return;
+    if (!await confirm(`Xóa bài đăng "${post.title}" của ${teacherName}?`)) return;
     try { await api.delete(`/study-lists/${post.id}`); load(); }
     catch (e) { setAlert({ type: 'error', msg: e.message }); }
   };

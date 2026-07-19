@@ -8,6 +8,7 @@ import ImportFileModal from '../../components/admin/ImportFileModal';
 import CollapsibleSection from '../../components/shared/CollapsibleSection';
 import LessonInfoPanel from '../../components/shared/LessonInfoPanel';
 import VocabWordViewer from '../../components/shared/VocabWordViewer';
+import { useConfirm, useNotify } from '../../contexts/ConfirmContext';
 import api from '../../lib/api';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -38,6 +39,7 @@ const LABEL_CLS = 'block text-sm font-medium text-on-muted mb-1';
 const GROUP_CLS = 'text-xs font-bold text-on-muted uppercase tracking-wider mb-2';
 
 function VocabForm({ form, onChange, uploadImage }) {
+  const notify = useNotify();
   const set = (key) => (e) => onChange({ ...form, [key]: e.target.value });
   const fileRef = useRef(null);
   const [uploading, setUploading] = useState(false);
@@ -49,7 +51,7 @@ function VocabForm({ form, onChange, uploadImage }) {
     setUploading(true);
     try {
       onChange({ ...form, image_url: await uploadImage(file) });
-    } catch (err) { alert(err.message); }
+    } catch (err) { notify(err.message); }
     finally { setUploading(false); }
   };
 
@@ -134,6 +136,7 @@ function VocabForm({ form, onChange, uploadImage }) {
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
 export default function AdminLessonVocabulary() {
+  const confirm = useConfirm();
   const { lessonId } = useParams();
   const navigate = useNavigate();
   const { apiBase, Layout } = useEditorArea();
@@ -231,7 +234,7 @@ export default function AdminLessonVocabulary() {
 
   // Gỡ khỏi bài (không xóa từ gốc trong thư viện)
   const handleDelete = async (item) => {
-    if (!confirm(`Gỡ từ "${item.kanji || item.reading}" khỏi bài này? (Từ vẫn còn trong thư viện)`)) return;
+    if (!await confirm(`Gỡ từ "${item.kanji || item.reading}" khỏi bài này? (Từ vẫn còn trong thư viện)`)) return;
     try {
       await api.delete(`${apiBase}/lessons/${lessonId}/vocabulary/${item.id}`);
       setVocab(v => v.filter(x => x.id !== item.id));

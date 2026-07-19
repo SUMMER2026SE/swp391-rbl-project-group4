@@ -6,6 +6,7 @@ import Button from '../../components/ui/Button';
 import Alert from '../../components/ui/Alert';
 import ImportFileModal from '../../components/admin/ImportFileModal';
 import LessonInfoPanel from '../../components/shared/LessonInfoPanel';
+import { useConfirm } from '../../contexts/ConfirmContext';
 import api from '../../lib/api';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -211,6 +212,7 @@ function KanjiForm({ form, onChange }) {
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
 export default function AdminLessonKanji() {
+  const confirm = useConfirm();
   const { lessonId } = useParams();
   const navigate     = useNavigate();
   const { apiBase, Layout } = useEditorArea();
@@ -321,7 +323,7 @@ export default function AdminLessonKanji() {
 
   // Gỡ khỏi bài (không xóa kanji gốc trong thư viện)
   const handleDelete = async (item) => {
-    if (!confirm(`Gỡ kanji "${item.character}" khỏi bài này? (Kanji vẫn còn trong thư viện)`)) return;
+    if (!await confirm(`Gỡ kanji "${item.character}" khỏi bài này? (Kanji vẫn còn trong thư viện)`)) return;
     try {
       await api.delete(`${apiBase}/lessons/${lessonId}/kanji/${item.id}`);
       setKanji(k => k.filter(x => x.id !== item.id));

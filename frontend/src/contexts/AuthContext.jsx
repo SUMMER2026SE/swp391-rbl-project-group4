@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
+import { clearTeacherIntent } from '../lib/authRedirect';
 
 const AuthContext = createContext(null);
 
@@ -108,6 +109,7 @@ export function AuthProvider({ children }) {
   };
 
   const logout = async () => {
+    clearTeacherIntent();
     await supabase.auth.signOut();
     setUser(null);
   };

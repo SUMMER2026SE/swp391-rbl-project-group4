@@ -5,6 +5,7 @@ import { useLang } from '../../contexts/LangContext';
 import Input from '../../components/ui/Input';
 import Button from '../../components/ui/Button';
 import Alert from '../../components/ui/Alert';
+import { postAuthRedirect } from '../../lib/authRedirect';
 
 export default function Login() {
   const { login, loginWithGoogle, isAdmin, user } = useAuth();
@@ -18,11 +19,7 @@ export default function Login() {
   const [googleLoading, setGoogleLoading] = useState(false);
 
   useEffect(() => {
-    if (!user) return;
-    const role = user.user_metadata?.role;
-    if (role === 'admin')        navigate('/admin',    { replace: true });
-    else if (role === 'teacher') navigate('/teacher',  { replace: true });
-    else                         navigate('/dashboard', { replace: true });
+    if (user) postAuthRedirect(user, navigate);
   }, [user]);
 
   const success = params.get('registered') === '1' ? t('success.registered')

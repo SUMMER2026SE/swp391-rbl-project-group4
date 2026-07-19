@@ -6,13 +6,14 @@ import Input from '../../components/ui/Input';
 import Button from '../../components/ui/Button';
 import Alert from '../../components/ui/Alert';
 import OtpInput, { OTP_LENGTH } from '../../components/ui/OtpInput';
+import { postAuthRedirect, setTeacherIntent } from '../../lib/authRedirect';
 
 export default function Register() {
   const { register, verifyOtp, resendOtp, loginWithGoogle, user } = useAuth();
   const { t } = useLang();
   const navigate = useNavigate();
 
-  const [form, setForm]       = useState({ fullname: '', email: '', password: '', terms: false, role: 'student' });
+  const [form, setForm]       = useState({ fullname: '', email: '', password: '', confirmPassword: '', terms: false, role: 'student' });
   const [error, setError]     = useState('');
   const [emailExists, setEmailExists] = useState(false);
   const [loading, setLoading]         = useState(false);
@@ -25,12 +26,7 @@ export default function Register() {
   const [resendLoading, setResendLoading] = useState(false);
 
   useEffect(() => {
-    if (!user) return;
-    const role = user.user_metadata?.role;
-    if (role === 'admin')            navigate('/admin',    { replace: true });
-    else if (role === 'teacher')     navigate('/teacher',  { replace: true });
-    else if (form.role === 'teacher') navigate('/teacher-application', { replace: true });
-    else                             navigate('/dashboard', { replace: true });
+    if (user) postAuthRedirect(user, navigate);
   }, [user]);
 
   // Đếm ngược thời gian được phép gửi lại OTP
@@ -46,7 +42,9 @@ export default function Register() {
     setEmailExists(false);
     if (!form.terms) return setError('Bạn cần đồng ý với điều khoản sử dụng.');
     if (form.password.length < 8) return setError(t('errors.reset_pass_short'));
+    if (form.password !== form.confirmPassword) return setError('Mật khẩu xác nhận không khớp.');
 
+    if (form.role === 'teacher') setTeacherIntent();
     setLoading(true);
     try {
       await register(form.fullname, form.email, form.password);
@@ -73,9 +71,9 @@ export default function Register() {
       const data = await verifyOtp(form.email, otp);
       if (!data.session) {
         navigate('/login?registered=1', { replace: true });
-      } else {
-        navigate(form.role === 'teacher' ? '/teacher-application' : '/dashboard', { replace: true });
       }
+      // Có session: user cập nhật qua onAuthStateChange → useEffect gọi postAuthRedirect
+      // (route theo vai trò + ý định giáo viên).
     } catch (err) {
       setError(err.message);
       // Hết hạn hoặc bị khóa → quay lại form đăng ký
@@ -104,6 +102,7 @@ export default function Register() {
 
   const handleGoogleRegister = async () => {
     setError('');
+    if (form.role === 'teacher') setTeacherIntent();   // giữ ý định qua vòng redirect Google
     setGoogleLoading(true);
     try {
       await loginWithGoogle();
@@ -235,6 +234,9 @@ export default function Register() {
             <Input label={t('auth.password')} type="password" value={form.password}
               onChange={e => setForm({ ...form, password: e.target.value })}
               placeholder="Tối thiểu 8 ký tự" required />
+            <Input label="Xác nhận mật khẩu" type="password" value={form.confirmPassword}
+              onChange={e => setForm({ ...form, confirmPassword: e.target.value })}
+              placeholder="Nhập lại mật khẩu" required />
 
             <label className="flex items-start gap-3 cursor-pointer">
               <input type="checkbox" checked={form.terms}
