@@ -2,24 +2,16 @@ import { useCallback, useEffect, useState } from 'react';
 import AdminLayout from '../../components/layout/AdminLayout';
 import Modal from '../../components/ui/Modal';
 import Button from '../../components/ui/Button';
+import Input from '../../components/ui/Input';
 import Alert from '../../components/ui/Alert';
 import StudyListPreviewModal from '../../components/shared/StudyListPreviewModal';
+import { useAuth } from '../../contexts/AuthContext';
 import api from '../../lib/api';
-
-const TYPE_ICON  = { vocabulary: 'translate', kanji: 'font_download', grammar: 'spellcheck' };
-const ITEM_UNIT  = { vocabulary: 'từ vựng', kanji: 'kanji', grammar: 'mẫu ngữ pháp' };
-const LEVEL_BG   = {
-  N5: 'bg-gradient-to-br from-emerald-400 to-emerald-600',
-  N4: 'bg-gradient-to-br from-sky-400 to-sky-600',
-  N3: 'bg-gradient-to-br from-violet-400 to-violet-600',
-  N2: 'bg-gradient-to-br from-orange-400 to-orange-600',
-  N1: 'bg-gradient-to-br from-red-400 to-red-600',
-};
-const LEVEL_BADGE = {
-  N5: 'bg-emerald-100 text-emerald-700', N4: 'bg-sky-100 text-sky-700',
-  N3: 'bg-violet-100 text-violet-700',   N2: 'bg-orange-100 text-orange-700',
-  N1: 'bg-red-100 text-red-700',
-};
+import { TOPICS } from '../../lib/studyListTopics';
+import {
+  PostPreviewCard, ItemPickerContent,
+  ITEM_UNIT, LEVELS, LEVEL_BG, LEVEL_BADGE,
+} from '../../components/shared/StudyListPostEditor';
 
 const TYPES = [
   ['vocabulary', 'translate', 'Từ vựng'],
@@ -27,10 +19,13 @@ const TYPES = [
   ['grammar', 'spellcheck', 'Ngữ pháp'],
 ];
 
-// Admin chỉ xem/kiểm duyệt bài đăng của giáo viên (xem trước, khóa yêu cầu sửa,
+// Admin xem/kiểm duyệt bài đăng của giáo viên (xem trước, khóa yêu cầu sửa,
 // xóa) — KHÔNG tự sửa nội dung thay giáo viên. Muốn yêu cầu sửa thì khóa bài
 // kèm ghi chú, giáo viên tự vào sửa (giữ quyền tác giả của họ).
+// Riêng bài do CHÍNH admin đăng thì admin có toàn quyền CRUD (tạo/sửa/xóa),
+// giống hệt luồng giáo viên — xem loadOwnedPost ở studyListController.js.
 export default function AdminStudyLists() {
+  const { user } = useAuth();
   const [type, setType]       = useState('vocabulary');
   const [items, setItems]     = useState([]);
   const [total, setTotal]     = useState(0);
@@ -42,6 +37,14 @@ export default function AdminStudyLists() {
   const [lockSaving, setLockSaving] = useState(false);
 
   const [previewId, setPreviewId] = useState(null); // post đang xem trước (modal chỉ đọc)
+
+  // Tạo/sửa bài đăng của chính admin
+  const [postModal, setPostModal] = useState(false);
+  const [postTab, setPostTab]     = useState('info');
+  const [postForm, setPostForm]   = useState({ title: '', description: '', level: '', topic: '' });
+  const [postId, setPostId]       = useState(null);   // null = đang tạo mới
+  const [postBase, setPostBase]   = useState(null);   // dữ liệu post hiện có, dùng cho preview
+  const [postSaving, setPostSaving] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -79,6 +82,43 @@ export default function AdminStudyLists() {
     finally { setLockSaving(false); }
   };
 
+  const openCreate = () => {
+    setPostForm({ title: '', description: '', level: '', topic: '' });
+    setPostId(null); setPostBase(null); setPostTab('info');
+    setPostModal(true);
+  };
+
+  const openEdit = (post) => {
+    setPostForm({ title: post.title, description: post.description || '', level: post.level || '', topic: post.topic || '' });
+    setPostId(post.id); setPostBase(post); setPostTab('info');
+    setPostModal(true);
+  };
+
+  const handleSavePost = async () => {
+    if (!postForm.title.trim()) return setAlert({ type: 'error', msg: 'Tiêu đề là bắt buộc.' });
+    if (type === 'vocabulary') {
+      if (!postForm.topic) return setAlert({ type: 'error', msg: 'Vui lòng chọn chủ đề.' });
+    } else if (!postForm.level) {
+      return setAlert({ type: 'error', msg: 'Vui lòng chọn cấp độ.' });
+    }
+    const wasCreate = !postId;
+    setPostSaving(true);
+    try {
+      const payload = { title: postForm.title, description: postForm.description, level: postForm.level || null, topic: postForm.topic || null };
+      if (wasCreate) {
+        const r = await api.post('/study-lists', { list_type: type, ...payload });
+        setPostId(r.data.id);
+        setPostBase(r.data);
+        setPostTab('items');
+      } else {
+        await api.put(`/study-lists/${postId}`, payload);
+        setPostModal(false);
+      }
+      await load();
+    } catch (e) { setAlert({ type: 'error', msg: e.message }); }
+    finally { setPostSaving(false); }
+  };
+
   return (
     <AdminLayout title="Bài đăng của giáo viên">
       {alert.msg && <Alert type={alert.type} onClose={() => setAlert({ type: '', msg: '' })} className="mb-4">{alert.msg}</Alert>}
@@ -95,7 +135,10 @@ export default function AdminStudyLists() {
         </div>
       </div>
 
-      <p className="text-sm text-on-muted mb-4">Tổng: <strong>{total}</strong> bài đăng</p>
+      <div className="flex items-center justify-between mb-4">
+        <p className="text-sm text-on-muted">Tổng: <strong>{total}</strong> bài đăng</p>
+        <Button onClick={openCreate}><span className="material-symbols-outlined text-lg">add</span> Tạo bài đăng</Button>
+      </div>
 
       {loading ? (
         <div className="flex items-center justify-center py-24">
@@ -148,6 +191,12 @@ export default function AdminStudyLists() {
                   className="p-1.5 rounded-lg text-on-muted hover:text-tsubaki-red hover:bg-tsubaki-red/10 transition-colors">
                   <span className="material-symbols-outlined text-lg">visibility</span>
                 </button>
+                {post.created_by === user?.id && (
+                  <button onClick={() => openEdit(post)} title="Sửa bài đăng của bạn"
+                    className="p-1.5 rounded-lg text-on-muted hover:text-tsubaki-red hover:bg-tsubaki-red/10 transition-colors">
+                    <span className="material-symbols-outlined text-lg">edit</span>
+                  </button>
+                )}
                 <button onClick={() => handleLockToggle(post)} title={post.is_locked ? 'Mở khóa' : 'Khóa (yêu cầu sửa)'}
                   className={`p-1.5 rounded-lg transition-colors ${post.is_locked ? 'text-error hover:bg-red-50' : 'text-on-muted hover:text-amber-600 hover:bg-amber-50'}`}>
                   <span className="material-symbols-outlined text-lg">{post.is_locked ? 'lock_open' : 'lock'}</span>
@@ -179,6 +228,67 @@ export default function AdminStudyLists() {
       </Modal>
 
       <StudyListPreviewModal open={!!previewId} onClose={() => setPreviewId(null)} postId={previewId} />
+
+      <Modal open={postModal} onClose={() => setPostModal(false)} title={postId ? 'Sửa bài đăng' : 'Tạo bài đăng'} size="xl"
+        footer={
+          postTab === 'items'
+            ? <Button variant="secondary" onClick={() => setPostModal(false)}>Đóng</Button>
+            : <><Button variant="secondary" onClick={() => setPostModal(false)}>Huỷ</Button><Button loading={postSaving} onClick={handleSavePost}>{postId ? 'Lưu' : 'Tạo'}</Button></>
+        }>
+
+        {postId && (
+          <div className="flex border-b border-outline/40 mb-5">
+            {[['info', 'Thông tin'], ['items', 'Quản lý mục']].map(([tab, label]) => (
+              <button key={tab} onClick={() => setPostTab(tab)}
+                className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${postTab === tab ? 'border-tsubaki-red text-tsubaki-red' : 'border-transparent text-on-muted hover:text-charcoal'}`}>
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {postTab === 'info' && (
+          <div className="flex flex-col sm:flex-row gap-6">
+            <div className="flex-1 space-y-4 min-w-0">
+              <Input label="Tiêu đề *" value={postForm.title} onChange={e => setPostForm({ ...postForm, title: e.target.value })}
+                placeholder='vd "Kanji thường gặp trong đề JLPT N4"' />
+              <div className="flex flex-col gap-4">
+                <div className={type === 'vocabulary' ? 'order-2' : 'order-1'}>
+                  <label className="block text-sm font-medium text-on-muted mb-1">Cấp độ{type === 'vocabulary' ? '' : ' *'}</label>
+                  <select value={postForm.level} onChange={e => setPostForm({ ...postForm, level: e.target.value })}
+                    className="w-full px-4 py-3 bg-white border border-outline rounded-xl text-sm outline-none focus:border-tsubaki-red">
+                    <option value="">-- Chọn cấp độ --</option>
+                    {LEVELS.map(l => <option key={l} value={l}>{l}</option>)}
+                  </select>
+                  {type === 'vocabulary' && (
+                    <p className="text-xs text-on-muted mt-1">Không bắt buộc — 1 chủ đề thường có từ ở nhiều cấp độ, cấp độ sẽ lọc bên trong khi xem từng từ.</p>
+                  )}
+                </div>
+                <div className={type === 'vocabulary' ? 'order-1' : 'order-2'}>
+                  <label className="block text-sm font-medium text-on-muted mb-1">Chủ đề{type === 'vocabulary' ? ' *' : ''}</label>
+                  <select value={postForm.topic} onChange={e => setPostForm({ ...postForm, topic: e.target.value })}
+                    className="w-full px-4 py-3 bg-white border border-outline rounded-xl text-sm outline-none focus:border-tsubaki-red">
+                    <option value="">-- Không chọn --</option>
+                    {TOPICS.map(t => <option key={t} value={t}>{t}</option>)}
+                  </select>
+                </div>
+              </div>
+              <Input label="Mô tả" value={postForm.description} onChange={e => setPostForm({ ...postForm, description: e.target.value })} />
+            </div>
+            <div className="shrink-0 sm:w-80 sm:pl-6 sm:border-l border-outline/30 flex flex-col">
+              <p className="text-xs font-semibold text-on-muted uppercase tracking-wide mb-4">Xem trước</p>
+              <div className="flex justify-center">
+                <PostPreviewCard type={type} form={postForm} base={postBase} />
+              </div>
+              <p className="text-xs text-on-muted/60 text-center mt-3">Cập nhật theo thời gian thực</p>
+            </div>
+          </div>
+        )}
+
+        {postTab === 'items' && postId && (
+          <ItemPickerContent post={{ id: postId }} listType={type} onChanged={load} />
+        )}
+      </Modal>
     </AdminLayout>
   );
 }

@@ -1,13 +1,8 @@
 import { useEffect, useState } from 'react';
 import AdminLayout from '../../components/layout/AdminLayout';
-import Modal from '../../components/ui/Modal';
-import Button from '../../components/ui/Button';
-import Input from '../../components/ui/Input';
 import Alert from '../../components/ui/Alert';
-import ImportFileModal from '../../components/admin/ImportFileModal';
 import api from '../../lib/api';
 
-const EMPTY  = { title: '', title_ja: '', meaning_vi: '', explanation: '', example_sentence: '', level: '' };
 const LEVELS = ['N5', 'N4', 'N3', 'N2', 'N1'];
 const LEVEL_BADGE = {
   N5: 'bg-emerald-100 text-emerald-700', N4: 'bg-sky-100 text-sky-700',
@@ -15,6 +10,9 @@ const LEVEL_BADGE = {
   N1: 'bg-red-100 text-red-700',
 };
 
+// Admin chỉ xem kho ngữ pháp — không sửa/xóa/tạo/nhập file (kho là của giáo
+// viên/hệ thống, admin không tự sửa nội dung thay giáo viên, giống quy tắc
+// ở bài đăng).
 export default function AdminGrammarPoints() {
   const [data, setData]       = useState([]);
   const [total, setTotal]     = useState(0);
@@ -24,12 +22,6 @@ export default function AdminGrammarPoints() {
   const [level, setLevel]     = useState('');
   const [page, setPage]       = useState(1);
   const LIMIT = 20;
-
-  const [modal, setModal]     = useState(false);
-  const [form, setForm]       = useState(EMPTY);
-  const [editId, setEditId]   = useState(null);
-  const [saving, setSaving]   = useState(false);
-  const [importModal, setImportModal] = useState(false);
 
   const fetchData = async () => {
     setLoading(true);
@@ -43,32 +35,6 @@ export default function AdminGrammarPoints() {
     finally { setLoading(false); }
   };
   useEffect(() => { fetchData(); }, [page, level]);
-
-  const openCreate = () => { setForm(EMPTY); setEditId(null); setModal(true); };
-  const openEdit   = (row) => {
-    setForm({
-      title: row.title || '', title_ja: row.title_ja || '', meaning_vi: row.meaning_vi || '',
-      explanation: row.explanation || '', example_sentence: row.example_sentence || '', level: row.level || '',
-    });
-    setEditId(row.id); setModal(true);
-  };
-
-  const handleSave = async () => {
-    if (!form.title.trim() || !form.meaning_vi.trim()) return setAlert({ type: 'error', msg: 'Tiêu đề và nghĩa là bắt buộc.' });
-    setSaving(true);
-    try {
-      if (editId) await api.put(`/admin/grammar-points/${editId}`, form);
-      else        await api.post('/admin/grammar-points', form);
-      setAlert({ type: 'success', msg: 'Đã lưu.' }); setModal(false); fetchData();
-    } catch (e) { setAlert({ type: 'error', msg: e.message }); }
-    finally { setSaving(false); }
-  };
-
-  const handleDelete = async (row) => {
-    if (!confirm('Xóa mẫu ngữ pháp này?')) return;
-    try { await api.delete(`/admin/grammar-points/${row.id}`); setAlert({ type: 'success', msg: 'Đã xóa.' }); fetchData(); }
-    catch (e) { setAlert({ type: 'error', msg: e.message }); }
-  };
 
   return (
     <AdminLayout title="Ngữ pháp (từ điển)">
@@ -85,10 +51,6 @@ export default function AdminGrammarPoints() {
             <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Tìm kiếm..." className="px-3 py-2 border border-outline rounded-xl text-sm outline-none focus:border-tsubaki-red w-36" />
             <button type="submit" className="p-2 bg-tsubaki-red text-white rounded-xl"><span className="material-symbols-outlined text-lg">search</span></button>
           </form>
-          <Button variant="secondary" onClick={() => setImportModal(true)}>
-            <span className="material-symbols-outlined text-lg">upload_file</span> Nhập file
-          </Button>
-          <Button onClick={openCreate}><span className="material-symbols-outlined text-lg">add</span> Thêm</Button>
         </div>
       </div>
 
@@ -100,7 +62,6 @@ export default function AdminGrammarPoints() {
         <div className="flex flex-col items-center justify-center py-24 text-on-muted text-center">
           <span className="material-symbols-outlined text-6xl mb-4 opacity-25">spellcheck</span>
           <p className="text-lg font-semibold text-charcoal mb-1">{search ? 'Không tìm thấy mẫu ngữ pháp' : 'Chưa có mẫu ngữ pháp nào'}</p>
-          <p className="text-sm">Bấm "Thêm" để thêm mẫu đầu tiên</p>
         </div>
       ) : (
         <div className="bg-white border border-outline/30 rounded-2xl overflow-hidden divide-y divide-outline/20">
@@ -122,16 +83,6 @@ export default function AdminGrammarPoints() {
                 <span className="material-symbols-outlined text-[15px]">{row.creator_name ? 'person' : 'public'}</span>
                 {row.creator_name || 'Hệ thống'}
               </span>
-              <div className="flex items-center gap-0.5 shrink-0">
-                <button onClick={() => openEdit(row)} title="Sửa"
-                  className="p-1.5 text-on-muted hover:text-tsubaki-red hover:bg-tsubaki-red/10 rounded-lg transition-colors">
-                  <span className="material-symbols-outlined text-[18px]">edit</span>
-                </button>
-                <button onClick={() => handleDelete(row)} title="Xóa"
-                  className="p-1.5 text-on-muted hover:text-error hover:bg-red-50 rounded-lg transition-colors">
-                  <span className="material-symbols-outlined text-[18px]">delete</span>
-                </button>
-              </div>
             </div>
           ))}
         </div>
@@ -144,39 +95,6 @@ export default function AdminGrammarPoints() {
           <button disabled={page * LIMIT >= total} onClick={() => setPage(p => p + 1)} className="px-4 py-2 rounded-xl border border-outline text-sm disabled:opacity-40">Tiếp →</button>
         </div>
       )}
-
-      <Modal open={modal} onClose={() => setModal(false)} title={editId ? 'Sửa mẫu ngữ pháp' : 'Thêm mẫu ngữ pháp'}
-        footer={<><Button variant="secondary" onClick={() => setModal(false)}>Huỷ</Button><Button loading={saving} onClick={handleSave}>Lưu</Button></>}>
-        <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-3">
-            <Input label="Mẫu ngữ pháp *" value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} placeholder="～ば" />
-            <Input label="Dạng tiếng Nhật" value={form.title_ja} onChange={e => setForm({ ...form, title_ja: e.target.value })} />
-          </div>
-          <Input label="Nghĩa (VI) *" value={form.meaning_vi} onChange={e => setForm({ ...form, meaning_vi: e.target.value })} />
-          <div>
-            <label className="block text-sm font-medium text-on-muted mb-1">Giải thích</label>
-            <textarea value={form.explanation} onChange={e => setForm({ ...form, explanation: e.target.value })}
-              className="w-full h-24 px-4 py-3 border border-outline rounded-xl text-sm outline-none focus:border-tsubaki-red resize-y" />
-          </div>
-          <Input label="Câu ví dụ" value={form.example_sentence} onChange={e => setForm({ ...form, example_sentence: e.target.value })} />
-          <div>
-            <label className="block text-sm font-medium text-on-muted mb-1">Level</label>
-            <select value={form.level} onChange={e => setForm({ ...form, level: e.target.value })}
-              className="w-full px-4 py-3 bg-white border border-outline rounded-xl text-sm outline-none focus:border-tsubaki-red">
-              <option value="">--</option>
-              {LEVELS.map(l => <option key={l} value={l}>{l}</option>)}
-            </select>
-          </div>
-        </div>
-      </Modal>
-      <ImportFileModal
-        open={importModal}
-        onClose={() => setImportModal(false)}
-        type="grammar"
-        previewUrl="/admin/grammar-points/import-file"
-        importUrl="/admin/grammar-points/import"
-        onImported={(msg) => { setAlert({ type: 'success', msg }); fetchData(); }}
-      />
     </AdminLayout>
   );
 }

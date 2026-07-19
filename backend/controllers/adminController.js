@@ -762,6 +762,8 @@ exports.detachVocab = async (req, res) => {
   } catch (err) { res.status(500).json({ error: 'Không thể gỡ từ vựng.' }); }
 };
 
+// Sửa từ vựng khi đang soạn bài học (AdminLessonVocabulary.jsx). Trang "kho từ
+// vựng" độc lập (AdminVocabulary.jsx) chỉ xem, không gọi hàm này.
 exports.updateVocab = async (req, res) => {
   const allowed = ['kanji','reading','meaning_vi','meaning_ja','level','lesson_id','type','topic','example_sentence','image_url','han_viet'];
   const updates = Object.fromEntries(Object.entries(req.body).filter(([k]) => allowed.includes(k)));
@@ -770,13 +772,6 @@ exports.updateVocab = async (req, res) => {
     if (error) throw error;
     res.json(data);
   } catch (err) { res.status(500).json({ error: 'Không thể cập nhật.' }); }
-};
-
-exports.deleteVocab = async (req, res) => {
-  try {
-    await supabaseAdmin.from('vocabulary').delete().eq('id', req.params.id);
-    res.json({ message: 'Đã xóa.' });
-  } catch (err) { res.status(500).json({ error: 'Không thể xóa.' }); }
 };
 
 // ── Grammar Points (từ điển ngữ pháp chuẩn, độc lập với lesson_grammar) ───────
@@ -933,24 +928,6 @@ exports.detachGrammar = async (req, res) => {
     if (error) throw error;
     res.json({ message: 'Đã gỡ khỏi bài.' });
   } catch (err) { res.status(500).json({ error: 'Không thể gỡ ngữ pháp.' }); }
-};
-
-exports.updateGrammarPoint = async (req, res) => {
-  const allowed = ['title','title_ja','meaning_vi','explanation','example_sentence','level'];
-  const updates = Object.fromEntries(Object.entries(req.body).filter(([k]) => allowed.includes(k)));
-  if (updates.level === '') updates.level = null;
-  try {
-    const { data, error } = await supabaseAdmin.from('grammar_points').update(updates).eq('id', req.params.id).select().single();
-    if (error) throw error;
-    res.json(data);
-  } catch (err) { res.status(500).json({ error: 'Không thể cập nhật.' }); }
-};
-
-exports.deleteGrammarPoint = async (req, res) => {
-  try {
-    await supabaseAdmin.from('grammar_points').delete().eq('id', req.params.id);
-    res.json({ message: 'Đã xóa.' });
-  } catch (err) { res.status(500).json({ error: 'Không thể xóa.' }); }
 };
 
 // ── Admin Study Lists ─────────────────────────────────────────────────────────
@@ -1187,6 +1164,8 @@ exports.detachKanji = async (req, res) => {
   } catch (err) { res.status(500).json({ error: 'Không thể gỡ kanji.' }); }
 };
 
+// Sửa kanji khi đang soạn bài học (AdminLessonKanji.jsx). Trang "kho kanji"
+// độc lập (AdminKanji.jsx) chỉ xem, không gọi hàm này.
 exports.updateKanji = async (req, res) => {
   const allowed = ['character','reading_on','reading_kun','meaning_vi','stroke_count','level','han_viet','lesson_id'];
   const updates = Object.fromEntries(Object.entries(req.body).filter(([k]) => allowed.includes(k)));
@@ -1195,13 +1174,6 @@ exports.updateKanji = async (req, res) => {
     if (error) throw error;
     res.json(data);
   } catch (err) { res.status(500).json({ error: 'Không thể cập nhật.' }); }
-};
-
-exports.deleteKanji = async (req, res) => {
-  try {
-    await supabaseAdmin.from('kanji').delete().eq('id', req.params.id);
-    res.json({ message: 'Đã xóa.' });
-  } catch (err) { res.status(500).json({ error: 'Không thể xóa.' }); }
 };
 
 // ── Question Bank ─────────────────────────────────────────────────────────────
