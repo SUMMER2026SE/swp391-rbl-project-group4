@@ -112,15 +112,21 @@ export default function LessonView({ Layout = StudentLayout, previewBase = '' })
   );
 
   if (paywall) return (
-    <Layout title="Khóa học có phí">
+    <Layout title={paywall.is_free ? 'Cần đăng ký khóa học' : 'Khóa học có phí'}>
       <div className="max-w-md mx-auto text-center py-16">
         <span className="material-symbols-outlined text-5xl text-amber-400 mb-4 block">lock</span>
-        <h2 className="font-display text-xl font-bold text-on-surface mb-2">Nội dung dành cho học viên đã mua khóa học</h2>
-        <p className="text-sm text-on-muted mb-6">Bạn cần mua khóa học này để xem nội dung bài học.</p>
+        <h2 className="font-display text-xl font-bold text-on-surface mb-2">
+          {paywall.is_free ? 'Hãy đăng ký khóa học để bắt đầu học' : 'Nội dung dành cho học viên đã mua khóa học'}
+        </h2>
+        <p className="text-sm text-on-muted mb-6">
+          {paywall.is_free
+            ? 'Khóa học này miễn phí — bạn chỉ cần bấm đăng ký để vào học.'
+            : 'Bạn cần mua khóa học này để xem nội dung bài học.'}
+        </p>
         <Link to={`/courses/${paywall.course_id}`}>
           <Button>
-            <span className="material-symbols-outlined text-lg">shopping_cart</span>
-            Mua khóa học
+            <span className="material-symbols-outlined text-lg">{paywall.is_free ? 'school' : 'shopping_cart'}</span>
+            {paywall.is_free ? 'Đăng ký học miễn phí' : 'Mua khóa học'}
           </Button>
         </Link>
       </div>

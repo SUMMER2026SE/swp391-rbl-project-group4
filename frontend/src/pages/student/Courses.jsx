@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import StudentLayout from '../../components/layout/StudentLayout';
 import CourseCard, { CourseCardSkeleton } from '../../components/ui/CourseCard';
+import { useAuth } from '../../contexts/AuthContext';
 import api from '../../lib/api';
 
 const LEVELS = ['N5', 'N4', 'N3', 'N2', 'N1', 'Business'];
@@ -19,11 +20,13 @@ const PRICE = [
 const LIMIT = 9;
 
 export default function Courses() {
+  const { user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const level      = searchParams.get('level')      || '';
   const isFree     = searchParams.get('is_free')    || '';
   const sort       = searchParams.get('sort')       || 'newest';
   const q          = searchParams.get('search')     || '';
+  const enrolled   = searchParams.get('enrolled')   === 'true';
   const page       = Number(searchParams.get('page') || 1);
 
   const [courses, setCourses] = useState([]);
@@ -52,11 +55,12 @@ export default function Courses() {
     if (q)          params.set('search', q);
     if (level)      params.set('level', level);
     if (isFree)     params.set('is_free', isFree);
+    if (enrolled)   params.set('enrolled', 'true');
     api.get(`/courses?${params}`)
       .then(r => { setCourses(r.data.data || []); setTotal(r.data.total || 0); })
       .catch(e => setError(e.message))
       .finally(() => setLoading(false));
-  }, [page, sort, q, level, isFree]);
+  }, [page, sort, q, level, isFree, enrolled]);
 
   const totalPages = Math.ceil(total / LIMIT);
   const hasFilters = level || isFree || q;
@@ -72,6 +76,33 @@ export default function Courses() {
           Khám phá hành trình tiếng Nhật của bạn — từ N5 cơ bản đến N1 nâng cao.
         </p>
       </div>
+
+      {/* ── Tabs: tất cả / đã đăng ký ────────────────────────────────── */}
+      {user && (
+        <div className="flex gap-2 mb-6">
+          <button
+            onClick={() => setParam({ enrolled: '' })}
+            className={`px-5 py-2.5 rounded-xl text-sm font-semibold transition-all ${
+              !enrolled
+                ? 'bg-tsubaki-red text-white shadow-md shadow-tsubaki-red/20'
+                : 'bg-white border border-outline-variant text-charcoal-text hover:border-tsubaki-red hover:text-tsubaki-red'
+            }`}
+          >
+            Tất cả khóa học
+          </button>
+          <button
+            onClick={() => setParam({ enrolled: 'true' })}
+            className={`inline-flex items-center gap-1.5 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all ${
+              enrolled
+                ? 'bg-tsubaki-red text-white shadow-md shadow-tsubaki-red/20'
+                : 'bg-white border border-outline-variant text-charcoal-text hover:border-tsubaki-red hover:text-tsubaki-red'
+            }`}
+          >
+            <span className="material-symbols-outlined text-base">school</span>
+            Khóa học của tôi
+          </button>
+        </div>
+      )}
 
       {/* ── Filter bar ──────────────────────────────────────────────── */}
       <div className="glass-card rounded-2xl p-4 mb-8 space-y-4 border border-outline-variant/40">
@@ -151,11 +182,23 @@ export default function Courses() {
         </div>
       ) : courses.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-24 text-center">
-          <span className="material-symbols-outlined text-6xl text-on-muted/20 mb-4">menu_book</span>
-          <p className="font-semibold text-on-surface mb-1">Không tìm thấy khóa học</p>
-          <p className="text-on-muted text-sm">
-            {hasFilters ? 'Thử bỏ bộ lọc hoặc nhập từ khóa khác' : 'Hãy quay lại sau!'}
+          <span className="material-symbols-outlined text-6xl text-on-muted/20 mb-4">{enrolled ? 'school' : 'menu_book'}</span>
+          <p className="font-semibold text-on-surface mb-1">
+            {enrolled ? 'Bạn chưa đăng ký khóa học nào' : 'Không tìm thấy khóa học'}
           </p>
+          <p className="text-on-muted text-sm">
+            {enrolled
+              ? (hasFilters ? 'Thử bỏ bộ lọc hoặc nhập từ khóa khác' : 'Hãy đăng ký một khóa học để bắt đầu học!')
+              : (hasFilters ? 'Thử bỏ bộ lọc hoặc nhập từ khóa khác' : 'Hãy quay lại sau!')}
+          </p>
+          {enrolled && !hasFilters && (
+            <button
+              onClick={() => setParam({ enrolled: '' })}
+              className="mt-4 px-5 py-2.5 rounded-xl bg-tsubaki-red text-white text-sm font-semibold hover:bg-tsubaki-red/90 transition-colors"
+            >
+              Khám phá khóa học
+            </button>
+          )}
         </div>
       ) : (
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">

@@ -55,6 +55,7 @@ app.use('/api/teacher-applications', require('./routes/api/teacherApplications')
 app.use('/api/study-lists',    require('./routes/api/studyLists'));
 app.use('/api/grammar-points', require('./routes/api/grammarPoints'));
 app.use('/api/subscription',   require('./routes/api/subscription'));
+app.use('/api/payment',        require('./routes/api/paymentQr'));
 app.use('/api/webhooks',       require('./routes/api/webhooks'));
 
 // ── Health check ──────────────────────────────────────────────────────────────

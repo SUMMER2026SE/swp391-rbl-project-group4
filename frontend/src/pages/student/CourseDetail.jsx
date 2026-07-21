@@ -142,7 +142,7 @@ function CoursePaymentModal({ courseId, courseTitle, buyer, onClose, onSuccess }
             {/* QR code — QR lỗi (mạng chặn / thiếu cấu hình) thì hướng dẫn chuyển khoản thủ công */}
             {order.qr_url && !qrError ? (
               <div className="flex justify-center mb-5">
-                <img src={order.qr_url} alt="QR Thanh toán"
+                <img src={`/api/payment/qr?amount=${order.amount}&des=${order.payment_code}`} alt="QR Thanh toán"
                   className="w-52 h-52 border-4 border-amber-300 rounded-2xl object-contain bg-white"
                   onError={() => setQrError(true)}
                 />
@@ -231,13 +231,11 @@ function CoursePaymentModal({ courseId, courseTitle, buyer, onClose, onSuccess }
   );
 }
 
-function ItemRow({ item, isCurrent, to }) {
+// locked: chưa đăng ký → không điều hướng, bấm sẽ mở luồng đăng ký (onLockedClick).
+function ItemRow({ item, isCurrent, to, locked, onLockedClick }) {
   const meta = TYPE_META[item.lesson_type] || TYPE_META.reading;
-  return (
-    <Link
-      to={to}
-      className={`flex items-center gap-3 px-5 py-3 transition-colors group ${isCurrent ? 'bg-sumire-purple/5' : 'hover:bg-surface-container-low'}`}
-    >
+  const inner = (
+    <>
       {item.completed ? (
         <span className="material-symbols-outlined text-green-500 fill text-[26px] shrink-0">check_circle</span>
       ) : (
@@ -255,7 +253,31 @@ function ItemRow({ item, isCurrent, to }) {
         {item.title_ja && <p className="text-xs text-on-muted mt-0.5 truncate">{item.title_ja}</p>}
       </div>
       <span className={`shrink-0 text-xs font-semibold px-2.5 py-1 rounded-full ${meta.badge}`}>{meta.label}</span>
-      <span className="material-symbols-outlined text-lg text-on-muted/40 group-hover:text-sumire-purple group-hover:translate-x-0.5 transition-all shrink-0">chevron_right</span>
+      <span className={`material-symbols-outlined text-lg shrink-0 transition-all ${locked ? 'text-on-muted/40' : 'text-on-muted/40 group-hover:text-sumire-purple group-hover:translate-x-0.5'}`}>
+        {locked ? 'lock' : 'chevron_right'}
+      </span>
+    </>
+  );
+
+  if (locked) {
+    return (
+      <button
+        type="button"
+        onClick={onLockedClick}
+        title="Đăng ký khóa học để mở mục này"
+        className="w-full flex items-center gap-3 px-5 py-3 text-left transition-colors group hover:bg-surface-container-low"
+      >
+        {inner}
+      </button>
+    );
+  }
+
+  return (
+    <Link
+      to={to}
+      className={`flex items-center gap-3 px-5 py-3 transition-colors group ${isCurrent ? 'bg-sumire-purple/5' : 'hover:bg-surface-container-low'}`}
+    >
+      {inner}
     </Link>
   );
 }
@@ -547,7 +569,7 @@ export default function CourseDetail({ Layout = StudentLayout, backTo = '/course
                       </button>
                       {open && (
                         <div className="border-t border-outline-variant/30 divide-y divide-outline-variant/15">
-                          {lessons.map(item => <ItemRow key={item.id} item={item} to={lessonPath(item.id)} isCurrent={resumeItem && item.id === resumeItem.id} />)}
+                          {lessons.map(item => <ItemRow key={item.id} item={item} to={lessonPath(item.id)} isCurrent={resumeItem && item.id === resumeItem.id} locked={!enrolled && !viewerOnly} onLockedClick={handleEnrollClick} />)}
                           {lessons.length === 0 && <p className="px-5 py-4 text-sm text-on-muted italic">Chưa có mục nào.</p>}
                         </div>
                       )}

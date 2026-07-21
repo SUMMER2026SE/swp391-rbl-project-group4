@@ -281,12 +281,11 @@ export default function Dashboard() {
 
         </div>
       {/* Quick links */}
-      <div className="mt-8 grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="mt-8 grid grid-cols-2 md:grid-cols-3 gap-3">
         {[
-          { to: '/courses',    icon: 'menu_book',  label: t('courses.title') },
+          { to: '/courses?enrolled=true', icon: 'menu_book',  label: t('courses.title') },
           { to: '/vocabulary', icon: 'translate',  label: t('vocab.title') },
           { to: '/profile',    icon: 'person',     label: t('profile.title') },
-          { to: '/courses',    icon: 'quiz',       label: 'Bài kiểm tra' },
         ].map(link => (
           <Link key={link.to + link.label} to={link.to}
             className="glass-card rounded-2xl p-4 flex flex-col items-center gap-2 hover:shadow-lg hover:border-tsubaki-red/20 transition-all group">
