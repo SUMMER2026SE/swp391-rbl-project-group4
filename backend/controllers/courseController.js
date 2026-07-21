@@ -10,10 +10,22 @@ const PUBLIC_NEW_FIELDS = 'is_free,price,creator_type,enrollment_count,avg_ratin
 
 // GET /api/courses
 exports.list = async (req, res) => {
-  const { level, difficulty, is_free, sort = 'newest', search, page = 1, limit = 12 } = req.query;
+  const { level, difficulty, is_free, sort = 'newest', search, page = 1, limit = 12, enrolled } = req.query;
   const offset = (Number(page) - 1) * Number(limit);
 
   try {
+    // Lọc "đã đăng ký": chỉ những khóa user hiện tại đã enroll (miễn phí lẫn có phí).
+    let enrolledIds = null;
+    if (enrolled === 'true') {
+      if (!req.user)
+        return res.json({ data: [], total: 0, page: Number(page), limit: Number(limit) });
+      const { data: en } = await contentDb.from('course_enrollments')
+        .select('course_id').eq('student_id', req.user.id);
+      enrolledIds = (en || []).map(r => r.course_id);
+      if (enrolledIds.length === 0)
+        return res.json({ data: [], total: 0, page: Number(page), limit: Number(limit) });
+    }
+
     // Lọc theo cấp JLPT (level dạng chữ) qua view compat để khỏi map jlpt_level_id thủ công.
     let levelIds = null;
     if (level) {
@@ -28,6 +40,7 @@ exports.list = async (req, res) => {
       .select(`id,title,title_ja,description,jlpt_level_id,thumbnail_url,is_published,created_by,created_at,${PUBLIC_NEW_FIELDS}`, { count: 'exact' })
       .eq('is_published', true);
 
+    if (enrolledIds)           query = query.in('id', enrolledIds);
     if (levelIds)              query = query.in('id', levelIds);
     if (difficulty)            query = query.eq('difficulty_level', difficulty);
     if (is_free !== undefined) query = query.eq('is_free', is_free === 'true');
