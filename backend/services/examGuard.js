@@ -1,5 +1,7 @@
 const { supabaseAdmin } = require('../config/supabase');
 
+const jlptDb = supabaseAdmin.schema('jlpt_module');
+
 // Trợ lý AI phải bị khoá khi học viên ĐANG làm bài thi — nếu không, chỉ cần mở
 // /chat ở tab khác là hỏi được đáp án (ẩn bubble ở frontend không chặn được).
 //
@@ -12,9 +14,11 @@ const { supabaseAdmin } = require('../config/supabase');
 async function activeExam(userId) {
   const now = new Date().toISOString();
 
-  const { data: mock } = await supabaseAdmin.from('mock_attempts')
+  // supabase-js không throw khi query lỗi — phải tự ném để caller không fail-open thầm lặng.
+  const { data: mock, error } = await jlptDb.from('mock_attempts')
     .select('id').eq('user_id', userId).eq('status', 'in_progress')
     .gt('section_deadline_at', now).limit(1).maybeSingle();
+  if (error) throw error;
 
   if (mock) return 'mock_exam';
   return null;
