@@ -97,13 +97,13 @@ export default function TeacherGrammar() {
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-surface-low border-b border-outline/40">
-              <tr>{['Mẫu ngữ pháp','Nghĩa','Level','Ví dụ',''].map(h =>
+              <tr>{['Mẫu ngữ pháp','Nghĩa','Level','Ví dụ','Người tạo',''].map(h =>
                 <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-on-muted uppercase tracking-wide">{h}</th>)}</tr>
             </thead>
             <tbody>
               {loading ? Array.from({length:8}).map((_,i) => (
                 <tr key={i} className="border-t border-outline/40 animate-pulse">
-                  {[80,100,40,120,40].map((w,j) => <td key={j} className="px-4 py-3"><div className="h-3 bg-surface-low rounded" style={{width:w}}/></td>)}
+                  {[80,100,40,120,60,40].map((w,j) => <td key={j} className="px-4 py-3"><div className="h-3 bg-surface-low rounded" style={{width:w}}/></td>)}
                 </tr>
               )) : items.map((g,i) => (
                 <tr key={g.id} className={`border-t border-outline/40 hover:bg-tsubaki-red/5 transition-colors ${i%2===1?'bg-surface-low/30':''}`}>
@@ -111,6 +111,7 @@ export default function TeacherGrammar() {
                   <td className="px-4 py-2.5">{g.meaning_vi}</td>
                   <td className="px-4 py-2.5">{g.level ? <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${LEVEL_COLORS[g.level]}`}>{g.level}</span> : '—'}</td>
                   <td className="px-4 py-2.5 text-xs text-on-muted italic max-w-[200px] truncate">{g.example_sentence || '—'}</td>
+                  <td className="px-4 py-2.5 text-xs text-on-muted">{g.creator_name || 'Hệ thống'}</td>
                   <td className="px-4 py-2.5">
                     <button onClick={() => openEdit(g)} title="Sửa"
                       className="p-1.5 rounded-lg text-on-muted hover:text-tsubaki-red hover:bg-tsubaki-red/10 transition-colors">
@@ -120,7 +121,7 @@ export default function TeacherGrammar() {
                 </tr>
               ))}
               {!loading && items.length === 0 && (
-                <tr><td colSpan={5} className="px-4 py-12 text-center text-on-muted">Không có dữ liệu</td></tr>
+                <tr><td colSpan={6} className="px-4 py-12 text-center text-on-muted">Không có dữ liệu</td></tr>
               )}
             </tbody>
           </table>

@@ -136,7 +136,7 @@ function CheckoutModal({ plan, buyer, onClose, onSuccess }) {
                 thì hiện hướng dẫn chuyển khoản thủ công thay vì để trống */}
             {order.qr_url && !qrError ? (
               <div className="flex justify-center mb-5">
-                <img src={order.qr_url} alt="QR Thanh toán"
+                <img src={`/api/payment/qr?amount=${order.amount}&des=${order.payment_code}`} alt="QR Thanh toán"
                   className="w-52 h-52 border-4 border-amber-300 rounded-2xl object-contain bg-white"
                   onError={() => setQrError(true)}
                 />
