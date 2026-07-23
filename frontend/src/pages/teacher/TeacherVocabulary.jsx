@@ -69,13 +69,13 @@ function SystemTab() {
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-surface-low border-b border-outline/40">
-              <tr>{['Kanji','Hán Việt','Reading','Nghĩa VI','Nghĩa JA','Level','Loại','Ví dụ'].map(h =>
+              <tr>{['Kanji','Hán Việt','Reading','Nghĩa VI','Nghĩa JA','Level','Loại','Ví dụ','Người tạo'].map(h =>
                 <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-on-muted uppercase tracking-wide">{h}</th>)}</tr>
             </thead>
             <tbody>
               {loading ? Array.from({length:8}).map((_,i) => (
                 <tr key={i} className="border-t border-outline/40 animate-pulse">
-                  {[40,50,60,80,60,40,56,100].map((w,j) => <td key={j} className="px-4 py-3"><div className="h-3 bg-surface-low rounded" style={{width:w}}/></td>)}
+                  {[40,50,60,80,60,40,56,100,60].map((w,j) => <td key={j} className="px-4 py-3"><div className="h-3 bg-surface-low rounded" style={{width:w}}/></td>)}
                 </tr>
               )) : items.map((v,i) => (
                 <tr key={v.id} className={`border-t border-outline/40 hover:bg-tsubaki-red/5 transition-colors ${i%2===1?'bg-surface-low/30':''}`}>
@@ -87,10 +87,11 @@ function SystemTab() {
                   <td className="px-4 py-2.5">{v.level ? <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${LEVEL_COLORS[v.level]}`}>{v.level}</span> : '—'}</td>
                   <td className="px-4 py-2.5">{v.type ? <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${TYPE_COLORS[v.type]||'bg-surface-low text-on-muted'}`}>{v.type}</span> : '—'}</td>
                   <td className="px-4 py-2.5 text-xs text-on-muted italic max-w-[180px] truncate">{v.example_sentence||'—'}</td>
+                  <td className="px-4 py-2.5 text-xs text-on-muted">{v.creator_name || 'Hệ thống'}</td>
                 </tr>
               ))}
               {!loading && items.length === 0 && (
-                <tr><td colSpan={8} className="px-4 py-12 text-center text-on-muted">Không có dữ liệu</td></tr>
+                <tr><td colSpan={9} className="px-4 py-12 text-center text-on-muted">Không có dữ liệu</td></tr>
               )}
             </tbody>
           </table>

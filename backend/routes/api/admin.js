@@ -156,27 +156,27 @@ router.patch('/lessons/reorder',     c.reorderLessons);
 router.post('/lessons/upload-video', videoUpload.single('video'), c.uploadLessonVideo);
 router.post('/lessons/:id/transcribe-video', c.transcribeLessonVideo);
 
-// Vocabulary
+// Vocabulary — trang "kho từ vựng" độc lập (AdminVocabulary.jsx) chỉ xem,
+// không còn nút tạo/sửa/xóa/nhập file. Các route tạo/sửa dưới đây vẫn giữ vì
+// còn dùng bởi trang soạn bài học (AdminLessonVocabulary.jsx — thêm/sửa từ
+// vựng gắn trực tiếp vào 1 bài học, khác với quản lý kho độc lập).
 router.get('/vocabulary',         c.listVocab);
-router.post('/vocabulary/import', c.importVocab);
 router.post('/vocabulary',        c.createVocab);
 router.post('/vocabulary/upload-image', upload.single('image'), c.uploadVocabImage);
 router.put('/vocabulary/:id',     c.updateVocab);
-router.delete('/vocabulary/:id',  c.deleteVocab);
+router.post('/vocabulary/import', c.importVocab);
 
-// Kanji
+// Kanji — như trên, giữ tạo/sửa cho trang soạn bài học.
 router.get('/kanji',         c.listKanji);
-router.post('/kanji/import', c.importKanji);
 router.post('/kanji',        c.createKanji);
 router.put('/kanji/:id',     c.updateKanji);
-router.delete('/kanji/:id',  c.deleteKanji);
+router.post('/kanji/import', c.importKanji);
 
 // Grammar Points (từ điển ngữ pháp chuẩn — khác với /grammar quản lý lesson_grammar)
+// — giữ tạo cho trang soạn bài học (không có sửa/xóa trực tiếp ở đó).
 router.get('/grammar-points',         c.listGrammarPoints);
-router.post('/grammar-points/import', c.importGrammarPoints);
 router.post('/grammar-points',        c.createGrammarPoint);
-router.put('/grammar-points/:id',     c.updateGrammarPoint);
-router.delete('/grammar-points/:id',  c.deleteGrammarPoint);
+router.post('/grammar-points/import', c.importGrammarPoints);
 
 // Gắn/gỡ từ vựng & kanji có sẵn vào Mục (bảng nối nhiều–nhiều)
 router.post('/lessons/:lessonId/vocabulary/attach',     c.attachVocab);
@@ -201,11 +201,6 @@ const importFileUpload = multer({
 router.post('/lessons/:lessonId/vocabulary/import-file', importFileUpload.single('file'), fic.previewVocabFile);
 router.post('/lessons/:lessonId/kanji/import-file',      importFileUpload.single('file'), fic.previewKanjiFile);
 router.post('/lessons/:lessonId/grammar-points/import-file', importFileUpload.single('file'), fic.previewGrammarFile);
-
-// Import file trực tiếp vào ngân hàng chung (không cần lessonId)
-router.post('/vocabulary/import-file',     importFileUpload.single('file'), fic.previewVocabFile);
-router.post('/kanji/import-file',          importFileUpload.single('file'), fic.previewKanjiFile);
-router.post('/grammar-points/import-file', importFileUpload.single('file'), fic.previewGrammarFile);
 
 // Study lists — admin quản lý bài đăng của giáo viên
 const sl = require('../../controllers/studyListController');

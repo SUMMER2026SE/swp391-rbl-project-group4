@@ -44,7 +44,9 @@ exports.createMyVocab = async (req, res) => {
 exports.updateMyVocab = async (req, res) => {
   try {
     const { data: row } = await supabaseAdmin.from('vocabulary').select('created_by').eq('id', req.params.id).single();
-    if (!row || row.created_by !== req.user.id) return res.status(403).json({ error: 'Không có quyền.' });
+    // created_by NULL (từ hệ thống/nhập hàng loạt) — không ai sở hữu riêng nên
+    // giáo viên nào cũng sửa được; đã có chủ thì chỉ chủ đó sửa.
+    if (!row || (row.created_by && row.created_by !== req.user.id)) return res.status(403).json({ error: 'Không có quyền.' });
     const allowed = ['kanji','reading','meaning_vi','meaning_ja','level','type','example_sentence','han_viet'];
     const updates = Object.fromEntries(Object.entries(req.body).filter(([k]) => allowed.includes(k)));
     const { data, error } = await supabaseAdmin.from('vocabulary').update(updates).eq('id', req.params.id).select().single();
@@ -102,8 +104,10 @@ exports.updateMyKanji = async (req, res) => {
   const toArr = (v) => Array.isArray(v) ? v : (typeof v === 'string' ? v.split(',').map(s => s.trim()).filter(Boolean) : []);
   try {
     const { data: row } = await supabaseAdmin.from('kanji').select('created_by').eq('id', req.params.id).single();
-    if (!row || row.created_by !== req.user.id) return res.status(403).json({ error: 'Không có quyền.' });
-    const { character, reading_on, reading_kun, meaning_vi, stroke_count, level } = req.body;
+    // created_by NULL (kanji hệ thống/nhập hàng loạt từ Mazii) — giáo viên nào
+    // cũng sửa được; đã có chủ thì chỉ chủ đó sửa.
+    if (!row || (row.created_by && row.created_by !== req.user.id)) return res.status(403).json({ error: 'Không có quyền.' });
+    const { character, reading_on, reading_kun, meaning_vi, stroke_count, level, han_viet } = req.body;
     const updates = {};
     if (character    !== undefined) updates.character    = character;
     if (meaning_vi   !== undefined) updates.meaning_vi   = meaning_vi;
@@ -111,6 +115,7 @@ exports.updateMyKanji = async (req, res) => {
     if (reading_kun  !== undefined) updates.reading_kun  = toArr(reading_kun);
     if (stroke_count !== undefined) updates.stroke_count = stroke_count ? Number(stroke_count) : null;
     if (level        !== undefined) updates.level        = level;
+    if (han_viet      !== undefined) updates.han_viet     = han_viet || null;
     const { data, error } = await supabaseAdmin.from('kanji').update(updates).eq('id', req.params.id).select().single();
     if (error) throw error;
     res.json(data);
@@ -623,6 +628,57 @@ exports.createGrammarForLesson = async (req, res) => {
   if (lesson_id && !(await ownsLesson(lesson_id, req.user.id)))
     return res.status(403).json({ error: 'Bạn không có quyền thêm vào bài này.' });
   return require('./adminController').createGrammarPoint(req, res);
+};
+
+// ── Sửa kanji/ngữ pháp trong kho chung (vd: sửa inline ngay trên bài đăng) ──────
+// created_by NULL (kanji hệ thống, ngữ pháp nhập hàng loạt từ Mazii) → giáo viên
+// nào cũng sửa được, vì không ai sở hữu riêng. Đã gán cho 1 giáo viên cụ thể →
+// chỉ giáo viên đó sửa được, giống hệt luật của "my-vocab".
+async function checkSharedOwnership(table, id, userId) {
+  const { data: row } = await supabaseAdmin.from(table).select('created_by').eq('id', id).single();
+  if (!row) return { ok: false, notFound: true };
+  if (row.created_by && row.created_by !== userId) return { ok: false, notFound: false };
+  return { ok: true, notFound: false };
+}
+
+exports.updateSharedVocab = async (req, res) => {
+  const check = await checkSharedOwnership('vocabulary', req.params.id, req.user.id);
+  if (check.notFound) return res.status(404).json({ error: 'Không tìm thấy.' });
+  if (!check.ok) return res.status(403).json({ error: 'Từ vựng này do giáo viên khác tạo, bạn không có quyền sửa.' });
+  const allowed = ['kanji', 'reading', 'meaning_vi', 'meaning_ja', 'level', 'lesson_id', 'type', 'topic', 'example_sentence', 'image_url', 'han_viet'];
+  const updates = Object.fromEntries(Object.entries(req.body).filter(([k]) => allowed.includes(k)));
+  try {
+    const { data, error } = await supabaseAdmin.from('vocabulary').update(updates).eq('id', req.params.id).select().single();
+    if (error) throw error;
+    res.json(data);
+  } catch (err) { res.status(500).json({ error: err.message || 'Không thể cập nhật.' }); }
+};
+
+exports.updateSharedKanji = async (req, res) => {
+  const check = await checkSharedOwnership('kanji', req.params.id, req.user.id);
+  if (check.notFound) return res.status(404).json({ error: 'Không tìm thấy.' });
+  if (!check.ok) return res.status(403).json({ error: 'Kanji này do giáo viên khác tạo, bạn không có quyền sửa.' });
+  const allowed = ['character', 'reading_on', 'reading_kun', 'meaning_vi', 'stroke_count', 'level', 'han_viet'];
+  const updates = Object.fromEntries(Object.entries(req.body).filter(([k]) => allowed.includes(k)));
+  try {
+    const { data, error } = await supabaseAdmin.from('kanji').update(updates).eq('id', req.params.id).select().single();
+    if (error) throw error;
+    res.json(data);
+  } catch (err) { res.status(500).json({ error: err.message || 'Không thể cập nhật.' }); }
+};
+
+exports.updateSharedGrammarPoint = async (req, res) => {
+  const check = await checkSharedOwnership('grammar_points', req.params.id, req.user.id);
+  if (check.notFound) return res.status(404).json({ error: 'Không tìm thấy.' });
+  if (!check.ok) return res.status(403).json({ error: 'Mẫu ngữ pháp này do giáo viên khác tạo, bạn không có quyền sửa.' });
+  const allowed = ['title', 'title_ja', 'meaning_vi', 'explanation', 'example_sentence', 'level'];
+  const updates = Object.fromEntries(Object.entries(req.body).filter(([k]) => allowed.includes(k)));
+  if (updates.level === '') updates.level = null;
+  try {
+    const { data, error } = await supabaseAdmin.from('grammar_points').update(updates).eq('id', req.params.id).select().single();
+    if (error) throw error;
+    res.json(data);
+  } catch (err) { res.status(500).json({ error: err.message || 'Không thể cập nhật.' }); }
 };
 
 // ── Quiz của Mục (lesson quiz) ─────────────────────────────────────────────────
