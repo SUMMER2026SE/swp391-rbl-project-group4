@@ -6,6 +6,8 @@
 const { supabaseAdmin } = require('../config/supabase');
 const { getPoolPct } = require('./settingsService');
 
+const billingDb = supabaseAdmin.schema('billing_module');
+
 const round = (n) => Math.round(Number(n) || 0);
 
 // Month boundaries for a 'YYYY-MM' period key (UTC).
@@ -54,13 +56,13 @@ async function computePeriod(periodKey) {
 
 // Persist the distribution for a period. Idempotent: skips if already finalized.
 async function finalizePeriod(periodKey) {
-  const { data: existing } = await supabaseAdmin
+  const { data: existing } = await billingDb
     .from('revenue_pool_periods').select('period_key').eq('period_key', periodKey).maybeSingle();
   if (existing) return { skipped: true, period_key: periodKey };
 
   const c = await computePeriod(periodKey);
 
-  await supabaseAdmin.from('revenue_pool_periods').insert({
+  await billingDb.from('revenue_pool_periods').insert({
     period_key: periodKey,
     total_vip_revenue: c.total_vip_revenue,
     pool_pct: c.pool_pct,
@@ -71,7 +73,7 @@ async function finalizePeriod(periodKey) {
   });
 
   if (c.payouts.length) {
-    await supabaseAdmin.from('teacher_payouts').insert(
+    await billingDb.from('teacher_payouts').insert(
       c.payouts.map(p => ({ period_key: periodKey, teacher_id: p.teacher_id, uses: p.uses, share_pct: p.share_pct, amount: p.amount }))
     );
   }

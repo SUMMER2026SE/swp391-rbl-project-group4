@@ -4,7 +4,6 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useSubscription } from '../../hooks/useSubscription';
 
 const FREE_FEATURES = [
-  { label: '1 lượt kiểm tra năng lực / tháng' },
   { label: '2 bài luyện nghe / tháng' },
   { label: '5 tin nhắn AI / ngày' },
   { label: '2 file luyện viết kanji / tháng' },
@@ -14,7 +13,6 @@ const FREE_FEATURES = [
 ];
 
 const PREMIUM_FEATURES = [
-  { label: 'Kiểm tra năng lực không giới hạn', highlight: true },
   { label: 'Luyện nghe không giới hạn', highlight: true },
   { label: 'Trợ lý AI không giới hạn mỗi ngày', highlight: true },
   { label: 'Luyện viết kanji không giới hạn', highlight: true },

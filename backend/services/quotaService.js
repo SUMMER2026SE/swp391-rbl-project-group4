@@ -1,6 +1,7 @@
 'use strict';
 
 const { supabaseAdmin } = require('../config/supabase');
+const billingDb = supabaseAdmin.schema('billing_module');
 
 // ── Period key helpers ────────────────────────────────────────────────────────
 
@@ -24,7 +25,7 @@ async function getUserTier(userId) {
   const cached = _tierCache.get(userId);
   if (cached && Date.now() < cached.expiresAt) return cached.tier;
 
-  const { data } = await supabaseAdmin
+  const { data } = await billingDb
     .from('user_subscriptions')
     .select('tier')
     .eq('user_id', userId)
@@ -50,7 +51,7 @@ let _entitlementsFetchedAt = 0;
 
 async function getEntitlement(tier, featureCode) {
   if (!_entitlements || Date.now() - _entitlementsFetchedAt > 300_000) {
-    const { data } = await supabaseAdmin
+    const { data } = await billingDb
       .from('feature_entitlements')
       .select('tier, feature_code, limit_value, period_type');
     _entitlements = {};
@@ -65,7 +66,7 @@ async function getEntitlement(tier, featureCode) {
 // ── Usage counter ─────────────────────────────────────────────────────────────
 
 async function getUsage(userId, featureCode, periodKey) {
-  const { data } = await supabaseAdmin
+  const { data } = await billingDb
     .from('feature_usage_counters')
     .select('used_count, used_amount')
     .eq('user_id', userId)
@@ -80,7 +81,7 @@ async function incrementUsage(userId, featureCode, amount = 1, tier = null) {
   const periodType = ent?.period_type ?? 'monthly';
   const periodKey  = getCurrentPeriodKey(periodType);
 
-  const { data: existing } = await supabaseAdmin
+  const { data: existing } = await billingDb
     .from('feature_usage_counters')
     .select('id, used_count')
     .eq('user_id', userId)
@@ -89,7 +90,7 @@ async function incrementUsage(userId, featureCode, amount = 1, tier = null) {
     .maybeSingle();
 
   if (existing) {
-    await supabaseAdmin
+    await billingDb
       .from('feature_usage_counters')
       .update({
         used_count: existing.used_count + 1,
@@ -99,7 +100,7 @@ async function incrementUsage(userId, featureCode, amount = 1, tier = null) {
       })
       .eq('id', existing.id);
   } else {
-    await supabaseAdmin.from('feature_usage_counters').insert({
+    await billingDb.from('feature_usage_counters').insert({
       user_id: userId,
       feature_code: featureCode,
       period_type: periodType,
@@ -184,7 +185,6 @@ async function getRemaining(userId, featureCode) {
 async function getAllQuotas(userId) {
   const tier = await getUserTier(userId);
   const featureCodes = [
-    'placement_test_monthly',
     'kanji_file_monthly',
     'kanji_chars_per_file',
     'listening_practice_monthly',

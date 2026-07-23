@@ -1,7 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 
 const FEATURE_NAMES = {
-  placement_test_monthly:     'Kiểm tra năng lực',
   ai_chat_daily:              'Trợ lý AI',
   listening_practice_monthly: 'Luyện nghe',
   kanji_file_monthly:         'Luyện viết kanji',

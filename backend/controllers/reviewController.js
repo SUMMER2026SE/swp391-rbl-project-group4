@@ -2,7 +2,7 @@
 
 const { supabaseAdmin } = require('../config/supabase');
 
-const contentDb = supabaseAdmin.schema('content_module');
+const contentDb = supabaseAdmin.schema('course_module');
 
 function validRating(v) {
   const r = Number(v);

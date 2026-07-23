@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import StudentLayout from '../../components/layout/StudentLayout';
 import Button from '../../components/ui/Button';
 import Alert from '../../components/ui/Alert';
@@ -169,7 +169,6 @@ export default function LearningPath() {
                   <option value="">-- Chọn --</option>
                   {LEVELS.map(l => <option key={l} value={l}>{l}</option>)}
                 </select>
-                <p className="text-xs text-on-muted mt-1">Có thể lấy từ bài kiểm tra đầu vào.</p>
               </div>
               <div>
                 <label className="block text-sm font-semibold text-on-muted mb-1.5">Mục tiêu</label>
@@ -200,10 +199,6 @@ export default function LearningPath() {
               <span className="material-symbols-outlined text-lg">auto_awesome</span>
               Tạo lộ trình
             </Button>
-            <p className="text-center text-xs text-on-muted">
-              Chưa làm bài kiểm tra đầu vào?{' '}
-              <Link to="/placement-test" className="text-sumire-purple font-semibold hover:underline">Làm ngay</Link>
-            </p>
           </div>
         </div>
       </StudentLayout>

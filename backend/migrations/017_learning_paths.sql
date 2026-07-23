@@ -11,7 +11,6 @@ CREATE TABLE IF NOT EXISTS public.learning_paths (
   study_goal        text,
   daily_minutes     smallint,
   status            text NOT NULL DEFAULT 'active' CHECK (status IN ('active','archived')),
-  source_attempt_id uuid REFERENCES public.placement_test_attempts(id) ON DELETE SET NULL,
   ai_model          text,
   generated_at      timestamptz NOT NULL DEFAULT now(),
   created_at        timestamptz NOT NULL DEFAULT now(),
@@ -57,7 +56,7 @@ CREATE POLICY lps_read_own ON public.learning_path_steps
             WHERE p.id = path_id AND p.user_id = auth.uid())
   );
 
--- Quota seed (mirrors placement_test_monthly): free = 2/month, premium = unlimited
+-- Quota seed: free = 2/month, premium = unlimited
 INSERT INTO public.feature_entitlements (tier, feature_code, limit_value, period_type)
 VALUES ('free',    'learning_path_generate_monthly',  2, 'monthly'),
        ('premium', 'learning_path_generate_monthly', -1, 'monthly')

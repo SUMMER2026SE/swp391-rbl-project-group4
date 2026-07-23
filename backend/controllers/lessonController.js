@@ -5,9 +5,10 @@ const { checkCourseContentAccess } = require('../services/courseAccess');
 const { describeThreshold } = require('../services/passThreshold');
 const { markLessonCompleted } = require('../services/lessonProgress');
 
-// Bảng quiz nằm ở exam_module; tiến độ (lesson_progress) + units nằm ở content_module
+// Bảng quiz nằm ở exam_module; tiến độ (lesson_progress) + units nằm ở course_module
 const examDb = supabaseAdmin.schema('exam_module');
-const contentDb = supabaseAdmin.schema('content_module');
+const contentDb = supabaseAdmin.schema('course_module');
+const langDb = supabaseAdmin.schema('language_module');
 
 // Danh sách Mục toàn khóa, sắp theo (unit.sort_order, lesson.order_index) → để điều hướng tiếp/trước.
 async function buildCourseItemOrder(courseId) {
@@ -57,7 +58,7 @@ exports.getOne = async (req, res) => {
             .in('id', kanjiIds).order('created_at')
         : Promise.resolve({ data: [] }),
       grammarIds.length
-        ? supabaseAdmin.from('grammar_points')
+        ? langDb.from('grammar_points')
             .select('id,title,title_ja,meaning_vi,explanation,example_sentence,level')
             .in('id', grammarIds).order('created_at')
         : Promise.resolve({ data: [] }),

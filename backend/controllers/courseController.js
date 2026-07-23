@@ -2,9 +2,9 @@
 
 const { supabaseAdmin } = require('../config/supabase');
 
-const contentDb = supabaseAdmin.schema('content_module');
+const contentDb = supabaseAdmin.schema('course_module');
 
-// Cột mới (giá / đánh giá / phân loại) nằm ở bảng gốc content_module.courses — view
+// Cột mới (giá / đánh giá / phân loại) nằm ở bảng gốc course_module.courses — view
 // compat public.courses chưa expose. Không trả commission_rate ra ngoài (số liệu nội bộ).
 const PUBLIC_NEW_FIELDS = 'is_free,price,creator_type,enrollment_count,avg_rating,difficulty_level,reference_curriculum';
 
@@ -103,7 +103,7 @@ exports.getOne = async (req, res) => {
       .from('courses').select('*').eq('id', req.params.id).eq('is_published', true).single();
     if (error || !course) return res.status(404).json({ error: 'Không tìm thấy khóa học.' });
 
-    // Cột giá/đánh giá nằm ở bảng gốc content_module (view public.courses chưa có).
+    // Cột giá/đánh giá nằm ở bảng gốc course_module (view public.courses chưa có).
     const { data: extra } = await contentDb.from('courses')
       .select(PUBLIC_NEW_FIELDS).eq('id', req.params.id).single();
 

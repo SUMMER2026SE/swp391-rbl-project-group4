@@ -2,13 +2,15 @@
 
 const { supabaseAdmin } = require('../config/supabase');
 
+const langDb = supabaseAdmin.schema('language_module');
+
 // GET /api/grammar-points
 exports.list = async (req, res) => {
   const { level, search, page = 1, limit = 20 } = req.query;
   const offset = (page - 1) * limit;
 
   try {
-    let query = supabaseAdmin.from('grammar_points')
+    let query = langDb.from('grammar_points')
       .select('*', { count: 'exact' })
       .order('created_at', { ascending: false })
       .range(offset, offset + Number(limit) - 1);
@@ -41,7 +43,7 @@ exports.list = async (req, res) => {
 // GET /api/grammar-points/:id
 exports.getOne = async (req, res) => {
   try {
-    const { data, error } = await supabaseAdmin.from('grammar_points').select('*').eq('id', req.params.id).single();
+    const { data, error } = await langDb.from('grammar_points').select('*').eq('id', req.params.id).single();
     if (error || !data) return res.status(404).json({ error: 'Không tìm thấy.' });
     res.json(data);
   } catch (err) {

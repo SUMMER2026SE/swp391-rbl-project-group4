@@ -14,7 +14,7 @@ const EMPTY = {
 };
 
 // Soạn bài đọc cho Mục "Bài đọc" của khóa học — dùng chung cơ chế
-// reading_module.articles + editor cấu trúc của trang Luyện đọc (ReadingForm):
+// practice_module.articles + editor cấu trúc của trang Luyện đọc (ReadingForm):
 // AI tách câu/furigana/dịch, sinh quiz, từ vựng & ngữ pháp. Lưu qua
 // PUT {apiBase}/lessons/:lessonId/reading (upsert article gắn với lesson).
 export default function AdminLessonReading() {

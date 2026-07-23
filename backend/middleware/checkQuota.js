@@ -4,7 +4,7 @@ const { checkAccess } = require('../services/quotaService');
 
 /**
  * Express middleware factory.
- * Usage: router.post('/start', checkQuota('placement_test_monthly'), handler)
+ * Usage: router.post('/generate', checkQuota('learning_path_generate_monthly'), handler)
  *
  * Returns 403 with upgrade info if user has exhausted their quota.
  * The allowed access result is attached to req.quotaResult for downstream use.

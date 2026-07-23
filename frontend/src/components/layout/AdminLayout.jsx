@@ -15,7 +15,6 @@ const ADMIN_LINKS = (t) => [
   { to: '/admin/mock-exams',   icon: 'fact_check',    label: 'Thi thử JLPT' },
   { to: '/admin/jlpt-bank',    icon: 'inventory',     label: 'Ngân hàng JLPT' },
   { to: '/admin/listening',    icon: 'headphones',      label: 'Hội thoại nghe' },
-  { to: '/admin/placement',   icon: 'assignment_ind',  label: 'Kiểm tra NL' },
   { to: '/admin/reading',      icon: 'auto_stories',  label: 'Luyện đọc' },
   { to: '/admin/teacher-applications', icon: 'verified_user', label: 'Đơn giáo viên' },
   { to: '/admin/subscriptions', icon: 'workspace_premium', label: 'Đăng ký' },

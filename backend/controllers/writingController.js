@@ -3,7 +3,7 @@
 const { supabaseAdmin } = require('../config/supabase');
 const { chatCompletion } = require('../config/ai');
 
-const writingDb = () => supabaseAdmin.schema('materials_module').from('writing_submissions');
+const writingDb = () => supabaseAdmin.schema('practice_module').from('writing_submissions');
 
 // POST /api/writing/submit  { topic, level, text }
 exports.submit = async (req, res) => {

@@ -3,7 +3,14 @@
 const { supabaseAdmin } = require('../config/supabase');
 const { logContentUse } = require('../utils/usageTracker');
 
+const langDb    = supabaseAdmin.schema('language_module');
+const billingDb = supabaseAdmin.schema('billing_module');
+
 const TABLE_BY_TYPE = { vocabulary: 'vocabulary', kanji: 'kanji', grammar: 'grammar_points' };
+
+// vocabulary/kanji vẫn đi qua compat view ở public (view map tên cột cũ);
+// grammar_points là bảng thật nằm ở language_module.
+const bankFrom = (table) => table === 'grammar_points' ? langDb.from(table) : supabaseAdmin.from(table);
 const LIST_TYPES = Object.keys(TABLE_BY_TYPE);
 
 const toArr = (v) => {
@@ -22,7 +29,7 @@ exports.list = async (req, res) => {
   const offset = (p - 1) * lim;
 
   try {
-    let query = supabaseAdmin.from('study_list_posts')
+    let query = langDb.from('study_list_posts')
       .select('*', { count: 'exact' })
       .eq('list_type', type);
 
@@ -50,7 +57,7 @@ exports.list = async (req, res) => {
     const teacherIds = [...new Set(posts.filter(p => p.creator_type !== 'admin').map(p => p.created_by))];
 
     const [itemRows, creatorRows] = await Promise.all([
-      ids.length ? supabaseAdmin.from('study_list_items').select('post_id').in('post_id', ids) : Promise.resolve({ data: [] }),
+      ids.length ? langDb.from('study_list_items').select('post_id').in('post_id', ids) : Promise.resolve({ data: [] }),
       teacherIds.length ? supabaseAdmin.from('users').select('id,full_name').in('id', teacherIds) : Promise.resolve({ data: [] }),
     ]);
 
@@ -74,7 +81,7 @@ exports.list = async (req, res) => {
 // GET /api/study-lists/:id
 exports.getOne = async (req, res) => {
   try {
-    const { data: post, error } = await supabaseAdmin.from('study_list_posts').select('*').eq('id', req.params.id).single();
+    const { data: post, error } = await langDb.from('study_list_posts').select('*').eq('id', req.params.id).single();
     if (error || !post) return res.status(404).json({ error: 'Không tìm thấy.' });
 
     // Bài bị khóa (admin ẩn để yêu cầu sửa) — chỉ chủ bài và admin xem được.
@@ -88,7 +95,7 @@ exports.getOne = async (req, res) => {
       if (role !== 'teacher' && role !== 'admin') {
         let hasPremium = false;
         if (req.user) {
-          const { data: sub } = await supabaseAdmin
+          const { data: sub } = await billingDb
             .from('user_subscriptions')
             .select('plan:subscription_plans(tier)')
             .eq('user_id', req.user.id)
@@ -103,13 +110,13 @@ exports.getOne = async (req, res) => {
       }
     }
 
-    const { data: itemRows } = await supabaseAdmin.from('study_list_items')
+    const { data: itemRows } = await langDb.from('study_list_items')
       .select('item_id,sort_order').eq('post_id', post.id).order('sort_order', { ascending: true });
 
     const itemIds = (itemRows || []).map(r => r.item_id);
     const table = TABLE_BY_TYPE[post.list_type];
     const [{ data: items }, { data: creatorRows }] = await Promise.all([
-      itemIds.length ? supabaseAdmin.from(table).select('*').in('id', itemIds) : Promise.resolve({ data: [] }),
+      itemIds.length ? bankFrom(table).select('*').in('id', itemIds) : Promise.resolve({ data: [] }),
       post.creator_type !== 'admin'
         ? supabaseAdmin.from('users').select('full_name').eq('id', post.created_by).maybeSingle()
         : Promise.resolve({ data: null }),
@@ -123,7 +130,7 @@ exports.getOne = async (req, res) => {
     // Trừ chính chủ (giáo viên/admin mở modal "Quản lý mục" của bài đăng mình tạo).
     const isOwnerViewing = req.user && req.user.id === post.created_by;
     if (!isOwnerViewing) {
-      supabaseAdmin.from('study_list_posts').update({ view_count: post.view_count + 1 }).eq('id', post.id)
+      langDb.from('study_list_posts').update({ view_count: post.view_count + 1 }).eq('id', post.id)
         .then(({ error }) => { if (error) console.error('studyList view_count bump:', error); });
     }
     logContentUse({ userId: req.user?.id, contentType: 'study_list', contentId: post.id,
@@ -144,7 +151,7 @@ exports.create = async (req, res) => {
 
   const creator_type = req.user.user_metadata?.role === 'admin' ? 'admin' : 'teacher';
   try {
-    const { data, error } = await supabaseAdmin.from('study_list_posts')
+    const { data, error } = await langDb.from('study_list_posts')
       .insert({ list_type, title: title.trim(), description: description || null, level: req.body.level || null, topic: topic || null, creator_type, created_by: req.user.id })
       .select().single();
     if (error) throw error;
@@ -160,7 +167,7 @@ exports.create = async (req, res) => {
 // cầu sửa thì dùng khóa bài + ghi chú (adminController.lockStudyList), không
 // tự ý sửa thay giáo viên.
 async function loadOwnedPost(id, user, { allowAdmin = true } = {}) {
-  const { data: post } = await supabaseAdmin.from('study_list_posts').select('*').eq('id', id).single();
+  const { data: post } = await langDb.from('study_list_posts').select('*').eq('id', id).single();
   if (!post) return { post: null, allowed: false };
   const isOwner = post.created_by === user.id;
   const isAdmin = user.user_metadata?.role === 'admin';
@@ -180,7 +187,7 @@ exports.update = async (req, res) => {
     const updates = Object.fromEntries(Object.entries(req.body).filter(([k]) => allowedFields.includes(k)));
     updates.updated_at = new Date().toISOString();
 
-    const { data, error } = await supabaseAdmin.from('study_list_posts').update(updates).eq('id', req.params.id).select().single();
+    const { data, error } = await langDb.from('study_list_posts').update(updates).eq('id', req.params.id).select().single();
     if (error) throw error;
     res.json(data);
   } catch (err) {
@@ -196,7 +203,7 @@ exports.remove = async (req, res) => {
     if (!post) return res.status(404).json({ error: 'Không tìm thấy.' });
     if (!allowed) return res.status(403).json({ error: 'Bạn không có quyền xóa bài đăng này.' });
 
-    await supabaseAdmin.from('study_list_posts').delete().eq('id', req.params.id);
+    await langDb.from('study_list_posts').delete().eq('id', req.params.id);
     res.json({ message: 'Đã xóa.' });
   } catch (err) {
     console.error('studyList.remove:', err);
@@ -214,12 +221,12 @@ exports.addItem = async (req, res) => {
     if (!allowed) return res.status(403).json({ error: 'Bạn không có quyền sửa bài đăng này.' });
 
     const table = TABLE_BY_TYPE[post.list_type];
-    const { data: exists } = await supabaseAdmin.from(table).select('id').eq('id', item_id).maybeSingle();
+    const { data: exists } = await bankFrom(table).select('id').eq('id', item_id).maybeSingle();
     if (!exists) return res.status(400).json({ error: 'item_id không tồn tại.' });
 
-    const { count } = await supabaseAdmin.from('study_list_items').select('id', { count: 'exact', head: true }).eq('post_id', post.id);
+    const { count } = await langDb.from('study_list_items').select('id', { count: 'exact', head: true }).eq('post_id', post.id);
 
-    const { data, error } = await supabaseAdmin.from('study_list_items')
+    const { data, error } = await langDb.from('study_list_items')
       .insert({ post_id: post.id, item_id, sort_order: count || 0 })
       .select().single();
     if (error) {
@@ -297,7 +304,7 @@ exports.importItems = async (req, res) => {
         .map(r => Object.fromEntries(ALLOWED.filter(k => r[k] != null).map(k => [k, r[k]])));
 
       const titles = [...new Set(cleaned.map(r => r.title).filter(Boolean))];
-      const { data: existing } = await supabaseAdmin.from('grammar_points')
+      const { data: existing } = await langDb.from('grammar_points')
         .select('id, title').in('title', titles);
       const bankMap = Object.fromEntries((existing || []).map(g => [g.title, g.id]));
       cleaned.forEach(item => {
@@ -309,13 +316,13 @@ exports.importItems = async (req, res) => {
     // Thêm mục mới vào bank
     let newIds = [];
     if (toInsert.length > 0) {
-      const { data: inserted, error: insertErr } = await supabaseAdmin.from(table).insert(toInsert).select('id');
+      const { data: inserted, error: insertErr } = await bankFrom(table).insert(toInsert).select('id');
       if (insertErr) throw insertErr;
       newIds = (inserted || []).map(r => r.id);
     }
 
     // Lấy sort_order hiện tại
-    const { count: currentCount } = await supabaseAdmin
+    const { count: currentCount } = await langDb
       .from('study_list_items').select('id', { count: 'exact', head: true }).eq('post_id', post.id);
 
     // Link tất cả vào study_list_items (upsert để bỏ qua trùng)
@@ -324,7 +331,7 @@ exports.importItems = async (req, res) => {
       const linkRows = allIds.map((item_id, i) => ({
         post_id: post.id, item_id, sort_order: (currentCount || 0) + i,
       }));
-      const { error: linkErr } = await supabaseAdmin
+      const { error: linkErr } = await langDb
         .from('study_list_items').upsert(linkRows, { onConflict: 'post_id,item_id' });
       if (linkErr) throw linkErr;
     }
@@ -347,7 +354,7 @@ exports.removeItem = async (req, res) => {
     if (!post) return res.status(404).json({ error: 'Không tìm thấy.' });
     if (!allowed) return res.status(403).json({ error: 'Bạn không có quyền sửa bài đăng này.' });
 
-    await supabaseAdmin.from('study_list_items').delete().eq('post_id', post.id).eq('item_id', req.params.itemId);
+    await langDb.from('study_list_items').delete().eq('post_id', post.id).eq('item_id', req.params.itemId);
     res.json({ message: 'Đã xóa mục.' });
   } catch (err) {
     console.error('studyList.removeItem:', err);

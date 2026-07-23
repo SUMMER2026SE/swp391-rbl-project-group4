@@ -6,6 +6,8 @@
 require('dotenv').config({ path: '../.env' });
 const { supabaseAdmin } = require('../config/supabase');
 
+const langDb = supabaseAdmin.schema('language_module');
+
 const LEVELS = [
   { code: 5, name: 'N5', total: 193 },
   { code: 4, name: 'N4', total: 436 },
@@ -56,11 +58,11 @@ async function run() {
       const row = parseEntry(entry);
       if (!row.title || !row.meaning_vi) { skipped++; continue; }
 
-      const { data: existing } = await supabaseAdmin.from('grammar_points')
+      const { data: existing } = await langDb.from('grammar_points')
         .select('id').eq('title', row.title).eq('level', row.level).maybeSingle();
       if (existing) { skipped++; continue; }
 
-      const { error } = await supabaseAdmin.from('grammar_points').insert(row);
+      const { error } = await langDb.from('grammar_points').insert(row);
       if (error) { console.error(`  lỗi (${row.title}):`, error.message); continue; }
       inserted++;
     }

@@ -2,8 +2,8 @@
 
 const { supabaseAdmin } = require('../config/supabase');
 
-// Tiến độ mục học (lesson_progress) nằm ở content_module
-const contentDb = supabaseAdmin.schema('content_module');
+// Tiến độ mục học (lesson_progress) nằm ở course_module
+const contentDb = supabaseAdmin.schema('course_module');
 
 // Đánh dấu 1 mục là đã hoàn thành cho học sinh (upsert): đã có bản ghi thì update, chưa có thì insert.
 // Dùng chung bởi lessonController.complete (hoàn thành thủ công) và quizController.submitAttempt
