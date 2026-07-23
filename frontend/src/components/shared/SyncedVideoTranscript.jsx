@@ -232,7 +232,7 @@ export default function SyncedVideoTranscript({ videoUrl, segments, title, audio
             </div>
           </div>
 
-          <div ref={listRef} className="overflow-y-auto p-3 space-y-2 max-h-96 lg:max-h-none lg:flex-1 lg:min-h-0">
+          <div ref={listRef} className="overflow-y-auto p-3 space-y-2 max-h-96 lg:max-h-[70vh]">
             {safeSegments.length === 0 ? (
               <p className="text-sm text-on-muted/60 text-center py-8">Chưa có bản chép.</p>
             ) : safeSegments.map((seg, i) => {
