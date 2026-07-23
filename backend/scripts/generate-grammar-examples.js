@@ -51,7 +51,7 @@ async function processBatch(client, batch) {
     if (!row || !validIds.has(row.id)) continue;
     const sentence = stripHtml(row.example_sentence);
     if (!sentence) continue;
-    await client.query('UPDATE public.grammar_points SET example_sentence = $1 WHERE id = $2', [sentence, row.id]);
+    await client.query('UPDATE language_module.grammar_points SET example_sentence = $1 WHERE id = $2', [sentence, row.id]);
     updated++;
   }
   return updated;
@@ -62,7 +62,7 @@ async function processBatch(client, batch) {
   await client.connect();
 
   const { rows: targets } = await client.query(
-    `SELECT id, title, level, meaning_vi, explanation FROM public.grammar_points
+    `SELECT id, title, level, meaning_vi, explanation FROM language_module.grammar_points
      WHERE example_sentence IS NULL OR btrim(example_sentence) = ''
      ORDER BY level, title`
   );

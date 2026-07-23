@@ -2,6 +2,7 @@
 
 const crypto = require('crypto');
 const { supabaseAdmin } = require('../config/supabase');
+const billingDb = supabaseAdmin.schema('billing_module');
 
 const PREFIX     = process.env.TRANSFER_CONTENT_PREFIX || 'PREM';
 const EXPIRE_MIN = parseInt(process.env.PAYMENT_ORDER_EXPIRE_MINUTES || '30', 10);
@@ -26,7 +27,7 @@ function buildQrUrl(paymentCode, amount) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function createOrder(userId, planId) {
-  const { data: plan, error: pErr } = await supabaseAdmin
+  const { data: plan, error: pErr } = await billingDb
     .from('subscription_plans')
     .select('id, code, price, currency')
     .eq('id', planId)
@@ -36,7 +37,7 @@ async function createOrder(userId, planId) {
   if (pErr || !plan) throw new Error('Plan không tồn tại hoặc không hoạt động.');
 
   // Cancel any old pending orders for this user+plan
-  await supabaseAdmin
+  await billingDb
     .from('payment_orders')
     .update({ status: 'cancelled', updated_at: new Date().toISOString() })
     .eq('user_id', userId)
@@ -48,7 +49,7 @@ async function createOrder(userId, planId) {
   const expiresAt   = new Date(Date.now() + EXPIRE_MIN * 60_000).toISOString();
   const qrUrl       = buildQrUrl(paymentCode, plan.price);
 
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await billingDb
     .from('payment_orders')
     .insert({
       user_id:        userId,
@@ -72,7 +73,7 @@ async function createOrder(userId, planId) {
 }
 
 async function getOrder(orderId, userId = null) {
-  let query = supabaseAdmin
+  let query = billingDb
     .from('payment_orders')
     .select(`
       id, order_code, payment_code, amount, currency, qr_url, bank_code, account_number,
@@ -93,7 +94,7 @@ async function cancelOrder(orderId, userId) {
   if (!order) throw new Error('Order không tồn tại.');
   if (order.status !== 'pending') throw new Error('Chỉ có thể huỷ order đang chờ thanh toán.');
 
-  const { error } = await supabaseAdmin
+  const { error } = await billingDb
     .from('payment_orders')
     .update({ status: 'cancelled', updated_at: new Date().toISOString() })
     .eq('id', orderId);
@@ -102,7 +103,7 @@ async function cancelOrder(orderId, userId) {
 }
 
 async function expireOldOrders() {
-  const { error } = await supabaseAdmin
+  const { error } = await billingDb
     .from('payment_orders')
     .update({ status: 'expired', updated_at: new Date().toISOString() })
     .eq('status', 'pending')
@@ -111,7 +112,7 @@ async function expireOldOrders() {
 }
 
 async function getUserPendingOrder(userId, planId) {
-  const { data } = await supabaseAdmin
+  const { data } = await billingDb
     .from('payment_orders')
     .select('id, order_code, payment_code, amount, currency, qr_url, bank_code, account_number, expires_at, status, plan:subscription_plans(code,name)')
     .eq('user_id', userId)

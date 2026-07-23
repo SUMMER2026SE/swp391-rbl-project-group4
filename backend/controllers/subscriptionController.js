@@ -19,6 +19,8 @@ const {
 const { getAllQuotas } = require('../services/quotaService');
 const { supabaseAdmin } = require('../config/supabase');
 
+const billingDb = supabaseAdmin.schema('billing_module');
+
 // ── Public / user endpoints ───────────────────────────────────────────────────
 
 async function getPlans(req, res) {
@@ -84,7 +86,7 @@ async function getBillingHistory(req, res) {
   const limit = Math.min(50, parseInt(req.query.limit || '20', 10));
 
   try {
-    const { data, count, error } = await supabaseAdmin
+    const { data, count, error } = await billingDb
       .from('payment_orders')
       .select(`
         id, order_code, payment_code, amount, currency,
@@ -147,7 +149,7 @@ async function adminGetUsersWithSubscription(req, res) {
 
     // 2. Fetch active subscriptions for these users in one query
     const userIds = users.map(u => u.id);
-    const { data: subs } = await supabaseAdmin
+    const { data: subs } = await billingDb
       .from('user_subscriptions')
       .select('user_id, tier, status, current_period_end, started_at, source')
       .in('user_id', userIds)
@@ -228,15 +230,13 @@ async function adminGetPayments(req, res) {
   const limit  = Math.min(100, parseInt(req.query.limit || '20', 10));
   const status = req.query.status || null;
 
-  // type=course → order mua khóa học (content_module); mặc định → order premium subscription
+  // type=course → order mua khóa học (billing_module); mặc định → order premium subscription
   if (req.query.type === 'course') {
-    let cQuery = supabaseAdmin
-      .schema('content_module')
+    let cQuery = billingDb
       .from('course_payment_orders')
       .select(`
-        id, student_id, order_code, payment_code, amount, currency,
-        status, paid_at, created_at,
-        course:courses(title)
+        id, student_id, course_id, order_code, payment_code, amount, currency,
+        status, paid_at, created_at
       `, { count: 'exact' })
       .order('created_at', { ascending: false })
       .range((page - 1) * limit, page * limit - 1);
@@ -247,21 +247,32 @@ async function adminGetPayments(req, res) {
       const { data, count, error } = await cQuery;
       if (error) return res.status(500).json({ error: error.message });
 
-      // Bổ sung tên/email học viên (users nằm ngoài content_module, không join được)
+      // Bổ sung tên/email học viên + tên khóa học (users/courses nằm ngoài billing_module, không join được)
       const studentIds = [...new Set((data || []).map(o => o.student_id))];
-      const { data: users } = studentIds.length
-        ? await supabaseAdmin.from('users').select('id, full_name, email').in('id', studentIds)
-        : { data: [] };
-      const userMap = Object.fromEntries((users || []).map(u => [u.id, u]));
+      const courseIds  = [...new Set((data || []).map(o => o.course_id).filter(Boolean))];
+      const [{ data: users }, { data: courses }] = await Promise.all([
+        studentIds.length
+          ? supabaseAdmin.from('users').select('id, full_name, email').in('id', studentIds)
+          : Promise.resolve({ data: [] }),
+        courseIds.length
+          ? supabaseAdmin.schema('course_module').from('courses').select('id, title').in('id', courseIds)
+          : Promise.resolve({ data: [] }),
+      ]);
+      const userMap   = Object.fromEntries((users || []).map(u => [u.id, u]));
+      const courseMap = Object.fromEntries((courses || []).map(c => [c.id, c]));
 
-      const orders = (data || []).map(o => ({ ...o, student: userMap[o.student_id] || null }));
+      const orders = (data || []).map(o => ({
+        ...o,
+        student: userMap[o.student_id] || null,
+        course:  courseMap[o.course_id] ? { title: courseMap[o.course_id].title } : null,
+      }));
       return res.json({ orders, total: count || 0, page, limit });
     } catch (err) {
       return res.status(500).json({ error: err.message });
     }
   }
 
-  let query = supabaseAdmin
+  let query = billingDb
     .from('payment_orders')
     .select(`
       id, user_id, order_code, payment_code, amount, currency,

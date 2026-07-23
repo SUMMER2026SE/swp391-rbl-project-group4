@@ -42,7 +42,7 @@ router.post('/units',          c.createUnit);
 router.patch('/units/reorder', c.reorderUnits);
 router.put('/units/:id',       c.updateUnit);
 router.delete('/units/:id',    c.deleteUnit);
-// Bài đọc gắn với Mục (reading_module.articles) — đặt trước '/lessons/:id'
+// Bài đọc gắn với Mục (practice_module.articles) — đặt trước '/lessons/:id'
 router.get('/lessons/reading/:id',       nc.teacherLessonReadingGet);
 router.put('/lessons/:lessonId/reading', nc.teacherLessonReadingUpsert);
 router.get('/lessons/:id',     c.getLesson);

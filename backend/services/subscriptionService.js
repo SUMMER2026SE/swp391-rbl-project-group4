@@ -2,13 +2,14 @@
 
 const { supabaseAdmin } = require('../config/supabase');
 const { invalidateTierCache } = require('./quotaService');
+const billingDb = supabaseAdmin.schema('billing_module');
 
 const DURATION_DAYS = parseInt(process.env.SUBSCRIPTION_DURATION_DAYS || '30', 10);
 
 // ── Plan helpers ──────────────────────────────────────────────────────────────
 
 async function getPlanByCode(code) {
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await billingDb
     .from('subscription_plans')
     .select('*')
     .eq('code', code)
@@ -19,7 +20,7 @@ async function getPlanByCode(code) {
 }
 
 async function getActivePlans() {
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await billingDb
     .from('subscription_plans')
     .select('id, code, name, tier, billing_cycle, price, currency, features_json')
     .eq('is_active', true)
@@ -31,7 +32,7 @@ async function getActivePlans() {
 // ── Subscription helpers ──────────────────────────────────────────────────────
 
 async function getActiveSubscription(userId) {
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await billingDb
     .from('user_subscriptions')
     .select('*, plan:subscription_plans(code,name,tier,price,currency)')
     .eq('user_id', userId)
@@ -51,7 +52,7 @@ async function getActiveSubscription(userId) {
  */
 async function activateSubscription(userId, planId, source = 'sepay') {
   const now  = new Date();
-  const plan = await supabaseAdmin
+  const plan = await billingDb
     .from('subscription_plans')
     .select('tier')
     .eq('id', planId)
@@ -70,7 +71,7 @@ async function activateSubscription(userId, planId, source = 'sepay') {
     const newEnd = new Date(Math.max(currentEnd.getTime(), now.getTime()));
     newEnd.setDate(newEnd.getDate() + DURATION_DAYS);
 
-    const { error } = await supabaseAdmin
+    const { error } = await billingDb
       .from('user_subscriptions')
       .update({
         current_period_end: newEnd.toISOString(),
@@ -88,7 +89,7 @@ async function activateSubscription(userId, planId, source = 'sepay') {
   const periodEnd = new Date(now);
   periodEnd.setDate(periodEnd.getDate() + DURATION_DAYS);
 
-  const { data: newSub, error: cErr } = await supabaseAdmin
+  const { data: newSub, error: cErr } = await billingDb
     .from('user_subscriptions')
     .insert({
       user_id: userId,
@@ -112,7 +113,7 @@ async function cancelSubscription(userId) {
   const sub = await getActiveSubscription(userId);
   if (!sub) return null;
 
-  const { error } = await supabaseAdmin
+  const { error } = await billingDb
     .from('user_subscriptions')
     .update({ status: 'cancelled', updated_at: new Date().toISOString() })
     .eq('id', sub.id);
@@ -130,7 +131,7 @@ async function adminGrantPremium(userId, durationDays = DURATION_DAYS) {
 }
 
 async function adminListSubscriptions({ page = 1, limit = 20, status } = {}) {
-  let query = supabaseAdmin
+  let query = billingDb
     .from('user_subscriptions')
     .select(`
       id, user_id, tier, status, started_at, current_period_end, source, created_at,

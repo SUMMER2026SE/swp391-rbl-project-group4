@@ -9,12 +9,12 @@ const { extractVocabCandidates } = require('../services/jaTokenizer');
 const { annotateQuestions, toRubyHtml } = require('../services/furiganaService');
 const { attachMeaningPreview } = require('./dictionaryController');
 
-// Bảng bài đọc nằm trong schema riêng reading_module — mọi truy vấn dùng client này
-const readDb = supabaseAdmin.schema('reading_module');
+// Bảng bài đọc nằm trong schema practice_module — mọi truy vấn dùng client này
+const readDb = supabaseAdmin.schema('practice_module');
 // Từ điển (dictionary_module) — dùng để khớp từ vựng của bài với từ điển hệ thống
 const dictDb = supabaseAdmin.schema('dictionary_module');
-// Lessons/courses (content_module) — cho bài đọc gắn với Mục của khóa học
-const contentDb = supabaseAdmin.schema('content_module');
+// Lessons/courses (course_module) — cho bài đọc gắn với Mục của khóa học
+const contentDb = supabaseAdmin.schema('course_module');
 
 // Gắn furigana cho quiz trước khi lưu; lỗi kuroshiro → ghi questions không furigana (fail open)
 async function annotateQuizFurigana(questions) {

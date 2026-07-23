@@ -3,6 +3,7 @@
 const { supabaseAdmin } = require('../config/supabase');
 const { getSetting, setSetting } = require('../services/settingsService');
 const { computePeriod, finalizePeriod } = require('../services/revenuePoolService');
+const billingDb = supabaseAdmin.schema('billing_module');
 
 const curPeriod = () => new Date().toISOString().slice(0, 7);
 
@@ -33,11 +34,11 @@ exports.updateConfig = async (req, res) => {
 exports.getPeriod = async (req, res) => {
   const periodKey = req.query.period || curPeriod();
   try {
-    const { data: period } = await supabaseAdmin
+    const { data: period } = await billingDb
       .from('revenue_pool_periods').select('*').eq('period_key', periodKey).maybeSingle();
 
     if (period) {
-      const { data: payouts } = await supabaseAdmin
+      const { data: payouts } = await billingDb
         .from('teacher_payouts').select('*').eq('period_key', periodKey).order('amount', { ascending: false });
       return res.json({ period, payouts: await attachTeacherNames(payouts || []), finalized: true });
     }
@@ -74,7 +75,7 @@ exports.finalize = async (req, res) => {
 // ── Admin: mark a payout as paid ──────────────────────────────────────────────
 exports.markPaid = async (req, res) => {
   try {
-    const { error } = await supabaseAdmin.from('teacher_payouts')
+    const { error } = await billingDb.from('teacher_payouts')
       .update({ status: 'paid', paid_at: new Date().toISOString() }).eq('id', req.params.id);
     if (error) throw error;
     res.json({ message: 'Đã đánh dấu đã trả.' });
@@ -88,7 +89,7 @@ exports.markPaid = async (req, res) => {
 exports.teacherEarnings = async (req, res) => {
   const teacherId = req.user.id;
   try {
-    const { data: payouts } = await supabaseAdmin
+    const { data: payouts } = await billingDb
       .from('teacher_payouts').select('*').eq('teacher_id', teacherId).order('period_key', { ascending: false });
 
     // Live estimate for the current (not-yet-finalized) month.

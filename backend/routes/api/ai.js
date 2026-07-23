@@ -4,6 +4,7 @@ const router = require('express').Router();
 const { requireAuth, requireAdmin } = require('../../middleware/auth');
 const { chatCompletion } = require('../../config/ai');
 const { supabaseAdmin } = require('../../config/supabase');
+const aiDb = supabaseAdmin.schema('ai_module');
 const checkQuota = require('../../middleware/checkQuota');
 const { incrementUsage } = require('../../services/quotaService');
 const { roleOf, catalogText } = require('../../services/aiTools/registry');
@@ -263,7 +264,7 @@ router.post('/furigana', requireAuth, async (req, res) => {
 // GET /api/ai/sessions
 router.get('/sessions', requireAuth, async (req, res) => {
   if (!req.user?.id) return res.status(401).json({ error: 'Unauthorized' });
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await aiDb
     .from('chat_sessions')
     .select('id, title, created_at, updated_at')
     .eq('user_id', req.user.id)
@@ -275,7 +276,7 @@ router.get('/sessions', requireAuth, async (req, res) => {
 
 // GET /api/ai/sessions/:id  — load messages
 router.get('/sessions/:id', requireAuth, async (req, res) => {
-  const { data: session, error: sErr } = await supabaseAdmin
+  const { data: session, error: sErr } = await aiDb
     .from('chat_sessions')
     .select('id')
     .eq('id', req.params.id)
@@ -283,7 +284,7 @@ router.get('/sessions/:id', requireAuth, async (req, res) => {
     .single();
   if (sErr || !session) return res.status(404).json({ error: 'Session not found.' });
 
-  const { data: messages, error: mErr } = await supabaseAdmin
+  const { data: messages, error: mErr } = await aiDb
     .from('chat_messages')
     .select('id, role, content, context_items, created_at')
     .eq('session_id', req.params.id)
@@ -294,7 +295,7 @@ router.get('/sessions/:id', requireAuth, async (req, res) => {
 
 // DELETE /api/ai/sessions/:id
 router.delete('/sessions/:id', requireAuth, async (req, res) => {
-  const { error } = await supabaseAdmin
+  const { error } = await aiDb
     .from('chat_sessions')
     .delete()
     .eq('id', req.params.id)
@@ -322,7 +323,7 @@ router.post('/chat', requireAuth, checkQuota('ai_chat_daily'), async (req, res) 
   if (isNewSession) {
     const firstContent = messages.find(m => m.role === 'user')?.content || 'Cuộc trò chuyện mới';
     const title = firstContent.replace(/\s+/g, ' ').trim().slice(0, 60) || 'Cuộc trò chuyện mới';
-    const { data: newSession, error: cErr } = await supabaseAdmin
+    const { data: newSession, error: cErr } = await aiDb
       .from('chat_sessions')
       .insert({ user_id: userId, title })
       .select('id')
@@ -334,7 +335,7 @@ router.post('/chat', requireAuth, checkQuota('ai_chat_daily'), async (req, res) 
   // Save the last user message
   const lastUserMsg = [...messages].reverse().find(m => m.role === 'user');
   if (lastUserMsg) {
-    await supabaseAdmin.from('chat_messages').insert({
+    await aiDb.from('chat_messages').insert({
       session_id: sessionId,
       role: 'user',
       content: lastUserMsg.content + (imageBase64 ? '\n[Hình ảnh đính kèm]' : ''),
@@ -532,7 +533,7 @@ router.post('/chat', requireAuth, checkQuota('ai_chat_daily'), async (req, res) 
 
     // Save assistant message + update session timestamp
     await Promise.all([
-      supabaseAdmin.from('chat_messages').insert({
+      aiDb.from('chat_messages').insert({
         session_id: sessionId,
         role: 'assistant',
         content: reply,
@@ -540,7 +541,7 @@ router.post('/chat', requireAuth, checkQuota('ai_chat_daily'), async (req, res) 
           ? { vocabs: ctxVocabs, kanjis: ctxKanjis }
           : null,
       }),
-      supabaseAdmin.from('chat_sessions')
+      aiDb.from('chat_sessions')
         .update({ updated_at: new Date().toISOString() })
         .eq('id', sessionId),
     ]);
@@ -579,7 +580,7 @@ router.post('/action/confirm', requireAuth, async (req, res) => {
     : `❌ Không thực hiện được: ${out.error}`;
 
   if (sessionId) {
-    supabaseAdmin.from('chat_messages')
+    aiDb.from('chat_messages')
       .insert({ session_id: sessionId, role: 'assistant', content: message })
       .then(() => {}, () => {});
   }

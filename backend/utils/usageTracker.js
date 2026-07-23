@@ -2,6 +2,8 @@
 
 const { supabaseAdmin } = require('../config/supabase');
 
+const billingDb = supabaseAdmin.schema('billing_module');
+
 // Log a "student used a teacher's content" event for revenue attribution.
 // Fire-and-forget, deduped to one row per (student, content, day) via a unique index.
 // Only teacher-created content counts; the owner's own views are ignored.
@@ -17,7 +19,7 @@ async function logContentUse({ userId, contentType, contentId, creatorType, owne
     const period_key = now.toISOString().slice(0, 7);  // YYYY-MM
     const day_key    = now.toISOString().slice(0, 10); // YYYY-MM-DD
 
-    await supabaseAdmin.from('content_usage_events').upsert(
+    await billingDb.from('content_usage_events').upsert(
       { student_id: userId, content_type: contentType, content_id: contentId, teacher_id: ownerId, period_key, day_key },
       { onConflict: 'student_id,content_type,content_id,day_key', ignoreDuplicates: true }
     );

@@ -4,7 +4,8 @@ const crypto = require('crypto');
 const { supabaseAdmin } = require('../config/supabase');
 const { buildQrUrl } = require('./paymentOrderService');
 
-const contentDb = supabaseAdmin.schema('content_module');
+const contentDb = supabaseAdmin.schema('course_module');
+const billingDb = supabaseAdmin.schema('billing_module');
 
 // Prefix riêng (khác PREM của premium) để webhook SePay phân biệt giao dịch mua khóa học.
 const COURSE_PREFIX = process.env.COURSE_TRANSFER_CONTENT_PREFIX || 'COURSE';
@@ -17,15 +18,22 @@ function generatePaymentCode() {
 const ORDER_FIELDS = 'id, order_code, payment_code, amount, currency, qr_url, bank_code, account_number, expires_at, status, course_id';
 
 // Lịch sử khóa học đã mua (đã thanh toán) của một học viên — kèm tên khóa.
+// courses nằm ở course_module (khác schema billing_module) nên không embed được — map thủ công.
 async function listMyCoursePurchases(studentId) {
-  const { data, error } = await contentDb
+  const { data, error } = await billingDb
     .from('course_payment_orders')
-    .select('id, order_code, payment_code, amount, currency, paid_at, course:courses(title)')
+    .select('id, order_code, payment_code, amount, currency, paid_at, course_id')
     .eq('student_id', studentId)
     .eq('status', 'paid')
     .order('paid_at', { ascending: false });
   if (error) throw error;
-  return data || [];
+
+  const courseIds = [...new Set((data || []).map(o => o.course_id).filter(Boolean))];
+  const { data: courses } = courseIds.length
+    ? await contentDb.from('courses').select('id, title').in('id', courseIds)
+    : { data: [] };
+  const courseMap = Object.fromEntries((courses || []).map(c => [c.id, c]));
+  return (data || []).map(o => ({ ...o, course: courseMap[o.course_id] ? { title: courseMap[o.course_id].title } : null }));
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -46,7 +54,7 @@ async function createCourseOrder(studentId, courseId) {
   if (enrolled) throw new Error('Bạn đã sở hữu khóa học này.');
 
   // Hủy các order pending cũ của cùng student + course
-  await contentDb.from('course_payment_orders')
+  await billingDb.from('course_payment_orders')
     .update({ status: 'cancelled', updated_at: new Date().toISOString() })
     .eq('student_id', studentId)
     .eq('course_id', courseId)
@@ -57,7 +65,7 @@ async function createCourseOrder(studentId, courseId) {
   const expiresAt   = new Date(Date.now() + EXPIRE_MIN * 60_000).toISOString();
   const amount      = Number(course.price);
 
-  const { data, error } = await contentDb
+  const { data, error } = await billingDb
     .from('course_payment_orders')
     .insert({
       student_id:     studentId,
@@ -81,7 +89,7 @@ async function createCourseOrder(studentId, courseId) {
 }
 
 async function getCourseOrder(orderId, studentId = null) {
-  let query = contentDb.from('course_payment_orders')
+  let query = billingDb.from('course_payment_orders')
     .select(`${ORDER_FIELDS}, paid_at, created_at`)
     .eq('id', orderId);
   if (studentId) query = query.eq('student_id', studentId);
@@ -96,7 +104,7 @@ async function cancelCourseOrder(orderId, studentId) {
   if (!order) throw new Error('Order không tồn tại.');
   if (order.status !== 'pending') throw new Error('Chỉ có thể huỷ order đang chờ thanh toán.');
 
-  const { error } = await contentDb.from('course_payment_orders')
+  const { error } = await billingDb.from('course_payment_orders')
     .update({ status: 'cancelled', updated_at: new Date().toISOString() })
     .eq('id', orderId);
   if (error) throw new Error(error.message);
@@ -104,7 +112,7 @@ async function cancelCourseOrder(orderId, studentId) {
 }
 
 async function getPendingCourseOrder(studentId, courseId) {
-  const { data } = await contentDb.from('course_payment_orders')
+  const { data } = await billingDb.from('course_payment_orders')
     .select(ORDER_FIELDS)
     .eq('student_id', studentId)
     .eq('course_id', courseId)
@@ -118,7 +126,7 @@ async function getPendingCourseOrder(studentId, courseId) {
 
 /**
  * Hoàn tất mua khóa học sau khi order đã khớp giao dịch (mirror activateSubscription):
- * ghi row 'completed' vào content_module.payments → trigger trg_payments_enroll (008)
+ * ghi row 'completed' vào billing_module.payments → trigger trg_payments_enroll (008)
  * tự tạo course_enrollments (idempotent qua NOT EXISTS trong trigger).
  */
 async function completeCoursePayment(order, externalTransactionId) {
@@ -129,7 +137,7 @@ async function completeCoursePayment(order, externalTransactionId) {
   const amount      = Number(order.amount);
   const platformFee = Math.round(amount * rate);
 
-  const { error } = await contentDb.from('payments').insert({
+  const { error } = await billingDb.from('payments').insert({
     student_id:              order.student_id,
     course_id:               order.course_id,
     amount,

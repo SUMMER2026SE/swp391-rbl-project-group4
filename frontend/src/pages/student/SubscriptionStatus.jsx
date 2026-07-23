@@ -7,7 +7,6 @@ import { useAuth } from '../../contexts/AuthContext';
 import { ReceiptButton } from '../../components/receipt/Receipt';
 
 const FEATURE_LABELS = {
-  placement_test_monthly:     'Kiểm tra năng lực',
   kanji_file_monthly:         'Luyện viết kanji',
   kanji_chars_per_file:       'Ký tự tối đa / file kanji',
   listening_practice_monthly: 'Luyện nghe',

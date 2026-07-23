@@ -6,7 +6,6 @@ import { AiAssistant } from '../../pages/ChatPage';
 // Các trang ĐANG LÀM BÀI — ẩn trợ lý để không hỏi bài hộ (toàn vẹn học thuật).
 // Trang xem kết quả/review sau khi nộp không nằm ở đây: lúc đó đáp án đã hiện sẵn.
 const EXAM_PATHS = [
-  /^\/placement-test$/,
   /^\/quizzes\/[^/]+$/,
   /^\/exams\/[^/]+$/,
   /^\/mock-exams\/attempt\/[^/]+$/,

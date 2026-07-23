@@ -6,8 +6,10 @@ const { snapshotsForBankRows } = require('../utils/passageSnapshot');
 
 // Bảng quiz đã chuyển sang schema exam_module (question_bank/users vẫn ở public)
 const examDb = supabaseAdmin.schema('exam_module');
-// Bảng "Bài học" (units) nằm trong content_module (Mục/item vẫn dùng compat view public.lessons)
-const contentDb = supabaseAdmin.schema('content_module');
+// Bảng "Bài học" (units) nằm trong course_module (Mục/item vẫn dùng compat view public.lessons)
+const contentDb = supabaseAdmin.schema('course_module');
+const usersDb = supabaseAdmin.schema('users_module');
+const langDb = supabaseAdmin.schema('language_module');
 
 // ── Stats ────────────────────────────────────────────────────────────────────
 exports.getStats = async (req, res) => {
@@ -17,7 +19,7 @@ exports.getStats = async (req, res) => {
       supabaseAdmin.from('courses').select('id', { count: 'exact', head: true }),
       supabaseAdmin.from('vocabulary').select('id', { count: 'exact', head: true }),
       examDb.from('quizzes').select('id', { count: 'exact', head: true }),
-      supabaseAdmin.from('teacher_applications').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
+      usersDb.from('teacher_applications').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
     ]);
     const authUsers    = usersRes.status === 'fulfilled' ? (usersRes.value.data?.users || []) : [];
     const teacherCount = authUsers.filter(u => u.user_metadata?.role === 'teacher').length;
@@ -226,7 +228,7 @@ exports.listCourses = async (req, res) => {
     const all = allRes.count || 0;
     const published = pubRes.count || 0;
 
-    // Bổ sung số học viên (cột cache ở content_module) + số mục cho từng khóa của trang,
+    // Bổ sung số học viên (cột cache ở course_module) + số mục cho từng khóa của trang,
     // kèm creator_type/tên người tạo để frontend phân biệt khóa hệ thống vs khóa teacher.
     const ids = rows.map(c => c.id);
     let enrollMap = {}, lessonMap = {}, metaMap = {}, creatorNameMap = {};
@@ -363,7 +365,7 @@ async function courseIdOfQuizQuestion(questionId) {
 }
 
 exports.updateCourse = async (req, res) => {
-  // Cột cơ bản qua view compat; cột giá/phân loại ghi thẳng vào bảng gốc content_module.
+  // Cột cơ bản qua view compat; cột giá/phân loại ghi thẳng vào bảng gốc course_module.
   const viewAllowed = ['title','title_ja','description','description_ja','level','thumbnail_url','is_published'];
   const newAllowed  = ['is_free','price','reference_curriculum','difficulty_level'];
   const viewUpdates = Object.fromEntries(Object.entries(req.body).filter(([k]) => viewAllowed.includes(k)));
@@ -558,7 +560,9 @@ exports.createLesson = async (req, res) => {
   try {
     if (await isTeacherCourse(course_id))
       return res.status(403).json({ error: TEACHER_COURSE_MSG });
-    const contentDb = supabaseAdmin.schema('content_module');
+    const contentDb = supabaseAdmin.schema('course_module');
+const usersDb = supabaseAdmin.schema('users_module');
+const langDb = supabaseAdmin.schema('language_module');
     const { data, error } = await contentDb.from('lessons')
       .insert({ course_id, unit_id: unit_id || null, title, title_ja, content_body: content, content_type: lesson_type || 'reading', grammar_notes, content_url, transcript, transcript_segments: transcript_segments || null, sort_order: order_index || 0, duration_minutes: duration_minutes || 0, question_count: question_count || 0, is_published: is_published ?? false })
       .select().single();
@@ -580,7 +584,9 @@ exports.updateLesson = async (req, res) => {
   try {
     if (await isTeacherCourse(await courseIdOfLesson(req.params.id)))
       return res.status(403).json({ error: TEACHER_COURSE_MSG });
-    const contentDb = supabaseAdmin.schema('content_module');
+    const contentDb = supabaseAdmin.schema('course_module');
+const usersDb = supabaseAdmin.schema('users_module');
+const langDb = supabaseAdmin.schema('language_module');
     const { data, error } = await contentDb.from('lessons').update(updates).eq('id', req.params.id).select().single();
     if (error) throw error;
     res.json(data);
@@ -594,7 +600,9 @@ exports.deleteLesson = async (req, res) => {
   try {
     if (await isTeacherCourse(await courseIdOfLesson(req.params.id)))
       return res.status(403).json({ error: TEACHER_COURSE_MSG });
-    const contentDb = supabaseAdmin.schema('content_module');
+    const contentDb = supabaseAdmin.schema('course_module');
+const usersDb = supabaseAdmin.schema('users_module');
+const langDb = supabaseAdmin.schema('language_module');
     const { error } = await contentDb.from('lessons').delete().eq('id', req.params.id);
     if (error) throw error;
     res.json({ message: 'Đã xóa.' });
@@ -811,7 +819,7 @@ exports.importGrammarPoints = async (req, res) => {
   try {
     // Dedup: tìm ngữ pháp đã có trong ngân hàng theo title.
     const titles = [...new Set(cleaned.map(i => i.title).filter(Boolean))];
-    const { data: existing } = await supabaseAdmin.from('grammar_points')
+    const { data: existing } = await langDb.from('grammar_points')
       .select('id, title').in('title', titles);
     const bankMap = Object.fromEntries((existing || []).map(g => [g.title, g.id]));
 
@@ -830,7 +838,7 @@ exports.importGrammarPoints = async (req, res) => {
 
     let newCount = 0;
     if (toInsert.length > 0) {
-      const { data, error } = await supabaseAdmin.from('grammar_points').insert(toInsert).select('id');
+      const { data, error } = await langDb.from('grammar_points').insert(toInsert).select('id');
       if (error) throw error;
       newCount = data.length;
       data.forEach((d, i) => {
@@ -863,13 +871,13 @@ exports.listGrammarPoints = async (req, res) => {
         .select('grammar_point_id').eq('lesson_id', lesson_id);
       const ids = (links || []).map(l => l.grammar_point_id);
       if (ids.length === 0) return res.json({ data: [], total: 0 });
-      const { data, error } = await supabaseAdmin.from('grammar_points')
+      const { data, error } = await langDb.from('grammar_points')
         .select('*').in('id', ids).order('created_at', { ascending: true });
       if (error) throw error;
       return res.json({ data: data || [], total: data?.length || 0 });
     }
 
-    let q = supabaseAdmin.from('grammar_points').select('*', { count: 'exact' })
+    let q = langDb.from('grammar_points').select('*', { count: 'exact' })
       .order('created_at', { ascending: true })
       .range(offset, offset + Number(limit) - 1);
     if (level)  q = q.eq('level', level);
@@ -887,7 +895,7 @@ exports.createGrammarPoint = async (req, res) => {
   const { title, title_ja, meaning_vi, explanation, example_sentence, level, lesson_id } = req.body;
   if (!title || !meaning_vi) return res.status(400).json({ error: 'Thiếu thông tin bắt buộc.' });
   try {
-    const { data, error } = await supabaseAdmin.from('grammar_points')
+    const { data, error } = await langDb.from('grammar_points')
       .insert({ title, title_ja, meaning_vi, explanation, example_sentence, level: level || null })
       .select().single();
     if (error) throw error;
@@ -941,7 +949,7 @@ exports.adminListStudyLists = async (req, res) => {
   const offset = (p - 1) * lim;
 
   try {
-    let query = supabaseAdmin.from('study_list_posts')
+    let query = langDb.from('study_list_posts')
       .select('*', { count: 'exact' })
       .eq('list_type', type);
 
@@ -959,7 +967,7 @@ exports.adminListStudyLists = async (req, res) => {
     const teacherIds = [...new Set(posts.map(p => p.created_by))];
 
     const [itemRows, creatorRows] = await Promise.all([
-      ids.length ? supabaseAdmin.from('study_list_items').select('post_id').in('post_id', ids) : Promise.resolve({ data: [] }),
+      ids.length ? langDb.from('study_list_items').select('post_id').in('post_id', ids) : Promise.resolve({ data: [] }),
       teacherIds.length ? supabaseAdmin.from('users').select('id,full_name,email').in('id', teacherIds) : Promise.resolve({ data: [] }),
     ]);
 
@@ -988,7 +996,7 @@ exports.adminListStudyLists = async (req, res) => {
 exports.lockStudyList = async (req, res) => {
   const { locked, note } = req.body;
   try {
-    const { data, error } = await supabaseAdmin.from('study_list_posts')
+    const { data, error } = await langDb.from('study_list_posts')
       .update({ is_locked: !!locked, lock_note: locked ? (note || null) : null })
       .eq('id', req.params.id).select().single();
     if (error) throw error;
@@ -1429,7 +1437,9 @@ exports.transcribeLessonVideo = async (req, res) => {
   try {
     if (await isTeacherCourse(await courseIdOfLesson(req.params.id)))
       return res.status(403).json({ error: TEACHER_COURSE_MSG });
-    const contentDb = supabaseAdmin.schema('content_module');
+    const contentDb = supabaseAdmin.schema('course_module');
+const usersDb = supabaseAdmin.schema('users_module');
+const langDb = supabaseAdmin.schema('language_module');
     const { data: lesson } = await contentDb.from('lessons').select('content_url').eq('id', req.params.id).single();
     if (!lesson) return res.status(404).json({ error: 'Không tìm thấy bài học.' });
     if (!lesson.content_url) return res.status(400).json({ error: 'Bài học chưa có video.' });

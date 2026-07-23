@@ -4,8 +4,9 @@ const { supabaseAdmin } = require('../config/supabase');
 
 // Bảng quiz đã chuyển sang schema exam_module
 const examDb = supabaseAdmin.schema('exam_module');
-// Cột giá/phân loại của khóa học nằm ở bảng gốc content_module.courses
-const contentDb = supabaseAdmin.schema('content_module');
+// Cột giá/phân loại của khóa học nằm ở bảng gốc course_module.courses
+const contentDb = supabaseAdmin.schema('course_module');
+const langDb = supabaseAdmin.schema('language_module');
 
 // ── My Vocabulary ─────────────────────────────────────────────────────────────
 // Giáo viên thêm từ vựng thẳng vào bảng chung vocabulary, lọc theo created_by.
@@ -675,7 +676,7 @@ exports.updateSharedGrammarPoint = async (req, res) => {
   const updates = Object.fromEntries(Object.entries(req.body).filter(([k]) => allowed.includes(k)));
   if (updates.level === '') updates.level = null;
   try {
-    const { data, error } = await supabaseAdmin.from('grammar_points').update(updates).eq('id', req.params.id).select().single();
+    const { data, error } = await langDb.from('grammar_points').update(updates).eq('id', req.params.id).select().single();
     if (error) throw error;
     res.json(data);
   } catch (err) { res.status(500).json({ error: err.message || 'Không thể cập nhật.' }); }

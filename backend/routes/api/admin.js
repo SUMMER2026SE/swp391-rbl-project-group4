@@ -145,7 +145,7 @@ router.patch('/units/reorder',   c.reorderUnits);
 
 // Lessons
 router.get('/lessons',               c.listLessons);
-// Bài đọc gắn với Mục (reading_module.articles) — đặt trước '/lessons/:id'
+// Bài đọc gắn với Mục (practice_module.articles) — đặt trước '/lessons/:id'
 router.get('/lessons/reading/:id',        reading.adminLessonReadingGet);
 router.put('/lessons/:lessonId/reading',  reading.adminLessonReadingUpsert);
 router.get('/lessons/:id',           c.getLesson);
@@ -375,17 +375,5 @@ const jlptImportUpload = multer({
 router.get('/jlpt-bank/import-template',    jb.importTemplate);
 router.post('/jlpt-bank/import-file',       jlptImportUpload.single('file'), jb.importFile);
 router.post('/jlpt-bank/import-commit',     jb.importCommit);
-
-// Placement Test — Question Bank
-const pc = require('../../controllers/placementController');
-router.get('/placement/stats',                pc.adminGetStats);
-router.get('/placement/config',               pc.adminGetConfig);
-router.put('/placement/config',               pc.adminUpdateConfig);
-router.get('/placement/questions',            pc.adminListQuestions);
-router.get('/placement/questions/:id',        pc.adminGetQuestion);
-router.post('/placement/questions',           pc.adminCreateQuestion);
-router.put('/placement/questions/:id',        pc.adminUpdateQuestion);
-router.patch('/placement/questions/:id/toggle', pc.adminToggleQuestion);
-router.delete('/placement/questions/:id',     pc.adminDeleteQuestion);
 
 module.exports = router;

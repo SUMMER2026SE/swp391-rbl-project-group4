@@ -6,7 +6,8 @@ const { normalizeTransaction }  = require('./sepayClient');
 const { COURSE_PREFIX, completeCoursePayment } = require('./coursePaymentService');
 const { sendReceiptEmail } = require('../config/mailer');
 
-const contentDb = supabaseAdmin.schema('content_module');
+const contentDb = supabaseAdmin.schema('course_module');
+const billingDb = supabaseAdmin.schema('billing_module');
 
 // Gửi biên lai qua email — best-effort, không được làm hỏng luồng khớp thanh toán.
 async function emailReceiptSafe({ userId, typeLabel, itemName, amount, currency, orderCode, paymentCode, paidAt }) {
@@ -35,7 +36,7 @@ async function processTransaction(rawPayload) {
   // 1. Upsert the transaction record (idempotent by external_transaction_id)
   let txRecord;
   {
-    const { data, error } = await supabaseAdmin
+    const { data, error } = await billingDb
       .from('payment_transactions')
       .upsert(
         {
@@ -81,7 +82,7 @@ async function processTransaction(rawPayload) {
     return matchCourseOrder(paymentCode, tx, txRecord, rawPayload);
   }
 
-  const { data: order, error: oErr } = await supabaseAdmin
+  const { data: order, error: oErr } = await billingDb
     .from('payment_orders')
     .select('id, user_id, plan_id, amount, status, expires_at, order_code, payment_code')
     .eq('payment_code', paymentCode)
@@ -96,7 +97,7 @@ async function processTransaction(rawPayload) {
 
   // 3. Mark order as paid (atomic via update with status check)
   const now = new Date().toISOString();
-  const { data: updated, error: uErr } = await supabaseAdmin
+  const { data: updated, error: uErr } = await billingDb
     .from('payment_orders')
     .update({
       status:                   'paid',
@@ -115,7 +116,7 @@ async function processTransaction(rawPayload) {
   if (uErr || !updated) return 'no_match'; // race condition, another handler won
 
   // 4. Link transaction → order
-  await supabaseAdmin
+  await billingDb
     .from('payment_transactions')
     .update({ matched_order_id: order.id })
     .eq('id', txRecord.id);
@@ -129,7 +130,7 @@ async function processTransaction(rawPayload) {
   }
 
   // 6. Email biên lai (best-effort)
-  const { data: plan } = await supabaseAdmin.from('subscription_plans').select('name').eq('id', order.plan_id).maybeSingle();
+  const { data: plan } = await billingDb.from('subscription_plans').select('name').eq('id', order.plan_id).maybeSingle();
   await emailReceiptSafe({
     userId: order.user_id, typeLabel: 'Gói', itemName: plan?.name || 'Premium',
     amount: order.amount, currency: 'VND', orderCode: order.order_code, paymentCode: order.payment_code, paidAt: now,
@@ -145,7 +146,7 @@ async function processTransaction(rawPayload) {
  * 'completed' để trigger tự tạo enrollment.
  */
 async function matchCourseOrder(paymentCode, tx, txRecord, rawPayload) {
-  const { data: order, error: oErr } = await contentDb
+  const { data: order, error: oErr } = await billingDb
     .from('course_payment_orders')
     .select('id, student_id, course_id, amount, status, expires_at, order_code, payment_code')
     .eq('payment_code', paymentCode)
@@ -159,7 +160,7 @@ async function matchCourseOrder(paymentCode, tx, txRecord, rawPayload) {
   if (Number(order.amount) !== Number(tx.amountIn)) return 'no_match';
 
   const now = new Date().toISOString();
-  const { data: updated, error: uErr } = await contentDb
+  const { data: updated, error: uErr } = await billingDb
     .from('course_payment_orders')
     .update({
       status:                   'paid',
@@ -177,7 +178,7 @@ async function matchCourseOrder(paymentCode, tx, txRecord, rawPayload) {
 
   if (uErr || !updated) return 'no_match'; // race condition, another handler won
 
-  await supabaseAdmin
+  await billingDb
     .from('payment_transactions')
     .update({ matched_course_order_id: order.id })
     .eq('id', txRecord.id);
@@ -210,12 +211,12 @@ async function reconcilePendingOrders() {
   // Only run if there are pending orders (subscription hoặc mua khóa học)
   const nowIso = new Date().toISOString();
   const [{ count: subCount }, { count: courseCount }] = await Promise.all([
-    supabaseAdmin
+    billingDb
       .from('payment_orders')
       .select('*', { count: 'exact', head: true })
       .eq('status', 'pending')
       .gt('expires_at', nowIso),
-    contentDb
+    billingDb
       .from('course_payment_orders')
       .select('*', { count: 'exact', head: true })
       .eq('status', 'pending')

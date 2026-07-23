@@ -6,6 +6,8 @@
 require('dotenv').config({ path: '../.env' });
 const { supabaseAdmin } = require('../config/supabase');
 
+const langDb = supabaseAdmin.schema('language_module');
+
 const TEACHER_ID = '40a44b95-f5b8-4993-afa8-85bb9c3c322e'; // Bảo Teacher
 
 // title (bài đăng đã có, khớp với script 1 & 2) → thêm từ theo cấp độ
@@ -171,11 +173,11 @@ async function run() {
   for (const t of ADDITIONS) {
     console.log(`\n=== ${t.title} ===`);
 
-    const { data: post } = await supabaseAdmin.from('study_list_posts')
+    const { data: post } = await langDb.from('study_list_posts')
       .select('id, topic').eq('title', t.title).eq('created_by', TEACHER_ID).maybeSingle();
     if (!post) { console.error('  Không tìm thấy bài đăng, bỏ qua.'); continue; }
 
-    const { count: currentCount } = await supabaseAdmin
+    const { count: currentCount } = await langDb
       .from('study_list_items').select('id', { count: 'exact', head: true }).eq('post_id', post.id);
 
     const itemIds = [];
@@ -200,7 +202,7 @@ async function run() {
     }
 
     const linkRows = itemIds.map((item_id, i) => ({ post_id: post.id, item_id, sort_order: (currentCount || 0) + i }));
-    const { error: linkErr } = await supabaseAdmin.from('study_list_items')
+    const { error: linkErr } = await langDb.from('study_list_items')
       .upsert(linkRows, { onConflict: 'post_id,item_id' });
     if (linkErr) console.error('  link items lỗi:', linkErr.message);
     else console.log(`  Đã liên kết thêm ${linkRows.length} từ.`);

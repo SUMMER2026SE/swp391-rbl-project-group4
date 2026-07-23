@@ -2,7 +2,8 @@
 
 const { supabaseAdmin } = require('../config/supabase');
 
-const contentDb = supabaseAdmin.schema('content_module');
+const contentDb = supabaseAdmin.schema('course_module');
+const billingDb = supabaseAdmin.schema('billing_module');
 
 // POST /api/courses/:id/enroll
 // - Khóa miễn phí → đăng ký thẳng.
@@ -26,7 +27,7 @@ exports.enroll = async (req, res) => {
     // Admin được miễn thanh toán: enroll thẳng để "vào học" như student thật.
     const isAdmin = req.user.user_metadata?.role === 'admin';
     if (!isAdmin && !course.is_free && Number(course.price) > 0) {
-      const { data: paid } = await contentDb.from('payments')
+      const { data: paid } = await billingDb.from('payments')
         .select('id').eq('course_id', courseId).eq('student_id', studentId)
         .eq('payment_status', 'completed').limit(1).maybeSingle();
       if (!paid)
@@ -53,7 +54,7 @@ exports.status = async (req, res) => {
   try {
     const { data: enr } = await contentDb.from('course_enrollments')
       .select('id').eq('course_id', courseId).eq('student_id', studentId).maybeSingle();
-    const { data: pay } = await contentDb.from('payments')
+    const { data: pay } = await billingDb.from('payments')
       .select('payment_status').eq('course_id', courseId).eq('student_id', studentId)
       .order('created_at', { ascending: false }).limit(1);
     res.json({

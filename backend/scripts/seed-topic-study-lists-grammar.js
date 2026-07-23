@@ -5,6 +5,8 @@
 require('dotenv').config({ path: '../.env' });
 const { supabaseAdmin } = require('../config/supabase');
 
+const langDb = supabaseAdmin.schema('language_module');
+
 const TEACHER_ID = '40a44b95-f5b8-4993-afa8-85bb9c3c322e'; // Bảo Teacher
 
 const POSTS = [
@@ -16,17 +18,17 @@ async function run() {
   for (const p of POSTS) {
     console.log(`\n=== ${p.title} ===`);
 
-    const { data: points, error: qErr } = await supabaseAdmin
+    const { data: points, error: qErr } = await langDb
       .from('grammar_points').select('id').eq('level', p.level);
     if (qErr) { console.error('  lỗi lấy danh sách:', qErr.message); continue; }
     console.log(`  Tìm thấy ${points.length} mẫu ngữ pháp cấp ${p.level}.`);
 
-    const { data: existingPost } = await supabaseAdmin.from('study_list_posts')
+    const { data: existingPost } = await langDb.from('study_list_posts')
       .select('id').eq('title', p.title).eq('created_by', TEACHER_ID).maybeSingle();
 
     let postId = existingPost?.id;
     if (!postId) {
-      const { data: post, error } = await supabaseAdmin.from('study_list_posts')
+      const { data: post, error } = await langDb.from('study_list_posts')
         .insert({ list_type: 'grammar', title: p.title, level: p.level, creator_type: 'teacher', created_by: TEACHER_ID })
         .select('id').single();
       if (error) { console.error('  insert post lỗi:', error.message); continue; }
@@ -37,7 +39,7 @@ async function run() {
     }
 
     const linkRows = points.map((pt, i) => ({ post_id: postId, item_id: pt.id, sort_order: i }));
-    const { error: linkErr } = await supabaseAdmin.from('study_list_items')
+    const { error: linkErr } = await langDb.from('study_list_items')
       .upsert(linkRows, { onConflict: 'post_id,item_id' });
     if (linkErr) console.error('  link items lỗi:', linkErr.message);
     else console.log(`  Đã liên kết ${linkRows.length} mẫu ngữ pháp vào bài đăng.`);

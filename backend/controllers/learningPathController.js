@@ -6,6 +6,8 @@ const { chatCompletion } = require('../config/ai');
 
 // Bảng mock_exams nằm trong schema jlpt_module (migration 024)
 const jlptDb = supabaseAdmin.schema('jlpt_module');
+const aiDb   = supabaseAdmin.schema('ai_module');
+const langDb = supabaseAdmin.schema('language_module');
 
 const LEVELS      = ['N5', 'N4', 'N3', 'N2', 'N1'];
 const SKILL_FOCUS = ['vocabulary', 'kanji', 'grammar', 'reading', 'listening', 'mixed'];
@@ -32,7 +34,7 @@ async function buildCatalog(span) {
   const [coursesRes, listsRes, mocksRes] = await Promise.all([
     supabaseAdmin.from('courses')
       .select('id, title, level, description').in('level', span).eq('is_published', true).limit(CATALOG_CAP),
-    supabaseAdmin.from('study_list_posts')
+    langDb.from('study_list_posts')
       .select('id, title, list_type, level, description').in('level', span).limit(CATALOG_CAP),
     jlptDb.from('mock_exams')
       .select('id, title, level').in('level', span).eq('is_published', true).limit(CATALOG_CAP),
@@ -57,38 +59,9 @@ async function buildCatalog(span) {
   return { index, text: lines.join('\n') };
 }
 
-async function loadLatestPlacement(userId) {
-  const { data } = await supabaseAdmin
-    .from('placement_test_attempts')
-    .select('id, score, vocab_correct, vocab_total, kanji_correct, kanji_total, grammar_correct, grammar_total, strengths, weaknesses, jlpt_level_selected')
-    .eq('user_id', userId)
-    .in('status', ['submitted', 'auto_submitted'])
-    .order('submitted_at', { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  return data || null;
-}
-
-const pct = (c, t) => (t > 0 ? Math.round((c / t) * 100) : null);
-
 // Call the AI once and return a parsed array of raw milestones (may throw 502).
 async function callAI(context) {
-  const { current, target, goal, dailyMinutes, placement, catalogText } = context;
-
-  let breakdown = 'Chưa có dữ liệu bài kiểm tra đầu vào.';
-  if (placement) {
-    const vp = pct(placement.vocab_correct, placement.vocab_total);
-    const kp = pct(placement.kanji_correct, placement.kanji_total);
-    const gp = pct(placement.grammar_correct, placement.grammar_total);
-    breakdown = [
-      `Điểm tổng: ${placement.score ?? '?'}%`,
-      vp !== null ? `Từ vựng: ${vp}%` : null,
-      kp !== null ? `Kanji: ${kp}%` : null,
-      gp !== null ? `Ngữ pháp: ${gp}%` : null,
-      placement.strengths ? placement.strengths : null,
-      placement.weaknesses ? placement.weaknesses : null,
-    ].filter(Boolean).join(' · ');
-  }
+  const { current, target, goal, dailyMinutes, catalogText } = context;
 
   const SYSTEM = `Bạn là cố vấn học tập JLPT. Nhiệm vụ: thiết kế một lộ trình học cá nhân hoá gồm các mốc (milestone) có thứ tự từ dễ đến khó.
 
@@ -108,7 +81,6 @@ Schema mỗi phần tử:
 - Mục tiêu: ${target}
 - Mục tiêu học tập: ${goal || 'không nêu'}
 - Thời gian học mỗi ngày: ${dailyMinutes ? dailyMinutes + ' phút' : 'không nêu'}
-- Kết quả kiểm tra đầu vào: ${breakdown}
 
 DANH MỤC HỌC LIỆU (chỉ được chọn resource_id trong đây):
 ${catalogText}
@@ -176,7 +148,7 @@ async function enrichSteps(steps) {
   const meta = new Map();  // id → { title, level, list_type }
   const [courses, lists, mocks] = await Promise.all([
     byType.course.length     ? supabaseAdmin.from('courses').select('id, title, level').in('id', byType.course)               : { data: [] },
-    byType.study_list.length ? supabaseAdmin.from('study_list_posts').select('id, title, level, list_type').in('id', byType.study_list) : { data: [] },
+    byType.study_list.length ? langDb.from('study_list_posts').select('id, title, level, list_type').in('id', byType.study_list) : { data: [] },
     byType.mock_exam.length  ? jlptDb.from('mock_exams').select('id, title, level').in('id', byType.mock_exam)         : { data: [] },
   ]);
   for (const c of (courses.data || [])) meta.set(c.id, { title: c.title, level: c.level });
@@ -195,10 +167,10 @@ async function enrichSteps(steps) {
 }
 
 async function fetchFullPath(pathId) {
-  const { data: path } = await supabaseAdmin
+  const { data: path } = await aiDb
     .from('learning_paths').select('*').eq('id', pathId).single();
   if (!path) return null;
-  const { data: rawSteps } = await supabaseAdmin
+  const { data: rawSteps } = await aiDb
     .from('learning_path_steps').select('*').eq('path_id', pathId).order('order_index', { ascending: true });
   const steps = await enrichSteps(rawSteps || []);
   const total = steps.length;
@@ -214,11 +186,8 @@ async function generateForUser(userId, body) {
     .select('current_level, jlpt_target_level, study_goal, daily_study_minutes')
     .eq('user_id', userId).maybeSingle();
 
-  const placement = await loadLatestPlacement(userId);
-
   const clean = (v) => (typeof v === 'string' ? v.trim() : v);
-  let current = clean(body.current_level) || (profile?.current_level ? profile.current_level.trim() : null)
-    || (placement?.jlpt_level_selected || null) || 'N5';
+  let current = clean(body.current_level) || (profile?.current_level ? profile.current_level.trim() : null) || 'N5';
   let target  = clean(body.target_level) || (profile?.jlpt_target_level ? profile.jlpt_target_level.trim() : null) || null;
 
   if (!LEVELS.includes(current)) current = 'N5';
@@ -242,7 +211,7 @@ async function generateForUser(userId, body) {
   // Generate + validate, with one retry if nothing survives validation.
   let steps = [];
   for (let attempt = 0; attempt < 2 && steps.length === 0; attempt++) {
-    const rawSteps = await callAI({ current, target, goal, dailyMinutes, placement, catalogText });
+    const rawSteps = await callAI({ current, target, goal, dailyMinutes, catalogText });
     steps = validateSteps(rawSteps, catalogIndex);
   }
   if (steps.length === 0) {
@@ -252,23 +221,22 @@ async function generateForUser(userId, body) {
   }
 
   // Archive any existing active path, then insert the new one.
-  await supabaseAdmin.from('learning_paths')
+  await aiDb.from('learning_paths')
     .update({ status: 'archived', updated_at: new Date().toISOString() })
     .eq('user_id', userId).eq('status', 'active');
 
-  const { data: path, error: pErr } = await supabaseAdmin.from('learning_paths').insert({
+  const { data: path, error: pErr } = await aiDb.from('learning_paths').insert({
     user_id: userId,
     current_level: current,
     target_level: target,
     study_goal: goal,
     daily_minutes: dailyMinutes,
-    source_attempt_id: placement?.id || null,
     ai_model: AI_MODEL,
   }).select().single();
   if (pErr) throw pErr;
 
   const rows = steps.map(s => ({ ...s, path_id: path.id }));
-  const { error: sErr } = await supabaseAdmin.from('learning_path_steps').insert(rows);
+  const { error: sErr } = await aiDb.from('learning_path_steps').insert(rows);
   if (sErr) throw sErr;
 
   incrementUsage(userId, 'learning_path_generate_monthly').catch(() => {});
@@ -280,7 +248,7 @@ async function generateForUser(userId, body) {
 
 exports.getPath = async (req, res) => {
   try {
-    const { data: path } = await supabaseAdmin
+    const { data: path } = await aiDb
       .from('learning_paths').select('id')
       .eq('user_id', req.user.id).eq('status', 'active')
       .maybeSingle();
@@ -313,17 +281,17 @@ exports.updateStep = async (req, res) => {
   }
   try {
     // Verify the step belongs to the requesting user (via its path).
-    const { data: step } = await supabaseAdmin
+    const { data: step } = await aiDb
       .from('learning_path_steps').select('id, path_id').eq('id', req.params.id).maybeSingle();
     if (!step) return res.status(404).json({ error: 'Không tìm thấy bước học.' });
 
-    const { data: path } = await supabaseAdmin
+    const { data: path } = await aiDb
       .from('learning_paths').select('id, user_id').eq('id', step.path_id).single();
     if (!path || path.user_id !== req.user.id) {
       return res.status(403).json({ error: 'Không có quyền.' });
     }
 
-    await supabaseAdmin.from('learning_path_steps')
+    await aiDb.from('learning_path_steps')
       .update({ status, completed_at: status === 'completed' ? new Date().toISOString() : null })
       .eq('id', req.params.id);
 

@@ -3,6 +3,8 @@
 const { supabaseAdmin, updateUserMetadata } = require('../config/supabase');
 const { extractAllDocs, reviewApplication } = require('../utils/teacherDocReview');
 
+const usersDb = supabaseAdmin.schema('users_module');
+
 const BUCKET = 'teacher-documents';
 const DOC_TYPES = ['cv', 'degree', 'certificate', 'other'];
 
@@ -31,7 +33,7 @@ exports.submitApplication = async (req, res) => {
   }
 
   // Block duplicate pending applications.
-  const { data: existing } = await supabaseAdmin
+  const { data: existing } = await usersDb
     .from('teacher_applications').select('id').eq('user_id', userId).eq('status', 'pending').maybeSingle();
   if (existing) {
     return res.status(409).json({ error: 'Bạn đang có một đơn đăng ký chờ duyệt.' });
@@ -94,7 +96,7 @@ exports.submitApplication = async (req, res) => {
       await updateUserMetadata(userId, { role: 'teacher' });
     }
 
-    const { data: appRow, error: insErr } = await supabaseAdmin.from('teacher_applications').insert({
+    const { data: appRow, error: insErr } = await usersDb.from('teacher_applications').insert({
       user_id: userId,
       status,
       decided_by: autoApprove ? 'ai' : null,
@@ -124,7 +126,7 @@ exports.submitApplication = async (req, res) => {
 // ── Applicant: my latest application ──────────────────────────────────────────
 exports.getMyApplication = async (req, res) => {
   try {
-    const { data } = await supabaseAdmin
+    const { data } = await usersDb
       .from('teacher_applications')
       .select('id, status, decided_by, ai_summary, ai_flags, ai_confidence, admin_note, created_at, reviewed_at')
       .eq('user_id', req.user.id)
@@ -142,7 +144,7 @@ exports.getMyApplication = async (req, res) => {
 exports.adminListApplications = async (req, res) => {
   const { status = 'pending' } = req.query;
   try {
-    let q = supabaseAdmin.from('teacher_applications').select('*').order('updated_at', { ascending: false });
+    let q = usersDb.from('teacher_applications').select('*').order('updated_at', { ascending: false });
     if (status !== 'all') q = q.eq('status', status);
     const { data: rows, error } = await q;
     if (error) throw error;
@@ -179,7 +181,7 @@ exports.adminReviewApplication = async (req, res) => {
     return res.status(400).json({ error: 'action phải là approve, reject hoặc revoke.' });
   }
   try {
-    const { data: row, error: fErr } = await supabaseAdmin
+    const { data: row, error: fErr } = await usersDb
       .from('teacher_applications').select('*').eq('id', req.params.id).single();
     if (fErr || !row) return res.status(404).json({ error: 'Không tìm thấy đơn.' });
 
@@ -193,13 +195,13 @@ exports.adminReviewApplication = async (req, res) => {
 
     if (action === 'approve') {
       await updateUserMetadata(row.user_id, { role: 'teacher' });
-      await supabaseAdmin.from('teacher_applications').update({ ...base, status: 'approved' }).eq('id', row.id);
+      await usersDb.from('teacher_applications').update({ ...base, status: 'approved' }).eq('id', row.id);
       return res.json({ message: 'Đã duyệt và cấp quyền giáo viên.' });
     }
 
     // reject or revoke → ensure the account is (or stays) a student.
     await updateUserMetadata(row.user_id, { role: 'student' });
-    await supabaseAdmin.from('teacher_applications').update({ ...base, status: 'rejected' }).eq('id', row.id);
+    await usersDb.from('teacher_applications').update({ ...base, status: 'rejected' }).eq('id', row.id);
     return res.json({ message: action === 'revoke' ? 'Đã thu hồi quyền giáo viên.' : 'Đã từ chối đơn.' });
   } catch (err) {
     console.error('adminReviewApplication error:', err);

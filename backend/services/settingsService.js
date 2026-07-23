@@ -1,7 +1,7 @@
 'use strict';
 
-// Generic key/value app settings (jsonb), mirrors the placement_test_configs
-// cache+upsert pattern. Used for the revenue-pool percentage, etc.
+// Generic key/value app settings (jsonb) theo pattern cache+upsert.
+// Used for the revenue-pool percentage, etc.
 
 const { supabaseAdmin } = require('../config/supabase');
 

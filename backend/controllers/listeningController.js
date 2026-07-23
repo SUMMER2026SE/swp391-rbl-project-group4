@@ -8,6 +8,8 @@ const { synthesizeWithTimings } = require('../utils/ttsJa');
 const { toRubyHtml } = require('../services/furiganaService');
 const { logContentUse } = require('../utils/usageTracker');
 
+const practiceDb = supabaseAdmin.schema('practice_module');
+
 const BUCKET = 'listening-passages-audio';
 const isAdmin = (u) => u?.user_metadata?.role === 'admin';
 const SOURCE_TYPES = ['tts', 'audio', 'video', 'youtube'];
@@ -38,17 +40,17 @@ async function annotateFurigana(segments) {
 
 // Chủ sở hữu (theo student_id) hoặc admin mới được sửa/xóa.
 async function ownsContent(id, user) {
-  const { data } = await supabaseAdmin.from('listening_user_audios')
+  const { data } = await practiceDb.from('listening_user_audios')
     .select('student_id, storage_path, is_public').eq('id', id).single();
   if (!data) return null;
   if (data.student_id === user.id || isAdmin(user)) return data;
   return false;
 }
 
-// Tables are in public schema with listening_ prefix (schema exposure workaround)
-const dlg   = () => supabaseAdmin.from('listening_dialogues');
-const lines = () => supabaseAdmin.from('listening_dialogue_lines');
-const uadb  = () => supabaseAdmin.from('listening_user_audios');
+// Các bảng luyện nghe nằm trong schema practice_module
+const dlg   = () => practiceDb.from('listening_dialogues');
+const lines = () => practiceDb.from('listening_dialogue_lines');
+const uadb  = () => practiceDb.from('listening_user_audios');
 
 // ── Public: Dialogue list / detail ────────────────────────────────────────────
 
