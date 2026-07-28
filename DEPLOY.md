@@ -72,6 +72,7 @@ Database đã chạy sẵn (project **KizunaNihongo**), **không cần tạo m�
 | Biến | Bắt buộc | Ghi chú |
 |---|:---:|---|
 | `SUPABASE_URL` | ✅ | Bước 1 |
+| `SUPABASE_ANON_KEY` | ✅ | Bước 1 — backend **vẫn cần** anon key cho luồng đăng ký/đăng nhập |
 | `SUPABASE_SERVICE_ROLE_KEY` | ✅ | 🔒 Bước 1 |
 | `NODE_ENV` | ✅ | `production` |
 | `FRONTEND_URL` | ✅ | tạm điền `http://localhost:5173`, **sẽ sửa ở Bước 4** |
