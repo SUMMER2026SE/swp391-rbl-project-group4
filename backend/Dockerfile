@@ -1,7 +1,9 @@
 # Backend Kizuna Nihongo — chạy trên Render / Railway / Fly.io (container thường trú).
 # KHÔNG dùng được Vercel serverless vì cần ffmpeg + yt-dlp và cron chạy liên tục.
 
-FROM node:20-bookworm-slim
+# Node 22: @supabase/supabase-js v2.106+ cần native WebSocket (Node 20 chưa có → crash khi
+# khởi tạo RealtimeClient). Khớp luôn với Node v22 đang dùng ở máy dev.
+FROM node:22-bookworm-slim
 
 # ffmpeg      : tách/chuẩn hoá audio cho tính năng luyện nghe (config/audio.js)
 # python3+pip : chạy yt-dlp (config/youtube.js tự fallback `python -m yt_dlp`)

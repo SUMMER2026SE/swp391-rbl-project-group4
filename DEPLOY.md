@@ -1,6 +1,10 @@
 # Hướng dẫn deploy Kizuna Nihongo (chi tiết từng bước)
 
-**Kiến trúc:** Frontend → **Vercel** · Backend → **Render** (Docker) · Database → **Supabase** (đã có sẵn).
+**Kiến trúc:** Frontend (Static Site) + Backend (Docker) → **cùng trên Render** · Database → **Supabase** (đã có sẵn).
+
+> Frontend dùng **Static Site** của Render: miễn phí và **không bị ngủ**. Backend là Web Service free
+> nên vẫn ngủ sau ~15 phút.
+> *(Repo vẫn giữ `frontend/vercel.json` nếu sau này muốn quay lại Vercel — không dùng thì bỏ qua.)*
 
 > **Vì sao backend không đặt trên Vercel?** Backend cần `ffmpeg` + `yt-dlp` (binary ngoài), chạy
 > `node-cron` thường trú, và tạo transcript AI mất vài phút. Vercel serverless không có các binary
@@ -99,7 +103,32 @@ Database đã chạy sẵn (project **KizunaNihongo**), **không cần tạo m�
 
 ---
 
-## BƯỚC 3 — Deploy Frontend lên Vercel
+## BƯỚC 3 — Deploy Frontend lên Render (Static Site)
+
+**New + → Static Site** → chọn repo → điền:
+
+| Ô | Giá trị |
+|---|---|
+| Name | `kizuna-nihongo-web` |
+| Branch | `main` |
+| **Root Directory** | **`frontend`** ⚠️ bắt buộc (monorepo) |
+| Build Command | `npm ci && npm run build` |
+| Publish Directory | `dist` |
+
+**Environment Variables:** `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` (dùng **anon** key).
+
+Sau khi tạo xong, vào **Settings → Redirects/Rewrites**, thêm 2 rule **đúng thứ tự**:
+
+| # | Source | Destination | Action |
+|---|---|---|---|
+| 1 | `/api/*` | `https://<backend>.onrender.com/api/*` | **Rewrite** |
+| 2 | `/*` | `/index.html` | **Rewrite** |
+
+Rule 1 giúp frontend giữ nguyên `baseURL: '/api'` (không phải sửa code); rule 2 là SPA fallback cho
+React Router (thiếu là F5 ở `/dashboard` sẽ 404). `/api/*` **phải** đứng trước `/*`.
+
+<details>
+<summary>Cách cũ: deploy frontend lên Vercel (không dùng nữa)</summary>
 
 ### 3.1. Sửa URL backend vào code
 
@@ -148,18 +177,20 @@ git push origin vinhdd
 
 ---
 
+</details>
+
 ## BƯỚC 4 — Nối hai đầu lại với nhau
 
 Đây là bước hay bị quên nhất, thiếu là đăng nhập/API sẽ lỗi.
 
 ### 4.1. Cho backend biết frontend (CORS)
 1. Về Render → service của bạn → **Environment**.
-2. Sửa `FRONTEND_URL` = URL Vercel ở Bước 3 (vd `https://swp391-xxx.vercel.app`), **không có dấu `/` cuối**.
+2. Sửa `FRONTEND_URL` = URL static site ở Bước 3 (vd `https://swp391-xxx.vercel.app`), **không có dấu `/` cuối**.
 3. Bấm **Save Changes** → Render tự deploy lại.
 
 ### 4.2. Cho Supabase biết frontend (đăng nhập Google)
 1. Supabase → **Authentication** → **URL Configuration**.
-2. **Site URL**: điền URL Vercel.
+2. **Site URL**: điền URL static site (Render).
 3. **Redirect URLs**: thêm `https://<url-vercel>/login`
    *(code redirect về `${origin}/login` sau khi đăng nhập Google — thiếu dòng này là Google login hỏng).*
 
