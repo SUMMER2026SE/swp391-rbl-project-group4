@@ -1,4 +1,4 @@
-﻿import { useState } from 'react';
+import { useState } from 'react';
 import Sidebar from './Sidebar';
 import MobileNav from './MobileNav';
 import AppHeader from './AppHeader';

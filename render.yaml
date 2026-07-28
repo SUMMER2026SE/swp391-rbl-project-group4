@@ -1,0 +1,57 @@
+# Render Blueprint cho backend Kizuna Nihongo.
+# Dùng: Render Dashboard → New → Blueprint → chọn repo này.
+# Các biến có `sync: false` sẽ được Render hỏi/để bạn tự điền (không lưu vào git).
+
+services:
+  - type: web
+    name: kizuna-nihongo-api
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    plan: free            # free bị ngủ sau ~15 phút không request → lần gọi đầu sẽ chậm
+    region: singapore
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      # Render tự cấp PORT — KHÔNG khai báo API_PORT ở đây.
+      - key: FRONTEND_URL          # https://<ten-app>.vercel.app
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: FPT_AI_API_KEY
+        sync: false
+      - key: FPT_AI_MODEL
+        sync: false
+      - key: FPT_AI_WHISPER_MODEL
+        sync: false
+      - key: FPT_AI_JLPT_MODEL
+        sync: false
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        sync: false
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASS
+        sync: false
+      - key: SMTP_FROM
+        sync: false
+      - key: SEPAY_API_TOKEN
+        sync: false
+      - key: SEPAY_WEBHOOK_KEY
+        sync: false
+      - key: QR_BANK_CODE
+        sync: false
+      - key: QR_ACCOUNT_NUMBER
+        sync: false
+      - key: QR_PROVIDER
+        value: sepay
+      - key: PAYMENT_PROVIDER
+        value: sepay
+      - key: PAYMENT_ORDER_EXPIRE_MINUTES
+        value: "30"
+      - key: SUBSCRIPTION_DURATION_DAYS
+        value: "30"

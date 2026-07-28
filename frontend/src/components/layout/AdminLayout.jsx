@@ -1,4 +1,4 @@
-﻿import Sidebar from './Sidebar';
+import Sidebar from './Sidebar';
 import MobileNav from './MobileNav';
 import AppHeader from './AppHeader';
 import { useLang } from '../../contexts/LangContext';
