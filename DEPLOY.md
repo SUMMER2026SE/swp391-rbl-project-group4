@@ -10,17 +10,17 @@
 > `node-cron` thường trú, và tạo transcript AI mất vài phút. Vercel serverless không có các binary
 > này, không giữ process nền, và giới hạn 10s (Hobby) / 60s (Pro).
 
-**Thời gian ước tính:** ~30 phút. Cần sẵn: tài khoản GitHub, Vercel, Render (đăng nhập bằng GitHub được).
+**Thời gian ước tính:** ~30 phút. Can san: tai khoan GitHub va Render (dang nhap bang GitHub duoc).
 
 ---
 
 ## BƯỚC 0 — Đẩy code lên GitHub
 
-Render và Vercel deploy từ Git, nên code phải có trên GitHub trước.
+Render deploy tu Git, nen code phai co tren GitHub truoc.
 
 ```bash
 git add -A
-git commit -m "Chore: thêm cấu hình deploy Vercel + Render"
+git commit -m "Chore: them cau hinh deploy Render"
 git push origin vinhdd
 ```
 
@@ -79,7 +79,7 @@ Database đã chạy sẵn (project **KizunaNihongo**), **không cần tạo m�
 | `SUPABASE_ANON_KEY` | ✅ | Bước 1 — backend **vẫn cần** anon key cho luồng đăng ký/đăng nhập |
 | `SUPABASE_SERVICE_ROLE_KEY` | ✅ | 🔒 Bước 1 |
 | `NODE_ENV` | ✅ | `production` |
-| `FRONTEND_URL` | ✅ | tạm điền `http://localhost:5173`, **sẽ sửa ở Bước 4** |
+| `FRONTEND_URL` | ✅ | tam dien `https://placeholder.onrender.com`, **se sua o Buoc 4** |
 | `FPT_AI_API_KEY`, `FPT_AI_MODEL`, `FPT_AI_WHISPER_MODEL`, `FPT_AI_JLPT_MODEL` | ✅ | AI chat + transcript |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` | ✅ | gửi mã OTP |
 | `SEPAY_API_TOKEN`, `SEPAY_WEBHOOK_KEY` | ✅ | 🔒 thanh toán |
@@ -185,13 +185,13 @@ git push origin vinhdd
 
 ### 4.1. Cho backend biết frontend (CORS)
 1. Về Render → service của bạn → **Environment**.
-2. Sửa `FRONTEND_URL` = URL static site ở Bước 3 (vd `https://swp391-xxx.vercel.app`), **không có dấu `/` cuối**.
+2. Sửa `FRONTEND_URL` = URL static site ở Bước 3 (vd `https://kizuna-nihongo-web.onrender.com`), **khong co dau `/` cuoi**.
 3. Bấm **Save Changes** → Render tự deploy lại.
 
 ### 4.2. Cho Supabase biết frontend (đăng nhập Google)
 1. Supabase → **Authentication** → **URL Configuration**.
 2. **Site URL**: điền URL static site (Render).
-3. **Redirect URLs**: thêm `https://<url-vercel>/login`
+3. **Redirect URLs**: them `https://<url-static-site>/login`
    *(code redirect về `${origin}/login` sau khi đăng nhập Google — thiếu dòng này là Google login hỏng).*
 
 ### 4.3. Webhook thanh toán (nếu dùng SePay thật)
