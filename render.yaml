@@ -1,21 +1,22 @@
-# Render Blueprint cho backend Kizuna Nihongo.
+# Render Blueprint — chạy CẢ backend (Docker) và frontend (Static Site) trên Render.
 # Dùng: Render Dashboard → New → Blueprint → chọn repo này.
-# Các biến có `sync: false` sẽ được Render hỏi/để bạn tự điền (không lưu vào git).
+# Biến `sync: false` sẽ được Render hỏi để bạn tự điền (không lưu vào git).
 
 services:
+  # ── BACKEND: Express + ffmpeg + yt-dlp (container thường trú) ────────────────
   - type: web
     name: kizuna-nihongo-api
     runtime: docker
     dockerfilePath: ./backend/Dockerfile
-    dockerContext: ./backend
-    plan: free            # free bị ngủ sau ~15 phút không request → lần gọi đầu sẽ chậm
+    dockerContext: ./backend        # BẮT BUỘC: repo root cũng có package.json riêng
+    plan: free                      # free ngủ sau ~15 phút không request → gọi đầu chậm
     region: singapore
     healthCheckPath: /api/health
     envVars:
       - key: NODE_ENV
         value: production
-      # Render tự cấp PORT — KHÔNG khai báo API_PORT ở đây.
-      - key: FRONTEND_URL          # https://<ten-app>.vercel.app
+      # Render tự cấp PORT — KHÔNG khai báo PORT/API_PORT ở đây.
+      - key: FRONTEND_URL           # URL của static site bên dưới (điền sau khi deploy xong)
         sync: false
       - key: SUPABASE_URL
         sync: false
@@ -54,7 +55,32 @@ services:
         value: sepay
       - key: PAYMENT_PROVIDER
         value: sepay
+      - key: TRANSFER_CONTENT_PREFIX
+        value: PREM
       - key: PAYMENT_ORDER_EXPIRE_MINUTES
         value: "30"
       - key: SUBSCRIPTION_DURATION_DAYS
         value: "30"
+
+  # ── FRONTEND: React + Vite build sẵn, phục vụ tĩnh (free, KHÔNG ngủ) ─────────
+  - type: web
+    name: kizuna-nihongo-web
+    runtime: static
+    rootDir: frontend
+    buildCommand: npm ci && npm run build
+    staticPublishPath: ./dist
+    envVars:
+      - key: VITE_SUPABASE_URL
+        sync: false
+      - key: VITE_SUPABASE_ANON_KEY    # anon key (công khai được), KHÔNG dùng service_role
+        sync: false
+    routes:
+      # 1) Proxy API sang backend → frontend giữ nguyên baseURL '/api', không phải sửa code.
+      #    ⚠️ ĐỔI URL dưới đây thành domain backend thật sau lần deploy đầu.
+      - type: rewrite
+        source: /api/*
+        destination: https://kizuna-nihongo-api.onrender.com/api/*
+      # 2) SPA fallback cho React Router (phải đặt SAU rule /api/*).
+      - type: rewrite
+        source: /*
+        destination: /index.html

@@ -1,5 +1,8 @@
 node_modules/
 .env
+# File env sinh ra để dán vào Render/Vercel — chứa secret thật, KHÔNG được commit
+*.env
+!.env.example
 *.log
 dist/
 .DS_Store

@@ -1,22 +1,26 @@
 # Hướng dẫn deploy Kizuna Nihongo (chi tiết từng bước)
 
-**Kiến trúc:** Frontend → **Vercel** · Backend → **Render** (Docker) · Database → **Supabase** (đã có sẵn).
+**Kiến trúc:** Frontend (Static Site) + Backend (Docker) → **cùng trên Render** · Database → **Supabase** (đã có sẵn).
+
+> Frontend dùng **Static Site** của Render: miễn phí và **không bị ngủ**. Backend là Web Service free
+> nên vẫn ngủ sau ~15 phút.
+> *(Repo vẫn giữ `frontend/vercel.json` nếu sau này muốn quay lại Vercel — không dùng thì bỏ qua.)*
 
 > **Vì sao backend không đặt trên Vercel?** Backend cần `ffmpeg` + `yt-dlp` (binary ngoài), chạy
 > `node-cron` thường trú, và tạo transcript AI mất vài phút. Vercel serverless không có các binary
 > này, không giữ process nền, và giới hạn 10s (Hobby) / 60s (Pro).
 
-**Thời gian ước tính:** ~30 phút. Cần sẵn: tài khoản GitHub, Vercel, Render (đăng nhập bằng GitHub được).
+**Thời gian ước tính:** ~30 phút. Can san: tai khoan GitHub va Render (dang nhap bang GitHub duoc).
 
 ---
 
 ## BƯỚC 0 — Đẩy code lên GitHub
 
-Render và Vercel deploy từ Git, nên code phải có trên GitHub trước.
+Render deploy tu Git, nen code phai co tren GitHub truoc.
 
 ```bash
 git add -A
-git commit -m "Chore: thêm cấu hình deploy Vercel + Render"
+git commit -m "Chore: them cau hinh deploy Render"
 git push origin vinhdd
 ```
 
@@ -75,7 +79,7 @@ Database đã chạy sẵn (project **KizunaNihongo**), **không cần tạo m�
 | `SUPABASE_ANON_KEY` | ✅ | Bước 1 — backend **vẫn cần** anon key cho luồng đăng ký/đăng nhập |
 | `SUPABASE_SERVICE_ROLE_KEY` | ✅ | 🔒 Bước 1 |
 | `NODE_ENV` | ✅ | `production` |
-| `FRONTEND_URL` | ✅ | tạm điền `http://localhost:5173`, **sẽ sửa ở Bước 4** |
+| `FRONTEND_URL` | ✅ | tam dien `https://placeholder.onrender.com`, **se sua o Buoc 4** |
 | `FPT_AI_API_KEY`, `FPT_AI_MODEL`, `FPT_AI_WHISPER_MODEL`, `FPT_AI_JLPT_MODEL` | ✅ | AI chat + transcript |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` | ✅ | gửi mã OTP |
 | `SEPAY_API_TOKEN`, `SEPAY_WEBHOOK_KEY` | ✅ | 🔒 thanh toán |
@@ -99,7 +103,32 @@ Database đã chạy sẵn (project **KizunaNihongo**), **không cần tạo m�
 
 ---
 
-## BƯỚC 3 — Deploy Frontend lên Vercel
+## BƯỚC 3 — Deploy Frontend lên Render (Static Site)
+
+**New + → Static Site** → chọn repo → điền:
+
+| Ô | Giá trị |
+|---|---|
+| Name | `kizuna-nihongo-web` |
+| Branch | `main` |
+| **Root Directory** | **`frontend`** ⚠️ bắt buộc (monorepo) |
+| Build Command | `npm ci && npm run build` |
+| Publish Directory | `dist` |
+
+**Environment Variables:** `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` (dùng **anon** key).
+
+Sau khi tạo xong, vào **Settings → Redirects/Rewrites**, thêm 2 rule **đúng thứ tự**:
+
+| # | Source | Destination | Action |
+|---|---|---|---|
+| 1 | `/api/*` | `https://<backend>.onrender.com/api/*` | **Rewrite** |
+| 2 | `/*` | `/index.html` | **Rewrite** |
+
+Rule 1 giúp frontend giữ nguyên `baseURL: '/api'` (không phải sửa code); rule 2 là SPA fallback cho
+React Router (thiếu là F5 ở `/dashboard` sẽ 404). `/api/*` **phải** đứng trước `/*`.
+
+<details>
+<summary>Cách cũ: deploy frontend lên Vercel (không dùng nữa)</summary>
 
 ### 3.1. Sửa URL backend vào code
 
@@ -148,19 +177,21 @@ git push origin vinhdd
 
 ---
 
+</details>
+
 ## BƯỚC 4 — Nối hai đầu lại với nhau
 
 Đây là bước hay bị quên nhất, thiếu là đăng nhập/API sẽ lỗi.
 
 ### 4.1. Cho backend biết frontend (CORS)
 1. Về Render → service của bạn → **Environment**.
-2. Sửa `FRONTEND_URL` = URL Vercel ở Bước 3 (vd `https://swp391-xxx.vercel.app`), **không có dấu `/` cuối**.
+2. Sửa `FRONTEND_URL` = URL static site ở Bước 3 (vd `https://kizuna-nihongo-web.onrender.com`), **khong co dau `/` cuoi**.
 3. Bấm **Save Changes** → Render tự deploy lại.
 
 ### 4.2. Cho Supabase biết frontend (đăng nhập Google)
 1. Supabase → **Authentication** → **URL Configuration**.
-2. **Site URL**: điền URL Vercel.
-3. **Redirect URLs**: thêm `https://<url-vercel>/login`
+2. **Site URL**: điền URL static site (Render).
+3. **Redirect URLs**: them `https://<url-static-site>/login`
    *(code redirect về `${origin}/login` sau khi đăng nhập Google — thiếu dòng này là Google login hỏng).*
 
 ### 4.3. Webhook thanh toán (nếu dùng SePay thật)
