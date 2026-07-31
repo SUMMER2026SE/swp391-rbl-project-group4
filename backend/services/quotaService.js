@@ -30,6 +30,9 @@ async function getUserTier(userId) {
     .select('tier')
     .eq('user_id', userId)
     .in('status', ['active', 'grace_period'])
+    // Không tin vào mỗi status: gói quá hạn phải thành 'free' ngay, không đợi cron
+    // hạ status. current_period_end NULL = không giới hạn thời gian.
+    .or(`current_period_end.is.null,current_period_end.gt.${new Date().toISOString()}`)
     .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle();

@@ -1,0 +1,78 @@
+// 05-flashcard-module.dbml — schema "flashcard_module" (Flashcard)
+// Kizuna Nihongo — dán trực tiếp vào https://dbdiagram.io
+
+Table flashcard_module.flashcard_folder_sets {
+  folder_id uuid [not null]
+  set_id uuid [not null]
+  added_at timestamptz [default: `now()`]
+
+  indexes {
+    (folder_id, set_id) [pk]
+  }
+}
+
+Table flashcard_module.flashcard_folders {
+  id uuid [pk, default: `gen_random_uuid()`]
+  owner_id uuid [not null]
+  name text [not null]
+  created_at timestamptz [default: `now()`]
+  updated_at timestamptz [default: `now()`]
+}
+
+Table flashcard_module.flashcard_progress {
+  student_id uuid [not null]
+  card_id uuid [not null]
+  status text [not null, default: 'learning']
+  last_reviewed_at timestamptz [default: `now()`]
+
+  indexes {
+    (student_id, card_id) [pk]
+  }
+}
+
+Table flashcard_module.flashcard_sets {
+  id uuid [pk, default: `gen_random_uuid()`]
+  owner_id uuid [not null]
+  title text [not null]
+  description text
+  created_at timestamptz [default: `now()`]
+  updated_at timestamptz [default: `now()`]
+}
+
+Table flashcard_module.flashcard_tests {
+  id uuid [pk, default: `gen_random_uuid()`]
+  set_id uuid [unique, not null]
+  owner_id uuid [not null]
+  config jsonb [not null, default: '{}']
+  questions jsonb [not null]
+  created_at timestamptz [default: `now()`]
+}
+
+Table flashcard_module.flashcards {
+  id uuid [pk, default: `gen_random_uuid()`]
+  set_id uuid [not null]
+  term text [not null]
+  definition text [not null]
+  order_index int [default: 0]
+  created_at timestamptz [default: `now()`]
+}
+
+// ─── Bảng tham chiếu ở schema khác (stub, chỉ để vẽ quan hệ) ───
+
+Table auth.users {
+  id uuid [pk]
+
+  Note: 'Supabase Auth (auth.users) — nguồn định danh gốc'
+}
+
+// ─── Quan hệ ───
+
+Ref: flashcard_module.flashcard_folder_sets.folder_id > flashcard_module.flashcard_folders.id
+Ref: flashcard_module.flashcard_folder_sets.set_id > flashcard_module.flashcard_sets.id
+Ref: flashcard_module.flashcard_folders.owner_id > auth.users.id
+Ref: flashcard_module.flashcard_progress.student_id > auth.users.id
+Ref: flashcard_module.flashcard_progress.card_id > flashcard_module.flashcards.id
+Ref: flashcard_module.flashcard_sets.owner_id > auth.users.id
+Ref: flashcard_module.flashcard_tests.set_id > flashcard_module.flashcard_sets.id
+Ref: flashcard_module.flashcard_tests.owner_id > auth.users.id
+Ref: flashcard_module.flashcards.set_id > flashcard_module.flashcard_sets.id

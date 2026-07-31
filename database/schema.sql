@@ -1,7 +1,5 @@
 -- =============================================================================
 -- Kizuna Nihongo (Sorakara) - Full Database Schema
--- Project: KizunaNihongo (kcjepoaksgbrhqytkjrw)
--- Generated from the LIVE database on 2026-07-24 via schema introspection.
 -- Idempotent where possible (IF NOT EXISTS / OR REPLACE). Structure only (no row data).
 -- Order: schemas -> extensions -> sequences -> tables -> constraints -> functions
 --        -> views -> triggers -> indexes -> RLS -> policies -> role config.

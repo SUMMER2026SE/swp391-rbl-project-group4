@@ -1,0 +1,1370 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kizuna Nihongo — Software Project Development</title>
+
+<!-- ========================================================================
+     HOW TO ADD YOUR IMAGES
+     ------------------------------------------------------------------------
+     Every image slot is a <div class="imgph" ...> placeholder. To insert a
+     real picture, put the file in a folder named  assets/  NEXT TO this HTML
+     file, then either:
+       (a) COVER hero: edit the .hero rule in CSS -> set background-image to
+           url('assets/landing-hero.png'); and delete the <div class="hero-ph">
+       (b) Any .imgph box: replace the whole <div class="imgph">...</div> with
+           <img src="assets/your-file.png" alt="..." class="shot">
+     Suggested filenames are printed inside each placeholder.
+     ======================================================================== -->
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Zen+Antique&family=Zen+Kaku+Gothic+New:wght@400;500;700;900&display=swap" rel="stylesheet">
+
+<style>
+/* =========================================================================
+   THEME TOKENS  — change these to restyle the whole deck
+   ========================================================================= */
+:root{
+  --red:#ae2826;          /* tsubaki red (brand) */
+  --red-deep:#8c0b12;     /* primary deep red    */
+  --red-bright:#c8302a;
+  --ink:#141210;          /* main text */
+  --ink-soft:#3a352f;
+  --muted:#7c7168;
+  --white:#ffffff;
+  --cream:#faf6ef;        /* warm off-white */
+  --cream-2:#f3ecdf;
+  --line:#e7ddcd;
+  --gold:#c9a24b;
+
+  --font:'Zen Kaku Gothic New',system-ui,sans-serif;
+  --font-jp:'Zen Antique',serif;
+
+  --stage-bg:#0b0908;
+  --slide-bg:var(--white);
+}
+
+* { margin:0; padding:0; box-sizing:border-box; }
+
+/* =========================================================================
+   FIXED 16:9 STAGE (from viewport-base.css) — do not reflow per device
+   ========================================================================= */
+html,body{ width:100%; height:100%; margin:0; overflow:hidden; background:var(--stage-bg); }
+.deck-viewport{ position:fixed; inset:0; overflow:hidden; background:var(--stage-bg); }
+.deck-stage{ position:absolute; left:0; top:0; width:1920px; height:1080px; overflow:hidden;
+  transform-origin:0 0; background:var(--slide-bg); }
+.slide{ position:absolute; inset:0; width:1920px; height:1080px; overflow:hidden; display:block;
+  visibility:hidden; opacity:0; pointer-events:none; background:var(--slide-bg); }
+.slide.active,.slide.visible{ visibility:visible; opacity:1; pointer-events:auto; z-index:1; }
+img,video,canvas,svg{ max-width:100%; max-height:100%; }
+.deck-controls{ position:fixed; left:50%; bottom:22px; transform:translateX(-50%); z-index:1000; }
+@media print{
+  html,body{ width:1920px; height:auto; overflow:visible; background:#fff; }
+  .deck-viewport{ position:static; overflow:visible; background:#fff; }
+  .deck-stage{ position:static; width:auto; height:auto; transform:none!important; background:none; }
+  .slide{ position:relative; display:block!important; visibility:visible!important; opacity:1!important;
+    pointer-events:auto!important; width:1920px; height:1080px; break-after:page; page-break-after:always; }
+  .slide:last-child{ break-after:auto; page-break-after:auto; }
+  .deck-controls{ display:none!important; }
+}
+@media (prefers-reduced-motion:reduce){ *,*::before,*::after{ animation-duration:.01ms!important; transition-duration:.2s!important; } }
+
+/* =========================================================================
+   SHARED SLIDE FURNITURE
+   ========================================================================= */
+.slide{ font-family:var(--font); color:var(--ink); }
+/* faint vertical grid ticks — quiet Swiss-Japanese texture */
+.slide::before{ content:""; position:absolute; inset:0; pointer-events:none; opacity:.5;
+  background-image:linear-gradient(90deg, rgba(20,18,16,.03) 1px, transparent 1px);
+  background-size:160px 100%; }
+
+.wrap{ position:absolute; inset:0; padding:84px 108px 104px; display:flex; flex-direction:column; }
+.lbar{ position:absolute; left:0; top:0; bottom:0; width:22px; background:var(--red); z-index:2; }
+
+.eyebrow{ display:flex; align-items:center; gap:16px; font-size:21px; font-weight:700;
+  letter-spacing:.34em; text-transform:uppercase; color:var(--red); }
+.eyebrow .tick{ width:46px; height:3px; background:var(--red); }
+.eyebrow .part{ color:var(--muted); font-weight:700; }
+
+.s-title{ font-size:74px; font-weight:900; line-height:1.02; letter-spacing:-.015em; color:var(--ink);
+  margin-top:20px; }
+.s-title .r{ color:var(--red); }
+.s-sub{ font-size:27px; font-weight:500; color:var(--ink-soft); margin-top:18px; line-height:1.45; max-width:1500px; }
+
+.s-foot{ position:absolute; left:108px; right:108px; bottom:44px; display:flex; justify-content:space-between;
+  align-items:center; font-size:19px; color:var(--muted); font-weight:500; letter-spacing:.02em; z-index:2; }
+.s-foot .brand{ display:flex; align-items:center; gap:12px; }
+.s-foot .dot{ width:11px; height:11px; border-radius:50%; background:var(--red); }
+.s-foot .pageno b{ color:var(--ink); }
+
+/* content region below the header — vertically centered to avoid empty gaps */
+.body{ flex:1; margin-top:44px; min-height:0; display:flex; flex-direction:column; justify-content:center; }
+
+/* =========================================================================
+   REUSABLE PIECES
+   ========================================================================= */
+.grid{ display:grid; gap:26px; }
+.card{ background:var(--cream); border:1.5px solid var(--line); border-radius:18px; padding:30px 32px;
+  position:relative; overflow:hidden; }
+.card .num{ font-family:var(--font-jp); font-size:34px; color:var(--red); opacity:.9; line-height:1; }
+.card h3{ font-size:29px; font-weight:700; color:var(--ink); margin:12px 0 10px; }
+.card p{ font-size:22px; font-weight:400; color:var(--ink-soft); line-height:1.5; }
+.card.accent{ background:linear-gradient(160deg,var(--red) 0%,var(--red-deep) 100%); border-color:transparent; color:#fff; }
+.card.accent h3,.card.accent p{ color:#fff; }
+.card.accent .num{ color:rgba(255,255,255,.85); }
+
+.chip{ display:inline-flex; align-items:center; font-size:20px; font-weight:700; color:var(--red-deep);
+  border:2px solid rgba(174,40,38,.4); border-radius:999px; padding:9px 20px; background:#fff; }
+
+/* pill list */
+.plist{ list-style:none; display:flex; flex-direction:column; gap:16px; }
+.plist li{ display:flex; gap:16px; align-items:flex-start; font-size:23px; color:var(--ink-soft); line-height:1.4; }
+.plist li::before{ content:""; flex:none; width:13px; height:13px; margin-top:9px; border-radius:3px;
+  background:var(--red); transform:rotate(45deg); }
+.plist li b{ color:var(--ink); font-weight:700; }
+
+/* data table */
+table.t{ width:100%; border-collapse:collapse; font-size:21px; }
+table.t th{ text-align:left; font-weight:700; color:#fff; background:var(--red-deep); padding:16px 20px; }
+table.t th:first-child{ border-radius:12px 0 0 0; } table.t th:last-child{ border-radius:0 12px 0 0; }
+table.t td{ padding:15px 20px; border-bottom:1.5px solid var(--line); color:var(--ink-soft); vertical-align:top; line-height:1.4; }
+table.t tr:nth-child(even) td{ background:var(--cream); }
+table.t td .code{ font-weight:800; color:var(--red-deep); white-space:nowrap; }
+
+/* image placeholder */
+.imgph{ width:100%; height:620px; border:3px dashed rgba(174,40,38,.5); border-radius:20px;
+  background:repeating-linear-gradient(45deg,var(--cream) 0 22px,var(--cream-2) 22px 44px);
+  display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px; text-align:center; padding:24px; }
+.imgph .cam{ width:78px; height:78px; border-radius:16px; background:var(--red); color:#fff; display:flex;
+  align-items:center; justify-content:center; font-size:40px; box-shadow:0 12px 30px rgba(140,11,18,.28); }
+.imgph .lab{ font-size:26px; font-weight:800; color:var(--red-deep); }
+.imgph .sub{ font-size:19px; color:var(--muted); font-weight:600; letter-spacing:.02em; }
+img.shot{ width:100%; height:100%; object-fit:contain; border-radius:20px; border:1.5px solid var(--line);
+  box-shadow:0 24px 60px rgba(20,18,16,.14); background:#fff; }
+
+/* =========================================================================
+   ANIMATION — staggered reveal on the active slide
+   ========================================================================= */
+.reveal{ opacity:0; transform:translateY(26px); transition:opacity .7s cubic-bezier(.16,1,.3,1), transform .7s cubic-bezier(.16,1,.3,1); }
+.slide.visible .reveal{ opacity:1; transform:none; }
+.slide.visible .d1{ transition-delay:.08s } .slide.visible .d2{ transition-delay:.18s }
+.slide.visible .d3{ transition-delay:.28s } .slide.visible .d4{ transition-delay:.38s }
+.slide.visible .d5{ transition-delay:.48s } .slide.visible .d6{ transition-delay:.58s }
+.slide.visible .d7{ transition-delay:.68s } .slide.visible .d8{ transition-delay:.78s }
+
+/* =========================================================================
+   SLIDE 1 — COVER  (big circle now holds the LANDING PAGE image)
+   ========================================================================= */
+#cover{ background:var(--white); }
+#cover .lbar{ width:26px; }
+.hero{ position:absolute; right:-130px; top:50%; transform:translateY(-50%);
+  width:950px; height:950px; border-radius:50%; overflow:hidden;
+  border:14px solid #fff; box-shadow:0 40px 120px rgba(140,11,18,.26), 0 0 0 4px var(--red);
+  /* >>> To show the landing page: replace the line below with:
+         background:#fff url('assets/landing-hero.png') center/cover no-repeat;
+     and delete the <div class="hero-ph"> element in the HTML.        <<< */
+  background:radial-gradient(circle at 40% 34%,#fff 0%,var(--cream) 60%,var(--cream-2) 100%); }
+.hero-ph{ position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px; }
+.hero-ph .kanji{ font-family:var(--font-jp); font-size:230px; color:rgba(174,40,38,.16); line-height:1; }
+.hero-ph .cam{ width:80px; height:80px; border-radius:18px; background:var(--red); color:#fff; display:flex;
+  align-items:center; justify-content:center; font-size:42px; box-shadow:0 14px 34px rgba(140,11,18,.3); }
+.hero-ph .lab{ font-size:26px; font-weight:800; color:var(--red-deep); }
+.hero-ph .sub{ font-size:19px; font-weight:600; color:var(--muted); }
+.hero-seal{ position:absolute; right:150px; bottom:120px; width:150px; height:150px; border-radius:50%;
+  background:var(--red); color:#fff; display:flex; align-items:center; justify-content:center;
+  font-family:var(--font-jp); font-size:76px; z-index:3; box-shadow:0 18px 40px rgba(140,11,18,.35);
+  border:5px solid #fff; }
+.cover-body{ position:absolute; left:108px; top:0; bottom:0; width:1010px; display:flex; flex-direction:column; justify-content:center; z-index:2; }
+.cover-kicker{ font-size:23px; font-weight:700; letter-spacing:.36em; text-transform:uppercase; color:var(--red); margin-bottom:30px; }
+.cover-kicker span{ color:var(--muted); }
+.cover-title{ font-size:158px; font-weight:900; line-height:.9; letter-spacing:-.02em; color:var(--ink); }
+.cover-title .r{ color:var(--red); }
+.cover-sub{ font-size:40px; font-weight:500; color:var(--ink-soft); margin-top:34px; line-height:1.25; max-width:900px; }
+.cover-meta{ margin-top:52px; display:flex; gap:14px; flex-wrap:wrap; }
+.cover-foot{ position:absolute; left:108px; bottom:76px; font-size:22px; color:var(--muted); font-weight:500; z-index:2; }
+.cover-foot b{ color:var(--ink); }
+.hero{ opacity:0; transform:translateY(-50%) scale(.85); transition:opacity 1s ease, transform 1.1s cubic-bezier(.16,1,.3,1); }
+.slide.visible .hero{ opacity:1; transform:translateY(-50%) scale(1); }
+.hero-seal{ opacity:0; transform:scale(.4) rotate(-20deg); transition:opacity .7s ease .8s, transform .7s cubic-bezier(.34,1.56,.64,1) .8s; }
+.slide.visible .hero-seal{ opacity:1; transform:scale(1) rotate(0); }
+
+/* =========================================================================
+   SLIDE 2 — AGENDA
+   ========================================================================= */
+.agenda{ display:grid; grid-template-columns:repeat(2,1fr); gap:30px; height:100%; align-content:center; }
+.ag{ display:flex; gap:28px; align-items:center; background:var(--cream); border:1.5px solid var(--line);
+  border-radius:20px; padding:34px 40px; }
+.ag .n{ font-family:var(--font-jp); font-size:78px; color:var(--red); line-height:.85; flex:none; width:150px;
+  text-align:center; letter-spacing:-.03em; }
+.ag h3{ font-size:38px; font-weight:800; color:var(--ink); }
+.ag p{ font-size:22px; color:var(--muted); font-weight:500; margin-top:6px; }
+
+/* =========================================================================
+   ARCHITECTURE (slide 14)
+   ========================================================================= */
+.arch{ display:flex; flex-direction:column; gap:20px; height:100%; }
+.layer{ display:grid; grid-template-columns:230px 1fr; align-items:stretch; border-radius:18px; overflow:hidden;
+  border:1.5px solid var(--line); }
+.layer .lab{ background:var(--red-deep); color:#fff; display:flex; flex-direction:column; justify-content:center;
+  padding:20px 26px; }
+.layer .lab b{ font-size:26px; font-weight:800; } .layer .lab span{ font-size:17px; opacity:.8; margin-top:4px; letter-spacing:.06em; text-transform:uppercase; }
+.layer .cells{ display:flex; gap:16px; padding:18px 20px; background:var(--cream); flex-wrap:wrap; align-items:center; }
+.acell{ background:#fff; border:1.5px solid var(--line); border-radius:12px; padding:16px 22px; flex:1 1 0; min-width:160px; }
+.acell b{ display:block; font-size:23px; font-weight:700; color:var(--ink); }
+.acell span{ font-size:18px; color:var(--muted); }
+.layer.ext .lab{ background:var(--ink); }
+.arch-flow{ text-align:center; font-size:19px; color:var(--muted); font-weight:600; letter-spacing:.03em; }
+.arch-flow b{ color:var(--red-deep); }
+
+/* =========================================================================
+   ERD (slide 16)
+   ========================================================================= */
+.erd{ display:grid; grid-template-columns:1fr 1fr 1fr 320px; grid-auto-rows:1fr; gap:20px; height:100%; }
+.erd .stats{ grid-column:4; grid-row:1 / span 3; }
+.mod{ border:1.5px solid var(--line); border-radius:16px; background:var(--cream); overflow:hidden; display:flex; flex-direction:column; }
+.mod .h{ background:var(--red); color:#fff; padding:12px 18px; font-size:21px; font-weight:800; display:flex; justify-content:space-between; align-items:center; }
+.mod .h span{ font-size:15px; font-weight:600; opacity:.85; }
+.mod ul{ list-style:none; padding:14px 18px; display:flex; flex-direction:column; gap:9px; }
+.mod ul li{ font-size:18.5px; color:var(--ink-soft); display:flex; align-items:center; gap:10px; }
+.mod ul li::before{ content:""; width:8px; height:8px; border-radius:2px; background:var(--red); flex:none; }
+.mod ul li em{ font-style:normal; color:var(--muted); font-size:16px; margin-left:auto; }
+.mod.pub{ background:#fff; border-style:dashed; } .mod.pub .h{ background:var(--ink); }
+.stats{ background:linear-gradient(165deg,var(--red) 0%,var(--red-deep) 100%); border-radius:16px; color:#fff;
+  padding:26px 28px; display:flex; flex-direction:column; justify-content:center; gap:18px; }
+.stat b{ font-size:56px; font-weight:900; line-height:1; display:block; }
+.stat span{ font-size:19px; opacity:.9; font-weight:600; }
+.stat + .stat{ border-top:1px solid rgba(255,255,255,.25); padding-top:16px; }
+
+/* two-column layout for use-case & package slides */
+.split{ display:grid; grid-template-columns:640px 1fr; gap:44px; height:100%; align-items:center; }
+.split .txt{ display:flex; flex-direction:column; justify-content:center; }
+/* variant: align both columns to the top (used on the Overview slide) */
+.split.top{ align-items:start; }
+.split.top .txt{ justify-content:flex-start; }
+.split .txt h3{ font-size:26px; color:var(--red-deep); font-weight:800; margin-bottom:18px; letter-spacing:.04em; text-transform:uppercase; }
+
+/* actor cards */
+.actors{ display:grid; grid-template-columns:repeat(4,1fr); gap:22px; }
+.actor{ background:var(--cream); border:1.5px solid var(--line); border-radius:18px; padding:26px; text-align:center; }
+.actor .ic{ width:88px; height:88px; margin:0 auto 16px; border-radius:50%; background:var(--red); color:#fff;
+  display:flex; align-items:center; justify-content:center; font-size:44px; }
+.actor h3{ font-size:27px; font-weight:800; color:var(--ink); }
+.actor p{ font-size:19px; color:var(--muted); margin-top:8px; line-height:1.4; }
+.ext-actors{ display:flex; gap:18px; justify-content:center; margin-top:26px; }
+
+/* demo grid */
+.demo{ display:grid; grid-template-columns:1.5fr 1fr 1fr; grid-template-rows:1fr 1fr; gap:22px; height:100%; }
+.demo .big{ grid-row:1 / span 2; }
+.demo .cap{ position:absolute; left:16px; bottom:14px; background:rgba(140,11,18,.92); color:#fff; font-size:17px;
+  font-weight:700; padding:7px 15px; border-radius:999px; }
+.demo .cell{ position:relative; }
+.demo .imgph{ height:100%; }  /* demo tiles fill their grid cells */
+
+/* closing */
+#closing{ background:linear-gradient(160deg,var(--red) 0%,var(--red-deep) 100%); }
+#closing::before{ opacity:.12; background-image:linear-gradient(90deg, rgba(255,255,255,.5) 1px, transparent 1px); background-size:160px 100%; }
+.close-wrap{ position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; color:#fff; }
+.close-seal{ width:180px; height:180px; border-radius:50%; border:6px solid rgba(255,255,255,.9); display:flex;
+  align-items:center; justify-content:center; font-family:var(--font-jp); font-size:96px; margin-bottom:40px; }
+.close-wrap h2{ font-size:112px; font-weight:900; letter-spacing:-.02em; }
+.close-wrap p{ font-size:34px; font-weight:500; opacity:.92; margin-top:20px; }
+.close-wrap .tags{ margin-top:44px; display:flex; gap:14px; }
+.close-wrap .chip{ color:#fff; border-color:rgba(255,255,255,.55); background:transparent; }
+
+/* =========================================================================
+   SECTION DIVIDER — one slide announcing each part (I … V)
+   ========================================================================= */
+.slide.divider{ background:linear-gradient(150deg,var(--red) 0%,var(--red-deep) 100%); }
+.slide.divider::before{ opacity:.14; background-image:linear-gradient(90deg, rgba(255,255,255,.55) 1px, transparent 1px);
+  background-size:160px 100%; }
+.divider .lbar{ background:rgba(255,255,255,.9); width:26px; }
+.dv{ position:absolute; inset:0; padding:0 150px 0 200px; display:grid; grid-template-columns:440px 1fr;
+  align-items:center; gap:70px; color:#fff; }
+.dv .roman{ font-family:var(--font-jp); font-size:300px; line-height:.8; color:rgba(255,255,255,.92);
+  text-align:center; letter-spacing:-.04em; }
+.dv .roman em{ display:block; font-family:var(--font); font-style:normal; font-size:22px; font-weight:700;
+  letter-spacing:.34em; text-transform:uppercase; opacity:.72; margin-top:26px; }
+.dv h2{ font-size:96px; font-weight:900; line-height:1.02; letter-spacing:-.02em; }
+.dv p{ font-size:30px; font-weight:500; opacity:.92; margin-top:24px; line-height:1.4; max-width:1000px; }
+.dv .tags{ margin-top:40px; display:flex; gap:14px; flex-wrap:wrap; }
+.dv .chip{ color:#fff; border-color:rgba(255,255,255,.55); background:transparent; }
+.divider .s-foot{ color:rgba(255,255,255,.72); }
+.divider .s-foot .dot{ background:#fff; }
+.divider .s-foot .pageno b{ color:#fff; }
+
+/* =========================================================================
+   PART II — reference-system slides & comparison matrix
+   ========================================================================= */
+/* image on the LEFT, notes on the RIGHT (mirror of .split) */
+.split.rev{ grid-template-columns:1fr 700px; align-items:stretch; }
+.refnotes{ display:flex; flex-direction:column; gap:20px; }
+.refnote{ border-left:6px solid var(--red); background:var(--cream); border-radius:0 16px 16px 0; padding:20px 26px; }
+/* only the direct child <b> is the label — inline <b> inside <p> must stay inline */
+.refnote > b{ display:block; font-size:20px; font-weight:800; color:var(--red-deep); letter-spacing:.06em;
+  text-transform:uppercase; margin-bottom:8px; }
+.refnote p{ font-size:22px; color:var(--ink-soft); line-height:1.45; }
+.refnote p b{ color:var(--ink); font-weight:700; }
+.refnote.gap{ border-left-color:var(--muted); background:#fff; border:1.5px solid var(--line); border-left:6px solid var(--muted); }
+.refnote.gap > b{ color:var(--muted); }
+
+/* comparison matrix — ✓ / ~ / — verdict cells */
+table.t.cmp td:nth-child(n+2),table.t.cmp th:nth-child(n+2){ text-align:center; }
+table.t.cmp th.us{ background:var(--red); }
+table.t.cmp td.us{ background:rgba(174,40,38,.09); font-weight:700; color:var(--ink); }
+table.t.cmp tr:nth-child(even) td.us{ background:rgba(174,40,38,.14); }
+.v-yes{ color:#1f7a44; font-weight:900; } .v-part{ color:var(--gold); font-weight:900; } .v-no{ color:#b9aea2; font-weight:900; }
+
+/* =========================================================================
+   PART III — use-case landscape
+   ========================================================================= */
+.ucgroups{ display:flex; flex-direction:column; gap:14px; }
+.ucg{ display:grid; grid-template-columns:190px 1fr; align-items:center; gap:20px; background:var(--cream);
+  border:1.5px solid var(--line); border-radius:14px; padding:16px 22px; }
+.ucg .rng{ font-size:20px; font-weight:800; color:#fff; background:var(--red-deep); border-radius:999px;
+  padding:7px 0; text-align:center; letter-spacing:.02em; }
+.ucg b{ font-size:23px; font-weight:800; color:var(--ink); display:block; }
+.ucg span{ font-size:19px; color:var(--muted); font-weight:600; }
+
+/* horizontal stat row (used on Part IV principles slide) */
+.statrow{ display:grid; grid-template-columns:repeat(3,1fr); gap:26px; }
+.statrow .stat{ background:linear-gradient(165deg,var(--red) 0%,var(--red-deep) 100%); border-radius:18px;
+  color:#fff; padding:26px 30px; }
+.statrow .stat + .stat{ border-top:none; padding-top:26px; }
+.statrow .stat b{ font-size:72px; }
+
+/* =========================================================================
+   PART IV — database slides
+   ========================================================================= */
+.imgph.full{ height:100%; }
+.imgph.wide{ height:100%; min-height:0; }
+/* thin caption strip listing the 10 module schemas under the big ERD */
+.schemastrip{ display:grid; grid-template-columns:repeat(6,1fr); gap:12px; margin-top:22px; }
+.schemastrip .sc{ background:var(--cream); border:1.5px solid var(--line); border-radius:12px; padding:11px 14px; }
+.schemastrip .sc b{ display:block; font-size:18px; font-weight:800; color:var(--red-deep); }
+.schemastrip .sc span{ font-size:16px; color:var(--muted); font-weight:600; }
+.schemastrip .sc.sys{ background:#fff; border-style:dashed; }
+.schemastrip .sc.sys b{ color:var(--ink); }
+/* compact module description blocks beside a diagram */
+.modnotes{ display:flex; flex-direction:column; gap:16px; }
+.modnote{ background:var(--cream); border:1.5px solid var(--line); border-radius:16px; padding:18px 24px; }
+.modnote .hd{ display:flex; align-items:baseline; gap:12px; }
+.modnote .hd b{ font-size:24px; font-weight:800; color:var(--red-deep); }
+.modnote .hd em{ font-style:normal; font-size:17px; font-weight:700; color:#fff; background:var(--red);
+  border-radius:999px; padding:3px 12px; }
+.modnote p{ font-size:20px; color:var(--ink-soft); line-height:1.42; margin-top:8px; }
+.modnote p code{ font-family:ui-monospace,Menlo,Consolas,monospace; font-size:18px; color:var(--red-deep); font-weight:700; }
+
+/* =========================================================================
+   PART V — code package cards
+   ========================================================================= */
+.pkgs{ display:grid; gap:20px; }
+.pkg{ background:var(--cream); border:1.5px solid var(--line); border-radius:16px; padding:20px 24px;
+  display:grid; grid-template-columns:54px 1fr; gap:18px; align-items:start; }
+.pkg .no{ width:54px; height:54px; border-radius:14px; background:var(--red); color:#fff; font-size:24px;
+  font-weight:900; display:flex; align-items:center; justify-content:center; }
+/* only the direct child <b> is the package name — inline <b> inside <p> stays inline */
+.pkg div > b{ font-size:23px; font-weight:800; color:var(--ink); display:block; }
+.pkg div > b code{ font-family:ui-monospace,Menlo,Consolas,monospace; font-size:21px; color:var(--red-deep); }
+.pkg p{ font-size:19.5px; color:var(--ink-soft); line-height:1.4; margin-top:6px; }
+.pkg p b{ color:var(--ink); font-weight:700; }
+.pkg p code{ font-family:ui-monospace,Menlo,Consolas,monospace; font-size:18px; color:var(--red-deep); font-weight:700; }
+.pkg.dark{ background:var(--ink); border-color:var(--ink); }
+.pkg.dark div > b,.pkg.dark p{ color:#fff; } .pkg.dark div > b code{ color:#f0c8a0; }
+.pkg.dark p b,.pkg.dark p code{ color:#f0c8a0; }
+.pkg.dark .no{ background:#fff; color:var(--ink); }
+
+/* edit affordance */
+.edit-hotzone{ position:fixed; top:0; left:0; width:80px; height:80px; z-index:10000; cursor:pointer; }
+.edit-toggle{ position:fixed; top:16px; left:16px; z-index:10001; width:52px; height:52px; border:none; border-radius:14px;
+  background:var(--red); color:#fff; font-size:24px; cursor:pointer; opacity:0; pointer-events:none; transition:opacity .3s ease;
+  box-shadow:0 10px 26px rgba(140,11,18,.35); }
+.edit-toggle.show,.edit-toggle.active{ opacity:1; pointer-events:auto; }
+.edit-toggle.active{ background:var(--ink); }
+body.editing [contenteditable]{ outline:2px dashed rgba(174,40,38,.6); outline-offset:3px; border-radius:4px; }
+
+/* progress + counter chrome */
+.deck-progress{ position:fixed; left:0; bottom:0; height:5px; background:var(--red); z-index:1000; transition:width .4s ease; }
+</style>
+</head>
+<body>
+<div class="deck-viewport">
+  <main class="deck-stage" id="deckStage">
+
+    <!-- ============================ 1 · COVER ============================ -->
+    <section class="slide" id="cover">
+      <div class="lbar"></div>
+      <div class="cover-body">
+        <div class="cover-kicker reveal d1">Software Project Development <span>/ Capstone Defense</span></div>
+        <h1 class="cover-title reveal d2">Kizuna<br><span class="r">Nihongo</span></h1>
+        <p class="cover-sub reveal d3">An AI-powered, personalized platform for learning Japanese — JLPT N5 to N1.</p>
+        <div class="cover-meta reveal d4">
+          <span class="chip">AI Sensei</span>
+          <span class="chip">Personalized Roadmap</span>
+          <span class="chip">Proctored Exams</span>
+        </div>
+      </div>
+      <!-- Circle = LANDING PAGE. See "HOW TO ADD YOUR IMAGES" at top of file. -->
+      <div class="hero">
+        <div class="hero-ph">
+          <div class="kanji">絆</div>
+          <div class="cam">📷</div>
+          <div class="lab">Landing page screenshot</div>
+          <div class="sub">assets/landing-hero.png</div>
+        </div>
+      </div>
+      <div class="hero-seal">絆</div>
+      <div class="cover-foot reveal d5"><b>Kizuna Nihongo Team</b> &nbsp;·&nbsp; React · Express · Supabase · FPT AI Factory &nbsp;·&nbsp; 2026</div>
+    </section>
+
+    <!-- ============================ 2 · AGENDA ============================ -->
+    <section class="slide">
+      <div class="lbar"></div>
+      <div class="wrap">
+        <div class="eyebrow reveal d1"><span class="tick"></span>Agenda</div>
+        <h2 class="s-title reveal d2">What we'll <span class="r">cover</span></h2>
+        <div class="body">
+          <div class="agenda">
+            <div class="ag reveal d3"><div class="n">I</div><div><h3>Project Overview</h3><p>Why we built Kizuna Nihongo — scope &amp; technology stack</p></div></div>
+            <div class="ag reveal d4"><div class="n">II</div><div><h3>Reference Systems</h3><p>Mazii &amp; Bunpro — what we adopted, what we extended</p></div></div>
+            <div class="ag reveal d5"><div class="n">III</div><div><h3>Actors &amp; Use Cases</h3><p>4 actors · 75 use cases in 22 functional groups</p></div></div>
+            <div class="ag reveal d6"><div class="n">IV</div><div><h3>Database Design</h3><p>Schema-per-domain — 10 module schemas, 96 tables</p></div></div>
+            <div class="ag reveal d7" style="grid-column:1 / -1"><div class="n">V</div><div><h3>Code Package</h3><p>12 packages across client, server, integrations &amp; data</p></div></div>
+          </div>
+        </div>
+      </div>
+      <footer class="s-foot"><span class="brand"><span class="dot"></span>Kizuna Nihongo · Software Project Development</span><span class="pageno"></span></footer>
+    </section>
+
+    <!-- ============================ DIVIDER · PART I ============================ -->
+    <section class="slide divider">
+      <div class="lbar"></div>
+      <div class="dv">
+        <div class="roman reveal d1">I<em>Part One</em></div>
+        <div>
+          <h2 class="reveal d2">Project Overview</h2>
+          <p class="reveal d3">Why a Vietnamese learner needs one platform that owns the whole journey — and what we set out to build.</p>
+          <div class="tags reveal d4">
+            <span class="chip">Motivation</span>
+            <span class="chip">Problem</span>
+            <span class="chip">Solution</span>
+            <span class="chip">Scope &amp; Tech stack</span>
+          </div>
+        </div>
+      </div>
+      <footer class="s-foot"><span class="brand"><span class="dot"></span>Kizuna Nihongo · Software Project Development</span><span class="pageno"></span></footer>
+    </section>
+
+    <!-- ============================ I.1 · WHY THIS PROJECT ============================ -->
+    <section class="slide">
+      <div class="lbar"></div>
+      <div class="wrap">
+        <div class="eyebrow reveal d1"><span class="tick"></span>I · Project Overview <span class="part">— Motivation</span></div>
+        <h2 class="s-title reveal d2">Why we chose <span class="r">this problem</span></h2>
+        <p class="s-sub reveal d3">JLPT certification is the gate to jobs, scholarships and study abroad — yet the tooling around it is scattered.</p>
+        <div class="body">
+          <div class="split rev">
+            <!-- INSERT IMAGE (optional): market data or the team's own learner survey -->
+            <div class="reveal d4">
+              <div class="imgph full">
+                <div class="cam">📷</div>
+                <div class="lab">Learner survey / market data <i>(optional)</i></div>
+                <div class="sub">Replace with your image · assets/why-market.png</div>
+              </div>
+            </div>
+            <div class="txt reveal d5">
+              <div class="refnotes" style="gap:15px">
+                <div class="refnote" style="padding:15px 24px"><b>Demand</b><p>Every Vietnamese learner climbs the same ladder — <b>N5 → N1</b> — and the certificate, not the study hours, is what employers and universities read.</p></div>
+                <div class="refnote" style="padding:15px 24px"><b>Fragmentation</b><p>One app for the dictionary, another for grammar drills, a third for mock tests, a video course somewhere else. <b>None of them share progress.</b></p></div>
+                <div class="refnote gap" style="padding:15px 24px"><b>Cost of feedback</b><p>The missing piece — correction on writing, speaking and kanji — comes from a tutor: expensive, hard to book, not on demand.</p></div>
+                <div class="refnote gap" style="padding:15px 24px"><b>Opportunity</b><p>LLM APIs now make personalized guidance and instant correction affordable, so a small team can build what used to need a teaching staff.</p></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <footer class="s-foot"><span class="brand"><span class="dot"></span>Kizuna Nihongo · Software Project Development</span><span class="pageno"></span></footer>
+    </section>
+
+    <!-- ============================ I.2 · PROBLEM ============================ -->
+    <section class="slide">
+      <div class="lbar"></div>
+      <div class="wrap">
+        <div class="eyebrow reveal d1"><span class="tick"></span>I · Project Overview <span class="part">— Problem</span></div>
+        <h2 class="s-title reveal d2">One path for everyone <span class="r">doesn't work</span></h2>
+        <p class="s-sub reveal d3">Traditional Japanese study forces every learner down the same track — and leaves them without timely feedback.</p>
+        <div class="body">
+          <div class="grid reveal d4" style="grid-template-columns:repeat(4,1fr)">
+            <div class="card"><div class="num">01</div><h3>Generic roadmap</h3><p>Everyone follows a single fixed curriculum, ignoring their real level, pace and goal.</p></div>
+            <div class="card"><div class="num">02</div><h3>No instant feedback</h3><p>Writing, speaking and kanji practice go uncorrected — mistakes stick.</p></div>
+            <div class="card"><div class="num">03</div><h3>Tutors don't scale</h3><p>1-on-1 guidance is costly, hard to book and unavailable on demand.</p></div>
+            <div class="card"><div class="num">04</div><h3>Passive content</h3><p>Static textbooks can't adapt to the exact points a learner struggles with.</p></div>
+          </div>
+        </div>
+      </div>
+      <footer class="s-foot"><span class="brand"><span class="dot"></span>Kizuna Nihongo · Software Project Development</span><span class="pageno"></span></footer>
+    </section>
+
+    <!-- ============================ I.3 · SOLUTION ============================ -->
+    <section class="slide">
+      <div class="lbar"></div>
+      <div class="wrap">
+        <div class="eyebrow reveal d1"><span class="tick"></span>I · Project Overview <span class="part">— Solution</span></div>
+        <h2 class="s-title reveal d2">A personalized, <span class="r">AI-assisted</span> platform</h2>
+        <p class="s-sub reveal d3">Kizuna Nihongo turns a fixed curriculum into an adaptive experience — with AI woven through learning, authoring and assessment.</p>
+        <div class="body">
+          <div class="grid reveal d4" style="grid-template-columns:repeat(4,1fr)">
+            <div class="card accent"><div class="num">AI</div><h3>Personalized roadmap</h3><p>AI builds a step-by-step study plan from the learner's current level to their target JLPT.</p></div>
+            <div class="card"><div class="num">AI</div><h3>AI Sensei tutor</h3><p>An agentic assistant that answers, reads the learner's own data, and acts only with confirmation.</p></div>
+            <div class="card"><div class="num">AI</div><h3>AI-assisted authoring</h3><p>Teachers &amp; admins generate readings, questions and audio in minutes, then review.</p></div>
+            <div class="card"><div class="num">AI</div><h3>Proctored assessment</h3><p>Exams run with webcam face-detection and anti-cheat, plus auto &amp; AI-assisted grading.</p></div>
+          </div>
+        </div>
+      </div>
+      <footer class="s-foot"><span class="brand"><span class="dot"></span>Kizuna Nihongo · Software Project Development</span><span class="pageno"></span></footer>
+    </section>
+
+    <!-- ============================ I.4 · SCOPE + TECH STACK ============================ -->
+    <section class="slide">
+      <div class="lbar"></div>
+      <div class="wrap">
+        <div class="eyebrow reveal d1"><span class="tick"></span>I · Project Overview <span class="part">— Scope &amp; Tech Stack</span></div>
+        <h2 class="s-title reveal d2">What we built &amp; <span class="r">how</span></h2>
+        <div class="body">
+          <div class="split top">
+            <div class="txt reveal d3">
+              <h3>Scope · JLPT N5 → N1</h3>
+              <ul class="plist">
+                <li><b>Learn</b> — courses, lessons, vocabulary, kanji, grammar &amp; a JP-VI dictionary</li>
+                <li><b>Practice</b> — flashcards, reading with furigana, writing &amp; kanji handwriting</li>
+                <li><b>Assess</b> — quizzes, proctored mock exams, placement test &amp; leaderboards</li>
+                <li><b>Personalize</b> — AI learning roadmap &amp; AI Sensei chat</li>
+                <li><b>Author</b> — teachers &amp; admins generate content with AI (readings, questions, audio)</li>
+              </ul>
+            </div>
+            <div class="reveal d4">
+              <h3 style="font-size:26px;color:var(--red-deep);font-weight:800;margin-bottom:18px;letter-spacing:.04em;text-transform:uppercase;">Technology stack</h3>
+              <div class="grid" style="grid-template-columns:1fr 1fr;gap:18px">
+                <div class="card" style="padding:22px 24px"><h3 style="font-size:24px;margin:0 0 6px">Frontend SPA</h3><p style="font-size:20px">React 18 · Vite · Tailwind CSS · React Router</p></div>
+                <div class="card" style="padding:22px 24px"><h3 style="font-size:24px;margin:0 0 6px">Backend API</h3><p style="font-size:20px">Node.js · Express REST API (Bearer JWT)</p></div>
+                <div class="card" style="padding:22px 24px"><h3 style="font-size:24px;margin:0 0 6px">SSR Web</h3><p style="font-size:20px">EJS · Express (landing &amp; auth callback)</p></div>
+                <div class="card" style="padding:22px 24px"><h3 style="font-size:24px;margin:0 0 6px">Data · Auth · Storage</h3><p style="font-size:20px">Supabase — PostgreSQL, GoTrue Auth, Storage</p></div>
+                <div class="card" style="padding:22px 24px"><h3 style="font-size:24px;margin:0 0 6px">AI Services</h3><p style="font-size:20px">FPT AI Factory (OpenAI-compatible)</p></div>
+                <div class="card" style="padding:22px 24px"><h3 style="font-size:24px;margin:0 0 6px">Proctoring &amp; Email</h3><p style="font-size:20px">MediaPipe Vision · SMTP (Nodemailer)</p></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <footer class="s-foot"><span class="brand"><span class="dot"></span>Kizuna Nihongo · Software Project Development</span><span class="pageno"></span></footer>
+    </section>
+
+    <!-- ============================ DIVIDER · PART II ============================ -->
+    <section class="slide divider">
+      <div class="lbar"></div>
+      <div class="dv">
+        <div class="roman reveal d1">II<em>Part Two</em></div>
+        <div>
+          <h2 class="reveal d2">Reference Systems</h2>
+          <p class="reveal d3">Two systems our learners already use every day — <b>Mazii</b> and <b>Bunpro</b>. We studied both, kept what works, and named the gaps we wanted to close.</p>
+          <div class="tags reveal d4">
+            <span class="chip">Mazii · JP–VI dictionary</span>
+            <span class="chip">Bunpro · SRS grammar</span>
+            <span class="chip">Comparison matrix</span>
+          </div>
+        </div>
+      </div>
+      <footer class="s-foot"><span class="brand"><span class="dot"></span>Kizuna Nihongo · Software Project Development</span><span class="pageno"></span></footer>
+    </section>
+
+    <!-- ============================ II.1 · MAZII ============================ -->
+    <section class="slide">
+      <div class="lbar"></div>
+      <div class="wrap">
+        <div class="eyebrow reveal d1"><span class="tick"></span>II · Reference Systems <span class="part">— Mazii</span></div>
+        <h2 class="s-title reveal d2">Mazii — the <span class="r">dictionary</span> every learner has</h2>
+        <div class="body">
+          <div class="split rev">
+            <!-- INSERT IMAGE: Mazii screenshot -->
+            <div class="reveal d3">
+              <div class="imgph full">
+                <div class="cam">📷</div>
+                <div class="lab">Mazii — screenshot</div>
+                <div class="sub">Replace with your image · assets/ref-mazii.png</div>
+              </div>
+            </div>
+            <div class="txt reveal d4">
+              <div class="refnotes">
+                <div class="refnote"><b>What it is</b><p>A Japanese–Vietnamese dictionary and study app: word lookup, kanji lookup, example sentences, saved word lists and JLPT practice tests.</p></div>
+                <div class="refnote"><b>What we adopted</b><p>Its <b>layered lexical model</b> — entry → sense → kanji → example — became our <code>dictionary_module</code> (~17k entries, 28k senses), plus lookup-then-save-to-study-list as a core habit.</p></div>
+                <div class="refnote gap"><b>Gaps we close</b><p>No structured course path, no teacher-authored lessons, no adaptive study plan and no proctored exam — it is a reference tool, not a curriculum.</p></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <footer class="s-foot"><span class="brand"><span class="dot"></span>Kizuna Nihongo · Software Project Development</span><span class="pageno"></span></footer>
+    </section>
+
+    <!-- ============================ II.2 · BUNPRO ============================ -->
+    <section class="slide">
+      <div class="lbar"></div>
+      <div class="wrap">
+        <div class="eyebrow reveal d1"><span class="tick"></span>II · Reference Systems <span class="part">— Bunpro</span></div>
+        <h2 class="s-title reveal d2">Bunpro — <span class="r">spaced repetition</span>, done well</h2>
+        <div class="body">
+          <div class="split rev">
+            <!-- INSERT IMAGE: Bunpro screenshot -->
+            <div class="reveal d3">
+              <div class="imgph full">
+                <div class="cam">📷</div>
+                <div class="lab">Bunpro — screenshot</div>
+                <div class="sub">Replace with your image · assets/ref-bunpro.png</div>
+              </div>
+            </div>
+            <div class="txt reveal d4">
+              <div class="refnotes">
+                <div class="refnote"><b>What it is</b><p>A grammar-first study platform where every grammar point and word is tagged by JLPT level and drilled through a spaced-repetition review queue.</p></div>
+                <div class="refnote"><b>What we adopted</b><p><b>JLPT-level tagging on every item</b> and <b>per-item progress</b> — the shape of our <code>language_module</code> and <code>flashcard_module</code> (folders → sets → cards → progress).</p></div>
+                <div class="refnote gap"><b>Gaps we close</b><p>English-only UI, grammar-centred (little listening / speaking / writing), no live teachers and no full three-section JLPT simulation.</p></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <footer class="s-foot"><span class="brand"><span class="dot"></span>Kizuna Nihongo · Software Project Development</span><span class="pageno"></span></footer>
+    </section>
+
+    <!-- ============================ II.3 · COMPARISON MATRIX ============================ -->
+    <section class="slide">
+      <div class="lbar"></div>
+      <div class="wrap">
+        <div class="eyebrow reveal d1"><span class="tick"></span>II · Reference Systems <span class="part">— Comparison</span></div>
+        <h2 class="s-title reveal d2">What we <span class="r">kept</span>, what we <span class="r">added</span></h2>
+        <div class="body">
+          <table class="t cmp reveal d3">
+            <thead><tr><th style="width:430px">Capability</th><th style="width:250px">Mazii</th><th style="width:250px">Bunpro</th><th class="us">Kizuna Nihongo</th></tr></thead>
+            <tbody>
+              <tr><td><b>JP–VI dictionary</b></td><td><span class="v-yes">✓</span> core product</td><td><span class="v-no">—</span></td><td class="us"><span class="v-yes">✓</span> ~17k entries built in</td></tr>
+              <tr><td><b>Spaced repetition / flashcards</b></td><td><span class="v-part">~</span> saved word lists</td><td><span class="v-yes">✓</span> core product</td><td class="us"><span class="v-yes">✓</span> folders → sets → cards + AI-generated tests</td></tr>
+              <tr><td><b>Structured courses</b> (unit → lesson)</td><td><span class="v-no">—</span></td><td><span class="v-no">—</span></td><td class="us"><span class="v-yes">✓</span> 3-tier course · unit · lesson with progress</td></tr>
+              <tr><td><b>Teacher-authored content</b></td><td><span class="v-no">—</span></td><td><span class="v-no">—</span></td><td class="us"><span class="v-yes">✓</span> apply → author with AI → revenue share</td></tr>
+              <tr><td><b>Personalized AI roadmap</b></td><td><span class="v-no">—</span></td><td><span class="v-part">~</span> fixed level order</td><td class="us"><span class="v-yes">✓</span> current level → target, regenerable</td></tr>
+              <tr><td><b>Proctored JLPT mock exam</b></td><td><span class="v-part">~</span> practice tests</td><td><span class="v-no">—</span></td><td class="us"><span class="v-yes">✓</span> 3 sections, timers, webcam &amp; anti-cheat</td></tr>
+              <tr><td><b>Monetization model</b></td><td>ads · premium</td><td>subscription</td><td class="us">subscription + per-course + teacher payout</td></tr>
+            </tbody>
+          </table>
+          <p class="s-sub reveal d4" style="margin-top:26px;max-width:none"><b>Our position:</b> keep the lexical depth of Mazii and the review discipline of Bunpro, then wrap them in a curriculum, a teacher economy and a real exam simulator.</p>
+        </div>
+      </div>
+      <footer class="s-foot"><span class="brand"><span class="dot"></span>Kizuna Nihongo · Software Project Development</span><span class="pageno"></span></footer>
+    </section>
+
+    <!-- ============================ DIVIDER · PART III ============================ -->
+    <section class="slide divider">
+      <div class="lbar"></div>
+      <div class="dv">
+        <div class="roman reveal d1">III<em>Part Three</em></div>
+        <div>
+          <h2 class="reveal d2">Actors &amp; Use Cases</h2>
+          <p class="reveal d3">Who the system serves, and the <b>75 use cases</b> that make up the product — grouped into 22 functional areas.</p>
+          <div class="tags reveal d4">
+            <span class="chip">Guest</span>
+            <span class="chip">Student</span>
+            <span class="chip">Teacher</span>
+            <span class="chip">Admin</span>
+          </div>
+        </div>
+      </div>
+      <footer class="s-foot"><span class="brand"><span class="dot"></span>Kizuna Nihongo · Software Project Development</span><span class="pageno"></span></footer>
+    </section>
+
+    <!-- ============================ III.1 · ACTORS ============================ -->
+    <section class="slide">
+      <div class="lbar"></div>
+      <div class="wrap">
+        <div class="eyebrow reveal d1"><span class="tick"></span>III · Actors &amp; Use Cases <span class="part">— Actors</span></div>
+        <h2 class="s-title reveal d2">Actors &amp; <span class="r">stakeholders</span></h2>
+        <div class="body">
+          <div class="actors reveal d3">
+            <div class="actor"><div class="ic">🧭</div><h3>Guest</h3><p>Browses public content, registers &amp; signs in.</p></div>
+            <div class="actor"><div class="ic">🎓</div><h3>Student</h3><p>Learns, practices, takes exams &amp; uses AI features.</p></div>
+            <div class="actor"><div class="ic">🧑‍🏫</div><h3>Teacher</h3><p>Authors content &amp; question banks, grades exams.</p></div>
+            <div class="actor"><div class="ic">🛡️</div><h3>Admin</h3><p>Manages users, content, monetization &amp; the system.</p></div>
+          </div>
+          <div class="ext-actors reveal d4" style="margin-top:34px">
+            <span class="chip">External · AI Service (FPT AI Factory)</span>
+            <span class="chip">External · Payment Gateway</span>
+            <span class="chip">External · SMTP Email</span>
+          </div>
+          <p class="s-sub reveal d5" style="margin-top:30px;text-align:center;max-width:none">Roles (<b>student / teacher / admin</b>) are carried in the Supabase Auth JWT <b>user_metadata.role</b> and drive every route guard.</p>
+        </div>
+      </div>
+      <footer class="s-foot"><span class="brand"><span class="dot"></span>Kizuna Nihongo · Software Project Development</span><span class="pageno"></span></footer>
+    </section>
+
+    <!-- ============================ III.2 · USE-CASE LANDSCAPE ============================ -->
+    <section class="slide">
+      <div class="lbar"></div>
+      <div class="wrap">
+        <div class="eyebrow reveal d1"><span class="tick"></span>III · Actors &amp; Use Cases <span class="part">— Landscape</span></div>
+        <h2 class="s-title reveal d2">75 use cases, <span class="r">22 functional groups</span></h2>
+        <div class="body">
+          <div class="split rev">
+            <!-- INSERT IMAGE: overall use case diagram -->
+            <div class="reveal d3">
+              <div class="imgph full">
+                <div class="cam">📷</div>
+                <div class="lab">Use Case Diagram — system overview</div>
+                <div class="sub">Replace with your image · assets/uc-overview.png</div>
+              </div>
+            </div>
+            <div class="txt reveal d4">
+              <div class="ucgroups">
+                <div class="ucg"><div class="rng">UC-01 … 08</div><div><b>Authentication &amp; Profile</b><span>Guest / User · register, OTP, login, password, profile</span></div></div>
+                <div class="ucg"><div class="rng">UC-09 … 21</div><div><b>Learning &amp; reference</b><span>Student · courses, vocab/kanji/grammar, flashcards, dictionary</span></div></div>
+                <div class="ucg"><div class="rng">UC-22 … 30</div><div><b>Skill practice</b><span>Student · reading, listening &amp; speaking, writing</span></div></div>
+                <div class="ucg"><div class="rng">UC-31 … 37</div><div><b>Assess, AI &amp; account</b><span>Student · mock exams, AI Sensei, progress, subscription</span></div></div>
+                <div class="ucg"><div class="rng">UC-38 … 63</div><div><b>Content authoring</b><span>Teacher &amp; Admin · courses, posts, question bank, exams</span></div></div>
+                <div class="ucg"><div class="rng">UC-64 … 75</div><div><b>Operations</b><span>Admin · users, payments, revenue sharing, analytics</span></div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <footer class="s-foot"><span class="brand"><span class="dot"></span>Kizuna Nihongo · Software Project Development</span><span class="pageno"></span></footer>
+    </section>
+
+    <!-- ============================ III.3 · UC AUTH ============================ -->
+    <section class="slide">
+      <div class="lbar"></div>
+      <div class="wrap">
+        <div class="eyebrow reveal d1"><span class="tick"></span>III · Actors &amp; Use Cases <span class="part">— Authentication</span></div>
+        <h2 class="s-title reveal d2">Use Case · <span class="r">Authentication</span></h2>
+        <div class="body">
+          <div class="split">
+            <div class="txt reveal d3">
+              <h3>Actor · Guest / User</h3>
+              <ul class="plist">
+                <li><b>Register</b> with email &amp; 6-digit <b>OTP</b> verification</li>
+                <li><b>Log in</b> — email/password or <b>Google OAuth</b></li>
+                <li><b>Forgot / reset password</b> via OTP (neutral response)</li>
+                <li><b>Change password</b> — re-authentication required</li>
+                <li><b>Role-based routing</b> after login (BR-05)</li>
+              </ul>
+            </div>
+            <!-- INSERT IMAGE: Use Case Diagram — Authentication -->
+            <div class="reveal d4">
+              <div class="imgph">
+                <div class="cam">📷</div>
+                <div class="lab">Use Case Diagram — Authentication</div>
+                <div class="sub">Replace with your image · assets/uc-auth.png</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <footer class="s-foot"><span class="brand"><span class="dot"></span>Kizuna Nihongo · Software Project Development</span><span class="pageno"></span></footer>
+    </section>
+
+    <!-- ============================ III.4 · UC STUDENT ============================ -->
+    <section class="slide">
+      <div class="lbar"></div>
+      <div class="wrap">
+        <div class="eyebrow reveal d1"><span class="tick"></span>III · Actors &amp; Use Cases <span class="part">— Student</span></div>
+        <h2 class="s-title reveal d2">Use Case · <span class="r">Student</span></h2>
+        <div class="body">
+          <div class="split">
+            <div class="txt reveal d3">
+              <h3>Actor · Student</h3>
+              <ul class="plist">
+                <li><b>Learn</b> — enroll in courses, study lessons, vocab, kanji &amp; grammar</li>
+                <li><b>Practice</b> — flashcards (AI-define / AI test), reading, writing, kanji</li>
+                <li><b>Assess</b> — quizzes, proctored mock exams, placement test, leaderboard</li>
+                <li><b>Personalize</b> — AI learning roadmap &amp; AI Sensei chat</li>
+                <li><b>Account</b> — profile, subscription &amp; upgrade</li>
+              </ul>
+            </div>
+            <!-- INSERT IMAGE: Use Case Diagram — Student -->
+            <div class="reveal d4">
+              <div class="imgph">
+                <div class="cam">📷</div>
+                <div class="lab">Use Case Diagram — Student</div>
+                <div class="sub">Replace with your image · assets/uc-student.png</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <footer class="s-foot"><span class="brand"><span class="dot"></span>Kizuna Nihongo · Software Project Development</span><span class="pageno"></span></footer>
+    </section>
+
+    <!-- ============================ III.5 · UC TEACHER ============================ -->
+    <section class="slide">
+      <div class="lbar"></div>
+      <div class="wrap">
+        <div class="eyebrow reveal d1"><span class="tick"></span>III · Actors &amp; Use Cases <span class="part">— Teacher</span></div>
+        <h2 class="s-title reveal d2">Use Case · <span class="r">Teacher</span></h2>
+        <div class="body">
+          <div class="split">
+            <div class="txt reveal d3">
+              <h3>Actor · Teacher</h3>
+              <ul class="plist">
+                <li><b>Apply</b> to become a teacher — <b>AI screening</b> of the application</li>
+                <li><b>Author content with AI</b> — reading passages (4-step pipeline) &amp; listening</li>
+                <li><b>Question bank</b> — manual &amp; AI-generated items in a private bank</li>
+                <li><b>Exams</b> — create exams &amp; review attempts (AI grading assist)</li>
+                <li><b>Earnings</b> — monthly revenue share based on content usage</li>
+              </ul>
+            </div>
+            <!-- INSERT IMAGE: Use Case Diagram — Teacher -->
+            <div class="reveal d4">
+              <div class="imgph">
+                <div class="cam">📷</div>
+                <div class="lab">Use Case Diagram — Teacher</div>
+                <div class="sub">Replace with your image · assets/uc-teacher.png</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <footer class="s-foot"><span class="brand"><span class="dot"></span>Kizuna Nihongo · Software Project Development</span><span class="pageno"></span></footer>
+    </section>
+
+    <!-- ============================ III.6 · UC ADMIN ============================ -->
+    <section class="slide">
+      <div class="lbar"></div>
+      <div class="wrap">
+        <div class="eyebrow reveal d1"><span class="tick"></span>III · Actors &amp; Use Cases <span class="part">— Admin</span></div>
+        <h2 class="s-title reveal d2">Use Case · <span class="r">Admin</span></h2>
+        <div class="body">
+          <div class="split">
+            <div class="txt reveal d3">
+              <h3>Actor · Admin</h3>
+              <ul class="plist">
+                <li><b>User management</b> — roles, accounts &amp; audit logs</li>
+                <li><b>Content</b> — course builder, vocab/kanji/grammar &amp; approvals</li>
+                <li><b>Assessment</b> — question bank, mock exams (AI + TTS), placement config</li>
+                <li><b>Monetization</b> — subscriptions, payments &amp; teacher revenue pool</li>
+                <li><b>Operations</b> — system health (App/DB/AI) &amp; teacher-application review</li>
+              </ul>
+            </div>
+            <!-- INSERT IMAGE: Use Case Diagram — Admin -->
+            <div class="reveal d4">
+              <div class="imgph">
+                <div class="cam">📷</div>
+                <div class="lab">Use Case Diagram — Admin</div>
+                <div class="sub">Replace with your image · assets/uc-admin.png</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <footer class="s-foot"><span class="brand"><span class="dot"></span>Kizuna Nihongo · Software Project Development</span><span class="pageno"></span></footer>
+    </section>
+
+    <!-- ============================ DIVIDER · PART IV ============================ -->
+    <section class="slide divider">
+      <div class="lbar"></div>
+      <div class="dv">
+        <div class="roman reveal d1">IV<em>Part Four</em></div>
+        <div>
+          <h2 class="reveal d2">Database Design</h2>
+          <p class="reveal d3">One PostgreSQL database, split into <b>10 domain schemas</b> — 96 tables, 138 relationships, RLS on every table.</p>
+          <div class="tags reveal d4">
+            <span class="chip">Schema-per-domain</span>
+            <span class="chip">96 tables</span>
+            <span class="chip">Cross-schema FKs</span>
+            <span class="chip">Triggers &amp; RPC</span>
+          </div>
+        </div>
+      </div>
+      <footer class="s-foot"><span class="brand"><span class="dot"></span>Kizuna Nihongo · Software Project Development</span><span class="pageno"></span></footer>
+    </section>
+
+    <!-- ============================ IV.1 · DESIGN PRINCIPLES ============================ -->
+    <section class="slide">
+      <div class="lbar"></div>
+      <div class="wrap">
+        <div class="eyebrow reveal d1"><span class="tick"></span>IV · Database Design <span class="part">— Principles</span></div>
+        <h2 class="s-title reveal d2">Schema-per-domain, <span class="r">by design</span></h2>
+        <div class="body">
+          <div class="statrow reveal d3">
+            <div class="stat"><b>10</b><span>domain schemas (+ <code>public</code> for system objects)</span></div>
+            <div class="stat"><b>96</b><span>tables, all with Row Level Security enabled</span></div>
+            <div class="stat"><b>138</b><span>foreign-key relationships, including cross-schema</span></div>
+          </div>
+          <div class="grid reveal d4" style="grid-template-columns:repeat(5,1fr);margin-top:30px;gap:20px">
+            <div class="card" style="padding:22px 24px"><div class="num">01</div><h3 style="font-size:23px">One schema = one domain</h3><p style="font-size:19px">Every table serving the same feature area lives together, named with the <b>_module</b> suffix.</p></div>
+            <div class="card" style="padding:22px 24px"><div class="num">02</div><h3 style="font-size:23px">Money is isolated</h3><p style="font-size:19px">All financial tables sit in <b>billing_module</b>, granted to <b>service_role</b> only — easy to audit and lock down.</p></div>
+            <div class="card" style="padding:22px 24px"><div class="num">03</div><h3 style="font-size:23px"><b>public</b> is system-only</h3><p style="font-size:19px">Sessions, settings, RPC functions and compatibility views — <b>no business tables</b>.</p></div>
+            <div class="card" style="padding:22px 24px"><div class="num">04</div><h3 style="font-size:23px">Two-layer authorization</h3><p style="font-size:19px">RLS on every table; the backend uses <b>service_role</b>; the client never queries the database directly.</p></div>
+            <div class="card" style="padding:22px 24px"><div class="num">05</div><h3 style="font-size:23px">Cross-schema keys</h3><p style="font-size:19px">Real foreign keys across domains; multi-schema joins are composed in the backend layer.</p></div>
+          </div>
+        </div>
+      </div>
+      <footer class="s-foot"><span class="brand"><span class="dot"></span>Kizuna Nihongo · Software Project Development</span><span class="pageno"></span></footer>
+    </section>
+
+    <!-- ============================ IV.2 · SCHEMA MAP (BIG ERD IMAGE) ============================ -->
+    <section class="slide">
+      <div class="lbar"></div>
+      <div class="wrap">
+        <div class="eyebrow reveal d1"><span class="tick"></span>IV · Database Design <span class="part">— Schema Map</span></div>
+        <h2 class="s-title reveal d2" style="font-size:60px">The whole database, <span class="r">one picture</span></h2>
+        <div class="body" style="margin-top:26px">
+          <div style="display:flex;flex-direction:column;height:100%;min-height:0">
+            <!-- INSERT IMAGE: full ERD exported from docs/erd/00-overview.dbml on dbdiagram.io -->
+            <div class="reveal d3" style="flex:1;min-height:0">
+              <div class="imgph full">
+                <div class="cam">📷</div>
+                <div class="lab">ERD — all 96 tables grouped by schema</div>
+                <div class="sub">Replace with your image · assets/db-overview.png &nbsp;(export docs/erd/00-overview.dbml on dbdiagram.io)</div>
+              </div>
+            </div>
+            <div class="schemastrip reveal d4">
+              <div class="sc"><b>users_module</b><span>6 tables · identity</span></div>
+              <div class="sc"><b>course_module</b><span>11 · courses</span></div>
+              <div class="sc"><b>language_module</b><span>17 · corpus</span></div>
+              <div class="sc"><b>practice_module</b><span>12 · 4 skills</span></div>
+              <div class="sc"><b>flashcard_module</b><span>6 · SRS</span></div>
+              <div class="sc"><b>exam_module</b><span>9 · quizzes</span></div>
+              <div class="sc"><b>jlpt_module</b><span>8 · mock exams</span></div>
+              <div class="sc"><b>dictionary_module</b><span>5 · JP–VI</span></div>
+              <div class="sc"><b>billing_module</b><span>11 · money</span></div>
+              <div class="sc"><b>ai_module</b><span>9 · AI &amp; paths</span></div>
+              <div class="sc sys"><b>public</b><span>2 + views · system</span></div>
+              <div class="sc sys"><b>auth</b><span>Supabase Auth</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <footer class="s-foot"><span class="brand"><span class="dot"></span>Kizuna Nihongo · Software Project Development</span><span class="pageno"></span></footer>
+    </section>
+
+    <!-- ============================ IV.3 · LEARNER DOMAIN ============================ -->
+    <section class="slide">
+      <div class="lbar"></div>
+      <div class="wrap">
+        <div class="eyebrow reveal d1"><span class="tick"></span>IV · Database Design <span class="part">— Identity, Courses &amp; Corpus</span></div>
+        <h2 class="s-title reveal d2" style="font-size:60px">Who learns, and <span class="r">what they learn</span></h2>
+        <div class="body" style="margin-top:26px">
+          <div class="split rev">
+            <!-- INSERT IMAGE: ERD for users_module + course_module + language_module -->
+            <div class="reveal d3">
+              <div class="imgph full">
+                <div class="cam">📷</div>
+                <div class="lab">ERD — users · course · language</div>
+                <div class="sub">Replace with your image · assets/db-learner.png &nbsp;(erd/01, 02, 03)</div>
+              </div>
+            </div>
+            <div class="txt reveal d4">
+              <div class="modnotes">
+                <div class="modnote">
+                  <div class="hd"><b>users_module</b><em>6 tables</em></div>
+                  <p>Identity root is <code>auth.users</code>; the <code>handle_new_user</code> trigger provisions <code>users</code>, <code>student_profiles</code> and the AI dashboard. <code>teacher_applications</code> stores the AI verdict plus the admin decision.</p>
+                </div>
+                <div class="modnote">
+                  <div class="hd"><b>course_module</b><em>11 tables</em></div>
+                  <p>Three tiers — <code>courses → units → lessons</code> — with <code>course_enrollments</code>, <code>lesson_progress</code> and <code>course_reviews</code>; triggers cache rating and enrollment count.</p>
+                </div>
+                <div class="modnote">
+                  <div class="hd"><b>language_module</b><em>17 tables</em></div>
+                  <p>The shared corpus every feature reads: <code>vocabulary</code>, <code>kanji</code>, <code>grammar_points</code>, <code>grammar_patterns</code>, <code>jlpt_levels</code>, topics — plus study-list posts written by teachers and admins.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <footer class="s-foot"><span class="brand"><span class="dot"></span>Kizuna Nihongo · Software Project Development</span><span class="pageno"></span></footer>
+    </section>
+
+    <!-- ============================ IV.4 · PRACTICE & ASSESSMENT DOMAIN ============================ -->
+    <section class="slide">
+      <div class="lbar"></div>
+      <div class="wrap">
+        <div class="eyebrow reveal d1"><span class="tick"></span>IV · Database Design <span class="part">— Practice &amp; Assessment</span></div>
+        <h2 class="s-title reveal d2" style="font-size:60px">Practising and <span class="r">being tested</span></h2>
+        <div class="body" style="margin-top:24px">
+          <div class="split rev">
+            <!-- INSERT IMAGE: ERD for practice / flashcard / exam / jlpt modules -->
+            <div class="reveal d3">
+              <div class="imgph full">
+                <div class="cam">📷</div>
+                <div class="lab">ERD — practice · flashcard · exam · jlpt</div>
+                <div class="sub">Replace with your image · assets/db-practice-exam.png &nbsp;(erd/04, 05, 06, 07)</div>
+              </div>
+            </div>
+            <div class="txt reveal d4">
+              <div class="modnotes" style="gap:13px">
+                <div class="modnote" style="padding:14px 22px">
+                  <div class="hd"><b>practice_module</b><em>12 tables</em></div>
+                  <p>All four skills in one domain: reading (<code>articles</code>, <code>reading_sets → passages → questions → options</code>), listening, <code>writing_submissions</code> and <code>pronunciation_assessments</code>.</p>
+                </div>
+                <div class="modnote" style="padding:14px 22px">
+                  <div class="hd"><b>flashcard_module</b><em>6 tables</em></div>
+                  <p>Folders ↔ sets many-to-many, <code>flashcards</code>, <code>flashcard_progress</code> keyed by (student, card), and one AI-generated test per set.</p>
+                </div>
+                <div class="modnote" style="padding:14px 22px">
+                  <div class="hd"><b>exam_module</b><em>9 tables</em></div>
+                  <p>Course quizzes with proctoring flags; <code>quiz_questions</code> freeze a <code>passage_snapshot</code>; <code>quiz_lockouts</code> count fullscreen violations; separate admin and teacher question banks.</p>
+                </div>
+                <div class="modnote" style="padding:14px 22px">
+                  <div class="hd"><b>jlpt_module</b><em>8 tables</em></div>
+                  <p>The real exam shape: <code>mock_exams → sections</code> (own timer) <code>→ question_groups</code> (21 mondai types) <code>→ questions</code>, plus attempts and a reusable JLPT bank.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <footer class="s-foot"><span class="brand"><span class="dot"></span>Kizuna Nihongo · Software Project Development</span><span class="pageno"></span></footer>
+    </section>
+
+    <!-- ============================ IV.5 · DICTIONARY / BILLING / AI DOMAIN ============================ -->
+    <section class="slide">
+      <div class="lbar"></div>
+      <div class="wrap">
+        <div class="eyebrow reveal d1"><span class="tick"></span>IV · Database Design <span class="part">— Dictionary, Money &amp; AI</span></div>
+        <h2 class="s-title reveal d2" style="font-size:60px">Reference data, revenue &amp; <span class="r">personalization</span></h2>
+        <div class="body" style="margin-top:26px">
+          <div class="split rev">
+            <!-- INSERT IMAGE: ERD for dictionary / billing / ai modules -->
+            <div class="reveal d3">
+              <div class="imgph full">
+                <div class="cam">📷</div>
+                <div class="lab">ERD — dictionary · billing · ai</div>
+                <div class="sub">Replace with your image · assets/db-billing-ai.png &nbsp;(erd/08, 09, 10)</div>
+              </div>
+            </div>
+            <div class="txt reveal d4">
+              <div class="modnotes">
+                <div class="modnote">
+                  <div class="hd"><b>dictionary_module</b><em>5 tables</em></div>
+                  <p>Imported at scale — ~17k entries, 28k senses, 10k kanji, 10k examples. Vietnamese-meaning lookup runs through the <code>search_dict_by_meaning</code> RPC (unaccent + ranking).</p>
+                </div>
+                <div class="modnote">
+                  <div class="hd"><b>billing_module</b><em>11 tables</em></div>
+                  <p>Two SePay flows told apart by transfer code — <code>PREM…</code> for subscriptions, <code>COURSE…</code> for courses — matched idempotently against bank transactions. Quotas live in <code>feature_entitlements</code>; teacher payouts are computed from <code>content_usage_events</code>.</p>
+                </div>
+                <div class="modnote">
+                  <div class="hd"><b>ai_module</b><em>9 tables</em></div>
+                  <p>AI Sensei conversations, <code>learning_paths</code> + steps with a polymorphic <code>resource_type</code> (course / study list / mock exam), <code>student_dashboards</code> and notifications.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <footer class="s-foot"><span class="brand"><span class="dot"></span>Kizuna Nihongo · Software Project Development</span><span class="pageno"></span></footer>
+    </section>
+
+    <!-- ============================ IV.6 · CROSS-SCHEMA & INTEGRITY ============================ -->
+    <section class="slide">
+      <div class="lbar"></div>
+      <div class="wrap">
+        <div class="eyebrow reveal d1"><span class="tick"></span>IV · Database Design <span class="part">— Cross-schema &amp; Integrity</span></div>
+        <h2 class="s-title reveal d2" style="font-size:60px">How the domains <span class="r">stay connected</span></h2>
+        <div class="body" style="margin-top:24px">
+          <div style="display:grid;grid-template-columns:1fr 540px;gap:40px;align-items:stretch;height:100%">
+            <div class="reveal d3">
+              <table class="t">
+                <thead><tr><th style="width:300px">Mechanism</th><th>What it guarantees</th></tr></thead>
+                <tbody>
+                  <tr><td><span class="code">handle_new_user</span></td><td>A signup in <b>auth.users</b> provisions <b>users</b>, <b>student_profiles</b> and <b>ai_module.student_dashboards</b> in one <code>SECURITY DEFINER</code> trigger.</td></tr>
+                  <tr><td><span class="code">trg_payments_enroll</span></td><td>A completed row in <b>billing_module.payments</b> inserts the matching <b>course_module.course_enrollments</b> — idempotently.</td></tr>
+                  <tr><td><span class="code">lesson_* join tables</span></td><td>Lessons reference the shared corpus in <b>language_module</b> instead of copying vocabulary, kanji or grammar.</td></tr>
+                  <tr><td><span class="code">vip_revenue() · teacher_uses()</span></td><td>Monthly RPCs split the premium revenue pool into <b>teacher_payouts</b> in proportion to content usage.</td></tr>
+                  <tr><td><span class="code">Polymorphic links</span></td><td><b>study_list_items.item_id</b> and <b>learning_path_steps.resource_id</b> have no hard FK — validated in the backend.</td></tr>
+                  <tr><td><span class="code">RLS + service_role</span></td><td>RLS on 100% of business tables; <b>billing_module</b> is granted to <b>service_role</b> only; <b>public</b> compat views keep older code working.</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <!-- INSERT IMAGE (optional): cross-schema relationship diagram -->
+            <div class="reveal d4">
+              <div class="imgph full">
+                <div class="cam">📷</div>
+                <div class="lab">Cross-schema diagram <i>(optional)</i></div>
+                <div class="sub">Replace with your image · assets/db-crossschema.png</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <footer class="s-foot"><span class="brand"><span class="dot"></span>Kizuna Nihongo · Software Project Development</span><span class="pageno"></span></footer>
+    </section>
+
+    <!-- ============================ DIVIDER · PART V ============================ -->
+    <section class="slide divider">
+      <div class="lbar"></div>
+      <div class="dv">
+        <div class="roman reveal d1">V<em>Part Five</em></div>
+        <div>
+          <h2 class="reveal d2">Code Package</h2>
+          <p class="reveal d3">How the source is organised — <b>12 packages</b> across the client, the server, external integrations and the database.</p>
+          <div class="tags reveal d4">
+            <span class="chip">Layered architecture</span>
+            <span class="chip">Client packages</span>
+            <span class="chip">Server packages</span>
+            <span class="chip">Component diagram</span>
+          </div>
+        </div>
+      </div>
+      <footer class="s-foot"><span class="brand"><span class="dot"></span>Kizuna Nihongo · Software Project Development</span><span class="pageno"></span></footer>
+    </section>
+
+    <!-- ============================ V.1 · ARCHITECTURE ============================ -->
+    <section class="slide">
+      <div class="lbar"></div>
+      <div class="wrap">
+        <div class="eyebrow reveal d1"><span class="tick"></span>V · Code Package <span class="part">— Architecture</span></div>
+        <h2 class="s-title reveal d2">A <span class="r">layered</span> architecture</h2>
+        <div class="body">
+          <div class="arch">
+            <div class="layer reveal d3">
+              <div class="lab"><b>Presentation</b><span>Client</span></div>
+              <div class="cells">
+                <div class="acell"><b>React SPA</b><span>student · teacher · admin</span></div>
+                <div class="acell"><b>EJS (SSR)</b><span>landing · auth callback</span></div>
+                <div class="acell"><b>MediaPipe</b><span>in-browser face detection</span></div>
+              </div>
+            </div>
+            <div class="arch-flow reveal d4">▼ &nbsp; <b>HTTPS · /api/* with Bearer JWT</b> &nbsp; ▼</div>
+            <div class="layer reveal d4">
+              <div class="lab"><b>Business Logic</b><span>Server</span></div>
+              <div class="cells">
+                <div class="acell"><b>Express REST API</b><span>~24 route groups under /api/*</span></div>
+                <div class="acell"><b>Route guards</b><span>requireAuth · requireRole</span></div>
+                <div class="acell"><b>Controllers</b><span>domain logic</span></div>
+                <div class="acell"><b>Metrics</b><span>traffic middleware</span></div>
+              </div>
+            </div>
+            <div class="arch-flow reveal d5">▼ &nbsp; <b>service-role client</b> &nbsp; ▼</div>
+            <div class="layer reveal d5">
+              <div class="lab"><b>Data &amp; Auth</b><span>Supabase</span></div>
+              <div class="cells">
+                <div class="acell"><b>PostgreSQL</b><span>10 module schemas</span></div>
+                <div class="acell"><b>GoTrue Auth</b><span>JWT · Google OAuth</span></div>
+                <div class="acell"><b>Storage</b><span>private buckets · signed URLs</span></div>
+              </div>
+            </div>
+            <div class="layer ext reveal d6">
+              <div class="lab"><b>External</b><span>Services</span></div>
+              <div class="cells">
+                <div class="acell"><b>FPT AI Factory</b><span>chat · generation · grading</span></div>
+                <div class="acell"><b>SMTP</b><span>OTP email</span></div>
+                <div class="acell"><b>Payment Gateway</b><span>subscriptions</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <footer class="s-foot"><span class="brand"><span class="dot"></span>Kizuna Nihongo · Software Project Development</span><span class="pageno"></span></footer>
+    </section>
+
+    <!-- ============================ V.2 · CLIENT PACKAGES (1–5) ============================ -->
+    <section class="slide">
+      <div class="lbar"></div>
+      <div class="wrap">
+        <div class="eyebrow reveal d1"><span class="tick"></span>V · Code Package <span class="part">— Client</span></div>
+        <h2 class="s-title reveal d2" style="font-size:62px">Client packages <span class="r">1 – 5</span></h2>
+        <div class="body" style="margin-top:26px">
+          <div class="pkgs reveal d3" style="grid-template-columns:1fr 1fr">
+            <div class="pkg"><div class="no">1</div><div><b><code>frontend/src/pages</code></b><p>React 18 + Vite screens split by role — <b>public · student · teacher · admin</b>. Routing in <code>App.jsx</code> is guarded by <code>ProtectedRoute</code> / <code>TeacherRoute</code> / <code>AdminRoute</code> and wrapped in role layouts.</p></div></div>
+            <div class="pkg"><div class="no">2</div><div><b><code>frontend/src/components</code></b><p>Design-system primitives in <code>ui/</code> (<code>Button</code>, <code>Modal</code>, <code>DataTable</code>, <code>FuriganaText</code>) plus feature widgets — dictionary, flashcards, mock exam, receipt — and route-guard wrappers.</p></div></div>
+            <div class="pkg"><div class="no">3</div><div><b><code>frontend/src/contexts</code></b><p>App-wide providers: <code>AuthContext</code> (Supabase session + role), <code>LangContext</code> (vi / ja), <code>ConfirmContext</code>, <code>PageContext</code>.</p></div></div>
+            <div class="pkg"><div class="no">4</div><div><b><code>frontend/src/lib</code></b><p>Client services: <code>api.js</code> (one axios instance whose interceptor attaches the Supabase Bearer JWT), <code>supabase.js</code> (PKCE client), <code>useProctoring</code> + <code>faceDetector</code> for exam monitoring.</p></div></div>
+            <div class="pkg" style="grid-column:1 / -1"><div class="no">5</div><div><b><code>routes/</code> + <code>views/</code> — the EJS server</b><p>Express 5 server-rendered site with Postgres session auth (<code>connect-pg-simple</code>); routes map to controllers and render EJS views. Scope: the public landing page and the Supabase OAuth callback.</p></div></div>
+          </div>
+        </div>
+      </div>
+      <footer class="s-foot"><span class="brand"><span class="dot"></span>Kizuna Nihongo · Software Project Development</span><span class="pageno"></span></footer>
+    </section>
+
+    <!-- ============================ V.3 · SERVER & DATA PACKAGES (6–12) ============================ -->
+    <section class="slide">
+      <div class="lbar"></div>
+      <div class="wrap">
+        <div class="eyebrow reveal d1"><span class="tick"></span>V · Code Package <span class="part">— Server &amp; Data</span></div>
+        <h2 class="s-title reveal d2" style="font-size:62px">Server &amp; data packages <span class="r">6 – 12</span></h2>
+        <div class="body" style="margin-top:22px">
+          <div class="pkgs reveal d3" style="grid-template-columns:1fr 1fr;gap:16px">
+            <div class="pkg" style="padding:16px 20px"><div class="no">6</div><div><b><code>backend/routes/api</code></b><p>Thin Express 4 routers — <b>~24 groups</b> under <code>/api/*</code>. They only wire middleware to controller methods; no business logic.</p></div></div>
+            <div class="pkg" style="padding:16px 20px"><div class="no">7</div><div><b><code>backend/controllers</code></b><p>One file per domain, pattern <code>exports.action = async (req,res)</code>. Read/write Postgres via <code>supabaseAdmin</code>, paginate, return <code>{data}</code> / <code>{error}</code>.</p></div></div>
+            <div class="pkg" style="padding:16px 20px"><div class="no">8</div><div><b><code>backend/services</code></b><p>Reusable business logic: <code>courseAccess</code>, <code>subscriptionService</code>, <code>quotaService</code>, payment matching &amp; revenue pool, <code>examGuard</code>, <code>jaTokenizer</code> / <code>furiganaService</code>.</p></div></div>
+            <div class="pkg dark" style="padding:16px 20px"><div class="no">9</div><div><b>Payment gateway — SePay</b><p><code>sepayClient.js</code> + webhook <code>POST /api/webhooks/sepay</code>: match a transfer by amount &amp; code, grant access, record revenue, email the receipt.</p></div></div>
+            <div class="pkg" style="padding:16px 20px"><div class="no">10</div><div><b><code>backend/config</code></b><p>External clients: <code>supabase.js</code> (anon + service-role), <code>ai.js</code> (FPT AI Factory), <code>mailer.js</code> (SMTP), <code>audio.js</code> / <code>youtube.js</code>.</p></div></div>
+            <div class="pkg" style="padding:16px 20px"><div class="no">11</div><div><b><code>backend/middleware</code></b><p>Cross-cutting: <code>auth.js</code> (<code>requireAuth</code> / <code>requireTeacher</code> / <code>requireAdmin</code> / <code>optionalAuth</code>), <code>checkQuota.js</code>, <code>metrics.js</code>.</p></div></div>
+            <div class="pkg dark" style="padding:16px 20px;grid-column:1 / -1"><div class="no">12</div><div><b><code>database/</code> — PostgreSQL schema for Supabase</b><p>Idempotent <code>schema.sql</code> plus incremental <code>backend/migrations/NNN_*.sql</code>. Organised into the 10 feature schemas, with a <code>public</code> compatibility layer of views and <code>INSTEAD OF</code> triggers, and the <code>handle_new_user</code> provisioning trigger.</p></div></div>
+          </div>
+        </div>
+      </div>
+      <footer class="s-foot"><span class="brand"><span class="dot"></span>Kizuna Nihongo · Software Project Development</span><span class="pageno"></span></footer>
+    </section>
+
+    <!-- ============================ V.4 · PACKAGE / COMPONENT DIAGRAM ============================ -->
+    <section class="slide">
+      <div class="lbar"></div>
+      <div class="wrap">
+        <div class="eyebrow reveal d1"><span class="tick"></span>V · Code Package <span class="part">— Component Diagram</span></div>
+        <h2 class="s-title reveal d2" style="font-size:60px">Packages, <span class="r">side by side</span></h2>
+        <div class="body" style="margin-top:26px">
+          <div class="split rev">
+            <!-- INSERT IMAGE: Package / Component diagram -->
+            <div class="reveal d3">
+              <div class="imgph full">
+                <div class="cam">📷</div>
+                <div class="lab">Package / Component Diagram</div>
+                <div class="sub">Replace with your image · assets/package-diagram.png</div>
+              </div>
+            </div>
+            <div class="txt reveal d4">
+              <h3>Rules we hold to</h3>
+              <ul class="plist">
+                <li><b>Routers stay thin</b> — they attach middleware and map to a controller, nothing else</li>
+                <li><b>One controller per domain</b> — request handling and Supabase queries live together</li>
+                <li><b>Shared logic becomes a service</b> — anything two controllers need moves into <b>backend/services</b></li>
+                <li><b>External access is centralised</b> — every third-party client is created once in <b>backend/config</b></li>
+                <li><b>The client never touches the database</b> — it goes through <b>/api/*</b> with a Bearer JWT</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+      <footer class="s-foot"><span class="brand"><span class="dot"></span>Kizuna Nihongo · Software Project Development</span><span class="pageno"></span></footer>
+    </section>
+
+    <!-- ============================ CLOSING ============================ -->
+    <section class="slide" id="closing">
+      <div class="close-wrap">
+        <div class="close-seal reveal d1">絆</div>
+        <h2 class="reveal d2">Thank you</h2>
+        <p class="reveal d3">Kizuna Nihongo — connecting learners to Japanese, with AI.</p>
+        <div class="tags reveal d4">
+          <span class="chip">Questions &amp; Answers</span>
+          <span class="chip">Kizuna Nihongo Team · 2026</span>
+        </div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<!-- progress bar + edit affordance -->
+<div class="deck-progress" id="progress"></div>
+<div class="edit-hotzone"></div>
+<button class="edit-toggle" id="editToggle" title="Edit mode (E)">✏️</button>
+
+<script>
+/* =========================================================================
+   SLIDE CONTROLLER — stage scaling, keyboard / wheel / touch nav
+   ========================================================================= */
+class Deck{
+  constructor(){
+    this.slides=[...document.querySelectorAll('.slide')];
+    this.stage=document.getElementById('deckStage');
+    this.progress=document.getElementById('progress');
+    this.i=0;
+    this.scale=this.scale.bind(this);
+    this.scale(); addEventListener('resize',this.scale);
+    this.stampFooters();
+    this.bindNav();
+    this.show(0);
+  }
+  scale(){
+    const f=Math.min(innerWidth/1920,innerHeight/1080);
+    const x=(innerWidth-1920*f)/2, y=(innerHeight-1080*f)/2;
+    this.stage.style.transform=`translate(${x}px,${y}px) scale(${f})`;
+  }
+  stampFooters(){
+    const total=this.slides.length;
+    this.slides.forEach((s,idx)=>{
+      const p=s.querySelector('.pageno');
+      if(p) p.innerHTML=`<b>${String(idx+1).padStart(2,'0')}</b> / ${total}`;
+    });
+  }
+  show(n){
+    this.i=Math.max(0,Math.min(n,this.slides.length-1));
+    this.slides.forEach((s,idx)=>{
+      s.classList.toggle('active',idx===this.i);
+      s.classList.toggle('visible',idx===this.i);
+    });
+    this.progress.style.width=((this.i+1)/this.slides.length*100)+'%';
+  }
+  next(){ this.show(this.i+1); }
+  prev(){ this.show(this.i-1); }
+  bindNav(){
+    addEventListener('keydown',e=>{
+      if(e.target.getAttribute && e.target.getAttribute('contenteditable')) return;
+      if(['ArrowRight','ArrowDown',' ','PageDown'].includes(e.key)){ e.preventDefault(); this.next(); }
+      else if(['ArrowLeft','ArrowUp','PageUp'].includes(e.key)){ e.preventDefault(); this.prev(); }
+      else if(e.key==='Home'){ this.show(0); } else if(e.key==='End'){ this.show(this.slides.length-1); }
+    });
+    let wheelLock=false;
+    addEventListener('wheel',e=>{
+      if(document.body.classList.contains('editing')) return;
+      if(wheelLock) return; if(Math.abs(e.deltaY)<24) return;
+      wheelLock=true; e.deltaY>0?this.next():this.prev();
+      setTimeout(()=>wheelLock=false,650);
+    },{passive:true});
+    let sx=0,sy=0;
+    addEventListener('touchstart',e=>{ sx=e.touches[0].clientX; sy=e.touches[0].clientY; },{passive:true});
+    addEventListener('touchend',e=>{
+      const dx=e.changedTouches[0].clientX-sx, dy=e.changedTouches[0].clientY-sy;
+      if(Math.abs(dx)>Math.abs(dy)&&Math.abs(dx)>50) dx<0?this.next():this.prev();
+    },{passive:true});
+  }
+}
+const deck=new Deck();
+
+/* =========================================================================
+   INLINE EDITING — hover top-left or press E; edits persist to localStorage
+   ========================================================================= */
+const editor={
+  isActive:false,
+  toggle(){
+    this.isActive=!this.isActive;
+    document.body.classList.toggle('editing',this.isActive);
+    const btn=document.getElementById('editToggle');
+    btn.classList.toggle('active',this.isActive);
+    const sel='.s-title,.s-sub,.eyebrow,.card h3,.card p,.plist li,.actor h3,.actor p,.ag h3,.ag p,'+
+      '.cover-title,.cover-sub,.mod .h,.acell b,.acell span,td,th,.close-wrap h2,.close-wrap p,.imgph .lab,'+
+      '.dv h2,.dv p,.refnote b,.refnote p,.ucg b,.ucg span,.modnote .hd b,.modnote p,.pkg b,.pkg p,'+
+      '.schemastrip .sc b,.schemastrip .sc span,.stat span';
+    document.querySelectorAll(sel).forEach(el=>{
+      el.setAttribute('contenteditable',this.isActive);
+      if(this.isActive) el.spellcheck=false;
+    });
+    if(!this.isActive) this.save();
+  },
+  save(){
+    try{ localStorage.setItem('kizuna-deck', document.getElementById('deckStage').innerHTML); }catch(e){}
+  },
+  restore(){
+    try{ const html=localStorage.getItem('kizuna-deck');
+      if(html){ document.getElementById('deckStage').innerHTML=html; }
+    }catch(e){}
+  }
+};
+/* restore saved edits, then re-init controller so nav still works */
+editor.restore();
+deck.slides=[...document.querySelectorAll('.slide')];
+deck.stampFooters(); deck.show(deck.i);
+
+const hotzone=document.querySelector('.edit-hotzone');
+const editToggle=document.getElementById('editToggle');
+let hideTimeout=null;
+hotzone.addEventListener('mouseenter',()=>{ clearTimeout(hideTimeout); editToggle.classList.add('show'); });
+hotzone.addEventListener('mouseleave',()=>{ hideTimeout=setTimeout(()=>{ if(!editor.isActive) editToggle.classList.remove('show'); },400); });
+editToggle.addEventListener('mouseenter',()=>clearTimeout(hideTimeout));
+editToggle.addEventListener('mouseleave',()=>{ hideTimeout=setTimeout(()=>{ if(!editor.isActive) editToggle.classList.remove('show'); },400); });
+editToggle.addEventListener('click',()=>editor.toggle());
+addEventListener('keydown',e=>{
+  if((e.key==='e'||e.key==='E') && !(e.target.getAttribute && e.target.getAttribute('contenteditable'))) editor.toggle();
+  if(e.key==='s' && (e.ctrlKey||e.metaKey) && editor.isActive){ e.preventDefault(); editor.save(); }
+});
+</script>
+</body>
+</html>

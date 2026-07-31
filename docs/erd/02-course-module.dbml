@@ -1,0 +1,216 @@
+// 02-course-module.dbml — schema "course_module" (Khóa học & bài học)
+// Kizuna Nihongo — dán trực tiếp vào https://dbdiagram.io
+
+Table course_module.course_enrollments {
+  id uuid [pk, default: `gen_random_uuid()`]
+  course_id uuid [not null]
+  student_id uuid [not null]
+  enrolled_at timestamptz [not null, default: `now()`]
+  completed_at timestamptz
+  progress_pct smallint [not null, default: 0]
+
+  indexes {
+    (course_id, student_id) [unique]
+  }
+}
+
+Table course_module.course_reviews {
+  id uuid [pk, default: `gen_random_uuid()`]
+  course_id uuid [not null]
+  student_id uuid [not null]
+  rating smallint [not null]
+  comment text
+  created_at timestamptz [default: `now()`]
+  updated_at timestamptz [default: `now()`]
+
+  indexes {
+    (course_id, student_id) [unique]
+  }
+}
+
+Table course_module.courses {
+  id uuid [pk, default: `gen_random_uuid()`]
+  title varchar(200) [not null]
+  description text
+  jlpt_level_id smallint [not null]
+  skill_id smallint
+  thumbnail_url varchar(500)
+  is_published boolean [not null, default: false]
+  deleted_at timestamptz
+  created_by uuid [not null]
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+  title_ja varchar
+  description_ja text
+  is_free boolean [not null, default: true]
+  price numeric(12,2) [default: 0]
+  commission_rate numeric(4,3) [default: 0.10]
+  creator_type varchar(10)
+  enrollment_count int [default: 0]
+  avg_rating numeric(3,2) [default: 0]
+  difficulty_level varchar(10)
+  reference_curriculum text
+}
+
+Table course_module.lesson_grammar {
+  lesson_id uuid [not null]
+  pattern_id uuid [not null]
+
+  indexes {
+    (lesson_id, pattern_id) [pk]
+  }
+}
+
+Table course_module.lesson_grammar_points {
+  lesson_id uuid [not null]
+  grammar_point_id uuid [not null]
+
+  indexes {
+    (lesson_id, grammar_point_id) [pk]
+  }
+}
+
+Table course_module.lesson_kanji {
+  lesson_id uuid [not null]
+  kanji_id uuid [not null]
+
+  indexes {
+    (lesson_id, kanji_id) [pk]
+  }
+}
+
+Table course_module.lesson_progress {
+  id uuid [pk, default: `gen_random_uuid()`]
+  student_id uuid [not null]
+  lesson_id uuid [not null]
+  status varchar(20) [not null, default: 'not_started']
+  progress_pct smallint [not null, default: 0]
+  last_position int [not null, default: 0]
+  completed_at timestamptz
+  time_spent_sec int [not null, default: 0]
+
+  indexes {
+    (student_id, lesson_id) [unique]
+  }
+}
+
+Table course_module.lesson_vocabulary {
+  lesson_id uuid [not null]
+  vocabulary_id uuid [not null]
+
+  indexes {
+    (lesson_id, vocabulary_id) [pk]
+  }
+}
+
+Table course_module.lessons {
+  id uuid [pk, default: `gen_random_uuid()`]
+  course_id uuid [not null]
+  title varchar(200) [not null]
+  description text
+  skill_id smallint
+  content_type varchar(30) [not null]
+  content_body text
+  content_url varchar(500)
+  transcript text
+  grammar_notes text
+  sort_order smallint [not null, default: 0]
+  is_published boolean [not null, default: false]
+  created_by uuid
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+  title_ja varchar
+  unit_id uuid
+  duration_minutes int [default: 0]
+  question_count int [default: 0]
+  reading_article_id uuid
+  transcript_segments jsonb
+}
+
+Table course_module.skills {
+  id smallint [pk]
+  name varchar(20) [unique, not null]
+  name_vi varchar(30) [not null]
+}
+
+Table course_module.units {
+  id uuid [pk, default: `gen_random_uuid()`]
+  course_id uuid [not null]
+  title varchar [not null]
+  title_ja varchar
+  sort_order smallint [not null, default: 0]
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+  description text
+  level varchar(10)
+}
+
+// ─── Bảng tham chiếu ở schema khác (stub, chỉ để vẽ quan hệ) ───
+
+Table language_module.grammar_patterns {
+  id uuid [pk]
+
+  Note: 'Bảng thuộc schema language_module — xem file 03-language-module.dbml'
+}
+
+Table language_module.grammar_points {
+  id uuid [pk]
+
+  Note: 'Bảng thuộc schema language_module — xem file 03-language-module.dbml'
+}
+
+Table language_module.jlpt_levels {
+  id smallint [pk]
+
+  Note: 'Bảng thuộc schema language_module — xem file 03-language-module.dbml'
+}
+
+Table language_module.kanji {
+  id uuid [pk]
+
+  Note: 'Bảng thuộc schema language_module — xem file 03-language-module.dbml'
+}
+
+Table language_module.vocabulary {
+  id uuid [pk]
+
+  Note: 'Bảng thuộc schema language_module — xem file 03-language-module.dbml'
+}
+
+Table practice_module.articles {
+  id uuid [pk]
+
+  Note: 'Bảng thuộc schema practice_module — xem file 04-practice-module.dbml'
+}
+
+Table users_module.users {
+  id uuid [pk]
+
+  Note: 'Bảng thuộc schema users_module — xem file 01-users-module.dbml'
+}
+
+// ─── Quan hệ ───
+
+Ref: course_module.course_enrollments.course_id > course_module.courses.id
+Ref: course_module.course_enrollments.student_id > users_module.users.id
+Ref: course_module.course_reviews.student_id > users_module.users.id
+Ref: course_module.course_reviews.course_id > course_module.courses.id
+Ref: course_module.courses.jlpt_level_id > language_module.jlpt_levels.id
+Ref: course_module.courses.skill_id > course_module.skills.id
+Ref: course_module.courses.created_by > users_module.users.id
+Ref: course_module.lesson_grammar.lesson_id > course_module.lessons.id
+Ref: course_module.lesson_grammar.pattern_id > language_module.grammar_patterns.id
+Ref: course_module.lesson_grammar_points.grammar_point_id > language_module.grammar_points.id
+Ref: course_module.lesson_grammar_points.lesson_id > course_module.lessons.id
+Ref: course_module.lesson_kanji.lesson_id > course_module.lessons.id
+Ref: course_module.lesson_kanji.kanji_id > language_module.kanji.id
+Ref: course_module.lesson_progress.lesson_id > course_module.lessons.id
+Ref: course_module.lesson_progress.student_id > users_module.users.id
+Ref: course_module.lesson_vocabulary.vocabulary_id > language_module.vocabulary.id
+Ref: course_module.lesson_vocabulary.lesson_id > course_module.lessons.id
+Ref: course_module.lessons.created_by > users_module.users.id
+Ref: course_module.lessons.reading_article_id > practice_module.articles.id
+Ref: course_module.lessons.unit_id > course_module.units.id
+Ref: course_module.lessons.skill_id > course_module.skills.id
+Ref: course_module.lessons.course_id > course_module.courses.id
+Ref: course_module.units.course_id > course_module.courses.id

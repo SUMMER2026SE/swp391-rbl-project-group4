@@ -106,17 +106,15 @@ function CoursePaymentModal({ courseId, courseTitle, buyer, onClose, onSuccess }
 
   const fmtTime = s => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
 
-  const handleCancel = async () => {
-    if (order && status === 'pending') {
-      try { await api.post(`/courses/payment-orders/${order.id}/cancel`); } catch (_) {}
-    }
-    onClose();
-  };
+  // Đóng modal KHÔNG được huỷ đơn: người dùng thường chuyển khoản xong rồi mới đóng,
+  // huỷ lúc đó sẽ làm giao dịch không còn đơn nào để khớp và mất tiền. Đơn cứ để đó,
+  // đối soát sẽ khớp khi tiền về, còn không thì tự hết hạn sau 30 phút.
+  const handleClose = () => onClose();
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
       <div className="bg-white rounded-3xl shadow-2xl max-w-md w-full p-8 relative">
-        <button onClick={handleCancel} className="absolute top-4 right-4 text-on-muted hover:text-on-surface material-symbols-outlined">close</button>
+        <button onClick={handleClose} className="absolute top-4 right-4 text-on-muted hover:text-on-surface material-symbols-outlined">close</button>
 
         {loading && (
           <div className="text-center py-12">
@@ -331,10 +329,18 @@ export default function CourseDetail({ Layout = StudentLayout, backTo = '/course
     setTimeout(() => setAlert({ type: '', msg: '' }), 4000);
   };
 
+  // Tải khóa học từ server, trả về trạng thái ghi danh THẬT (không phải state cục bộ).
+  const loadCourse = async () => {
+    const r = await api.get(`/courses/${id}`);
+    setCourse(r.data);
+    setEnrolled(!!r.data.is_enrolled);
+    setExpanded(new Set((r.data.units || []).map(u => u.id)));
+    return !!r.data.is_enrolled;
+  };
+
   useEffect(() => {
     setLoading(true);
-    api.get(`/courses/${id}`)
-      .then(r => { setCourse(r.data); setEnrolled(!!r.data.is_enrolled); setExpanded(new Set((r.data.units || []).map(u => u.id))); })
+    loadCourse()
       .catch(e => setError(e.message))
       .finally(() => setLoading(false));
     getCourseReviews(id, 1, 1000)
@@ -403,12 +409,20 @@ export default function CourseDetail({ Layout = StudentLayout, backTo = '/course
     }
   };
 
-  // Thanh toán khớp → enrollment đã được tạo tự động phía server, vào học luôn.
-  const handlePaymentSuccess = () => {
+  // Order chuyển 'paid' TRƯỚC khi server tạo xong enrollment, nên phải hỏi lại server
+  // thay vì tự cho là đã ghi danh — nếu không, học viên bị đẩy vào trang bài học đang khóa.
+  const handlePaymentSuccess = async () => {
     setShowPayment(false);
-    setEnrolled(true);
-    showAlert('success', 'Thanh toán thành công! Chúc bạn học tốt.');
-    if (resumeItem) navigate(lessonPath(resumeItem.id));
+    for (let i = 0; i < 3; i++) {
+      if (await loadCourse().catch(() => false)) {
+        showAlert('success', 'Thanh toán thành công! Chúc bạn học tốt.');
+        if (resumeItem) navigate(lessonPath(resumeItem.id));
+        return;
+      }
+      await new Promise(r => setTimeout(r, 1500));
+    }
+    // Tiền đã nhận, chỉ là khâu cấp quyền chậm — job cấp lại quyền sẽ xử lý trong ít phút.
+    showAlert('info', 'Đã nhận thanh toán. Hệ thống đang kích hoạt khóa học, vui lòng tải lại trang sau ít phút.');
   };
 
   const startEdit = () => {

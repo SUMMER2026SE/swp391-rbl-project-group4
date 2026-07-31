@@ -16,6 +16,7 @@ const {
   getUserPendingOrder,
 } = require('../services/paymentOrderService');
 
+const { reconcileOnDemand } = require('../services/paymentMatchingService');
 const { getAllQuotas } = require('../services/quotaService');
 const { supabaseAdmin } = require('../config/supabase');
 
@@ -64,8 +65,15 @@ async function checkout(req, res) {
 
 async function getPaymentOrder(req, res) {
   try {
-    const order = await getOrder(req.params.id, req.user.id);
+    let order = await getOrder(req.params.id, req.user.id);
     if (!order) return res.status(404).json({ error: 'Order không tồn tại.' });
+
+    // Học viên đang đứng chờ trước màn hình QR → đối soát ngay rồi đọc lại trạng thái,
+    // thay vì đợi chu kỳ cron. reconcileOnDemand tự chặn tần suất 15s.
+    if (order.status === 'pending') {
+      await reconcileOnDemand();
+      order = await getOrder(req.params.id, req.user.id);
+    }
     res.json({ order });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -74,6 +82,9 @@ async function getPaymentOrder(req, res) {
 
 async function cancelPaymentOrder(req, res) {
   try {
+    // Đối soát trước: nếu tiền đã về thì cancelOrder sẽ từ chối huỷ,
+    // tránh trường hợp huỷ mất đơn đã thanh toán và giao dịch không còn gì để khớp.
+    await reconcileOnDemand();
     await cancelOrder(req.params.id, req.user.id);
     res.json({ ok: true });
   } catch (err) {

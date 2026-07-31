@@ -1,0 +1,868 @@
+<title>Script thuyết trình 5 phút — Kizuna Nihongo</title>
+
+<style>
+/* ==========================================================================
+   TOKENS — palette kế thừa từ deck (tsubaki red + giấy kem), neutral ngả ấm
+   ========================================================================== */
+:root{
+  --ground:#FBF8F2;
+  --panel:#FFFDF9;
+  --ink:#17130F;
+  --ink-2:#4A423A;
+  --muted:#867B70;
+  --rule:#E3D8C6;
+  --rule-soft:#EFE7DA;
+  --accent:#AE2826;
+  --accent-deep:#7C0B10;
+  --accent-wash:#F7EAE8;
+  --warn:#9A6B12;
+
+  --f-ui:"Segoe UI","Segoe UI Variable Text",system-ui,-apple-system,sans-serif;
+  --f-say:"Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,serif;
+  --f-num:"Cascadia Mono",Consolas,"SF Mono",ui-monospace,monospace;
+
+  --gutter:104px;
+  --measure:66ch;
+}
+@media (prefers-color-scheme:dark){
+  :root{
+    --ground:#15110E; --panel:#1C1713; --ink:#F0E8DD; --ink-2:#C6BAAC;
+    --muted:#93867A; --rule:#332A22; --rule-soft:#261F19;
+    --accent:#E4736B; --accent-deep:#F0968F; --accent-wash:#2A1A18; --warn:#D6A73F;
+  }
+}
+:root[data-theme="dark"]{
+  --ground:#15110E; --panel:#1C1713; --ink:#F0E8DD; --ink-2:#C6BAAC;
+  --muted:#93867A; --rule:#332A22; --rule-soft:#261F19;
+  --accent:#E4736B; --accent-deep:#F0968F; --accent-wash:#2A1A18; --warn:#D6A73F;
+}
+:root[data-theme="light"]{
+  --ground:#FBF8F2; --panel:#FFFDF9; --ink:#17130F; --ink-2:#4A423A;
+  --muted:#867B70; --rule:#E3D8C6; --rule-soft:#EFE7DA;
+  --accent:#AE2826; --accent-deep:#7C0B10; --accent-wash:#F7EAE8; --warn:#9A6B12;
+}
+
+*{box-sizing:border-box}
+body{
+  margin:0; background:var(--ground); color:var(--ink);
+  font-family:var(--f-ui); font-size:16px; line-height:1.5;
+  -webkit-font-smoothing:antialiased;
+}
+.page{max-width:1080px; margin:0 auto; padding:0 24px 96px}
+
+/* ==========================================================================
+   HEADER
+   ========================================================================== */
+.masthead{padding:56px 0 28px; border-bottom:2px solid var(--ink)}
+.kicker{
+  font-size:12px; font-weight:700; letter-spacing:.22em; text-transform:uppercase;
+  color:var(--accent); margin:0 0 14px;
+}
+.masthead h1{
+  margin:0; font-size:clamp(30px,4.4vw,46px); line-height:1.05; letter-spacing:-.02em;
+  font-weight:700; text-wrap:balance;
+}
+.masthead .sub{
+  margin:14px 0 0; max-width:62ch; color:var(--ink-2); font-size:17px;
+}
+.meta{
+  display:flex; flex-wrap:wrap; gap:10px 26px; margin-top:22px;
+  font-family:var(--f-num); font-size:12.5px; color:var(--muted);
+  font-variant-numeric:tabular-nums; letter-spacing:.02em;
+}
+.meta b{color:var(--ink); font-weight:600}
+
+/* timeline nav — 5 khối bằng nhau, mỗi khối 1 phút */
+.timeline{display:grid; grid-template-columns:repeat(5,1fr); gap:4px; margin:26px 0 0}
+.tl{
+  display:block; padding:11px 12px 12px; text-decoration:none; color:inherit;
+  background:var(--panel); border:1px solid var(--rule); border-top:3px solid var(--accent);
+}
+.tl:hover,.tl:focus-visible{background:var(--accent-wash); outline:none}
+.tl:focus-visible{border-color:var(--accent)}
+.tl .n{font-family:var(--f-num); font-size:11px; color:var(--accent); letter-spacing:.1em}
+.tl .who{display:block; font-size:14px; font-weight:600; margin-top:3px; line-height:1.25}
+.tl .rng{display:block; font-family:var(--f-num); font-size:11px; color:var(--muted); margin-top:3px}
+
+/* ==========================================================================
+   SPEAKER SECTION — bố cục kiểu cue sheet: cột giờ | lời thoại
+   ========================================================================== */
+.speaker{margin-top:64px; scroll-margin-top:12px}
+.sp-head{
+  display:flex; flex-wrap:wrap; align-items:baseline; gap:8px 18px;
+  padding-bottom:12px; border-bottom:2px solid var(--ink);
+}
+.sp-head .idx{
+  font-family:var(--f-num); font-size:13px; font-weight:700; color:#fff;
+  background:var(--accent); padding:3px 9px; letter-spacing:.06em;
+}
+.sp-head h2{margin:0; font-size:26px; letter-spacing:-.01em; font-weight:700}
+.sp-head .scope{font-family:var(--f-num); font-size:12.5px; color:var(--muted)}
+.sp-head .spacer{flex:1}
+
+.timer{
+  display:inline-flex; align-items:center; gap:8px; cursor:pointer;
+  font-family:var(--f-num); font-size:13px; font-variant-numeric:tabular-nums;
+  background:transparent; color:var(--ink-2); border:1px solid var(--rule);
+  padding:5px 11px;
+}
+.timer:hover{border-color:var(--accent); color:var(--accent)}
+.timer:focus-visible{outline:2px solid var(--accent); outline-offset:2px}
+.timer.run{border-color:var(--accent); color:var(--accent)}
+.timer.over{border-color:var(--accent); background:var(--accent); color:#fff}
+.timer .dot{width:7px; height:7px; background:currentColor; border-radius:50%}
+
+.note{
+  margin:16px 0 0; padding:12px 16px; background:var(--accent-wash);
+  border-left:3px solid var(--accent); font-size:14.5px; color:var(--ink-2);
+  max-width:var(--measure);
+}
+.note b{color:var(--ink)}
+
+/* các nhịp nói */
+.beats{margin-top:22px; border-top:1px solid var(--rule-soft)}
+.beat{
+  display:grid; grid-template-columns:var(--gutter) 1fr; gap:0 26px;
+  padding:20px 0; border-bottom:1px solid var(--rule-soft);
+}
+.cue{
+  border-right:1px solid var(--rule); padding-right:18px; text-align:right;
+  font-family:var(--f-num); font-variant-numeric:tabular-nums;
+}
+.cue .at{display:block; font-size:15px; font-weight:600; color:var(--ink); letter-spacing:-.01em}
+.cue .dur{display:block; font-size:11.5px; color:var(--muted); margin-top:2px}
+.cue .slide{
+  display:inline-block; margin-top:9px; font-size:11px; letter-spacing:.04em;
+  color:var(--accent-deep); border:1px solid var(--rule); padding:2px 6px;
+  background:var(--panel);
+}
+.cue .mark{
+  display:block; margin-top:10px; font-family:var(--f-ui); font-size:10.5px;
+  font-weight:700; letter-spacing:.14em; text-transform:uppercase;
+}
+.beat.push .mark{color:var(--accent)}
+.beat.push .mark::before{content:"■ "}
+.beat.skim .mark{color:var(--muted)}
+.beat.skim .mark::before{content:"□ "}
+.beat.opt{background:linear-gradient(90deg,transparent 0,transparent calc(var(--gutter) + 26px),transparent 100%)}
+.beat.opt .cue{border-right-style:dashed}
+.beat.opt .mark{color:var(--warn)}
+.beat.opt .mark::before{content:"✂ "}
+/* câu lẻ có thể bỏ khi hụt giờ */
+.cutable{border-bottom:1px dotted var(--warn)}
+.cutable::after{content:"✂"; font-size:.62em; color:var(--warn); vertical-align:super; margin-left:2px}
+
+.say{
+  font-family:var(--f-say); font-size:19.5px; line-height:1.62; color:var(--ink);
+  max-width:var(--measure); margin:0; text-wrap:pretty;
+}
+.say + .say{margin-top:12px}
+.say em{font-style:italic; color:var(--accent-deep)}
+.say strong{font-weight:600}
+.stage{
+  margin:10px 0 0; font-size:13.5px; color:var(--muted); font-style:italic;
+  max-width:var(--measure);
+}
+
+/* hộp nhắc */
+.keys{
+  margin-top:24px; display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:0;
+  border:1px solid var(--rule);
+}
+.keys > div{padding:16px 18px; border-right:1px solid var(--rule)}
+.keys > div:last-child{border-right:none}
+.keys h3{
+  margin:0 0 9px; font-size:11px; font-weight:700; letter-spacing:.16em;
+  text-transform:uppercase; color:var(--accent);
+}
+.keys ul{margin:0; padding-left:17px; font-size:14.5px; color:var(--ink-2)}
+.keys li + li{margin-top:5px}
+.keys p{margin:0; font-family:var(--f-say); font-size:16px; color:var(--ink)}
+
+/* bản rút gọn — dùng khi buổi bảo vệ giữ đúng 5 phút */
+.compact{margin-top:28px; border:2px solid var(--accent)}
+.compact > h3{
+  margin:0; padding:12px 18px; background:var(--accent); color:#fff;
+  font-size:12px; font-weight:700; letter-spacing:.16em; text-transform:uppercase;
+}
+.compact .rows{padding:4px 18px 16px}
+.compact .row{display:grid; grid-template-columns:82px 1fr; gap:18px; padding:13px 0; border-bottom:1px solid var(--rule-soft)}
+.compact .row:last-child{border-bottom:none}
+.compact .row .s{
+  font-family:var(--f-num); font-size:11.5px; color:var(--accent-deep); padding-top:5px;
+}
+.compact .row p{margin:0; font-family:var(--f-say); font-size:17.5px; line-height:1.55; color:var(--ink)}
+
+/* ==========================================================================
+   Q&A + luật sân khấu
+   ========================================================================== */
+.block{margin-top:72px; padding-top:26px; border-top:2px solid var(--ink)}
+.block > h2{margin:0 0 6px; font-size:26px; font-weight:700; letter-spacing:-.01em}
+.block > .lede{margin:0 0 26px; color:var(--ink-2); max-width:62ch}
+
+.qa{border-top:1px solid var(--rule-soft)}
+.qa details{border-bottom:1px solid var(--rule-soft)}
+.qa summary{
+  padding:15px 0 15px 30px; cursor:pointer; font-size:17px; font-weight:600;
+  position:relative; list-style:none;
+}
+.qa summary::-webkit-details-marker{display:none}
+.qa summary::before{
+  content:"+"; position:absolute; left:4px; top:15px;
+  font-family:var(--f-num); color:var(--accent); font-size:16px;
+}
+.qa details[open] summary::before{content:"–"}
+.qa summary:focus-visible{outline:2px solid var(--accent); outline-offset:2px}
+.qa .ans{padding:0 0 18px 30px; font-size:16px; color:var(--ink-2); max-width:var(--measure)}
+.qa .ans p{margin:0 0 9px}
+.qa .ans code{font-family:var(--f-num); font-size:14px; color:var(--accent-deep)}
+
+.rules{display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); gap:1px; background:var(--rule)}
+.rules div{background:var(--ground); padding:18px}
+.rules h3{margin:0 0 7px; font-size:15px; font-weight:700}
+.rules p{margin:0; font-size:14.5px; color:var(--ink-2)}
+
+.foot{margin-top:56px; padding-top:18px; border-top:1px solid var(--rule); font-size:13px; color:var(--muted)}
+
+/* ==========================================================================
+   RESPONSIVE
+   ========================================================================== */
+@media (max-width:720px){
+  :root{--gutter:auto}
+  .timeline{grid-template-columns:repeat(2,1fr)}
+  .beat{grid-template-columns:1fr; gap:10px}
+  .cue{
+    border-right:none; border-left:3px solid var(--accent); padding:0 0 0 12px;
+    text-align:left; display:flex; align-items:center; gap:14px; flex-wrap:wrap;
+  }
+  .cue .at,.cue .dur,.cue .slide,.cue .mark{margin:0}
+  .say{font-size:18px}
+  .keys > div{border-right:none; border-bottom:1px solid var(--rule)}
+  .keys > div:last-child{border-bottom:none}
+}
+
+/* ==========================================================================
+   PRINT — mỗi người 1 trang giấy
+   ========================================================================== */
+@media print{
+  :root{--ground:#fff; --panel:#fff; --ink:#000; --ink-2:#222; --muted:#555; --rule:#bbb; --rule-soft:#ddd; --accent-wash:#f4f4f4}
+  .timeline,.timer,.theme-toggle{display:none !important}
+  .speaker{break-before:page; margin-top:0}
+  .speaker:first-of-type{break-before:auto}
+  .beat{break-inside:avoid}
+  .qa details{break-inside:avoid}
+  .qa .ans{display:block !important}
+  body{font-size:12pt}
+  .say{font-size:13pt}
+}
+@media (prefers-reduced-motion:reduce){*{animation:none !important; transition:none !important}}
+</style>
+
+<div class="page">
+
+  <!-- ===================== HEADER ===================== -->
+  <header class="masthead">
+    <p class="kicker">SWP391 · Bảo vệ đồ án · Group 4</p>
+    <h1>Script thuyết trình — Kizuna&nbsp;Nihongo</h1>
+    <p class="sub">
+      Lời thoại viết sẵn cho 5 người, mỗi người đúng 1 phút, bám theo 26 slide của
+      <b>GROUP4_KIZUNA_NIHONGO_SLIDE.pptx</b>. Demo sản phẩm tính riêng, ngoài 5 phút.
+    </p>
+    <div class="meta">
+      <span><b>5</b> người · <b>5:00</b> tổng</span>
+      <span><b>26</b> slide · ~11 giây/slide</span>
+      <span>Nhịp nói mục tiêu <b>170–185</b> âm tiết/phút</span>
+      <span>■ nhấn &nbsp;·&nbsp; □ lướt &nbsp;·&nbsp; ✂ bỏ được</span>
+    </div>
+
+    <nav class="timeline">
+      <a class="tl" href="#p1"><span class="n">00:00</span><span class="who">Mở đầu &amp; giải pháp</span><span class="rng">Slide 1–5</span></a>
+      <a class="tl" href="#p2"><span class="n">01:00</span><span class="who">Mazii &amp; Bunpro</span><span class="rng">Slide 6–7</span></a>
+      <a class="tl" href="#p3"><span class="n">02:00</span><span class="who">Actor &amp; Use case</span><span class="rng">Slide 8–12</span></a>
+      <a class="tl" href="#p4"><span class="n">03:00</span><span class="who">Database</span><span class="rng">Slide 13–23</span></a>
+      <a class="tl" href="#p5"><span class="n">04:00</span><span class="who">Code package &amp; kết</span><span class="rng">Slide 24–26</span></a>
+    </nav>
+  </header>
+
+  <!-- ===================== NGƯỜI 1 ===================== -->
+  <section class="speaker" id="p1">
+    <div class="sp-head">
+      <span class="idx">01</span>
+      <h2>Mở đầu · Vấn đề · Giải pháp · Công nghệ</h2>
+      <span class="scope">Slide 1–5 · 178 âm tiết · ~59s</span>
+      <span class="spacer"></span>
+      <button class="timer" data-timer type="button"><span class="dot"></span><span data-clock>0:00</span> / 1:00</button>
+    </div>
+
+    <div class="beats">
+      <div class="beat skim">
+        <div class="cue"><span class="at">0:00</span><span class="dur">8 giây</span><span class="slide">Slide 1</span><span class="mark">Chào</span></div>
+        <div>
+          <p class="say">Kính chào thầy cô. Nhóm em là Group 4, trình bày đồ án <strong>Kizuna Nihongo</strong> — nền tảng học tiếng Nhật cá nhân hoá bằng AI, từ N5 đến N1.</p>
+        </div>
+      </div>
+
+      <div class="beat skim">
+        <div class="cue"><span class="at">0:08</span><span class="dur">5 giây</span><span class="slide">Slide 2</span><span class="mark">Lướt</span></div>
+        <div>
+          <p class="say">Bài gồm năm phần, từ tổng quan cho tới cấu trúc code.</p>
+          <p class="stage">Nói nhanh, không dừng lại từng mục — bấm sang slide 3 ngay.</p>
+        </div>
+      </div>
+
+      <div class="beat">
+        <div class="cue"><span class="at">0:13</span><span class="dur">14 giây</span><span class="slide">Slide 3</span><span class="mark">Vấn đề</span></div>
+        <div>
+          <p class="say">Người tự học tiếng Nhật đang đi chung một lộ trình cứng. Viết, nói, kanji không ai sửa. Gia sư thì đắt và khó đặt lịch. Giáo trình giấy không biết học viên yếu chỗ nào.</p>
+        </div>
+      </div>
+
+      <div class="beat push">
+        <div class="cue"><span class="at">0:27</span><span class="dur">20 giây</span><span class="slide">Slide 4</span><span class="mark">Nhấn</span></div>
+        <div>
+          <p class="say">Bọn em giải quyết bằng bốn trụ AI. <strong>Lộ trình cá nhân hoá</strong> dựng từ trình độ hiện tại tới mục tiêu JLPT. <strong>AI Sensei</strong> đọc được dữ liệu học của chính học viên nên trả lời đúng ngữ cảnh. <strong>Giáo viên soạn nội dung bằng AI</strong> — bài đọc, câu hỏi, audio. Và bài thi <strong>chấm tự động</strong>, phần tự luận có AI hỗ trợ.</p>
+          <p class="stage">Đây là slide ăn điểm nhất của phần 1 — nói chậm hơn, tách rõ bốn ý.</p>
+        </div>
+      </div>
+
+      <div class="beat skim">
+        <div class="cue"><span class="at">0:47</span><span class="dur">11 giây</span><span class="slide">Slide 5</span><span class="mark">Lướt</span></div>
+        <div>
+          <p class="say">Phạm vi gồm học, luyện, thi, cá nhân hoá và soạn nội dung. Hệ thống chạy trên React, Express, Supabase và FPT AI Factory.</p>
+        </div>
+      </div>
+
+      <div class="beat">
+        <div class="cue"><span class="at">0:58</span><span class="dur">2 giây</span><span class="slide">→ 6</span><span class="mark">Bắc cầu</span></div>
+        <div>
+          <p class="say"><em>Nhóm em đã khảo sát hai nền tảng người Việt đang dùng.</em></p>
+        </div>
+      </div>
+    </div>
+
+    <div class="keys">
+      <div>
+        <h3>Phải nói bằng được</h3>
+        <ul>
+          <li>Bốn trụ AI: lộ trình · AI Sensei · soạn nội dung · chấm bài</li>
+          <li>AI Sensei đọc <em>dữ liệu học của chính học viên</em></li>
+          <li>Phạm vi N5 → N1</li>
+        </ul>
+      </div>
+      <div>
+        <h3>Nếu bị trễ giờ</h3>
+        <ul>
+          <li>Bỏ hẳn slide 2 (agenda), bấm qua luôn</li>
+          <li>Slide 5 rút còn một câu: “React, Express, Supabase và FPT AI Factory.”</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== NGƯỜI 2 ===================== -->
+  <section class="speaker" id="p2">
+    <div class="sp-head">
+      <span class="idx">02</span>
+      <h2>Hệ thống tham chiếu — Mazii &amp; Bunpro</h2>
+      <span class="scope">Slide 6–7 · 164 âm tiết · ~55s</span>
+      <span class="spacer"></span>
+      <button class="timer" data-timer type="button"><span class="dot"></span><span data-clock>0:00</span> / 1:00</button>
+    </div>
+
+    <p class="note">
+      Cả hai slide nói theo đúng ba nhịp: <b>là gì → học được gì → còn thiếu gì</b>.
+      Nhịp thứ ba mới là chỗ ăn điểm, vì nó cho thấy nhóm chọn tính năng có căn cứ chứ không làm theo cảm tính.
+    </p>
+
+    <div class="beats">
+      <div class="beat push">
+        <div class="cue"><span class="at">0:00</span><span class="dur">28 giây</span><span class="slide">Slide 6</span><span class="mark">Mazii</span></div>
+        <div>
+          <p class="say">Thứ nhất là <strong>Mazii</strong> — từ điển Nhật–Việt mà gần như ai học tiếng Nhật cũng cài.</p>
+          <p class="say">Cái bọn em học được là mô hình dữ liệu nhiều lớp: mục từ, nghĩa, kanji, câu ví dụ. Bọn em đưa đúng tinh thần đó vào <strong>dictionary_module</strong> — khoảng mười bảy nghìn mục từ, tra được bằng tiếng Việt không dấu.</p>
+          <p class="say">Nhưng Mazii dừng ở tra cứu: không có khoá học, không có giáo viên, không có lộ trình.</p>
+        </div>
+      </div>
+
+      <div class="beat push">
+        <div class="cue"><span class="at">0:28</span><span class="dur">28 giây</span><span class="slide">Slide 7</span><span class="mark">Bunpro</span></div>
+        <div>
+          <p class="say">Thứ hai là <strong>Bunpro</strong> — nền tảng luyện ngữ pháp theo phương pháp lặp lại ngắt quãng.</p>
+          <p class="say">Mỗi điểm ngữ pháp đều gắn cấp JLPT và ghi tiến độ riêng cho từng học viên. Bọn em lấy đúng hai ý đó cho <strong>language_module</strong> và <strong>flashcard_module</strong>: thư mục, học phần, thẻ, và tiến độ theo từng thẻ.</p>
+          <p class="say">Chỗ Bunpro thiếu là giao diện chỉ có tiếng Anh, không có giáo viên và không mô phỏng đề thi đủ ba phần.</p>
+        </div>
+      </div>
+
+      <div class="beat">
+        <div class="cue"><span class="at">0:56</span><span class="dur">4 giây</span><span class="slide">→ 8</span><span class="mark">Bắc cầu</span></div>
+        <div>
+          <p class="say"><em>Hai khoảng trống đó chính là chỗ Kizuna Nihongo đứng vào.</em></p>
+        </div>
+      </div>
+    </div>
+
+    <div class="keys">
+      <div>
+        <h3>Phải nói bằng được</h3>
+        <ul>
+          <li>Mazii → mô hình từ điển nhiều lớp → <em>dictionary_module</em></li>
+          <li>Bunpro → tag theo cấp JLPT + tiến độ từng thẻ → <em>flashcard_module</em></li>
+          <li>Cả hai đều thiếu: khoá học, giáo viên, lộ trình</li>
+        </ul>
+      </div>
+      <div>
+        <h3>Nếu bị trễ giờ</h3>
+        <ul>
+          <li>Bỏ đoạn số liệu 17k/28k mục từ</li>
+          <li>Gộp hai câu “còn thiếu gì” thành một câu chung ở cuối</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== NGƯỜI 3 ===================== -->
+  <section class="speaker" id="p3">
+    <div class="sp-head">
+      <span class="idx">03</span>
+      <h2>Actor &amp; Use case</h2>
+      <span class="scope">Slide 8–12 · bản chi tiết ~3:45</span>
+      <span class="spacer"></span>
+      <button class="timer" data-timer type="button"><span class="dot"></span><span data-clock>0:00</span> / 3:45</button>
+    </div>
+
+    <p class="note">
+      Bản này bám đúng <b>use case có trên 4 sơ đồ</b> trong slide. Mạch nói đi theo một đường thẳng:
+      ai kế thừa ai → nên gói tài khoản dùng chung → học viên dùng gì → nội dung đó ai tạo → ai duyệt người tạo.
+      Mỗi slide kết bằng một câu mở sẵn cho slide sau, cứ nói tiếp là liền mạch.
+      Các nhịp và câu đánh dấu <b>✂</b> bỏ được khi hụt giờ.
+    </p>
+
+    <div class="beats">
+
+      <!-- ---------- SLIDE 8 ---------- -->
+      <div class="beat">
+        <div class="cue"><span class="at">0:00</span><span class="dur">24 giây</span><span class="slide">Slide 8</span><span class="mark">Actor</span></div>
+        <div>
+          <p class="say">Hệ thống có bốn actor. <strong>Khách vãng lai</strong> chỉ xem được nội dung công khai. Còn <strong>học viên, giáo viên và quản trị viên</strong> đều là người dùng đã đăng ký — trên sơ đồ, cả ba đều kế thừa từ <em>Registered User</em>.</p>
+          <p class="say"><span class="cutable">Chính quan hệ kế thừa đó quyết định cách bọn em gom use case: cái gì cả ba vai trò đều dùng thì tách hẳn ra một gói chung.</span></p>
+          <p class="stage">Chỉ tay vào ba mũi tên kế thừa dưới đáy sơ đồ ở slide sau khi nói câu này — hội đồng sẽ theo được ngay.</p>
+        </div>
+      </div>
+
+      <div class="beat">
+        <div class="cue"><span class="at">0:24</span><span class="dur">24 giây</span><span class="slide">Slide 8</span><span class="mark">Tác nhân ngoài</span></div>
+        <div>
+          <p class="say">Bên dưới là ba <strong>tác nhân ngoài</strong> — không phải người dùng, mà là hệ thống khác bọn em gọi sang. Mỗi cái phục vụ một nhóm use case cụ thể.</p>
+          <p class="say"><strong>Dịch vụ AI của FPT</strong> đứng sau lộ trình cá nhân hoá, chatbot và các phần AI chấm bài. <strong>Cổng thanh toán</strong> lo việc nâng cấp gói. Còn <strong>email</strong> thì gửi mã xác thực lúc đăng ký và lúc quên mật khẩu.</p>
+          <p class="stage">Câu “quên mật khẩu” chính là cầu nối — nói xong bấm sang slide 9 luôn.</p>
+        </div>
+      </div>
+
+      <!-- ---------- SLIDE 9 ---------- -->
+      <div class="beat">
+        <div class="cue"><span class="at">0:48</span><span class="dur">33 giây</span><span class="slide">Slide 9</span><span class="mark">Tài khoản</span></div>
+        <div>
+          <p class="say">Và đây chính là gói chung đó. Vì cả ba vai trò cùng kế thừa nên phần tài khoản chỉ cần làm một lần: <strong>đăng nhập, đăng xuất, xem hồ sơ, sửa hồ sơ, đổi mật khẩu và quên mật khẩu</strong>.</p>
+          <p class="say">Khách vãng lai thì chỉ có đúng một use case là <strong>đăng ký tài khoản</strong>. <span class="cutable">Còn đăng nhập bằng Google, bọn em mô hình hoá là một biến thể của đăng nhập chứ không tách thành luồng riêng.</span></p>
+          <p class="say"><em>Đăng nhập xong thì mỗi vai trò rẽ vào không gian của mình. Đông việc nhất là học viên.</em></p>
+        </div>
+      </div>
+
+      <!-- ---------- SLIDE 10 ---------- -->
+      <div class="beat push">
+        <div class="cue"><span class="at">1:21</span><span class="dur">13 giây</span><span class="slide">Slide 10</span><span class="mark">Vào học</span></div>
+        <div>
+          <p class="say">Sơ đồ học viên nhìn thì dày, nhưng đọc theo hành trình học lại rất gọn.</p>
+          <p class="say">Mở đầu là <strong>ghi danh khoá học theo trình độ</strong>, xem tài liệu bài học, và <strong>tạo lộ trình cá nhân hoá bằng AI</strong>.</p>
+        </div>
+      </div>
+
+      <div class="beat push">
+        <div class="cue"><span class="at">1:34</span><span class="dur">12 giây</span><span class="slide">Slide 10</span><span class="mark">Tra cứu</span></div>
+        <div>
+          <p class="say">Trong lúc học thì tra cứu: <strong>danh sách từ vựng, kanji, ngữ pháp</strong> và <strong>từ điển</strong>. Riêng nhánh kanji được mở rộng thêm hai use case — <strong>tạo bảng tập viết</strong>, và <strong>luyện viết kanji có AI chấm</strong>.</p>
+        </div>
+      </div>
+
+      <div class="beat">
+        <div class="cue"><span class="at">1:46</span><span class="dur">12 giây</span><span class="slide">Slide 10</span><span class="mark">Ghi nhớ</span></div>
+        <div>
+          <p class="say">Học xong thì tới phần ghi nhớ, và đó là <strong>flashcard</strong>: học viên tự tạo, sửa, xoá học phần, ôn lại từ vựng, và <strong>làm bài kiểm tra sinh ra từ chính học phần đó</strong>.</p>
+        </div>
+      </div>
+
+      <div class="beat push">
+        <div class="cue"><span class="at">1:58</span><span class="dur">18 giây</span><span class="slide">Slide 10</span><span class="mark">4 kỹ năng</span></div>
+        <div>
+          <p class="say">Nhớ rồi thì phải luyện, và bọn em phủ đủ bốn kỹ năng. <strong>Nghe</strong> có hội thoại theo cấp độ, chép chính tả và luyện nói shadowing. <strong>Đọc</strong> có bài đọc theo cấp độ, mở rộng ra bài tập đọc hiểu. <strong>Viết</strong> thì học viên viết đoạn văn và <strong>được AI nhận xét ngay</strong>.</p>
+        </div>
+      </div>
+
+      <div class="beat">
+        <div class="cue"><span class="at">2:16</span><span class="dur">19 giây</span><span class="slide">Slide 10</span><span class="mark">Thi &amp; theo dõi</span></div>
+        <div>
+          <p class="say">Cuối hành trình là <strong>thi thử JLPT</strong> và xem lại lịch sử kết quả. Bên cạnh đó, học viên theo dõi <strong>dashboard học tập</strong>, hỏi <strong>AI chatbot</strong> bất cứ lúc nào, và nâng cấp gói khi cần dùng nhiều hơn.</p>
+          <p class="say"><em>Toàn bộ nội dung học viên vừa dùng đó không tự sinh ra — nó do giáo viên tạo.</em></p>
+        </div>
+      </div>
+
+      <!-- ---------- SLIDE 11 ---------- -->
+      <div class="beat push">
+        <div class="cue"><span class="at">2:35</span><span class="dur">8 giây</span><span class="slide">Slide 11</span><span class="mark">Soạn nội dung</span></div>
+        <div>
+          <p class="say">Giáo viên có đầy đủ <strong>tạo, sửa, xoá</strong> trên ba mảng: <strong>khoá học</strong>, <strong>quiz cho từng bài</strong>, và <strong>danh sách từ vựng, kanji, ngữ pháp</strong>.</p>
+        </div>
+      </div>
+
+      <div class="beat push">
+        <div class="cue"><span class="at">2:43</span><span class="dur">16 giây</span><span class="slide">Slide 11</span><span class="mark">Phân quyền</span></div>
+        <div>
+          <p class="say">Nhưng chỗ đáng chú ý nhất là ngân hàng câu hỏi. Giáo viên <strong>toàn quyền với câu hỏi riêng của mình</strong>, còn với <strong>ngân hàng chung thì chỉ được xem</strong>. <span class="cutable">Bọn em cố ý chặn như vậy để bộ đề dùng chung không bị một người sửa lệch.</span></p>
+        </div>
+      </div>
+
+      <div class="beat">
+        <div class="cue"><span class="at">2:59</span><span class="dur">13 giây</span><span class="slide">Slide 11</span><span class="mark">Thu nhập</span></div>
+        <div>
+          <p class="say">Ngoài dạy, giáo viên còn xem được <strong>báo cáo thu nhập</strong> và thống kê trên dashboard của mình.</p>
+          <p class="say"><em>Vậy ai duyệt cho một người trở thành giáo viên, và ai giữ ngân hàng chung kia? Là quản trị viên.</em></p>
+        </div>
+      </div>
+
+      <!-- ---------- SLIDE 12 ---------- -->
+      <div class="beat">
+        <div class="cue"><span class="at">3:12</span><span class="dur">15 giây</span><span class="slide">Slide 12</span><span class="mark">Người dùng</span></div>
+        <div>
+          <p class="say">Sơ đồ admin tách làm hai khối. Khối <strong>quản lý người dùng</strong>: xem danh sách, <strong>khoá và mở khoá tài khoản</strong>, gán vai trò, <strong>duyệt tài khoản giáo viên</strong>, cấp hoặc huỷ gói đăng ký cho người dùng, và xem báo cáo hệ thống.</p>
+        </div>
+      </div>
+
+      <div class="beat push">
+        <div class="cue"><span class="at">3:27</span><span class="dur">18 giây</span><span class="slide">Slide 12</span><span class="mark">Khép vòng</span></div>
+        <div>
+          <p class="say">Khối thứ hai là <strong>quản lý thi</strong>: toàn quyền tạo, sửa, xoá <strong>câu hỏi trong ngân hàng chung</strong> và <strong>đề thi thử JLPT</strong>, cùng với xem lịch sử kết quả thi.</p>
+          <p class="say">Nghĩa là chính admin tạo ra bộ đề JLPT mà học viên làm ở slide trước — <em>vòng nghiệp vụ khép lại ở đây.</em></p>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="keys">
+      <div>
+        <h3>Ba câu nối phải giữ</h3>
+        <ul>
+          <li>Slide 8 → 9: “cái gì cả ba vai trò đều dùng thì tách ra một gói chung”</li>
+          <li>Slide 10 → 11: “nội dung đó không tự sinh ra — do giáo viên tạo”</li>
+          <li>Slide 11 → 12: “ai duyệt giáo viên, ai giữ ngân hàng chung? — admin”</li>
+        </ul>
+      </div>
+      <div>
+        <h3>Chi tiết ăn điểm</h3>
+        <ul>
+          <li>Kế thừa <em>Registered User</em> → giải thích vì sao gói tài khoản dùng chung</li>
+          <li>Kanji mở rộng ra <em>tập viết</em> + <em>luyện viết có AI chấm</em></li>
+          <li>Bài kiểm tra sinh ra từ chính học phần flashcard</li>
+          <li>Giáo viên chỉ <em>xem</em> ngân hàng chung — cố ý chặn</li>
+        </ul>
+      </div>
+      <div>
+        <h3>Hai bản, chọn theo giờ</h3>
+        <ul>
+          <li>Bản chi tiết ở trên: <b>~3:45</b></li>
+          <li>Bản rút gọn bên dưới: <b>~71 giây</b>, vẫn giữ nguyên ba câu nối</li>
+          <li>Câu gạch chân <b>✂</b> là chỗ cắt trước tiên</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- Bản 60 giây: dùng khi cả buổi vẫn giữ đúng 5 phút cho 5 người -->
+    <div class="compact">
+      <h3>Bản rút gọn ~71 giây — dùng nếu cả buổi vẫn giữ 5 phút</h3>
+      <div class="rows">
+        <div class="row">
+          <span class="s">Slide 8<br>15 giây</span>
+          <p>Hệ thống có bốn actor. Khách chỉ xem nội dung công khai; học viên, giáo viên và admin đều kế thừa từ <em>Registered User</em> — nên phần tài khoản tách ra một gói dùng chung. Kèm ba tác nhân ngoài: AI, thanh toán và email.</p>
+        </div>
+        <div class="row">
+          <span class="s">Slide 9<br>10 giây</span>
+          <p>Gói đó gồm đăng nhập, đăng xuất, hồ sơ và mật khẩu; khách thì chỉ có đăng ký. Đăng nhập xong, mỗi vai trò rẽ vào không gian riêng.</p>
+        </div>
+        <div class="row">
+          <span class="s">Slide 10<br>17 giây</span>
+          <p>Học viên là sơ đồ dày nhất: ghi danh khoá học theo trình độ, tạo lộ trình bằng AI, tra cứu từ vựng và kanji, ôn bằng flashcard, luyện đủ bốn kỹ năng — riêng viết có AI nhận xét — rồi thi thử JLPT. Nội dung đó do giáo viên tạo.</p>
+        </div>
+        <div class="row">
+          <span class="s">Slide 11<br>16 giây</span>
+          <p>Giáo viên quản lý khoá học, quiz và danh sách từ vựng. Đáng chú ý là ngân hàng câu hỏi: toàn quyền với câu hỏi riêng, ngân hàng chung chỉ được xem. Giáo viên cũng xem được báo cáo thu nhập. Vậy ai duyệt giáo viên? Là admin.</p>
+        </div>
+        <div class="row">
+          <span class="s">Slide 12<br>13 giây</span>
+          <p>Admin quản lý người dùng — khoá tài khoản, gán vai trò, duyệt giáo viên, cấp gói — và quản lý thi: ngân hàng câu hỏi chung cùng đề JLPT. Chính admin tạo bộ đề mà học viên làm ở slide trước.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== NGƯỜI 4 ===================== -->
+  <section class="speaker" id="p4">
+    <div class="sp-head">
+      <span class="idx">04</span>
+      <h2>Thiết kế Database</h2>
+      <span class="scope">Slide 13–23 · 186 âm tiết · ~62s</span>
+      <span class="spacer"></span>
+      <button class="timer" data-timer type="button"><span class="dot"></span><span data-clock>0:00</span> / 1:00</button>
+    </div>
+
+    <p class="note">
+      Mười một slide trong một phút, nên <b>không nói từng schema một</b>. Nói theo ba cụm, và
+      <b>bấm slide liên tục trong lúc đang nói</b> — hình ERD chạy qua làm nền cho lời, không phải để đọc.
+      Chỉ slide 13 là dừng lại thật sự.
+    </p>
+
+    <div class="beats">
+      <div class="beat push">
+        <div class="cue"><span class="at">0:00</span><span class="dur">18 giây</span><span class="slide">Slide 13</span><span class="mark">Nhấn</span></div>
+        <div>
+          <p class="say">Database của bọn em không để chung một chỗ. <strong>Mười schema, mỗi schema là một domain nghiệp vụ</strong>, tổng chín mươi sáu bảng và một trăm ba mươi tám khoá ngoại.</p>
+          <p class="say">Row Level Security bật trên toàn bộ bảng. Riêng schema tài chính chỉ <strong>service_role</strong> của backend chạm được — client không bao giờ truy vấn thẳng.</p>
+          <p class="stage">Dừng hẳn ở slide này. Đây là phần thiết kế đáng giá nhất của cả bài.</p>
+        </div>
+      </div>
+
+      <div class="beat">
+        <div class="cue"><span class="at">0:18</span><span class="dur">14 giây</span><span class="slide">14 · 15 · 16</span><span class="mark">Cụm A</span></div>
+        <div>
+          <p class="say">Ba schema đầu là trục học. <strong>users</strong> giữ hồ sơ và đơn xin làm giáo viên. <strong>course</strong> là khoá học, bài học, mục học và tiến độ. <strong>language</strong> là kho ngữ liệu dùng chung — từ vựng, kanji, ngữ pháp.</p>
+          <p class="stage">Bấm sang slide mới ở mỗi tên schema.</p>
+        </div>
+      </div>
+
+      <div class="beat">
+        <div class="cue"><span class="at">0:32</span><span class="dur">14 giây</span><span class="slide">17 · 18 · 19 · 20</span><span class="mark">Cụm B</span></div>
+        <div>
+          <p class="say">Bốn schema tiếp là luyện và thi. <strong>practice</strong> cho đọc, nghe, viết, nói. <strong>flashcard</strong> cho thẻ ghi nhớ. <strong>exam</strong> cho quiz trong khoá học, kèm chế độ giám sát khi giáo viên bật. <strong>jlpt</strong> mô phỏng đúng cấu trúc đề thật, từng phần thi có đồng hồ riêng.</p>
+        </div>
+      </div>
+
+      <div class="beat">
+        <div class="cue"><span class="at">0:46</span><span class="dur">14 giây</span><span class="slide">21 · 22 · 23</span><span class="mark">Cụm C</span></div>
+        <div>
+          <p class="say">Ba schema cuối. <strong>dictionary</strong> với mười bảy nghìn mục từ. <strong>billing</strong> gom toàn bộ đơn hàng, hạn mức và chia doanh thu. Và <strong>ai</strong> lưu hội thoại AI Sensei cùng lộ trình học.</p>
+        </div>
+      </div>
+
+      <div class="beat">
+        <div class="cue"><span class="at">1:00</span><span class="dur">—</span><span class="slide">→ 24</span><span class="mark">Bắc cầu</span></div>
+        <div>
+          <p class="say"><em>Mời bạn tiếp theo nói về cách tổ chức code.</em></p>
+        </div>
+      </div>
+    </div>
+
+    <div class="keys">
+      <div>
+        <h3>Con số phải đúng</h3>
+        <ul>
+          <li><b>10</b> schema · <b>96</b> bảng · <b>138</b> khoá ngoại</li>
+          <li>RLS bật <b>100%</b> bảng nghiệp vụ</li>
+          <li>Từ điển ~<b>17.000</b> mục từ</li>
+        </ul>
+      </div>
+      <div>
+        <h3>Nếu bị trễ giờ</h3>
+        <ul>
+          <li>Giữ nguyên slide 13, rút ba cụm còn một câu mỗi cụm</li>
+          <li>Bỏ tên bảng, chỉ đọc tên schema</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== NGƯỜI 5 ===================== -->
+  <section class="speaker" id="p5">
+    <div class="sp-head">
+      <span class="idx">05</span>
+      <h2>Code package · Dẫn demo · Kết bài</h2>
+      <span class="scope">Slide 24–26 · 173 âm tiết · ~58s</span>
+      <span class="spacer"></span>
+      <button class="timer" data-timer type="button"><span class="dot"></span><span data-clock>0:00</span> / 1:00</button>
+    </div>
+
+    <div class="beats">
+      <div class="beat push">
+        <div class="cue"><span class="at">0:00</span><span class="dur">30 giây</span><span class="slide">Slide 24</span><span class="mark">Nhấn</span></div>
+        <div>
+          <p class="say">Code chia thành <strong>mười hai package</strong> theo ba tầng.</p>
+          <p class="say">Frontend React gọi API qua một axios instance duy nhất, tự gắn JWT vào mọi request. Backend có khoảng hai mươi tư nhóm route, nhưng <strong>route giữ rất mỏng</strong> — chỉ gắn middleware phân quyền rồi gọi controller.</p>
+          <p class="say">Logic dùng chung như kiểm tra quyền học, hạn mức theo gói, hay khớp giao dịch thanh toán thì tách hẳn ra <strong>tầng service</strong>. Nhờ vậy client không bao giờ chạm thẳng vào database — mọi truy vấn đều đi qua backend.</p>
+        </div>
+      </div>
+
+      <div class="beat skim">
+        <div class="cue"><span class="at">0:30</span><span class="dur">8 giây</span><span class="slide">Slide 25</span><span class="mark">Dẫn demo</span></div>
+        <div>
+          <p class="say">Đó là toàn bộ phần thiết kế. Ngay sau đây nhóm em xin demo sản phẩm chạy thật ạ.</p>
+          <p class="stage">Demo tính ngoài 5 phút. Mở sẵn tab trình duyệt trước khi lên, đã đăng nhập sẵn tài khoản học viên.</p>
+        </div>
+      </div>
+
+      <div class="beat">
+        <div class="cue"><span class="at">0:38</span><span class="dur">12 giây</span><span class="slide">Slide 26</span><span class="mark">Kết</span></div>
+        <div>
+          <p class="say">Tóm lại, Kizuna Nihongo là nền tảng học tiếng Nhật có <strong>lộ trình cá nhân hoá</strong>, có <strong>trợ lý AI hiểu dữ liệu người học</strong>, và có cả <strong>vòng đời giáo viên kèm chia doanh thu</strong>. Nhóm em xin cảm ơn thầy cô và sẵn sàng nhận câu hỏi ạ.</p>
+        </div>
+      </div>
+
+      <div class="beat skim">
+        <div class="cue"><span class="at">0:50</span><span class="dur">10 giây</span><span class="slide">—</span><span class="mark">Đệm</span></div>
+        <div>
+          <p class="say"><em>Mười giây dự phòng cho cả nhóm. Nếu bốn người trước bị trễ, phần này hấp thụ.</em></p>
+        </div>
+      </div>
+    </div>
+
+    <div class="keys">
+      <div>
+        <h3>Phải nói bằng được</h3>
+        <ul>
+          <li>Route mỏng → controller theo domain → service dùng chung</li>
+          <li>Client không truy vấn database trực tiếp</li>
+          <li>Ba điểm chốt ở câu kết</li>
+        </ul>
+      </div>
+      <div>
+        <h3>Câu kết dự phòng</h3>
+        <p>“Nhóm em xin dừng phần trình bày tại đây, rất mong nhận được góp ý của thầy cô ạ.”</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== Q&A ===================== -->
+  <section class="block" id="qa">
+    <h2>Câu hỏi hội đồng hay hỏi</h2>
+    <p class="lede">Trả lời ngắn, đúng những gì code làm được. Không hứa thứ chưa có — nói thẳng phạm vi rồi nêu hướng phát triển.</p>
+
+    <div class="qa">
+      <details>
+        <summary>Hệ thống chống gian lận khi thi tới đâu?</summary>
+        <div class="ans">
+          <p>Hiện tại cơ chế giám sát nằm ở <strong>quiz trong khoá học</strong>, và chỉ bật khi giáo viên hoặc admin chọn chế độ “Giám sát”. Khi bật, học viên phải vào <strong>toàn màn hình</strong> mới bắt đầu làm được; mỗi lần thoát toàn màn hình đều bị <strong>server ghi nhận</strong>, vượt ngưỡng thì bài thi bị <strong>khoá tạm thời</strong> — không trả câu hỏi và không cho nộp. Admin xem lại được các lượt thi này.</p>
+          <p><strong>Thi thử JLPT hiện chưa có giám sát</strong>, vì mục tiêu của nó là luyện đúng cấu trúc đề thật chứ không phải thi lấy điểm. Đây là hướng bọn em phát triển tiếp.</p>
+        </div>
+      </details>
+
+      <details>
+        <summary>Vì sao AI, cổng thanh toán và email lại là actor? Chúng có phải người dùng đâu?</summary>
+        <div class="ans">
+          <p>Actor không nhất thiết là người. Ba dịch vụ đó <strong>nằm ngoài phạm vi hệ thống</strong>, bọn em không kiểm soát được chúng, nhưng chúng <strong>trao đổi dữ liệu và tham gia hoàn thành use case</strong> — nên theo UML chúng là <em>actor phụ</em>.</p>
+          <p>Khác biệt là actor phụ <strong>không khởi tạo use case</strong>, mà được use case gọi tới: AI được gọi khi sinh lộ trình hoặc chấm bài viết, cổng thanh toán được gọi khi nâng cấp gói, email được gọi khi đăng ký và quên mật khẩu.</p>
+          <p>Vẽ chúng ra sơ đồ giúp thấy ngay hệ thống <strong>phụ thuộc bên ngoài ở đúng những chỗ nào</strong> — cũng chính là những chỗ phải có phương án dự phòng khi dịch vụ lỗi.</p>
+        </div>
+      </details>
+
+      <details>
+        <summary>Vì sao phải tách 10 schema thay vì để chung một schema public?</summary>
+        <div class="ans">
+          <p>Ba lý do. Thứ nhất, mỗi schema là một domain nghiệp vụ nên tìm bảng và phân công người làm dễ hơn nhiều. Thứ hai, <strong>dữ liệu tài chính tách riêng</strong> vào <code>billing_module</code> và chỉ cấp quyền cho <code>service_role</code>, nên kể cả lộ khoá phía client cũng không đọc được. Thứ ba, phân quyền và audit gọn hơn vì cấp theo schema thay vì theo từng bảng.</p>
+        </div>
+      </details>
+
+      <details>
+        <summary>AI sinh nội dung sai hoặc bịa thì xử lý thế nào?</summary>
+        <div class="ans">
+          <p>AI chỉ <strong>sinh bản nháp</strong>. Bài đọc, câu hỏi hay audio đều phải giáo viên xem lại và bấm publish thì học viên mới thấy. Với AI Sensei thì mọi hành động ghi dữ liệu đều phải người dùng xác nhận, AI không tự ý sửa gì trong tài khoản.</p>
+        </div>
+      </details>
+
+      <details>
+        <summary>Chia doanh thu cho giáo viên tính bằng công thức nào?</summary>
+        <div class="ans">
+          <p>Hệ thống ghi lại <strong>lượt học viên dùng nội dung</strong> của từng giáo viên, có khử trùng lặp theo ngày. Cuối tháng, một phần doanh thu premium được đưa vào quỹ, rồi chia cho các giáo viên <strong>theo tỷ lệ lượt dùng</strong>. Số liệu chỉ là ước tính cho tới khi admin chốt tháng.</p>
+        </div>
+      </details>
+
+      <details>
+        <summary>Sao không cho frontend gọi thẳng Supabase cho nhanh?</summary>
+        <div class="ans">
+          <p>Vì phần lớn nghiệp vụ không nằm ở câu truy vấn mà ở luật: hạn mức theo gói, quyền sở hữu nội dung, khoá bài thi, khớp thanh toán. Những luật đó phải chạy ở nơi client không sửa được. Nên client chỉ gọi <code>/api/*</code> kèm JWT, còn backend dùng <code>service_role</code> để truy vấn.</p>
+        </div>
+      </details>
+
+      <details>
+        <summary>Sản phẩm khác gì Mazii và Bunpro?</summary>
+        <div class="ans">
+          <p>Mazii mạnh về tra cứu nhưng không có lộ trình và khoá học. Bunpro mạnh về luyện ngữ pháp lặp lại nhưng chỉ có tiếng Anh và không có giáo viên. Kizuna Nihongo giữ cả hai điểm mạnh đó, rồi bọc thêm ba thứ họ không có: <strong>khoá học có cấu trúc</strong>, <strong>giáo viên soạn nội dung và được chia doanh thu</strong>, và <strong>lộ trình do AI dựng riêng cho từng người</strong>.</p>
+        </div>
+      </details>
+
+      <details>
+        <summary>Dữ liệu từ điển lấy từ đâu, tra tiếng Việt không dấu làm sao?</summary>
+        <div class="ans">
+          <p>Dữ liệu được import sẵn vào <code>dictionary_module</code> theo bốn lớp: mục từ, nghĩa, kanji và câu ví dụ. Tra theo nghĩa tiếng Việt chạy qua một hàm RPC trong Postgres có <strong>bỏ dấu</strong> và xếp hạng kết quả, nên gõ không dấu vẫn ra đúng từ.</p>
+        </div>
+      </details>
+
+      <details>
+        <summary>Thanh toán xử lý ra sao, có sợ trùng đơn không?</summary>
+        <div class="ans">
+          <p>Bọn em dùng SePay. Mỗi đơn có một mã chuyển khoản riêng; webhook nhận giao dịch từ ngân hàng rồi khớp với đơn đang chờ. Việc khớp là <strong>idempotent</strong> — cùng một giao dịch gửi lại nhiều lần cũng chỉ ghi nhận một lần. Thanh toán xong thì trigger trong database tự tạo bản ghi ghi danh.</p>
+        </div>
+      </details>
+    </div>
+  </section>
+
+  <!-- ===================== LUẬT SÂN KHẤU ===================== -->
+  <section class="block" id="rules">
+    <h2>Luật sân khấu</h2>
+    <p class="lede">Bốn quy ước để cả nhóm không vỡ trận khi có người nói lố.</p>
+    <div class="rules">
+      <div>
+        <h3>Không đọc chữ trên slide</h3>
+        <p>Hội đồng đọc nhanh hơn bạn nói. Slide là bằng chứng, lời nói là diễn giải.</p>
+      </div>
+      <div>
+        <h3>Ai lố thì người sau cắt</h3>
+        <p>Người kế tiếp bỏ ngay các nhịp đánh dấu □ trong phần mình, không bỏ nhịp ■.</p>
+      </div>
+      <div>
+        <h3>Bấm slide trong lúc nói</h3>
+        <p>Nhất là phần database — dừng lại chờ slide chuyển là mất 3–4 giây mỗi lần.</p>
+      </div>
+      <div>
+        <h3>Câu bắc cầu là tín hiệu</h3>
+        <p>Nghe câu bắc cầu thì người sau bước lên luôn, không chờ được mời lại.</p>
+      </div>
+    </div>
+  </section>
+
+  <p class="foot">
+    Bấm vào đồng hồ ở mỗi phần để tự bấm giờ khi tập. In trang này (Ctrl&nbsp;+&nbsp;P) sẽ ra mỗi người một tờ.
+  </p>
+</div>
+
+<script>
+/* Đồng hồ bấm giờ cho từng người — đếm lên, đổi màu khi vượt 60 giây. */
+document.querySelectorAll('[data-timer]').forEach(function (btn) {
+  var clock = btn.querySelector('[data-clock]');
+  var id = null, start = 0;
+
+  function paint(ms) {
+    var s = Math.floor(ms / 1000);
+    clock.textContent = Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+    btn.classList.toggle('over', s >= 60);
+  }
+
+  btn.addEventListener('click', function () {
+    if (id) {                       // đang chạy → dừng và reset
+      clearInterval(id); id = null;
+      btn.classList.remove('run', 'over');
+      clock.textContent = '0:00';
+      return;
+    }
+    start = Date.now();
+    btn.classList.add('run');
+    paint(0);
+    id = setInterval(function () { paint(Date.now() - start); }, 200);
+  });
+});
+</script>

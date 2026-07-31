@@ -33,8 +33,10 @@ async function sePayWebhook(req, res) {
     res.json({ ok: true, result });
   } catch (err) {
     console.error('[webhook/sepay]', err.message);
-    // Always 200 to prevent SePay from retrying with bad data
-    res.json({ ok: false, error: err.message });
+    // Trả 500 để SePay gửi lại — chỉ vào nhánh này khi lỗi hạ tầng (mất kết nối DB).
+    // Các trường hợp không khớp bình thường đã trả 200 ở trên nên không bị retry vô ích.
+    // An toàn vì processTransaction idempotent theo (provider, external_transaction_id).
+    res.status(500).json({ ok: false, error: err.message });
   }
 }
 

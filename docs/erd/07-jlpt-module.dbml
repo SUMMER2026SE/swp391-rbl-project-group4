@@ -1,0 +1,135 @@
+// 07-jlpt-module.dbml — schema "jlpt_module" (Thi thử JLPT)
+// Kizuna Nihongo — dán trực tiếp vào https://dbdiagram.io
+
+Table jlpt_module.jlpt_bank_groups {
+  id uuid [pk, default: `gen_random_uuid()`]
+  level text [not null]
+  mondai_type text [not null]
+  title text
+  passage_text text
+  image_url text
+  created_by uuid
+  created_at timestamptz [default: `now()`]
+}
+
+Table jlpt_module.jlpt_bank_questions {
+  id uuid [pk, default: `gen_random_uuid()`]
+  group_id uuid
+  level text [not null]
+  mondai_type text [not null]
+  score_category text [not null]
+  question_text text
+  image_url text
+  audio_url text
+  audio_transcript text
+  options jsonb [not null, default: '[]']
+  correct_index int [not null, default: 0]
+  explanation text
+  translation_vi text
+  option_translations jsonb
+  source text [not null, default: 'manual']
+  created_by uuid
+  created_at timestamptz [default: `now()`]
+}
+
+Table jlpt_module.mock_attempt_answers {
+  attempt_id uuid [not null]
+  question_id uuid [not null]
+  selected_index int
+  is_correct boolean
+  answered_at timestamptz [default: `now()`]
+
+  indexes {
+    (attempt_id, question_id) [pk]
+  }
+}
+
+Table jlpt_module.mock_attempts {
+  id uuid [pk, default: `gen_random_uuid()`]
+  exam_id uuid [not null]
+  user_id uuid [not null]
+  attempt_number int [not null, default: 1]
+  status text [not null, default: 'in_progress']
+  current_section_position int [not null, default: 0]
+  section_deadline_at timestamptz
+  started_at timestamptz [default: `now()`]
+  submitted_at timestamptz
+  scores jsonb
+  total_score int
+  passed boolean
+  duration_seconds int
+  user_role text [not null, default: 'student']
+}
+
+Table jlpt_module.mock_exam_sections {
+  id uuid [pk, default: `gen_random_uuid()`]
+  exam_id uuid [not null]
+  position int [not null, default: 0]
+  section_type text [not null]
+  title text [not null, default: '']
+  time_limit_minutes int [not null, default: 30]
+}
+
+Table jlpt_module.mock_exams {
+  id uuid [pk, default: `gen_random_uuid()`]
+  level text [not null]
+  title text [not null]
+  description text
+  is_published boolean [default: false]
+  created_by uuid
+  created_at timestamptz [default: `now()`]
+  updated_at timestamptz [default: `now()`]
+  published_at timestamptz
+  is_free boolean [not null, default: false]
+}
+
+Table jlpt_module.mock_question_groups {
+  id uuid [pk, default: `gen_random_uuid()`]
+  section_id uuid [not null]
+  position int [not null, default: 0]
+  mondai_number int [not null, default: 1]
+  mondai_type text [not null]
+  score_category text [not null]
+  passage_text text
+  image_url text
+  bank_group_id uuid
+}
+
+Table jlpt_module.mock_questions {
+  id uuid [pk, default: `gen_random_uuid()`]
+  group_id uuid [not null]
+  position int [not null, default: 0]
+  question_text text
+  image_url text
+  audio_url text
+  options jsonb [not null, default: '[]']
+  correct_index int [not null, default: 0]
+  explanation text
+  translation_vi text
+  passage_snapshot jsonb
+  audio_transcript text
+  option_translations jsonb
+  bank_question_id uuid
+}
+
+// ─── Bảng tham chiếu ở schema khác (stub, chỉ để vẽ quan hệ) ───
+
+Table auth.users {
+  id uuid [pk]
+
+  Note: 'Supabase Auth (auth.users) — nguồn định danh gốc'
+}
+
+// ─── Quan hệ ───
+
+Ref: jlpt_module.jlpt_bank_groups.created_by > auth.users.id
+Ref: jlpt_module.jlpt_bank_questions.created_by > auth.users.id
+Ref: jlpt_module.jlpt_bank_questions.group_id > jlpt_module.jlpt_bank_groups.id
+Ref: jlpt_module.mock_attempt_answers.attempt_id > jlpt_module.mock_attempts.id
+Ref: jlpt_module.mock_attempt_answers.question_id > jlpt_module.mock_questions.id
+Ref: jlpt_module.mock_attempts.exam_id > jlpt_module.mock_exams.id
+Ref: jlpt_module.mock_attempts.user_id > auth.users.id
+Ref: jlpt_module.mock_exam_sections.exam_id > jlpt_module.mock_exams.id
+Ref: jlpt_module.mock_exams.created_by > auth.users.id
+Ref: jlpt_module.mock_question_groups.section_id > jlpt_module.mock_exam_sections.id
+Ref: jlpt_module.mock_questions.group_id > jlpt_module.mock_question_groups.id
