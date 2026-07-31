@@ -20,6 +20,7 @@ export default function CourseManageCard({
   course, onManage, onEdit, onTogglePublish, onDelete,
   uploadCover, onCoverUploaded, onError,
   canEditContent = true, showCreator = false, onView,
+  onGrant,   // có truyền → hiện nút cấp quyền học cho học viên (trang giáo viên)
 }) {
   const fileRef = useRef(null);
   const [dragOver, setDragOver] = useState(false);
@@ -189,6 +190,15 @@ export default function CourseManageCard({
               className="p-2 rounded-xl text-on-muted hover:text-sumire-purple hover:bg-sumire-purple/10 transition-colors shrink-0"
             >
               <span className="material-symbols-outlined text-[18px]">visibility</span>
+            </button>
+          )}
+          {canEditContent && onGrant && (
+            <button
+              onClick={() => onGrant(course)}
+              title="Cấp quyền học cho học viên"
+              className="p-2 rounded-xl text-on-muted hover:text-tsubaki-red hover:bg-tsubaki-red/10 transition-colors shrink-0"
+            >
+              <span className="material-symbols-outlined text-[18px]">person_add</span>
             </button>
           )}
           {canEditContent && (

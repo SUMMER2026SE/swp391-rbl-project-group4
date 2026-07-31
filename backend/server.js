@@ -4,9 +4,7 @@ require('dotenv').config({ path: require('path').join(__dirname, '../.env') });
 const app  = require('./app');
 const cron = require('node-cron');
 const { finalizePreviousMonth } = require('./services/revenuePoolService');
-// Host deploy (Render/Railway) tự cấp PORT — phải nghe đúng port đó thì health check mới qua.
-// Local dev không có PORT nên rơi về API_PORT (tránh xung đột với app khác) rồi mới tới 3001.
-const port = process.env.PORT || process.env.API_PORT || 3001;
+const port = process.env.API_PORT || 3001; // Dùng API_PORT để tránh xung đột với PORT=3000 của EJS app
 
 app.listen(port, () => {
   console.log(`Kizuna Nihongo API running at http://localhost:${port}`);

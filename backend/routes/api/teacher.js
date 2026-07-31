@@ -36,6 +36,13 @@ router.put('/courses/:id',      c.updateCourse);
 router.delete('/courses/:id',   c.deleteCourse);
 router.post('/courses/upload-cover', upload.single('image'), ac.uploadCourseCover);
 
+// Cấp quyền học khoá cho học viên theo email (không cần thanh toán) — chỉ khoá của mình.
+// preview: đối chiếu email → tài khoản để giáo viên xác nhận trước khi cấp (không ghi DB).
+router.post('/courses/:id/grants/preview', c.previewCourseGrants);
+router.post('/courses/:id/grants',         c.grantCourseAccess);
+router.get('/courses/:id/grants',          c.listCourseGrants);
+router.delete('/courses/:id/grants/:studentId', c.revokeCourseGrant);
+
 // Course content (Bài học/units + Mục/lessons) — chỉ trên khóa do chính mình tạo
 router.get('/courses/:courseId/builder', c.getCourseBuilder);
 router.post('/units',          c.createUnit);

@@ -903,3 +903,76 @@ exports.listLessonQuizAttempts = async (req, res) => {
     res.status(500).json({ error: 'Không thể tải bài làm.' });
   }
 };
+
+// ── Cấp quyền học khoá cho học viên (giáo viên tự cấp, không cần thanh toán) ───
+// Quyền học = row course_enrollments (xem services/courseAccess.js). Giáo viên chỉ
+// thao tác được trên khoá do chính mình tạo; admin được đi qua như mọi nơi khác.
+
+const grantSvc = require('../services/courseGrantService');
+
+async function assertCourseOwner(courseId, user) {
+  const { data: course } = await supabaseAdmin.from('courses')
+    .select('id, title, created_by').eq('id', courseId).maybeSingle();
+  if (!course) {
+    const e = new Error('Không tìm thấy khoá học.');
+    e.status = 404;
+    throw e;
+  }
+  if (user.user_metadata?.role !== 'admin' && course.created_by !== user.id) {
+    const e = new Error('Bạn không có quyền trên khoá học này.');
+    e.status = 403;
+    throw e;
+  }
+  return course;
+}
+
+// Gom xử lý lỗi có e.status để 4 handler dưới không lặp try/catch dài dòng.
+function sendErr(res, err, fallback) {
+  if (err?.status) return res.status(err.status).json({ error: err.message });
+  console.error(fallback, err);
+  res.status(500).json({ error: fallback });
+}
+
+// Bước xác nhận: đối chiếu email → tài khoản, KHÔNG ghi gì vào DB.
+exports.previewCourseGrants = async (req, res) => {
+  try {
+    const course = await assertCourseOwner(req.params.id, req.user);
+    const { results } = await grantSvc.resolveEmails(req.body?.emails, course.id, course.created_by);
+    res.json({ results, max_emails: grantSvc.MAX_EMAILS });
+  } catch (err) { sendErr(res, err, 'Không thể kiểm tra danh sách email.'); }
+};
+
+exports.grantCourseAccess = async (req, res) => {
+  try {
+    const course = await assertCourseOwner(req.params.id, req.user);
+
+    // Nhận user_ids (sau khi đã xác nhận) hoặc emails (đường tắt) — luôn resolve lại
+    // để không tin danh sách id do client gửi lên.
+    let ids = Array.isArray(req.body?.user_ids) ? req.body.user_ids : null;
+    if (!ids) {
+      const { results } = await grantSvc.resolveEmails(req.body?.emails, course.id, course.created_by);
+      ids = results.filter(r => r.status === 'ok').map(r => r.user_id);
+    } else if (ids.length > grantSvc.MAX_EMAILS) {
+      return res.status(400).json({ error: `Tối đa ${grantSvc.MAX_EMAILS} học viên mỗi lần.` });
+    }
+    if (!ids.length) return res.status(400).json({ error: 'Không có học viên hợp lệ để cấp quyền.' });
+
+    const result = await grantSvc.grantAccess(course.id, req.user.id, ids);
+    res.json(result);
+  } catch (err) { sendErr(res, err, 'Không thể cấp quyền.'); }
+};
+
+exports.listCourseGrants = async (req, res) => {
+  try {
+    const course = await assertCourseOwner(req.params.id, req.user);
+    res.json(await grantSvc.listGranted(course.id));
+  } catch (err) { sendErr(res, err, 'Không thể tải danh sách đã cấp.'); }
+};
+
+exports.revokeCourseGrant = async (req, res) => {
+  try {
+    const course = await assertCourseOwner(req.params.id, req.user);
+    await grantSvc.revokeAccess(course.id, req.params.studentId);
+    res.json({ success: true });
+  } catch (err) { sendErr(res, err, 'Không thể thu hồi quyền.'); }
+};

@@ -6,6 +6,7 @@ import Button from '../../components/ui/Button';
 import Alert from '../../components/ui/Alert';
 import CourseManageCard from '../../components/admin/CourseManageCard';
 import CourseForm, { EMPTY, LEVELS } from '../../components/teacher/CourseForm';
+import CourseGrantModal from '../../components/teacher/CourseGrantModal';
 import api from '../../lib/api';
 
 const SORTS = [
@@ -29,6 +30,7 @@ export default function TeacherCourses() {
   const [saving, setSaving]   = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleting, setDeleting] = useState(false);
+  const [grantTarget, setGrantTarget] = useState(null);   // khoá đang mở cửa sổ cấp quyền
   const [alert, setAlert]     = useState({ type: '', msg: '' });
   const [search, setSearch]   = useState('');
   const [filterLevel, setFilterLevel] = useState('');
@@ -217,6 +219,7 @@ export default function TeacherCourses() {
               onCoverUploaded={(url) => handleCoverUploaded(course, url)}
               onError={(m) => showAlert('error', m)}
               onView={(c) => navigate(`/teacher/courses/preview/${c.id}`)}
+              onGrant={setGrantTarget}
             />
           ))}
         </div>
@@ -235,6 +238,11 @@ export default function TeacherCourses() {
           Bạn chắc chắn muốn xóa khóa học <strong>"{deleteTarget?.title}"</strong>? Hành động này không thể hoàn tác.
         </p>
       </Modal>
+
+      {/* Cấp quyền học cho học viên */}
+      {grantTarget && (
+        <CourseGrantModal course={grantTarget} onClose={() => setGrantTarget(null)} />
+      )}
     </TeacherLayout>
   );
 }

@@ -364,7 +364,10 @@ CREATE TABLE IF NOT EXISTS course_module.course_enrollments (
   student_id uuid NOT NULL,
   enrolled_at timestamp with time zone NOT NULL DEFAULT now(),
   completed_at timestamp with time zone,
-  progress_pct smallint NOT NULL DEFAULT 0
+  progress_pct smallint NOT NULL DEFAULT 0,
+  source text NOT NULL DEFAULT 'self',
+  granted_by uuid,
+  granted_at timestamp with time zone
 );
 
 -- Đánh giá/nhận xét khoá học
@@ -1657,6 +1660,8 @@ ALTER TABLE billing_module.user_subscriptions ADD CONSTRAINT user_subscriptions_
 
 ALTER TABLE course_module.course_enrollments ADD CONSTRAINT ck_ce_pct CHECK (((progress_pct >= 0) AND (progress_pct <= 100)));
 
+ALTER TABLE course_module.course_enrollments ADD CONSTRAINT ck_ce_source CHECK ((source = ANY (ARRAY['self'::text, 'purchase'::text, 'teacher_grant'::text, 'admin_grant'::text])));
+
 ALTER TABLE course_module.course_reviews ADD CONSTRAINT course_reviews_rating_check CHECK (((rating >= 1) AND (rating <= 5)));
 
 ALTER TABLE course_module.courses ADD CONSTRAINT courses_creator_type_check CHECK (((creator_type)::text = ANY ((ARRAY['admin'::character varying, 'teacher'::character varying])::text[])));
@@ -1812,6 +1817,8 @@ ALTER TABLE billing_module.user_subscriptions ADD CONSTRAINT user_subscriptions_
 ALTER TABLE course_module.course_enrollments ADD CONSTRAINT fk_ce_course FOREIGN KEY (course_id) REFERENCES course_module.courses(id) ON DELETE CASCADE;
 
 ALTER TABLE course_module.course_enrollments ADD CONSTRAINT fk_ce_student FOREIGN KEY (student_id) REFERENCES users_module.users(id);
+
+ALTER TABLE course_module.course_enrollments ADD CONSTRAINT fk_ce_granted_by FOREIGN KEY (granted_by) REFERENCES users_module.users(id) ON DELETE SET NULL;
 
 ALTER TABLE course_module.course_reviews ADD CONSTRAINT course_reviews_course_id_fkey FOREIGN KEY (course_id) REFERENCES course_module.courses(id) ON DELETE CASCADE;
 
@@ -3146,6 +3153,8 @@ CREATE INDEX idx_courses_difficulty ON course_module.courses USING btree (diffic
 CREATE INDEX idx_lessons_reading_article ON course_module.lessons USING btree (reading_article_id) WHERE (reading_article_id IS NOT NULL);
 
 CREATE INDEX ix_ce_student ON course_module.course_enrollments USING btree (student_id, course_id);
+
+CREATE INDEX ix_ce_source ON course_module.course_enrollments USING btree (course_id, source);
 
 CREATE INDEX ix_lessons_course ON course_module.lessons USING btree (course_id, sort_order);
 
