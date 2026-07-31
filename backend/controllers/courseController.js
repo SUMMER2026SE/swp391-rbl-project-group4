@@ -61,11 +61,13 @@ exports.list = async (req, res) => {
     const ids = courses.map(c => c.id);
     const teacherIds = [...new Set(courses.filter(c => c.creator_type !== 'admin').map(c => c.created_by).filter(Boolean))];
 
-    // Bổ sung: level (chữ) từ view compat, review_count, số mục, tên người tạo, is_enrolled.
-    const [levelRows, reviewRows, lessonRows, creatorRows, enrolledRows] = await Promise.all([
+    // Bổ sung: level (chữ) từ view compat, review_count, số bài học (units) + số mục
+    // (lessons), tên người tạo, is_enrolled.
+    const [levelRows, reviewRows, lessonRows, unitRows, creatorRows, enrolledRows] = await Promise.all([
       ids.length ? supabaseAdmin.from('courses').select('id,level').in('id', ids) : Promise.resolve({ data: [] }),
       ids.length ? contentDb.from('course_reviews').select('course_id').in('course_id', ids) : Promise.resolve({ data: [] }),
       ids.length ? supabaseAdmin.from('lessons').select('course_id').in('course_id', ids) : Promise.resolve({ data: [] }),
+      ids.length ? contentDb.from('units').select('course_id').in('course_id', ids) : Promise.resolve({ data: [] }),
       teacherIds.length ? supabaseAdmin.from('users').select('id,full_name').in('id', teacherIds) : Promise.resolve({ data: [] }),
       (req.user && ids.length)
         ? contentDb.from('course_enrollments').select('course_id').eq('student_id', req.user.id).in('course_id', ids)
@@ -75,8 +77,11 @@ exports.list = async (req, res) => {
     const levelMap = Object.fromEntries((levelRows.data || []).map(r => [r.id, r.level]));
     const reviewCount = {};
     (reviewRows.data || []).forEach(r => { reviewCount[r.course_id] = (reviewCount[r.course_id] || 0) + 1; });
+    // lesson = MỤC HỌC (từ vựng/kanji/ngữ pháp/bài đọc/quiz), unit = BÀI HỌC chứa các mục đó
     const lessonCount = {};
     (lessonRows.data || []).forEach(l => { lessonCount[l.course_id] = (lessonCount[l.course_id] || 0) + 1; });
+    const unitCount = {};
+    (unitRows.data || []).forEach(u => { unitCount[u.course_id] = (unitCount[u.course_id] || 0) + 1; });
     const creatorMap = Object.fromEntries((creatorRows.data || []).map(u => [u.id, u.full_name]));
     const enrolledSet = new Set((enrolledRows.data || []).map(e => e.course_id));
 
@@ -84,7 +89,8 @@ exports.list = async (req, res) => {
       ...c,
       level: levelMap[c.id] || null,
       review_count: reviewCount[c.id] || 0,
-      lesson_count: lessonCount[c.id] || 0,
+      unit_count:   unitCount[c.id] || 0,      // số BÀI HỌC
+      lesson_count: lessonCount[c.id] || 0,    // số MỤC HỌC
       is_enrolled: enrolledSet.has(c.id),
       creator_name: c.creator_type === 'admin' ? 'Kizuna Nihongo' : (creatorMap[c.created_by] || null),
     }));

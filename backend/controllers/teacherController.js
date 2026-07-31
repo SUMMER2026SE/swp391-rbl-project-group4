@@ -258,16 +258,25 @@ exports.listCourses = async (req, res) => {
     if (!courses || courses.length === 0) return res.json([]);
 
     const ids = courses.map(c => c.id);
-    const [{ data: lessons }, { data: cm }] = await Promise.all([
+    const [{ data: lessons }, { data: units }, { data: cm }] = await Promise.all([
       supabaseAdmin.from('lessons').select('course_id').in('course_id', ids),
+      contentDb.from('units').select('course_id').in('course_id', ids),
       contentDb.from('courses').select('id,enrollment_count').in('id', ids),
     ]);
 
+    // lesson = MỤC HỌC, unit = BÀI HỌC (một bài chứa nhiều mục)
     const counts = {};
     (lessons || []).forEach(l => { counts[l.course_id] = (counts[l.course_id] || 0) + 1; });
+    const unitCounts = {};
+    (units || []).forEach(u => { unitCounts[u.course_id] = (unitCounts[u.course_id] || 0) + 1; });
     const enrollMap = Object.fromEntries((cm || []).map(c => [c.id, c.enrollment_count]));
 
-    res.json(courses.map(c => ({ ...c, lesson_count: counts[c.id] || 0, enrollment_count: enrollMap[c.id] || 0 })));
+    res.json(courses.map(c => ({
+      ...c,
+      unit_count:   unitCounts[c.id] || 0,
+      lesson_count: counts[c.id] || 0,
+      enrollment_count: enrollMap[c.id] || 0,
+    })));
   } catch (err) {
     console.error('Teacher courses error:', err);
     res.status(500).json({ error: 'Không thể tải khoá học.' });
