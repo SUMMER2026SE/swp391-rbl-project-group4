@@ -130,8 +130,11 @@ CREATE TABLE IF NOT EXISTS ai_module.learning_path_steps (
   skill_focus text,
   rationale text,
   resource_type text NOT NULL,
-  resource_id uuid NOT NULL,
+  resource_id uuid,
   resource_level text,
+  external_url text,
+  external_source text,
+  estimated_days integer,
   status text NOT NULL DEFAULT 'pending'::text,
   completed_at timestamp with time zone,
   created_at timestamp with time zone NOT NULL DEFAULT now()
@@ -149,7 +152,9 @@ CREATE TABLE IF NOT EXISTS ai_module.learning_paths (
   ai_model text,
   generated_at timestamp with time zone NOT NULL DEFAULT now(),
   created_at timestamp with time zone NOT NULL DEFAULT now(),
-  updated_at timestamp with time zone NOT NULL DEFAULT now()
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  learner_snapshot jsonb,
+  focus_skills text[]
 );
 
 -- Thông báo gửi tới người dùng
@@ -1622,15 +1627,15 @@ ALTER TABLE users_module.users ADD CONSTRAINT uq_users_email UNIQUE (email);
 
 ALTER TABLE ai_module.chat_messages ADD CONSTRAINT chat_messages_role_check CHECK ((role = ANY (ARRAY['user'::text, 'assistant'::text])));
 
-ALTER TABLE ai_module.learning_path_steps ADD CONSTRAINT learning_path_steps_resource_level_check CHECK ((resource_level = ANY (ARRAY['N5'::text, 'N4'::text, 'N3'::text, 'N2'::text, 'N1'::text])));
+ALTER TABLE ai_module.learning_path_steps ADD CONSTRAINT learning_path_steps_resource_level_check CHECK (((resource_level IS NULL) OR (resource_level = ANY (ARRAY['N5'::text, 'N4'::text, 'N3'::text, 'N2'::text, 'N1'::text]))));
 
-ALTER TABLE ai_module.learning_path_steps ADD CONSTRAINT learning_path_steps_resource_type_check CHECK ((resource_type = ANY (ARRAY['course'::text, 'study_list'::text, 'mock_exam'::text])));
+ALTER TABLE ai_module.learning_path_steps ADD CONSTRAINT learning_path_steps_resource_type_check CHECK ((resource_type = ANY (ARRAY['course'::text, 'study_list'::text, 'mock_exam'::text, 'article'::text, 'listening'::text, 'practice'::text, 'external'::text])));
 
-ALTER TABLE ai_module.learning_path_steps ADD CONSTRAINT learning_path_steps_skill_focus_check CHECK ((skill_focus = ANY (ARRAY['vocabulary'::text, 'kanji'::text, 'grammar'::text, 'reading'::text, 'listening'::text, 'mixed'::text])));
+ALTER TABLE ai_module.learning_path_steps ADD CONSTRAINT learning_path_steps_skill_focus_check CHECK ((skill_focus = ANY (ARRAY['vocabulary'::text, 'kanji'::text, 'grammar'::text, 'reading'::text, 'listening'::text, 'writing'::text, 'mixed'::text])));
 
 ALTER TABLE ai_module.learning_path_steps ADD CONSTRAINT learning_path_steps_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'completed'::text])));
 
-ALTER TABLE ai_module.learning_paths ADD CONSTRAINT learning_paths_current_level_check CHECK ((current_level = ANY (ARRAY['N5'::text, 'N4'::text, 'N3'::text, 'N2'::text, 'N1'::text])));
+ALTER TABLE ai_module.learning_paths ADD CONSTRAINT learning_paths_current_level_check CHECK ((current_level = ANY (ARRAY['BEGINNER'::text, 'N5'::text, 'N4'::text, 'N3'::text, 'N2'::text, 'N1'::text])));
 
 ALTER TABLE ai_module.learning_paths ADD CONSTRAINT learning_paths_status_check CHECK ((status = ANY (ARRAY['active'::text, 'archived'::text])));
 
