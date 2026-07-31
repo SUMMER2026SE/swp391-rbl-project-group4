@@ -218,7 +218,9 @@ router.get('/revenue-pool/config',          rp.getConfig);
 router.put('/revenue-pool/config',          rp.updateConfig);
 router.get('/revenue-pool',                 rp.getPeriod);
 router.post('/revenue-pool/:period/finalize', rp.finalize);
+router.post('/revenue-pool/:period/refinalize', rp.refinalize);
 router.post('/teacher-payouts/:id/paid',    rp.markPaid);
+router.get('/course-revenue',               rp.adminCourseRevenue);
 
 // Quizzes
 router.get('/quizzes',         c.listQuizzes);

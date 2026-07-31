@@ -80,6 +80,29 @@ async function finalizePeriod(periodKey) {
   return { skipped: false, ...c };
 }
 
+/**
+ * Chốt sổ LẠI một kỳ: xoá bản ghi cũ rồi tính lại theo số liệu hiện tại.
+ * Cần thiết vì chốt sổ khi tháng chưa kết thúc sẽ đóng băng số liệu dở dang.
+ * Chặn nếu đã trả tiền cho giáo viên trong kỳ — không ghi đè số đã thanh toán.
+ */
+async function refinalizePeriod(periodKey) {
+  const { data: paid } = await billingDb
+    .from('teacher_payouts')
+    .select('id')
+    .eq('period_key', periodKey)
+    .eq('status', 'paid')
+    .limit(1);
+
+  if (paid && paid.length) {
+    throw new Error('Kỳ này đã trả tiền cho ít nhất một giáo viên — không thể tính lại.');
+  }
+
+  await billingDb.from('teacher_payouts').delete().eq('period_key', periodKey);
+  await billingDb.from('revenue_pool_periods').delete().eq('period_key', periodKey);
+
+  return finalizePeriod(periodKey);
+}
+
 // Run by cron: finalize last month if the month has ended and isn't finalized yet.
 async function finalizePreviousMonth() {
   const periodKey = prevPeriodKey();
@@ -92,4 +115,4 @@ async function finalizePreviousMonth() {
   }
 }
 
-module.exports = { computePeriod, finalizePeriod, finalizePreviousMonth, prevPeriodKey };
+module.exports = { computePeriod, finalizePeriod, refinalizePeriod, finalizePreviousMonth, prevPeriodKey };

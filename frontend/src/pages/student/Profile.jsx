@@ -22,7 +22,7 @@ export default function Profile() {
   const [profileData, setProfileData] = useState({});
   const [userData, setUserData]       = useState({});
   const [dashData, setDashData]       = useState({});
-  const [form, setForm]               = useState({ fullname: '', phone: '', jlptTarget: '', bio: '' });
+  const [form, setForm]               = useState({ fullname: '', phone: '', jlptTarget: '', bio: '', bankName: '', bankAccountNumber: '', bankAccountName: '' });
   const [alert, setAlert]             = useState({ type: '', msg: '' });
   const [saving, setSaving]           = useState(false);
   const [avatarPreview, setAvatarPreview] = useState(null);
@@ -41,6 +41,9 @@ export default function Profile() {
         phone:      r.data.userData?.phone        || '',
         jlptTarget: r.data.profileData?.jlpt_target_level || '',
         bio:        r.data.profileData?.study_goal || '',
+        bankName:          r.data.userData?.bank_name           || '',
+        bankAccountNumber: r.data.userData?.bank_account_number || '',
+        bankAccountName:   r.data.userData?.bank_account_name   || '',
       });
     }).catch(e => setAlert({ type: 'error', msg: e.message }));
   }, []);
@@ -201,9 +204,38 @@ export default function Profile() {
                   className="w-full px-4 py-3 bg-white border border-outline rounded-xl text-sm outline-none focus:border-tsubaki-red transition-colors resize-none" />
               </div>
               )}
+
+              {/* Tài khoản nhận thu nhập — admin dựa vào đây để chuyển khoản cho giáo viên */}
+              {!isStudent && (
+                <div className="pt-2 border-t border-outline/40">
+                  <h3 className="font-semibold text-sm mb-1 flex items-center gap-2">
+                    <span className="material-symbols-outlined text-base text-emerald-600">account_balance</span>
+                    Tài khoản nhận thu nhập
+                  </h3>
+                  <p className="text-xs text-on-muted mb-3">
+                    Quản trị viên dùng thông tin này để chuyển tiền bán khóa học và quỹ chia sẻ cho bạn.
+                    Chưa điền thì khoản thu nhập vẫn được ghi nhận, nhưng sẽ chậm được chi trả.
+                  </p>
+                  <div className="grid md:grid-cols-2 gap-4">
+                    <Input label="Ngân hàng" value={form.bankName}
+                      onChange={e => setForm({ ...form, bankName: e.target.value })} placeholder="Vietcombank, MB Bank..." />
+                    <Input label="Số tài khoản" value={form.bankAccountNumber}
+                      onChange={e => setForm({ ...form, bankAccountNumber: e.target.value })}
+                      inputMode="numeric" placeholder="Chỉ gồm chữ số" />
+                    <Input label="Tên chủ tài khoản" value={form.bankAccountName}
+                      onChange={e => setForm({ ...form, bankAccountName: e.target.value })} placeholder="NGUYEN VAN A" />
+                  </div>
+                </div>
+              )}
+
               <div className="flex gap-3 pt-2">
                 <Button type="submit" loading={saving}>{t('profile.save')}</Button>
-                <Button type="button" variant="secondary" onClick={() => setForm({ fullname: userData?.full_name || '', phone: userData?.phone || '', jlptTarget: profileData?.jlpt_target_level || '', bio: profileData?.study_goal || '' })}>
+                <Button type="button" variant="secondary" onClick={() => setForm({
+                  fullname: userData?.full_name || '', phone: userData?.phone || '',
+                  jlptTarget: profileData?.jlpt_target_level || '', bio: profileData?.study_goal || '',
+                  bankName: userData?.bank_name || '', bankAccountNumber: userData?.bank_account_number || '',
+                  bankAccountName: userData?.bank_account_name || '',
+                })}>
                   {t('profile.cancel')}
                 </Button>
               </div>

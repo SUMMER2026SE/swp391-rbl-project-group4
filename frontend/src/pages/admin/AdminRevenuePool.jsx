@@ -27,15 +27,19 @@ export default function AdminRevenuePool() {
   const [working, setWorking] = useState('');
   const [alert, setAlert]     = useState({ type: '', msg: '' });
 
+  const [courseRev, setCourseRev] = useState(null);
+
   const load = async (pd = period) => {
     setLoading(true);
     try {
-      const [poolR, cfgR] = await Promise.all([
+      const [poolR, cfgR, crR] = await Promise.all([
         api.get(`/admin/revenue-pool?period=${pd}`),
         api.get('/admin/revenue-pool/config'),
+        api.get('/admin/course-revenue?limit=20'),
       ]);
       setData(poolR.data);
       setPct(String(Math.round((cfgR.data.pool_pct ?? 0.3) * 100)));
+      setCourseRev(crR.data);
     } catch (e) { setAlert({ type: 'error', msg: e.message }); }
     finally { setLoading(false); }
   };
@@ -54,12 +58,28 @@ export default function AdminRevenuePool() {
     finally { setSavingPct(false); }
   };
 
+  const isCurrent = period === curPeriod();
+
   const finalize = async () => {
-    if (!await confirm(`Chốt sổ kỳ ${period}? Thu nhập giáo viên sẽ được ghi nhận và không tính lại.`)) return;
+    const warn = isCurrent
+      ? `Chốt sổ kỳ ${period}? Tháng này CHƯA kết thúc nên số liệu sẽ bị đóng băng ở mức hiện tại. Bạn vẫn có thể bấm "Tính lại" sau, miễn là chưa trả tiền cho giáo viên nào.`
+      : `Chốt sổ kỳ ${period}? Thu nhập giáo viên sẽ được ghi nhận.`;
+    if (!await confirm(warn)) return;
     setWorking('finalize');
     try {
       await api.post(`/admin/revenue-pool/${period}/finalize`);
       setAlert({ type: 'success', msg: 'Đã chốt sổ.' });
+      load(period);
+    } catch (e) { setAlert({ type: 'error', msg: e.message }); }
+    finally { setWorking(''); }
+  };
+
+  const refinalize = async () => {
+    if (!await confirm(`Tính lại kỳ ${period} theo số liệu mới nhất? Bản chốt sổ cũ sẽ bị thay thế.`)) return;
+    setWorking('refinalize');
+    try {
+      await api.post(`/admin/revenue-pool/${period}/refinalize`);
+      setAlert({ type: 'success', msg: 'Đã tính lại và chốt sổ theo số liệu mới nhất.' });
       load(period);
     } catch (e) { setAlert({ type: 'error', msg: e.message }); }
     finally { setWorking(''); }
@@ -120,12 +140,27 @@ export default function AdminRevenuePool() {
               <Stat label="Trạng thái" value={finalized ? 'Đã chốt' : 'Xem trước'} icon={finalized ? 'lock' : 'schedule'} color={finalized ? 'text-emerald-600' : 'text-amber-500'} />
             </div>
 
-            {!finalized && (
+            {!finalized ? (
               <div className="mb-4 flex items-center justify-between gap-3 p-3 rounded-xl bg-amber-50 border border-amber-200 flex-wrap">
-                <p className="text-sm text-amber-800">Kỳ này chưa chốt — số liệu là ước tính trực tiếp. Chốt sổ để ghi nhận thu nhập.</p>
+                <p className="text-sm text-amber-800">
+                  Kỳ này chưa chốt — số liệu là ước tính trực tiếp, tự cập nhật theo doanh thu thực tế.
+                  {isCurrent && ' Tháng chưa kết thúc nên chưa cần chốt vội.'}
+                </p>
                 <button onClick={finalize} disabled={working === 'finalize'}
                   className="px-4 py-2 bg-amber-500 text-white text-sm font-semibold rounded-xl disabled:opacity-40">
                   {working === 'finalize' ? 'Đang chốt...' : 'Chốt sổ'}
+                </button>
+              </div>
+            ) : (
+              <div className="mb-4 flex items-center justify-between gap-3 p-3 rounded-xl bg-sky-50 border border-sky-200 flex-wrap">
+                <p className="text-sm text-sky-900">
+                  {isCurrent
+                    ? 'Kỳ này đã chốt nhưng tháng CHƯA kết thúc — số liệu đang bị đóng băng ở mức dở dang. Bấm "Tính lại" để cập nhật theo doanh thu mới nhất.'
+                    : 'Kỳ này đã chốt sổ. Nếu số liệu phát sinh thêm sau khi chốt, bấm "Tính lại".'}
+                </p>
+                <button onClick={refinalize} disabled={working === 'refinalize'}
+                  className="px-4 py-2 bg-sky-600 text-white text-sm font-semibold rounded-xl disabled:opacity-40">
+                  {working === 'refinalize' ? 'Đang tính...' : 'Tính lại'}
                 </button>
               </div>
             )}
@@ -135,7 +170,7 @@ export default function AdminRevenuePool() {
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead className="bg-surface-low border-b border-outline/40">
-                    <tr>{['Giáo viên', 'Lượt', 'Tỷ lệ', 'Tiền nhận', 'Trạng thái', ''].map(h =>
+                    <tr>{['Giáo viên', 'Tài khoản nhận', 'Lượt', 'Tỷ lệ', 'Tiền nhận', 'Trạng thái', ''].map(h =>
                       <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-on-muted uppercase tracking-wide">{h}</th>)}</tr>
                   </thead>
                   <tbody>
@@ -144,6 +179,18 @@ export default function AdminRevenuePool() {
                         <td className="px-4 py-2.5">
                           <p className="font-medium text-xs">{r.teacher?.full_name || '—'}</p>
                           <p className="text-on-muted text-xs">{r.teacher?.email}</p>
+                        </td>
+                        <td className="px-4 py-2.5">
+                          {r.teacher?.bank_account_number ? (
+                            <>
+                              <p className="font-mono text-xs font-semibold">{r.teacher.bank_account_number}</p>
+                              <p className="text-on-muted text-xs">
+                                {r.teacher.bank_name}{r.teacher.bank_account_name ? ` · ${r.teacher.bank_account_name}` : ''}
+                              </p>
+                            </>
+                          ) : (
+                            <span className="text-xs text-amber-600">Giáo viên chưa cung cấp</span>
+                          )}
                         </td>
                         <td className="px-4 py-2.5 tabular-nums">{Number(r.uses).toLocaleString('vi-VN')}</td>
                         <td className="px-4 py-2.5 tabular-nums">{Math.round(Number(r.share_pct) * 100)}%</td>
@@ -161,10 +208,61 @@ export default function AdminRevenuePool() {
                       </tr>
                     ))}
                     {payouts.length === 0 && (
-                      <tr><td colSpan={6} className="px-4 py-12 text-center text-on-muted">Chưa có lượt dùng nội dung giáo viên trong kỳ này.</td></tr>
+                      <tr><td colSpan={7} className="px-4 py-12 text-center text-on-muted">Chưa có lượt dùng nội dung giáo viên trong kỳ này.</td></tr>
                     )}
                   </tbody>
                 </table>
+              </div>
+            </div>
+
+            {/* Hoa hồng bán khóa học — nguồn tiền riêng, không nằm trong quỹ chia sẻ ở trên */}
+            <div className="mt-8">
+              <h2 className="text-lg font-bold font-display mb-1">Hoa hồng bán khóa học</h2>
+              <p className="text-sm text-on-muted mb-3">
+                Nguồn tiền riêng, tính trên toàn bộ lịch sử: giáo viên nhận thẳng phần của mình, nền tảng giữ hoa hồng theo tỷ lệ của từng khóa.
+              </p>
+
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+                <Stat label="Tổng tiền bán khóa" value={vnd(courseRev?.total_gross)} icon="sell" color="text-emerald-600" />
+                <Stat label="Nền tảng thu" value={vnd(courseRev?.total_fee)} icon="account_balance" color="text-tsubaki-red" />
+                <Stat label="Trả giáo viên" value={vnd(courseRev?.total_payout)} icon="payments" color="text-sky-600" />
+                <Stat label="Số lượt mua" value={Number(courseRev?.total_sales || 0).toLocaleString('vi-VN')} icon="shopping_cart" color="text-amber-500" />
+              </div>
+
+              <div className="glass-card rounded-2xl overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className="bg-surface-low border-b border-outline/40">
+                      <tr>{['Thời điểm', 'Học viên', 'Khóa học', 'Số tiền', 'Nền tảng thu', 'Giáo viên nhận'].map(h =>
+                        <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-on-muted uppercase tracking-wide">{h}</th>)}</tr>
+                    </thead>
+                    <tbody>
+                      {(courseRev?.transactions || []).map((t, i) => (
+                        <tr key={t.id} className={`border-t border-outline/40 ${i % 2 ? 'bg-surface-low/30' : ''}`}>
+                          <td className="px-4 py-2.5 text-xs text-on-muted whitespace-nowrap">
+                            {new Date(t.created_at).toLocaleString('vi-VN')}
+                          </td>
+                          <td className="px-4 py-2.5">
+                            <p className="font-medium text-xs">{t.student?.full_name || '—'}</p>
+                            <p className="text-on-muted text-xs">{t.student?.email}</p>
+                          </td>
+                          <td className="px-4 py-2.5 text-xs font-semibold">{t.course?.title || '—'}</td>
+                          <td className="px-4 py-2.5 tabular-nums font-bold">{vnd(t.amount)}</td>
+                          <td className="px-4 py-2.5 tabular-nums text-tsubaki-red">{vnd(t.platform_fee)}</td>
+                          <td className="px-4 py-2.5 tabular-nums text-sky-600">{vnd(t.teacher_payout)}</td>
+                        </tr>
+                      ))}
+                      {!(courseRev?.transactions || []).length && (
+                        <tr><td colSpan={6} className="px-4 py-12 text-center text-on-muted">Chưa có lượt mua khóa học nào.</td></tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+                {courseRev?.total > (courseRev?.transactions || []).length && (
+                  <p className="px-4 py-3 text-xs text-on-muted border-t border-outline/40">
+                    Hiển thị {courseRev.transactions.length} / {courseRev.total} giao dịch gần nhất.
+                  </p>
+                )}
               </div>
             </div>
           </>
