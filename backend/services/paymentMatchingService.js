@@ -116,17 +116,22 @@ async function processTransaction(rawPayload) {
   if (uErr || !updated) return 'no_match'; // race condition, another handler won
 
   // 4. Link transaction → order
-  await billingDb
+  const { error: lErr } = await billingDb
     .from('payment_transactions')
     .update({ matched_order_id: order.id })
     .eq('id', txRecord.id);
+  if (lErr) console.error('[paymentMatching] link tx→order error', lErr.message);
 
-  // 5. Activate subscription
+  // 5. Activate subscription — nếu lỗi, fulfilled_at ở lại NULL để
+  // retryUnfulfilledOrders() tự cấp lại quyền ở lần chạy sau.
   try {
-    await activateSubscription(order.user_id, order.plan_id, 'sepay');
+    await activateSubscription(order.user_id, order.plan_id, 'sepay', order.id);
+    await billingDb
+      .from('payment_orders')
+      .update({ fulfilled_at: new Date().toISOString() })
+      .eq('id', order.id);
   } catch (err) {
     console.error('[paymentMatching] activateSubscription error', err.message);
-    // Order is marked paid but subscription failed — log for manual review
   }
 
   // 6. Email biên lai (best-effort)
@@ -178,16 +183,21 @@ async function matchCourseOrder(paymentCode, tx, txRecord, rawPayload) {
 
   if (uErr || !updated) return 'no_match'; // race condition, another handler won
 
-  await billingDb
+  const { error: lErr } = await billingDb
     .from('payment_transactions')
     .update({ matched_course_order_id: order.id })
     .eq('id', txRecord.id);
+  if (lErr) console.error('[paymentMatching] link tx→course order error', lErr.message);
 
+  // Ghi danh — nếu lỗi, fulfilled_at ở lại NULL để retryUnfulfilledOrders() cấp lại.
   try {
     await completeCoursePayment(order, tx.externalId);
+    await billingDb
+      .from('course_payment_orders')
+      .update({ fulfilled_at: new Date().toISOString() })
+      .eq('id', order.id);
   } catch (err) {
     console.error('[paymentMatching] completeCoursePayment error', err.message);
-    // Order is marked paid but enrollment failed — log for manual review
   }
 
   // Email biên lai (best-effort)
@@ -201,11 +211,28 @@ async function matchCourseOrder(paymentCode, tx, txRecord, rawPayload) {
   return 'matched';
 }
 
+// ─── Đối soát chủ động ────────────────────────────────────────────────────────
+
+// Chặn hai lượt đối soát chạy chồng nhau (cron + nút admin + poll của học viên).
+let _reconcileRunning = false;
+
 /**
  * Poll SePay for recent transactions and try to match pending orders.
- * Called by the reconcile job and periodically by the polling scheduler.
+ * Đây là đường CHÍNH để mở khóa khi backend chạy nội bộ: webhook của SePay không
+ * gọi vào được localhost, còn hàm này gọi ra SePay nên luôn hoạt động.
+ * Được gọi từ cron trong server.js, từ reconcileOnDemand(), và từ nút admin.
  */
 async function reconcilePendingOrders() {
+  if (_reconcileRunning) return { checked: 0, matched: 0, skipped: true };
+  _reconcileRunning = true;
+  try {
+    return await runReconcile();
+  } finally {
+    _reconcileRunning = false;
+  }
+}
+
+async function runReconcile() {
   const { listTransactions } = require('./sepayClient');
 
   // Only run if there are pending orders (subscription hoặc mua khóa học)
@@ -244,4 +271,77 @@ async function reconcilePendingOrders() {
   return { checked: transactions.length, matched };
 }
 
-module.exports = { processTransaction, reconcilePendingOrders };
+// Đối soát theo yêu cầu, chặn tần suất 15s. Gọi từ endpoint mà frontend poll để học
+// viên đang đứng trước màn hình QR được mở khóa sau ~15s, thay vì chờ hết chu kỳ cron.
+let _lastOnDemand = 0;
+
+async function reconcileOnDemand() {
+  if (Date.now() - _lastOnDemand < 15_000) return;
+  _lastOnDemand = Date.now();
+  try {
+    await reconcilePendingOrders();
+  } catch (err) {
+    console.error('[reconcileOnDemand]', err.message);
+  }
+}
+
+/**
+ * Cấp lại quyền cho các đơn đã 'paid' nhưng bước cấp quyền thất bại (fulfilled_at NULL).
+ * An toàn khi chạy lại nhiều lần nhờ last_order_id (gói premium) và unique index
+ * uq_payments_provider_tx (mua khóa học).
+ */
+async function retryUnfulfilledOrders() {
+  let fixed = 0, failed = 0;
+
+  const { data: subOrders } = await billingDb
+    .from('payment_orders')
+    .select('id, user_id, plan_id')
+    .eq('status', 'paid')
+    .is('fulfilled_at', null)
+    .limit(20);
+
+  for (const order of subOrders || []) {
+    try {
+      await activateSubscription(order.user_id, order.plan_id, 'sepay', order.id);
+      await billingDb
+        .from('payment_orders')
+        .update({ fulfilled_at: new Date().toISOString() })
+        .eq('id', order.id);
+      fixed++;
+    } catch (err) {
+      failed++;
+      console.error('[retryFulfill] order', order.id, err.message);
+    }
+  }
+
+  const { data: courseOrders } = await billingDb
+    .from('course_payment_orders')
+    .select('id, student_id, course_id, amount, matched_transaction_id')
+    .eq('status', 'paid')
+    .is('fulfilled_at', null)
+    .limit(20);
+
+  for (const order of courseOrders || []) {
+    try {
+      await completeCoursePayment(order, order.matched_transaction_id);
+      await billingDb
+        .from('course_payment_orders')
+        .update({ fulfilled_at: new Date().toISOString() })
+        .eq('id', order.id);
+      fixed++;
+    } catch (err) {
+      failed++;
+      console.error('[retryFulfill] course order', order.id, err.message);
+    }
+  }
+
+  if (fixed || failed) console.log(`[retryFulfill] cấp lại ${fixed} đơn, lỗi ${failed}`);
+  return { fixed, failed };
+}
+
+module.exports = {
+  processTransaction,
+  reconcilePendingOrders,
+  reconcileOnDemand,
+  retryUnfulfilledOrders,
+};

@@ -147,7 +147,19 @@ async function completeCoursePayment(order, externalTransactionId) {
     payment_provider:        'sepay',
     provider_transaction_id: externalTransactionId != null ? String(externalTransactionId) : null,
   });
-  if (error) throw new Error(error.message);
+  // 23505 = unique_violation trên uq_payments_provider_tx: giao dịch này đã được ghi
+  // nhận ở lần chạy trước (job cấp lại quyền chạy chồng) → coi như đã hoàn tất.
+  if (error && error.code !== '23505') throw new Error(error.message);
+}
+
+// Đánh dấu các order mua khóa học đã quá hạn — mirror expireOldOrders của gói premium.
+async function expireOldCourseOrders() {
+  const { error } = await billingDb
+    .from('course_payment_orders')
+    .update({ status: 'expired', updated_at: new Date().toISOString() })
+    .eq('status', 'pending')
+    .lt('expires_at', new Date().toISOString());
+  if (error) console.error('[expireOldCourseOrders]', error.message);
 }
 
 module.exports = {
@@ -157,5 +169,6 @@ module.exports = {
   cancelCourseOrder,
   getPendingCourseOrder,
   completeCoursePayment,
+  expireOldCourseOrders,
   listMyCoursePurchases,
 };

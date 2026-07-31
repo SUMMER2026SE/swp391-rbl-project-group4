@@ -49,8 +49,13 @@ async function getActiveSubscription(userId) {
  * - No active subscription → create new
  * - Active premium → extend current_period_end by DURATION_DAYS
  * - Expired premium → reactivate from now
+ *
+ * orderId: id của payment_order đã thanh toán. Truyền vào để hàm idempotent —
+ * webhook, cron đối soát và job cấp lại quyền có thể cùng xử lý một đơn, nếu
+ * không chặn thì mỗi lần gọi lại cộng thêm DURATION_DAYS. Đường admin cấp tay
+ * không truyền orderId nên giữ nguyên hành vi cộng dồn mỗi lần bấm.
  */
-async function activateSubscription(userId, planId, source = 'sepay') {
+async function activateSubscription(userId, planId, source = 'sepay', orderId = null) {
   const now  = new Date();
   const plan = await billingDb
     .from('subscription_plans')
@@ -62,6 +67,9 @@ async function activateSubscription(userId, planId, source = 'sepay') {
   const tier = plan.data.tier;
 
   const existing = await getActiveSubscription(userId);
+
+  // Đơn này đã được áp dụng rồi → không cộng dồn thêm chu kỳ nữa.
+  if (orderId && existing?.last_order_id === orderId) return existing.id;
 
   if (existing && existing.plan?.tier === 'premium') {
     // Extend current period
@@ -77,6 +85,7 @@ async function activateSubscription(userId, planId, source = 'sepay') {
         current_period_end: newEnd.toISOString(),
         status: 'active',
         source,
+        last_order_id: orderId ?? existing.last_order_id,
         updated_at: now.toISOString(),
       })
       .eq('id', existing.id);
@@ -100,6 +109,7 @@ async function activateSubscription(userId, planId, source = 'sepay') {
       current_period_start: now.toISOString(),
       current_period_end: periodEnd.toISOString(),
       source,
+      last_order_id: orderId,
     })
     .select('id')
     .single();
@@ -120,6 +130,28 @@ async function cancelSubscription(userId) {
   if (error) throw new Error(error.message);
   invalidateTierCache(userId);
   return sub.id;
+}
+
+/**
+ * Hạ trạng thái các gói đã quá current_period_end — chạy định kỳ từ cron.
+ * Không có bước này thì status ở lại 'active' vĩnh viễn và getUserTier vẫn trả
+ * 'premium' cho gói đã hết hạn. Áp dụng cho cả gói admin cấp tay.
+ */
+async function expireSubscriptions() {
+  const now = new Date().toISOString();
+  const { data, error } = await billingDb
+    .from('user_subscriptions')
+    .update({ status: 'expired', expired_at: now, updated_at: now })
+    .in('status', ['active', 'grace_period'])
+    .lt('current_period_end', now)
+    .select('user_id');
+
+  if (error) {
+    console.error('[expireSubscriptions]', error.message);
+    return 0;
+  }
+  for (const row of data || []) invalidateTierCache(row.user_id);
+  return (data || []).length;
 }
 
 // ── Admin helpers ─────────────────────────────────────────────────────────────
@@ -153,6 +185,7 @@ module.exports = {
   getActiveSubscription,
   activateSubscription,
   cancelSubscription,
+  expireSubscriptions,
   adminGrantPremium,
   adminListSubscriptions,
 };

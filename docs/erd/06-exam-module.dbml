@@ -1,0 +1,187 @@
+// 06-exam-module.dbml — schema "exam_module" (Quiz & ngân hàng câu hỏi)
+// Kizuna Nihongo — dán trực tiếp vào https://dbdiagram.io
+
+Table exam_module.listening_passages {
+  id uuid [pk, default: `gen_random_uuid()`]
+  title text
+  audio_url text
+  transcript text
+  description text
+  level text
+  topic text
+  source text
+  duration_sec int
+  created_by uuid
+  created_at timestamptz [default: `now()`]
+  updated_at timestamptz [default: `now()`]
+  transcript_segments jsonb
+  transcript_language text
+  image_url text
+}
+
+Table exam_module.question_bank {
+  id uuid [pk, default: `gen_random_uuid()`]
+  question_text text [not null]
+  options jsonb [default: '[]']
+  correct_answer text
+  explanation text
+  level text
+  skill text
+  topic text
+  difficulty text [default: 'medium']
+  status text [default: 'pending']
+  is_ai_generated boolean [default: false]
+  created_by uuid
+  created_at timestamptz [default: `now()`]
+  question_type text [not null, default: 'single_choice']
+  passage_id uuid
+  listening_passage_id uuid
+}
+
+Table exam_module.quiz_attempts {
+  id uuid [pk, default: `gen_random_uuid()`]
+  quiz_id uuid
+  user_id uuid
+  score int [default: 0]
+  total_questions int [default: 0]
+  answers jsonb
+  completed_at timestamptz [default: `now()`]
+  mode text [default: 'normal']
+  violation_count int [not null, default: 0]
+  proctor_events jsonb
+  snapshots jsonb
+  assignment_id uuid
+  attempt_number int [default: 1]
+  status text [default: 'graded']
+  manual_score int
+  feedback text
+  graded_by uuid
+  graded_at timestamptz
+  ai_feedback jsonb
+  passed boolean
+}
+
+Table exam_module.quiz_lockouts {
+  id uuid [pk, default: `gen_random_uuid()`]
+  quiz_id uuid [not null]
+  user_id uuid [not null]
+  violation_count int [not null, default: 0]
+  locked_until timestamptz
+  updated_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    (quiz_id, user_id) [unique]
+  }
+}
+
+Table exam_module.quiz_questions {
+  id uuid [pk, default: `gen_random_uuid()`]
+  quiz_id uuid
+  question text [not null]
+  options jsonb
+  correct_answer text
+  explanation text
+  order_index int [default: 0]
+  created_at timestamptz [default: `now()`]
+  question_type text [not null, default: 'single_choice']
+  bank_question_id uuid
+  correct_answer_data jsonb
+  passage_snapshot jsonb
+}
+
+Table exam_module.quizzes {
+  id uuid [pk, default: `gen_random_uuid()`]
+  title text [not null]
+  title_ja text
+  description text
+  course_id uuid
+  lesson_id uuid
+  type text [default: 'multiple_choice']
+  time_limit int
+  is_published boolean [default: false]
+  created_at timestamptz [default: `now()`]
+  mode text [not null, default: 'normal']
+  teacher_id uuid
+  is_exam boolean [default: false]
+  strict_fullscreen boolean [not null, default: false]
+  passing_type text
+  passing_value numeric
+}
+
+Table exam_module.reading_passages {
+  id uuid [pk, default: `gen_random_uuid()`]
+  title text
+  content text
+  level text
+  topic text
+  source text
+  created_by uuid
+  created_at timestamptz [not null, default: `now()`]
+  image_url text
+}
+
+Table exam_module.teacher_question_bank {
+  id uuid [pk, default: `gen_random_uuid()`]
+  teacher_id uuid [not null]
+  question_text text [not null]
+  options jsonb [default: '[]']
+  correct_answer text
+  explanation text
+  level text
+  skill text
+  topic text
+  difficulty text [default: 'medium']
+  status text [default: 'approved']
+  is_ai_generated boolean [default: false]
+  question_type text [default: 'single_choice']
+  passage_id uuid
+  source_bank_id uuid
+  created_at timestamptz [default: `now()`]
+  passage_snapshot jsonb
+}
+
+Table exam_module.teacher_reading_passages {
+  id uuid [pk, default: `gen_random_uuid()`]
+  teacher_id uuid [not null]
+  title text
+  content text
+  image_url text
+  level text
+  topic text
+  source text
+  created_at timestamptz [default: `now()`]
+}
+
+// ─── Bảng tham chiếu ở schema khác (stub, chỉ để vẽ quan hệ) ───
+
+Table auth.users {
+  id uuid [pk]
+
+  Note: 'Supabase Auth (auth.users) — nguồn định danh gốc'
+}
+
+Table users_module.users {
+  id uuid [pk]
+
+  Note: 'Bảng thuộc schema users_module — xem file 01-users-module.dbml'
+}
+
+// ─── Quan hệ ───
+
+Ref: exam_module.listening_passages.created_by > auth.users.id
+Ref: exam_module.question_bank.passage_id > exam_module.reading_passages.id
+Ref: exam_module.question_bank.listening_passage_id > exam_module.listening_passages.id
+Ref: exam_module.question_bank.created_by > auth.users.id
+Ref: exam_module.quiz_attempts.quiz_id > exam_module.quizzes.id
+Ref: exam_module.quiz_attempts.user_id > auth.users.id
+Ref: exam_module.quiz_attempts.graded_by > users_module.users.id
+Ref: exam_module.quiz_lockouts.quiz_id > exam_module.quizzes.id
+Ref: exam_module.quiz_lockouts.user_id > auth.users.id
+Ref: exam_module.quiz_questions.bank_question_id > exam_module.question_bank.id
+Ref: exam_module.quiz_questions.quiz_id > exam_module.quizzes.id
+Ref: exam_module.quizzes.teacher_id > users_module.users.id
+Ref: exam_module.reading_passages.created_by > auth.users.id
+Ref: exam_module.teacher_question_bank.source_bank_id > exam_module.question_bank.id
+Ref: exam_module.teacher_question_bank.passage_id > exam_module.teacher_reading_passages.id
+Ref: exam_module.teacher_question_bank.teacher_id > auth.users.id
+Ref: exam_module.teacher_reading_passages.teacher_id > auth.users.id

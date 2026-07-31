@@ -91,17 +91,15 @@ function CheckoutModal({ plan, buyer, onClose, onSuccess }) {
 
   const fmtTime = s => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
 
-  const handleCancel = async () => {
-    if (order) {
-      try { await api.post(`/subscription/payment-order/${order.id}/cancel`); } catch (_) {}
-    }
-    onClose();
-  };
+  // Đóng modal KHÔNG được huỷ đơn: người dùng thường chuyển khoản xong rồi mới đóng,
+  // huỷ lúc đó sẽ làm giao dịch không còn đơn nào để khớp và mất tiền. Đơn cứ để đó,
+  // đối soát sẽ khớp khi tiền về, còn không thì tự hết hạn sau 30 phút.
+  const handleClose = () => onClose();
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
       <div className="bg-white rounded-3xl shadow-2xl max-w-md w-full p-8 relative">
-        <button onClick={handleCancel} className="absolute top-4 right-4 text-on-muted hover:text-on-surface material-symbols-outlined">close</button>
+        <button onClick={handleClose} className="absolute top-4 right-4 text-on-muted hover:text-on-surface material-symbols-outlined">close</button>
 
         {loading && (
           <div className="text-center py-12">

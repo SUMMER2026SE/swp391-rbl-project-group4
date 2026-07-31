@@ -7,6 +7,7 @@ const {
   getPendingCourseOrder,
   listMyCoursePurchases,
 } = require('../services/coursePaymentService');
+const { reconcileOnDemand } = require('../services/paymentMatchingService');
 
 // GET /api/courses/my-purchases — lịch sử khóa học đã mua của học viên (để tải lại biên lai)
 exports.myPurchases = async (req, res) => {
@@ -40,8 +41,15 @@ exports.checkout = async (req, res) => {
 // GET /api/courses/payment-orders/:orderId — polling trạng thái order
 exports.getOrder = async (req, res) => {
   try {
-    const order = await getCourseOrder(req.params.orderId, req.user.id);
+    let order = await getCourseOrder(req.params.orderId, req.user.id);
     if (!order) return res.status(404).json({ error: 'Order không tồn tại.' });
+
+    // Học viên đang đứng chờ trước màn hình QR → đối soát ngay rồi đọc lại trạng thái,
+    // thay vì đợi chu kỳ cron. reconcileOnDemand tự chặn tần suất 15s.
+    if (order.status === 'pending') {
+      await reconcileOnDemand();
+      order = await getCourseOrder(req.params.orderId, req.user.id);
+    }
     res.json({ order });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -51,6 +59,9 @@ exports.getOrder = async (req, res) => {
 // POST /api/courses/payment-orders/:orderId/cancel
 exports.cancelOrder = async (req, res) => {
   try {
+    // Đối soát trước: nếu tiền đã về thì cancelCourseOrder sẽ từ chối huỷ,
+    // tránh trường hợp huỷ mất đơn đã thanh toán và giao dịch không còn gì để khớp.
+    await reconcileOnDemand();
     await cancelCourseOrder(req.params.orderId, req.user.id);
     res.json({ ok: true });
   } catch (err) {

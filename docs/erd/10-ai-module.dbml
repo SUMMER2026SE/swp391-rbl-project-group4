@@ -1,0 +1,154 @@
+// 10-ai-module.dbml — schema "ai_module" (AI Sensei & lộ trình học)
+// Kizuna Nihongo — dán trực tiếp vào https://dbdiagram.io
+
+// Quan hệ đa hình (không có FK cứng):
+//   learning_path_steps.resource_id → tài nguyên tùy resource_type (course/quiz/reading...)
+
+Table ai_module.ai_generated_questions {
+  id uuid [pk, default: `gen_random_uuid()`]
+  question_id uuid [not null]
+  requested_by uuid [not null]
+  generation_prompt text [not null]
+  generation_params jsonb [not null]
+  raw_ai_response text
+  ai_model varchar(100)
+  created_at timestamptz [not null, default: `now()`]
+}
+
+Table ai_module.ai_learning_paths {
+  id uuid [pk, default: `gen_random_uuid()`]
+  student_id uuid [not null]
+  generated_at timestamptz [not null, default: `now()`]
+  is_active boolean [not null, default: true]
+  path_data jsonb [not null]
+  ai_model_version varchar(50)
+  rationale_vi text
+  strength_skills jsonb
+  weakness_skills jsonb
+}
+
+Table ai_module.chat_messages {
+  id uuid [pk, default: `gen_random_uuid()`]
+  session_id uuid [not null]
+  role text [not null]
+  content text [not null]
+  context_items jsonb
+  created_at timestamptz [default: `now()`]
+}
+
+Table ai_module.chat_sessions {
+  id uuid [pk, default: `gen_random_uuid()`]
+  user_id uuid [not null]
+  title text [not null, default: 'Cuộc trò chuyện mới']
+  created_at timestamptz [default: `now()`]
+  updated_at timestamptz [default: `now()`]
+}
+
+Table ai_module.kanji_writing_sheets {
+  id uuid [pk, default: `gen_random_uuid()`]
+  student_id uuid [not null]
+  kanji_set_id uuid
+  jlpt_level_id smallint
+  kanji_ids jsonb [not null]
+  file_url varchar(500)
+  generated_at timestamptz [not null, default: `now()`]
+}
+
+Table ai_module.learning_path_steps {
+  id uuid [pk, default: `gen_random_uuid()`]
+  path_id uuid [not null]
+  order_index int [not null, default: 0]
+  title text [not null]
+  description text
+  skill_focus text
+  rationale text
+  resource_type text [not null]
+  resource_id uuid [not null]
+  resource_level text
+  status text [not null, default: 'pending']
+  completed_at timestamptz
+  created_at timestamptz [not null, default: `now()`]
+}
+
+Table ai_module.learning_paths {
+  id uuid [pk, default: `gen_random_uuid()`]
+  user_id uuid [not null]
+  current_level text [not null]
+  target_level text [not null]
+  study_goal text
+  daily_minutes smallint
+  status text [not null, default: 'active']
+  ai_model text
+  generated_at timestamptz [not null, default: `now()`]
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+}
+
+Table ai_module.notifications {
+  id uuid [pk, default: `gen_random_uuid()`]
+  recipient_id uuid [not null]
+  sender_id uuid
+  type varchar(50) [not null]
+  title varchar(200) [not null]
+  body text
+  metadata jsonb
+  is_read boolean [not null, default: false]
+  read_at timestamptz
+  created_at timestamptz [not null, default: `now()`]
+}
+
+Table ai_module.student_dashboards {
+  student_id uuid [pk]
+  total_study_days int [not null, default: 0]
+  total_study_minutes int [not null, default: 0]
+  total_vocab_learned int [not null, default: 0]
+  total_kanji_learned int [not null, default: 0]
+  total_grammar_learned int [not null, default: 0]
+  total_exams_taken int [not null, default: 0]
+  avg_exam_score numeric(5,2)
+  current_streak int [not null, default: 0]
+  longest_streak int [not null, default: 0]
+  skill_scores jsonb
+  last_updated_at timestamptz [not null, default: `now()`]
+}
+
+// ─── Bảng tham chiếu ở schema khác (stub, chỉ để vẽ quan hệ) ───
+
+Table auth.users {
+  id uuid [pk]
+
+  Note: 'Supabase Auth (auth.users) — nguồn định danh gốc'
+}
+
+Table language_module.jlpt_levels {
+  id smallint [pk]
+
+  Note: 'Bảng thuộc schema language_module — xem file 03-language-module.dbml'
+}
+
+Table language_module.kanji_sets {
+  id uuid [pk]
+
+  Note: 'Bảng thuộc schema language_module — xem file 03-language-module.dbml'
+}
+
+Table users_module.users {
+  id uuid [pk]
+
+  Note: 'Bảng thuộc schema users_module — xem file 01-users-module.dbml'
+}
+
+// ─── Quan hệ ───
+
+Ref: ai_module.ai_generated_questions.requested_by > users_module.users.id
+Ref: ai_module.ai_learning_paths.student_id > users_module.users.id
+Ref: ai_module.chat_messages.session_id > ai_module.chat_sessions.id
+Ref: ai_module.chat_sessions.user_id > auth.users.id
+Ref: ai_module.kanji_writing_sheets.kanji_set_id > language_module.kanji_sets.id
+Ref: ai_module.kanji_writing_sheets.jlpt_level_id > language_module.jlpt_levels.id
+Ref: ai_module.kanji_writing_sheets.student_id > users_module.users.id
+Ref: ai_module.learning_path_steps.path_id > ai_module.learning_paths.id
+Ref: ai_module.learning_paths.user_id > auth.users.id
+Ref: ai_module.notifications.recipient_id > users_module.users.id
+Ref: ai_module.notifications.sender_id > users_module.users.id
+Ref: ai_module.student_dashboards.student_id > users_module.users.id

@@ -1,0 +1,220 @@
+// 04-practice-module.dbml — schema "practice_module" (Luyện đọc / nghe / viết / nói)
+// Kizuna Nihongo — dán trực tiếp vào https://dbdiagram.io
+
+Table practice_module.article_reads {
+  article_id uuid [not null]
+  user_id uuid [not null]
+  first_read_at timestamptz [default: `now()`]
+  read_date date [default: `CURRENT_DATE`]
+
+  indexes {
+    (article_id, user_id) [pk]
+  }
+}
+
+Table practice_module.articles {
+  id uuid [pk, default: `gen_random_uuid()`]
+  title text [not null]
+  title_vi text
+  summary_vi text
+  level text
+  thumbnail_url text
+  content text
+  segments jsonb [default: '[]']
+  is_published boolean [default: false]
+  created_by uuid
+  created_at timestamptz [default: `now()`]
+  updated_at timestamptz [default: `now()`]
+  questions jsonb [default: '[]']
+  vocab jsonb [default: '[]']
+  grammar jsonb [default: '[]']
+  view_count int [not null, default: 0]
+  published_at timestamptz
+  creator_type text [default: 'admin']
+}
+
+Table practice_module.listening_dialogue_lines {
+  id uuid [pk, default: `gen_random_uuid()`]
+  dialogue_id uuid [not null]
+  line_order int [not null]
+  speaker text [not null, default: 'A']
+  text_jp text [not null]
+  text_plain text [not null]
+  text_vi text
+  created_at timestamptz [default: `now()`]
+}
+
+Table practice_module.listening_dialogues {
+  id uuid [pk, default: `gen_random_uuid()`]
+  title text [not null]
+  title_vi text
+  level text [not null]
+  topic text
+  thumbnail_icon text [default: 'headphones']
+  created_at timestamptz [default: `now()`]
+  created_by uuid
+  creator_type text [default: 'admin']
+  is_published boolean [default: true]
+  updated_at timestamptz [default: `now()`]
+}
+
+Table practice_module.listening_user_audios {
+  id uuid [pk, default: `gen_random_uuid()`]
+  student_id uuid [not null]
+  title text [not null, default: 'Bài nghe']
+  level text
+  audio_url text
+  storage_path text
+  transcript text [default: '']
+  segments jsonb [default: '[]']
+  created_at timestamptz [default: `now()`]
+  creator_type text [default: 'student']
+  is_public boolean [default: false]
+  source_type text
+  content_url text
+  title_vi text
+  updated_at timestamptz [default: `now()`]
+}
+
+Table practice_module.pronunciation_assessments {
+  id uuid [pk, default: `gen_random_uuid()`]
+  student_id uuid [not null]
+  lesson_id uuid
+  listening_material_id uuid
+  question_id uuid
+  target_text text [not null]
+  target_reading text
+  audio_url varchar(500) [not null]
+  ai_overall_score numeric(4,2)
+  ai_fluency_score numeric(4,2)
+  ai_feedback_vi text
+  ai_model_version varchar(50)
+  assessed_at timestamptz [not null, default: `now()`]
+}
+
+Table practice_module.reading_sets {
+  id uuid [pk, default: `gen_random_uuid()`]
+  title text [not null]
+  code text [unique]
+  jlpt_level text
+  difficulty text [default: 'medium']
+  topic text
+  short_description text
+  instructions text
+  estimated_time_minutes int
+  source_type text [default: 'manual']
+  status text [default: 'draft']
+  tags "text[]" [default: '{}']
+  created_by uuid
+  updated_by uuid
+  created_at timestamptz [default: `now()`]
+  updated_at timestamptz [default: `now()`]
+  published_at timestamptz
+}
+
+Table practice_module.rs_drafts {
+  id uuid [pk, default: `gen_random_uuid()`]
+  reading_set_id uuid
+  snapshot jsonb [not null]
+  created_by uuid
+  created_at timestamptz [default: `now()`]
+}
+
+Table practice_module.rs_options {
+  id uuid [pk, default: `gen_random_uuid()`]
+  question_id uuid [not null]
+  option_text text [not null, default: '']
+  is_correct boolean [default: false]
+  sort_order int [not null, default: 0]
+}
+
+Table practice_module.rs_passages {
+  id uuid [pk, default: `gen_random_uuid()`]
+  reading_set_id uuid [not null]
+  title text
+  content text [not null, default: '']
+  "note" text
+  sort_order int [not null, default: 0]
+  needs_review boolean [default: false]
+  created_at timestamptz [default: `now()`]
+  updated_at timestamptz [default: `now()`]
+}
+
+Table practice_module.rs_questions {
+  id uuid [pk, default: `gen_random_uuid()`]
+  reading_set_id uuid [not null]
+  passage_id uuid [not null]
+  question_type text [not null, default: 'single_choice']
+  question_text text [not null, default: '']
+  explanation text
+  skill_tags "text[]" [default: '{}']
+  sort_order int [not null, default: 0]
+  needs_review boolean [default: false]
+  created_at timestamptz [default: `now()`]
+  updated_at timestamptz [default: `now()`]
+}
+
+Table practice_module.writing_submissions {
+  id uuid [pk, default: `gen_random_uuid()`]
+  student_id uuid [not null]
+  question_id uuid
+  attempt_id uuid
+  lesson_id uuid
+  reading_material_id uuid
+  submission_text text [not null]
+  ai_score numeric(5,2)
+  ai_grammar_score numeric(5,2)
+  ai_vocabulary_score numeric(5,2)
+  ai_coherence_score numeric(5,2)
+  ai_feedback_vi text
+  ai_corrected_text text
+  ai_model_version varchar(50)
+  teacher_score numeric(5,2)
+  teacher_feedback text
+  teacher_corrected_text text
+  reviewed_by uuid
+  reviewed_at timestamptz
+  submitted_at timestamptz [not null, default: `now()`]
+  topic text
+  level varchar(5)
+}
+
+// ─── Bảng tham chiếu ở schema khác (stub, chỉ để vẽ quan hệ) ───
+
+Table auth.users {
+  id uuid [pk]
+
+  Note: 'Supabase Auth (auth.users) — nguồn định danh gốc'
+}
+
+Table course_module.lessons {
+  id uuid [pk]
+
+  Note: 'Bảng thuộc schema course_module — xem file 02-course-module.dbml'
+}
+
+Table users_module.users {
+  id uuid [pk]
+
+  Note: 'Bảng thuộc schema users_module — xem file 01-users-module.dbml'
+}
+
+// ─── Quan hệ ───
+
+Ref: practice_module.article_reads.user_id > auth.users.id
+Ref: practice_module.article_reads.article_id > practice_module.articles.id
+Ref: practice_module.articles.created_by > auth.users.id
+Ref: practice_module.listening_dialogue_lines.dialogue_id > practice_module.listening_dialogues.id
+Ref: practice_module.pronunciation_assessments.student_id > users_module.users.id
+Ref: practice_module.pronunciation_assessments.lesson_id > course_module.lessons.id
+Ref: practice_module.reading_sets.updated_by > auth.users.id
+Ref: practice_module.reading_sets.created_by > auth.users.id
+Ref: practice_module.rs_drafts.created_by > auth.users.id
+Ref: practice_module.rs_drafts.reading_set_id > practice_module.reading_sets.id
+Ref: practice_module.rs_options.question_id > practice_module.rs_questions.id
+Ref: practice_module.rs_passages.reading_set_id > practice_module.reading_sets.id
+Ref: practice_module.rs_questions.reading_set_id > practice_module.reading_sets.id
+Ref: practice_module.rs_questions.passage_id > practice_module.rs_passages.id
+Ref: practice_module.writing_submissions.lesson_id > course_module.lessons.id
+Ref: practice_module.writing_submissions.student_id > users_module.users.id
+Ref: practice_module.writing_submissions.reviewed_by > users_module.users.id

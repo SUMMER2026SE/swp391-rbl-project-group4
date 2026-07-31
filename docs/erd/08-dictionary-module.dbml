@@ -1,0 +1,73 @@
+// 08-dictionary-module.dbml — schema "dictionary_module" (Từ điển)
+// Kizuna Nihongo — dán trực tiếp vào https://dbdiagram.io
+
+Table dictionary_module.dict_entries {
+  id uuid [pk, default: `gen_random_uuid()`]
+  kanji text
+  kana text [not null]
+  romaji text
+  jlpt_level text
+  is_common boolean [default: false]
+  source text
+  source_id text
+  created_at timestamptz [default: `now()`]
+
+  indexes {
+    (source, source_id) [unique]
+  }
+}
+
+Table dictionary_module.dict_examples {
+  id uuid [pk, default: `gen_random_uuid()`]
+  sense_id uuid [not null]
+  sentence_jp text [not null]
+  sentence_vi text
+  created_at timestamptz [default: `now()`]
+  furigana text
+
+  indexes {
+    (sense_id, sentence_jp) [unique]
+  }
+}
+
+Table dictionary_module.dict_kanji {
+  id uuid [pk, default: `gen_random_uuid()`]
+  character text [unique, not null]
+  sino_vi text
+  meaning_vi text
+  reading_on "text[]"
+  reading_kun "text[]"
+  created_at timestamptz [default: `now()`]
+}
+
+Table dictionary_module.dict_related_words {
+  id uuid [pk, default: `gen_random_uuid()`]
+  entry_id uuid [not null]
+  related_id uuid [not null]
+  relation_type text [default: 'related']
+  created_at timestamptz [default: `now()`]
+
+  indexes {
+    (entry_id, related_id, relation_type) [unique]
+  }
+}
+
+Table dictionary_module.dict_senses {
+  id uuid [pk, default: `gen_random_uuid()`]
+  entry_id uuid [not null]
+  pos text
+  meaning_vi text [not null]
+  order_index int [default: 0]
+  created_at timestamptz [default: `now()`]
+
+  indexes {
+    (entry_id, order_index) [unique]
+  }
+}
+
+// ─── Quan hệ ───
+
+Ref: dictionary_module.dict_examples.sense_id > dictionary_module.dict_senses.id
+Ref: dictionary_module.dict_related_words.related_id > dictionary_module.dict_entries.id
+Ref: dictionary_module.dict_related_words.entry_id > dictionary_module.dict_entries.id
+Ref: dictionary_module.dict_senses.entry_id > dictionary_module.dict_entries.id

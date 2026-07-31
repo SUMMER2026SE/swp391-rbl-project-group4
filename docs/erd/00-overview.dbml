@@ -1,0 +1,869 @@
+// 00-overview.dbml — Toàn cảnh database Kizuna Nihongo
+// 10 schema nghiệp vụ + public (hệ thống) + auth (Supabase Auth)
+// Mỗi bảng chỉ hiện cột khóa (PK/FK) để sơ đồ đọc được — chi tiết cột xem file từng schema.
+// Dán trực tiếp vào https://dbdiagram.io
+
+// Quan hệ đa hình (không có FK cứng):
+//   study_list_items.item_id → vocabulary.id | kanji.id | grammar_points.id (tùy study_list_posts.type)
+// Quan hệ đa hình (không có FK cứng):
+//   learning_path_steps.resource_id → tài nguyên tùy resource_type (course/quiz/reading...)
+
+// ═══ users_module ═══
+
+Table users_module.roles {
+  id smallint [pk]
+}
+
+Table users_module.student_profiles {
+  user_id uuid [pk]
+}
+
+Table users_module.teacher_applications {
+  id uuid [pk]
+  user_id uuid
+}
+
+Table users_module.teacher_profiles {
+  user_id uuid [pk]
+  approved_by uuid
+}
+
+Table users_module.user_audit_logs {
+  id uuid [pk]
+  admin_id uuid
+  target_id uuid
+}
+
+Table users_module.users {
+  id uuid [pk]
+  role_id smallint
+}
+
+// ═══ course_module ═══
+
+Table course_module.course_enrollments {
+  id uuid [pk]
+  course_id uuid
+  student_id uuid
+}
+
+Table course_module.course_reviews {
+  id uuid [pk]
+  course_id uuid
+  student_id uuid
+}
+
+Table course_module.courses {
+  id uuid [pk]
+  jlpt_level_id smallint
+  skill_id smallint
+  created_by uuid
+}
+
+Table course_module.lesson_grammar {
+  lesson_id uuid
+  pattern_id uuid
+
+  indexes {
+    (lesson_id, pattern_id) [pk]
+  }
+}
+
+Table course_module.lesson_grammar_points {
+  lesson_id uuid
+  grammar_point_id uuid
+
+  indexes {
+    (lesson_id, grammar_point_id) [pk]
+  }
+}
+
+Table course_module.lesson_kanji {
+  lesson_id uuid
+  kanji_id uuid
+
+  indexes {
+    (lesson_id, kanji_id) [pk]
+  }
+}
+
+Table course_module.lesson_progress {
+  id uuid [pk]
+  student_id uuid
+  lesson_id uuid
+}
+
+Table course_module.lesson_vocabulary {
+  lesson_id uuid
+  vocabulary_id uuid
+
+  indexes {
+    (lesson_id, vocabulary_id) [pk]
+  }
+}
+
+Table course_module.lessons {
+  id uuid [pk]
+  course_id uuid
+  skill_id smallint
+  created_by uuid
+  unit_id uuid
+  reading_article_id uuid
+}
+
+Table course_module.skills {
+  id smallint [pk]
+}
+
+Table course_module.units {
+  id uuid [pk]
+  course_id uuid
+}
+
+// ═══ language_module ═══
+
+Table language_module.grammar_patterns {
+  id uuid [pk]
+  jlpt_level_id smallint
+  created_by uuid
+}
+
+Table language_module.grammar_points {
+  id uuid [pk]
+}
+
+Table language_module.grammar_set_items {
+  set_id uuid
+  pattern_id uuid
+
+  indexes {
+    (set_id, pattern_id) [pk]
+  }
+}
+
+Table language_module.grammar_sets {
+  id uuid [pk]
+  created_by uuid
+  jlpt_level_id smallint
+}
+
+Table language_module.jlpt_levels {
+  id smallint [pk]
+}
+
+Table language_module.kanji {
+  id uuid [pk]
+  jlpt_level_id smallint
+  created_by uuid
+}
+
+Table language_module.kanji_set_items {
+  set_id uuid
+  kanji_id uuid
+
+  indexes {
+    (set_id, kanji_id) [pk]
+  }
+}
+
+Table language_module.kanji_sets {
+  id uuid [pk]
+  created_by uuid
+  jlpt_level_id smallint
+  topic_id int
+}
+
+Table language_module.study_list_items {
+  id uuid [pk]
+  post_id uuid
+}
+
+Table language_module.study_list_posts {
+  id uuid [pk]
+  created_by uuid
+}
+
+Table language_module.teacher_kanji {
+  id uuid [pk]
+  teacher_id uuid
+}
+
+Table language_module.teacher_vocabulary {
+  id uuid [pk]
+  teacher_id uuid
+}
+
+Table language_module.topics {
+  id int [pk]
+  parent_id int
+}
+
+Table language_module.vocabulary {
+  id uuid [pk]
+  jlpt_level_id smallint
+  created_by uuid
+}
+
+Table language_module.vocabulary_set_items {
+  set_id uuid
+  vocabulary_id uuid
+
+  indexes {
+    (set_id, vocabulary_id) [pk]
+  }
+}
+
+Table language_module.vocabulary_sets {
+  id uuid [pk]
+  created_by uuid
+  jlpt_level_id smallint
+}
+
+Table language_module.vocabulary_topics {
+  vocabulary_id uuid
+  topic_id int
+
+  indexes {
+    (vocabulary_id, topic_id) [pk]
+  }
+}
+
+// ═══ practice_module ═══
+
+Table practice_module.article_reads {
+  article_id uuid
+  user_id uuid
+
+  indexes {
+    (article_id, user_id) [pk]
+  }
+}
+
+Table practice_module.articles {
+  id uuid [pk]
+  created_by uuid
+}
+
+Table practice_module.listening_dialogue_lines {
+  id uuid [pk]
+  dialogue_id uuid
+}
+
+Table practice_module.listening_dialogues {
+  id uuid [pk]
+}
+
+Table practice_module.listening_user_audios {
+  id uuid [pk]
+}
+
+Table practice_module.pronunciation_assessments {
+  id uuid [pk]
+  student_id uuid
+  lesson_id uuid
+}
+
+Table practice_module.reading_sets {
+  id uuid [pk]
+  created_by uuid
+  updated_by uuid
+}
+
+Table practice_module.rs_drafts {
+  id uuid [pk]
+  reading_set_id uuid
+  created_by uuid
+}
+
+Table practice_module.rs_options {
+  id uuid [pk]
+  question_id uuid
+}
+
+Table practice_module.rs_passages {
+  id uuid [pk]
+  reading_set_id uuid
+}
+
+Table practice_module.rs_questions {
+  id uuid [pk]
+  reading_set_id uuid
+  passage_id uuid
+}
+
+Table practice_module.writing_submissions {
+  id uuid [pk]
+  student_id uuid
+  lesson_id uuid
+  reviewed_by uuid
+}
+
+// ═══ flashcard_module ═══
+
+Table flashcard_module.flashcard_folder_sets {
+  folder_id uuid
+  set_id uuid
+
+  indexes {
+    (folder_id, set_id) [pk]
+  }
+}
+
+Table flashcard_module.flashcard_folders {
+  id uuid [pk]
+  owner_id uuid
+}
+
+Table flashcard_module.flashcard_progress {
+  student_id uuid
+  card_id uuid
+
+  indexes {
+    (student_id, card_id) [pk]
+  }
+}
+
+Table flashcard_module.flashcard_sets {
+  id uuid [pk]
+  owner_id uuid
+}
+
+Table flashcard_module.flashcard_tests {
+  id uuid [pk]
+  set_id uuid
+  owner_id uuid
+}
+
+Table flashcard_module.flashcards {
+  id uuid [pk]
+  set_id uuid
+}
+
+// ═══ exam_module ═══
+
+Table exam_module.listening_passages {
+  id uuid [pk]
+  created_by uuid
+}
+
+Table exam_module.question_bank {
+  id uuid [pk]
+  created_by uuid
+  passage_id uuid
+  listening_passage_id uuid
+}
+
+Table exam_module.quiz_attempts {
+  id uuid [pk]
+  quiz_id uuid
+  user_id uuid
+  graded_by uuid
+}
+
+Table exam_module.quiz_lockouts {
+  id uuid [pk]
+  quiz_id uuid
+  user_id uuid
+}
+
+Table exam_module.quiz_questions {
+  id uuid [pk]
+  quiz_id uuid
+  bank_question_id uuid
+}
+
+Table exam_module.quizzes {
+  id uuid [pk]
+  teacher_id uuid
+}
+
+Table exam_module.reading_passages {
+  id uuid [pk]
+  created_by uuid
+}
+
+Table exam_module.teacher_question_bank {
+  id uuid [pk]
+  teacher_id uuid
+  passage_id uuid
+  source_bank_id uuid
+}
+
+Table exam_module.teacher_reading_passages {
+  id uuid [pk]
+  teacher_id uuid
+}
+
+// ═══ jlpt_module ═══
+
+Table jlpt_module.jlpt_bank_groups {
+  id uuid [pk]
+  created_by uuid
+}
+
+Table jlpt_module.jlpt_bank_questions {
+  id uuid [pk]
+  group_id uuid
+  created_by uuid
+}
+
+Table jlpt_module.mock_attempt_answers {
+  attempt_id uuid
+  question_id uuid
+
+  indexes {
+    (attempt_id, question_id) [pk]
+  }
+}
+
+Table jlpt_module.mock_attempts {
+  id uuid [pk]
+  exam_id uuid
+  user_id uuid
+}
+
+Table jlpt_module.mock_exam_sections {
+  id uuid [pk]
+  exam_id uuid
+}
+
+Table jlpt_module.mock_exams {
+  id uuid [pk]
+  created_by uuid
+}
+
+Table jlpt_module.mock_question_groups {
+  id uuid [pk]
+  section_id uuid
+}
+
+Table jlpt_module.mock_questions {
+  id uuid [pk]
+  group_id uuid
+}
+
+// ═══ dictionary_module ═══
+
+Table dictionary_module.dict_entries {
+  id uuid [pk]
+}
+
+Table dictionary_module.dict_examples {
+  id uuid [pk]
+  sense_id uuid
+}
+
+Table dictionary_module.dict_kanji {
+  id uuid [pk]
+}
+
+Table dictionary_module.dict_related_words {
+  id uuid [pk]
+  entry_id uuid
+  related_id uuid
+}
+
+Table dictionary_module.dict_senses {
+  id uuid [pk]
+  entry_id uuid
+}
+
+// ═══ billing_module ═══
+
+Table billing_module.content_usage_events {
+  id uuid [pk]
+}
+
+Table billing_module.course_payment_orders {
+  id uuid [pk]
+  student_id uuid
+  course_id uuid
+}
+
+Table billing_module.feature_entitlements {
+  id uuid [pk]
+}
+
+Table billing_module.feature_usage_counters {
+  id uuid [pk]
+  user_id uuid
+}
+
+Table billing_module.payment_orders {
+  id uuid [pk]
+  user_id uuid
+  plan_id uuid
+}
+
+Table billing_module.payment_transactions {
+  id uuid [pk]
+  matched_order_id uuid
+  matched_course_order_id uuid
+}
+
+Table billing_module.payments {
+  id uuid [pk]
+  student_id uuid
+  course_id uuid
+}
+
+Table billing_module.revenue_pool_periods {
+  period_key text [pk]
+}
+
+Table billing_module.subscription_plans {
+  id uuid [pk]
+}
+
+Table billing_module.teacher_payouts {
+  id uuid [pk]
+}
+
+Table billing_module.user_subscriptions {
+  id uuid [pk]
+  user_id uuid
+  plan_id uuid
+}
+
+// ═══ ai_module ═══
+
+Table ai_module.ai_generated_questions {
+  id uuid [pk]
+  requested_by uuid
+}
+
+Table ai_module.ai_learning_paths {
+  id uuid [pk]
+  student_id uuid
+}
+
+Table ai_module.chat_messages {
+  id uuid [pk]
+  session_id uuid
+}
+
+Table ai_module.chat_sessions {
+  id uuid [pk]
+  user_id uuid
+}
+
+Table ai_module.kanji_writing_sheets {
+  id uuid [pk]
+  student_id uuid
+  kanji_set_id uuid
+  jlpt_level_id smallint
+}
+
+Table ai_module.learning_path_steps {
+  id uuid [pk]
+  path_id uuid
+}
+
+Table ai_module.learning_paths {
+  id uuid [pk]
+  user_id uuid
+}
+
+Table ai_module.notifications {
+  id uuid [pk]
+  recipient_id uuid
+  sender_id uuid
+}
+
+Table ai_module.student_dashboards {
+  student_id uuid [pk]
+}
+
+// ═══ public ═══
+
+Table public.app_settings {
+  key text [pk]
+}
+
+Table public.session {
+  sid varchar [pk]
+}
+
+// ═══ auth (Supabase Auth) ═══
+
+Table auth.users {
+  id uuid [pk]
+
+  Note: 'Supabase Auth — nguồn định danh gốc, đồng bộ qua trigger handle_new_user'
+}
+
+// ─── TableGroup theo schema ───
+
+TableGroup users_module {
+  users_module.roles
+  users_module.student_profiles
+  users_module.teacher_applications
+  users_module.teacher_profiles
+  users_module.user_audit_logs
+  users_module.users
+}
+
+TableGroup course_module {
+  course_module.course_enrollments
+  course_module.course_reviews
+  course_module.courses
+  course_module.lesson_grammar
+  course_module.lesson_grammar_points
+  course_module.lesson_kanji
+  course_module.lesson_progress
+  course_module.lesson_vocabulary
+  course_module.lessons
+  course_module.skills
+  course_module.units
+}
+
+TableGroup language_module {
+  language_module.grammar_patterns
+  language_module.grammar_points
+  language_module.grammar_set_items
+  language_module.grammar_sets
+  language_module.jlpt_levels
+  language_module.kanji
+  language_module.kanji_set_items
+  language_module.kanji_sets
+  language_module.study_list_items
+  language_module.study_list_posts
+  language_module.teacher_kanji
+  language_module.teacher_vocabulary
+  language_module.topics
+  language_module.vocabulary
+  language_module.vocabulary_set_items
+  language_module.vocabulary_sets
+  language_module.vocabulary_topics
+}
+
+TableGroup practice_module {
+  practice_module.article_reads
+  practice_module.articles
+  practice_module.listening_dialogue_lines
+  practice_module.listening_dialogues
+  practice_module.listening_user_audios
+  practice_module.pronunciation_assessments
+  practice_module.reading_sets
+  practice_module.rs_drafts
+  practice_module.rs_options
+  practice_module.rs_passages
+  practice_module.rs_questions
+  practice_module.writing_submissions
+}
+
+TableGroup flashcard_module {
+  flashcard_module.flashcard_folder_sets
+  flashcard_module.flashcard_folders
+  flashcard_module.flashcard_progress
+  flashcard_module.flashcard_sets
+  flashcard_module.flashcard_tests
+  flashcard_module.flashcards
+}
+
+TableGroup exam_module {
+  exam_module.listening_passages
+  exam_module.question_bank
+  exam_module.quiz_attempts
+  exam_module.quiz_lockouts
+  exam_module.quiz_questions
+  exam_module.quizzes
+  exam_module.reading_passages
+  exam_module.teacher_question_bank
+  exam_module.teacher_reading_passages
+}
+
+TableGroup jlpt_module {
+  jlpt_module.jlpt_bank_groups
+  jlpt_module.jlpt_bank_questions
+  jlpt_module.mock_attempt_answers
+  jlpt_module.mock_attempts
+  jlpt_module.mock_exam_sections
+  jlpt_module.mock_exams
+  jlpt_module.mock_question_groups
+  jlpt_module.mock_questions
+}
+
+TableGroup dictionary_module {
+  dictionary_module.dict_entries
+  dictionary_module.dict_examples
+  dictionary_module.dict_kanji
+  dictionary_module.dict_related_words
+  dictionary_module.dict_senses
+}
+
+TableGroup billing_module {
+  billing_module.content_usage_events
+  billing_module.course_payment_orders
+  billing_module.feature_entitlements
+  billing_module.feature_usage_counters
+  billing_module.payment_orders
+  billing_module.payment_transactions
+  billing_module.payments
+  billing_module.revenue_pool_periods
+  billing_module.subscription_plans
+  billing_module.teacher_payouts
+  billing_module.user_subscriptions
+}
+
+TableGroup ai_module {
+  ai_module.ai_generated_questions
+  ai_module.ai_learning_paths
+  ai_module.chat_messages
+  ai_module.chat_sessions
+  ai_module.kanji_writing_sheets
+  ai_module.learning_path_steps
+  ai_module.learning_paths
+  ai_module.notifications
+  ai_module.student_dashboards
+}
+
+TableGroup public {
+  public.app_settings
+  public.session
+}
+
+TableGroup auth {
+  auth.users
+}
+
+// ─── Quan hệ (kể cả cross-schema) ───
+
+Ref: ai_module.ai_generated_questions.requested_by > users_module.users.id
+Ref: ai_module.ai_learning_paths.student_id > users_module.users.id
+Ref: ai_module.chat_messages.session_id > ai_module.chat_sessions.id
+Ref: ai_module.chat_sessions.user_id > auth.users.id
+Ref: ai_module.kanji_writing_sheets.kanji_set_id > language_module.kanji_sets.id
+Ref: ai_module.kanji_writing_sheets.jlpt_level_id > language_module.jlpt_levels.id
+Ref: ai_module.kanji_writing_sheets.student_id > users_module.users.id
+Ref: ai_module.learning_path_steps.path_id > ai_module.learning_paths.id
+Ref: ai_module.learning_paths.user_id > auth.users.id
+Ref: ai_module.notifications.recipient_id > users_module.users.id
+Ref: ai_module.notifications.sender_id > users_module.users.id
+Ref: ai_module.student_dashboards.student_id > users_module.users.id
+Ref: billing_module.course_payment_orders.student_id > users_module.users.id
+Ref: billing_module.course_payment_orders.course_id > course_module.courses.id
+Ref: billing_module.feature_usage_counters.user_id > auth.users.id
+Ref: billing_module.payment_orders.user_id > auth.users.id
+Ref: billing_module.payment_orders.plan_id > billing_module.subscription_plans.id
+Ref: billing_module.payment_transactions.matched_course_order_id > billing_module.course_payment_orders.id
+Ref: billing_module.payment_transactions.matched_order_id > billing_module.payment_orders.id
+Ref: billing_module.payments.course_id > course_module.courses.id
+Ref: billing_module.payments.student_id > users_module.users.id
+Ref: billing_module.user_subscriptions.plan_id > billing_module.subscription_plans.id
+Ref: billing_module.user_subscriptions.user_id > auth.users.id
+Ref: course_module.course_enrollments.course_id > course_module.courses.id
+Ref: course_module.course_enrollments.student_id > users_module.users.id
+Ref: course_module.course_reviews.student_id > users_module.users.id
+Ref: course_module.course_reviews.course_id > course_module.courses.id
+Ref: course_module.courses.jlpt_level_id > language_module.jlpt_levels.id
+Ref: course_module.courses.skill_id > course_module.skills.id
+Ref: course_module.courses.created_by > users_module.users.id
+Ref: course_module.lesson_grammar.lesson_id > course_module.lessons.id
+Ref: course_module.lesson_grammar.pattern_id > language_module.grammar_patterns.id
+Ref: course_module.lesson_grammar_points.grammar_point_id > language_module.grammar_points.id
+Ref: course_module.lesson_grammar_points.lesson_id > course_module.lessons.id
+Ref: course_module.lesson_kanji.lesson_id > course_module.lessons.id
+Ref: course_module.lesson_kanji.kanji_id > language_module.kanji.id
+Ref: course_module.lesson_progress.lesson_id > course_module.lessons.id
+Ref: course_module.lesson_progress.student_id > users_module.users.id
+Ref: course_module.lesson_vocabulary.vocabulary_id > language_module.vocabulary.id
+Ref: course_module.lesson_vocabulary.lesson_id > course_module.lessons.id
+Ref: course_module.lessons.created_by > users_module.users.id
+Ref: course_module.lessons.reading_article_id > practice_module.articles.id
+Ref: course_module.lessons.unit_id > course_module.units.id
+Ref: course_module.lessons.skill_id > course_module.skills.id
+Ref: course_module.lessons.course_id > course_module.courses.id
+Ref: course_module.units.course_id > course_module.courses.id
+Ref: dictionary_module.dict_examples.sense_id > dictionary_module.dict_senses.id
+Ref: dictionary_module.dict_related_words.related_id > dictionary_module.dict_entries.id
+Ref: dictionary_module.dict_related_words.entry_id > dictionary_module.dict_entries.id
+Ref: dictionary_module.dict_senses.entry_id > dictionary_module.dict_entries.id
+Ref: exam_module.listening_passages.created_by > auth.users.id
+Ref: exam_module.question_bank.passage_id > exam_module.reading_passages.id
+Ref: exam_module.question_bank.listening_passage_id > exam_module.listening_passages.id
+Ref: exam_module.question_bank.created_by > auth.users.id
+Ref: exam_module.quiz_attempts.quiz_id > exam_module.quizzes.id
+Ref: exam_module.quiz_attempts.user_id > auth.users.id
+Ref: exam_module.quiz_attempts.graded_by > users_module.users.id
+Ref: exam_module.quiz_lockouts.quiz_id > exam_module.quizzes.id
+Ref: exam_module.quiz_lockouts.user_id > auth.users.id
+Ref: exam_module.quiz_questions.bank_question_id > exam_module.question_bank.id
+Ref: exam_module.quiz_questions.quiz_id > exam_module.quizzes.id
+Ref: exam_module.quizzes.teacher_id > users_module.users.id
+Ref: exam_module.reading_passages.created_by > auth.users.id
+Ref: exam_module.teacher_question_bank.source_bank_id > exam_module.question_bank.id
+Ref: exam_module.teacher_question_bank.passage_id > exam_module.teacher_reading_passages.id
+Ref: exam_module.teacher_question_bank.teacher_id > auth.users.id
+Ref: exam_module.teacher_reading_passages.teacher_id > auth.users.id
+Ref: flashcard_module.flashcard_folder_sets.folder_id > flashcard_module.flashcard_folders.id
+Ref: flashcard_module.flashcard_folder_sets.set_id > flashcard_module.flashcard_sets.id
+Ref: flashcard_module.flashcard_folders.owner_id > auth.users.id
+Ref: flashcard_module.flashcard_progress.student_id > auth.users.id
+Ref: flashcard_module.flashcard_progress.card_id > flashcard_module.flashcards.id
+Ref: flashcard_module.flashcard_sets.owner_id > auth.users.id
+Ref: flashcard_module.flashcard_tests.set_id > flashcard_module.flashcard_sets.id
+Ref: flashcard_module.flashcard_tests.owner_id > auth.users.id
+Ref: flashcard_module.flashcards.set_id > flashcard_module.flashcard_sets.id
+Ref: jlpt_module.jlpt_bank_groups.created_by > auth.users.id
+Ref: jlpt_module.jlpt_bank_questions.created_by > auth.users.id
+Ref: jlpt_module.jlpt_bank_questions.group_id > jlpt_module.jlpt_bank_groups.id
+Ref: jlpt_module.mock_attempt_answers.attempt_id > jlpt_module.mock_attempts.id
+Ref: jlpt_module.mock_attempt_answers.question_id > jlpt_module.mock_questions.id
+Ref: jlpt_module.mock_attempts.exam_id > jlpt_module.mock_exams.id
+Ref: jlpt_module.mock_attempts.user_id > auth.users.id
+Ref: jlpt_module.mock_exam_sections.exam_id > jlpt_module.mock_exams.id
+Ref: jlpt_module.mock_exams.created_by > auth.users.id
+Ref: jlpt_module.mock_question_groups.section_id > jlpt_module.mock_exam_sections.id
+Ref: jlpt_module.mock_questions.group_id > jlpt_module.mock_question_groups.id
+Ref: language_module.grammar_patterns.jlpt_level_id > language_module.jlpt_levels.id
+Ref: language_module.grammar_patterns.created_by > users_module.users.id
+Ref: language_module.grammar_set_items.pattern_id > language_module.grammar_patterns.id
+Ref: language_module.grammar_set_items.set_id > language_module.grammar_sets.id
+Ref: language_module.grammar_sets.created_by > users_module.users.id
+Ref: language_module.grammar_sets.jlpt_level_id > language_module.jlpt_levels.id
+Ref: language_module.kanji.jlpt_level_id > language_module.jlpt_levels.id
+Ref: language_module.kanji.created_by > auth.users.id
+Ref: language_module.kanji_set_items.set_id > language_module.kanji_sets.id
+Ref: language_module.kanji_set_items.kanji_id > language_module.kanji.id
+Ref: language_module.kanji_sets.created_by > users_module.users.id
+Ref: language_module.kanji_sets.jlpt_level_id > language_module.jlpt_levels.id
+Ref: language_module.kanji_sets.topic_id > language_module.topics.id
+Ref: language_module.study_list_items.post_id > language_module.study_list_posts.id
+Ref: language_module.study_list_posts.created_by > users_module.users.id
+Ref: language_module.teacher_kanji.teacher_id > auth.users.id
+Ref: language_module.teacher_vocabulary.teacher_id > auth.users.id
+Ref: language_module.topics.parent_id > language_module.topics.id
+Ref: language_module.vocabulary.jlpt_level_id > language_module.jlpt_levels.id
+Ref: language_module.vocabulary.created_by > auth.users.id
+Ref: language_module.vocabulary_set_items.vocabulary_id > language_module.vocabulary.id
+Ref: language_module.vocabulary_set_items.set_id > language_module.vocabulary_sets.id
+Ref: language_module.vocabulary_sets.jlpt_level_id > language_module.jlpt_levels.id
+Ref: language_module.vocabulary_sets.created_by > users_module.users.id
+Ref: language_module.vocabulary_topics.topic_id > language_module.topics.id
+Ref: language_module.vocabulary_topics.vocabulary_id > language_module.vocabulary.id
+Ref: practice_module.article_reads.user_id > auth.users.id
+Ref: practice_module.article_reads.article_id > practice_module.articles.id
+Ref: practice_module.articles.created_by > auth.users.id
+Ref: practice_module.listening_dialogue_lines.dialogue_id > practice_module.listening_dialogues.id
+Ref: practice_module.pronunciation_assessments.student_id > users_module.users.id
+Ref: practice_module.pronunciation_assessments.lesson_id > course_module.lessons.id
+Ref: practice_module.reading_sets.updated_by > auth.users.id
+Ref: practice_module.reading_sets.created_by > auth.users.id
+Ref: practice_module.rs_drafts.created_by > auth.users.id
+Ref: practice_module.rs_drafts.reading_set_id > practice_module.reading_sets.id
+Ref: practice_module.rs_options.question_id > practice_module.rs_questions.id
+Ref: practice_module.rs_passages.reading_set_id > practice_module.reading_sets.id
+Ref: practice_module.rs_questions.reading_set_id > practice_module.reading_sets.id
+Ref: practice_module.rs_questions.passage_id > practice_module.rs_passages.id
+Ref: practice_module.writing_submissions.lesson_id > course_module.lessons.id
+Ref: practice_module.writing_submissions.student_id > users_module.users.id
+Ref: practice_module.writing_submissions.reviewed_by > users_module.users.id
+Ref: users_module.student_profiles.user_id > users_module.users.id
+Ref: users_module.teacher_applications.user_id > auth.users.id
+Ref: users_module.teacher_profiles.approved_by > users_module.users.id
+Ref: users_module.teacher_profiles.user_id > users_module.users.id
+Ref: users_module.user_audit_logs.admin_id > users_module.users.id
+Ref: users_module.user_audit_logs.target_id > users_module.users.id
+Ref: users_module.users.id > auth.users.id
+Ref: users_module.users.role_id > users_module.roles.id

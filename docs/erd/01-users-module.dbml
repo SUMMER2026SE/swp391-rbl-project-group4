@@ -1,0 +1,100 @@
+// 01-users-module.dbml — schema "users_module" (Người dùng & hồ sơ)
+// Kizuna Nihongo — dán trực tiếp vào https://dbdiagram.io
+
+Table users_module.roles {
+  id smallint [pk]
+  name varchar(20) [unique, not null]
+  description varchar(255)
+}
+
+Table users_module.student_profiles {
+  user_id uuid [pk]
+  jlpt_target_level char(2)
+  current_level char(2)
+  native_language varchar(50) [not null, default: 'vi']
+  study_goal text
+  daily_study_minutes smallint [not null, default: 20]
+  streak_days int [not null, default: 0]
+  last_study_date date
+  onboarding_done boolean [not null, default: false]
+  created_at timestamptz [not null, default: `now()`]
+}
+
+Table users_module.teacher_applications {
+  id uuid [pk, default: `gen_random_uuid()`]
+  user_id uuid [not null]
+  status text [not null, default: 'pending']
+  decided_by text
+  phone text
+  highest_qualification text
+  specialization text
+  years_experience int
+  education text
+  bio text
+  documents jsonb [not null, default: '[]']
+  ai_verdict text
+  ai_summary text
+  ai_flags jsonb
+  ai_confidence int
+  ai_model text
+  admin_note text
+  reviewed_by uuid
+  reviewed_at timestamptz
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+}
+
+Table users_module.teacher_profiles {
+  user_id uuid [pk]
+  bio text
+  qualifications text
+  approval_status varchar(20) [not null, default: 'pending']
+  approved_by uuid
+  approved_at timestamptz
+  created_at timestamptz [not null, default: `now()`]
+}
+
+Table users_module.user_audit_logs {
+  id uuid [pk, default: `gen_random_uuid()`]
+  admin_id uuid [not null]
+  target_id uuid [not null]
+  action varchar(30) [not null]
+  old_value varchar(200)
+  new_value varchar(200)
+  reason varchar(500)
+  created_at timestamptz [not null, default: `now()`]
+}
+
+Table users_module.users {
+  id uuid [pk, default: `gen_random_uuid()`]
+  email varchar(255) [unique, not null]
+  role_id smallint [not null, default: 1]
+  full_name varchar(100) [not null]
+  avatar_url varchar(500)
+  phone varchar(20)
+  date_of_birth date
+  is_active boolean [not null, default: true]
+  is_email_verified boolean [not null, default: false]
+  lock_reason varchar(500)
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+}
+
+// ─── Bảng tham chiếu ở schema khác (stub, chỉ để vẽ quan hệ) ───
+
+Table auth.users {
+  id uuid [pk]
+
+  Note: 'Supabase Auth (auth.users) — nguồn định danh gốc'
+}
+
+// ─── Quan hệ ───
+
+Ref: users_module.student_profiles.user_id > users_module.users.id
+Ref: users_module.teacher_applications.user_id > auth.users.id
+Ref: users_module.teacher_profiles.approved_by > users_module.users.id
+Ref: users_module.teacher_profiles.user_id > users_module.users.id
+Ref: users_module.user_audit_logs.admin_id > users_module.users.id
+Ref: users_module.user_audit_logs.target_id > users_module.users.id
+Ref: users_module.users.id > auth.users.id
+Ref: users_module.users.role_id > users_module.roles.id
