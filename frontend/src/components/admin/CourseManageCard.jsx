@@ -138,10 +138,11 @@ export default function CourseManageCard({
             <span className="material-symbols-outlined text-[15px]">group</span>
             {formatCount(course.enrollment_count)} học viên
           </span>
-          {course.lesson_count != null && (
+          {/* Đếm theo unit = BÀI HỌC (lessons chỉ là mục bên trong bài, không hiển thị) */}
+          {course.unit_count != null && (
             <span className="flex items-center gap-1">
               <span className="material-symbols-outlined text-[15px]">menu_book</span>
-              {course.lesson_count} bài
+              {course.unit_count} bài học
             </span>
           )}
           <span className="flex items-center gap-1 ml-auto">

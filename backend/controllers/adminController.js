@@ -231,15 +231,18 @@ exports.listCourses = async (req, res) => {
     // Bổ sung số học viên (cột cache ở course_module) + số mục cho từng khóa của trang,
     // kèm creator_type/tên người tạo để frontend phân biệt khóa hệ thống vs khóa teacher.
     const ids = rows.map(c => c.id);
-    let enrollMap = {}, lessonMap = {}, metaMap = {}, creatorNameMap = {};
+    let enrollMap = {}, lessonMap = {}, unitMap = {}, metaMap = {}, creatorNameMap = {};
     if (ids.length) {
-      const [{ data: cm }, { data: ls }] = await Promise.all([
+      const [{ data: cm }, { data: ls }, { data: us }] = await Promise.all([
         contentDb.from('courses').select('id,enrollment_count,creator_type,created_by').in('id', ids),
         supabaseAdmin.from('lessons').select('course_id').in('course_id', ids),
+        contentDb.from('units').select('course_id').in('course_id', ids),
       ]);
       enrollMap = Object.fromEntries((cm || []).map(c => [c.id, c.enrollment_count]));
       metaMap   = Object.fromEntries((cm || []).map(c => [c.id, c]));
+      // lesson = MUC HOC, unit = BAI HOC (mot bai chua nhieu muc)
       (ls || []).forEach(l => { lessonMap[l.course_id] = (lessonMap[l.course_id] || 0) + 1; });
+      (us || []).forEach(u => { unitMap[u.course_id] = (unitMap[u.course_id] || 0) + 1; });
 
       const teacherIds = [...new Set((cm || []).filter(c => c.creator_type === 'teacher').map(c => c.created_by).filter(Boolean))];
       if (teacherIds.length) {
@@ -252,6 +255,7 @@ exports.listCourses = async (req, res) => {
       return {
         ...c,
         enrollment_count: enrollMap[c.id] || 0,
+        unit_count:   unitMap[c.id] || 0,
         lesson_count: lessonMap[c.id] || 0,
         creator_type: meta.creator_type || 'admin',
         creator_name: meta.creator_type === 'teacher' ? (creatorNameMap[meta.created_by] || 'Giáo viên') : 'Kizuna Nihongo',

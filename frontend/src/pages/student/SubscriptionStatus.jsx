@@ -5,15 +5,8 @@ import api from '../../lib/api';
 import { useSubscription } from '../../hooks/useSubscription';
 import { useAuth } from '../../contexts/AuthContext';
 import { ReceiptButton } from '../../components/receipt/Receipt';
+import { featureLabel, PERIOD_LABELS } from '../../lib/featureLabels';
 
-const FEATURE_LABELS = {
-  kanji_file_monthly:         'Luyện viết kanji',
-  kanji_chars_per_file:       'Ký tự tối đa / file kanji',
-  listening_practice_monthly: 'Luyện nghe',
-  ai_chat_daily:              'Tin nhắn AI',
-};
-
-const PERIOD_LABELS = { monthly: '/ tháng', daily: '/ ngày', none: '' };
 
 function QuotaBar({ used, limit, label, periodType }) {
   const pct = limit <= 0 ? 0 : Math.min(100, (used / limit) * 100);
@@ -299,7 +292,7 @@ export default function SubscriptionStatus() {
             {quotas.map(q => (
               <QuotaBar
                 key={q.feature}
-                label={FEATURE_LABELS[q.feature] || q.feature}
+                label={featureLabel(q.feature)}
                 used={q.used}
                 limit={q.limit}
                 periodType={q.periodType}

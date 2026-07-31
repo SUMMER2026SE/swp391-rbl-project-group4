@@ -1,13 +1,6 @@
 import { useNavigate } from 'react-router-dom';
+import { featureLabel } from '../lib/featureLabels';
 
-const FEATURE_NAMES = {
-  ai_chat_daily:              'Trợ lý AI',
-  listening_practice_monthly: 'Luyện nghe',
-  kanji_file_monthly:         'Luyện viết kanji',
-  kanji_chars_per_file:       'Ký tự kanji',
-  flashcard_ai_suggest_daily: 'AI gợi ý định nghĩa',
-  flashcard_test_gen_daily:   'Tạo bài kiểm tra AI',
-};
 
 /**
  * Shows when an API call returns 403 with error: 'quota_exceeded'.
@@ -18,7 +11,7 @@ export default function UpgradeModal({ quota, onClose }) {
   const navigate = useNavigate();
   if (!quota) return null;
 
-  const featureName = FEATURE_NAMES[quota.feature] || quota.feature;
+  const featureName = featureLabel(quota.feature);
   const isUnlimited = quota.tier === 'premium';
 
   return (
