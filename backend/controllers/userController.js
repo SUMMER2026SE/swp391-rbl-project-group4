@@ -22,7 +22,7 @@ exports.getProfile = async (req, res) => {
   const userId = req.user.id;
   try {
     const [userRes, profileRes, dashRes] = await Promise.allSettled([
-      supabaseAdmin.from('users').select('full_name,email,phone,avatar_url,date_of_birth').eq('id', userId).single(),
+      supabaseAdmin.from('users').select('full_name,email,phone,avatar_url,date_of_birth,bank_name,bank_account_number,bank_account_name').eq('id', userId).single(),
       supabaseAdmin.from('student_profiles').select('jlpt_target_level,current_level,study_goal,daily_study_minutes,streak_days').eq('user_id', userId).single(),
       supabaseAdmin.from('student_dashboards').select('current_streak,total_study_minutes,longest_streak').eq('student_id', userId).single(),
     ]);
@@ -46,7 +46,15 @@ exports.updateProfile = async (req, res) => {
   const bio      = req.body.bio?.trim()        || null;
   const currentLevel = req.body.currentLevel?.trim() || null;
 
+  // Tài khoản nhận thu nhập — chỉ giáo viên dùng, nhưng lưu chung ở users cho gọn.
+  const bankName    = req.body.bankName?.trim()          || null;
+  const bankNumber  = req.body.bankAccountNumber?.trim() || null;
+  const bankHolder  = req.body.bankAccountName?.trim()   || null;
+
   if (!fullname) return res.status(400).json({ error: 'Họ và tên không được để trống.' });
+  if (bankNumber && !/^\d{6,20}$/.test(bankNumber)) {
+    return res.status(400).json({ error: 'Số tài khoản chỉ gồm 6–20 chữ số.' });
+  }
   if (currentLevel && !['N5', 'N4', 'N3', 'N2', 'N1'].includes(currentLevel)) {
     return res.status(400).json({ error: 'Trình độ hiện tại không hợp lệ.' });
   }
@@ -55,9 +63,16 @@ exports.updateProfile = async (req, res) => {
   const profileUpdate = { jlpt_target_level: jlpt, study_goal: bio };
   if (currentLevel) profileUpdate.current_level = currentLevel;
 
+  // Tương tự: chỉ ghi field ngân hàng khi form thực sự gửi lên, tránh xoá mất
+  // thông tin đã lưu khi người dùng chỉ sửa tên hoặc số điện thoại.
+  const userUpdate = { full_name: fullname, phone };
+  if ('bankName' in req.body)          userUpdate.bank_name           = bankName;
+  if ('bankAccountNumber' in req.body) userUpdate.bank_account_number = bankNumber;
+  if ('bankAccountName' in req.body)   userUpdate.bank_account_name   = bankHolder;
+
   try {
     const results = await Promise.all([
-      supabaseAdmin.from('users').update({ full_name: fullname, phone }).eq('id', userId),
+      supabaseAdmin.from('users').update(userUpdate).eq('id', userId),
       supabaseAdmin.from('student_profiles').update(profileUpdate).eq('user_id', userId),
       updateUserMetadata(userId, { full_name: fullname }),
     ]);
